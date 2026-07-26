@@ -96,10 +96,15 @@ export async function callLLMClientSide(
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
   if (provider === "github") defaultBaseUrl = "https://models.github.ai/inference";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
+  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
 
-  const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
+  // Sanitize target URL (replace ollama.com default if stale)
+  let rawBaseUrl = baseUrl || defaultBaseUrl;
+  if (rawBaseUrl.includes("ollama.com/v1")) {
+    rawBaseUrl = "http://localhost:11434/v1";
+  }
+  const targetUrl = rawBaseUrl.replace(/\/$/, "") + "/chat/completions";
 
   const headers: Record<string, string> = {
     "Authorization": `Bearer ${effectiveApiKey}`,
@@ -111,7 +116,7 @@ export async function callLLMClientSide(
   }
 
   const reqBody: any = {
-    model: model || "gemma4:31b",
+    model: model || (provider === "ollama" ? "llama3.2" : "gpt-5.4-mini"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
@@ -140,10 +145,42 @@ export async function callLLMClientSide(
   } catch (err: any) {
     if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
       const isLocalHost = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");
-      if (isLocalHost) {
-        throw new Error(`CORS/Connection Error: Cannot connect to local LLM endpoint (${targetUrl}). Ensure local server is running and CORS allows requests.`);
+
+      // Attempt CORS Proxy fallback for remote endpoints when browser direct fetch fails
+      if (!isLocalHost) {
+        try {
+          console.warn(`Direct fetch to ${targetUrl} failed with CORS error. Retrying via CORS proxy...`);
+          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+          const proxyRes = await fetch(proxyUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(reqBody)
+          });
+
+          if (proxyRes.ok) {
+            const proxyData: any = await proxyRes.json();
+            const proxyText = proxyData.choices?.[0]?.message?.content || "";
+            if (proxyText) {
+              return cleanJsonResponse(proxyText);
+            }
+          }
+        } catch (proxyErr) {
+          console.warn("CORS proxy attempt failed:", proxyErr);
+        }
       }
-      throw new Error(`Browser Connection / CORS Error for ${provider.toUpperCase()} (${targetUrl}). Direct browser access was blocked by CORS policy or the cloud endpoint is unreachable.`);
+
+      if (isLocalHost) {
+        throw new Error(
+          `CORS / Local Network Error: Cannot reach local Ollama endpoint (${targetUrl}). ` +
+          `If running Ollama locally, launch it with OLLAMA_ORIGINS="*" (e.g. OLLAMA_ORIGINS="*" ollama serve) to allow browser access.`
+        );
+      }
+
+      throw new Error(
+        `CORS Error reaching ${provider.toUpperCase()} at (${targetUrl}). ` +
+        `Direct browser calls were blocked by CORS. ` +
+        `Ensure your Cloud Ollama or server has CORS enabled ('OLLAMA_ORIGINS="*"') or use a CORS-friendly proxy URL.`
+      );
     }
     throw err;
   }

@@ -8,10 +8,10 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
   {
     id: "ollama",
     name: "Ollama",
-    tagline: "Local & cloud open-weights models",
-    defaultModel: "gemma4:31b",
-    models: ["gemma4:31b", "gpt-oss:20b", "nemotron-3-nano:30b-cloud"],
-    defaultBaseUrl: "https://ollama.com/v1",
+    tagline: "Local server or self-hosted Cloud Ollama",
+    defaultModel: "llama3.2",
+    models: ["llama3.2", "gemma2", "mistral", "qwen2.5", "deepseek-r1"],
+    defaultBaseUrl: "http://localhost:11434/v1",
     requiresKey: false
   },
   {
