@@ -249,8 +249,8 @@ export default function SettingsView({
         await resetIndexedDBDatabase();
       } else {
         // Clear all notebooks completely
-        const { saveAllDecksToDB } = await import("../db/indexedDB");
-        await saveAllDecksToDB([]);
+        const { clearAllNotebooksFromDB } = await import("../db/indexedDB");
+        await clearAllNotebooksFromDB();
       }
 
       // Clear any cached localStorage backups

@@ -8,11 +8,11 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
   {
     id: "ollama",
     name: "Ollama",
-    tagline: "Local server or self-hosted Cloud Ollama",
+    tagline: "Ollama Cloud API (https://ollama.com/v1)",
     defaultModel: "llama3.2",
     models: ["llama3.2", "gemma2", "mistral", "qwen2.5", "deepseek-r1"],
-    defaultBaseUrl: "http://localhost:11434/v1",
-    requiresKey: false
+    defaultBaseUrl: "https://ollama.com/v1",
+    requiresKey: true
   },
   {
     id: "openai",

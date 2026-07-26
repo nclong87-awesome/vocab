@@ -688,28 +688,23 @@ export default function LlmLoginModal({
             </div>
 
             {/* Custom Base URL */}
-            {(provider === "custom" || provider === "openrouter" || provider === "ollama" || baseUrl !== "") && (
+            {(provider === "custom" || provider === "openrouter" || baseUrl !== "") && (
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
                     <Globe className="w-3.5 h-3.5 text-stone-900" /> Endpoint Base URL
                   </label>
                   <span className="text-[10px] text-stone-500 font-mono">
-                    {provider === "ollama" ? "Local or Cloud Ollama URL" : "OpenAI-compatible API Base URL"}
+                    OpenAI-compatible API Base URL
                   </span>
                 </div>
                 <input
                   type="text"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder={provider === "ollama" ? "http://localhost:11434/v1 or https://your-cloud-ollama.com/v1" : "e.g. http://localhost:11434/v1 or https://my-proxy.com/v1"}
+                  placeholder="e.g. https://ollama.com/v1 or https://my-proxy.com/v1"
                   className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
                 />
-                {provider === "ollama" && (
-                  <p className="text-[11px] text-stone-600 bg-stone-100 p-2 border border-stone-200 font-sans leading-relaxed">
-                    💡 <strong>Tip for Ollama:</strong> For local Ollama, use <code className="bg-white px-1 py-0.5 border text-stone-900 font-mono">http://localhost:11434/v1</code> and launch with <code className="bg-white px-1 py-0.5 border text-stone-900 font-mono">OLLAMA_ORIGINS="*" ollama serve</code>. For Cloud Ollama, enter your cloud server domain (e.g. <code className="bg-white px-1 py-0.5 border text-stone-900 font-mono">https://ollama.yourdomain.com/v1</code>).
-                  </p>
-                )}
               </div>
             )}
 

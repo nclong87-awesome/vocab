@@ -106,14 +106,10 @@ async function callLLM(
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
   if (provider === "github") defaultBaseUrl = "https://models.github.ai/inference";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
 
-  let rawBaseUrl = baseUrl || defaultBaseUrl;
-  if (rawBaseUrl.includes("ollama.com/v1")) {
-    rawBaseUrl = "http://localhost:11434/v1";
-  }
-  const targetUrl = rawBaseUrl.replace(/\/$/, "") + "/chat/completions";
+  const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
   const headers: Record<string, string> = {
     "Authorization": `Bearer ${effectiveApiKey}`,

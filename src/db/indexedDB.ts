@@ -94,6 +94,8 @@ async function performTx<T>(
 // Load all decks from IndexedDB (with fallback/migration from localStorage or DEFAULT_DECKS)
 export async function getAllDecksFromDB(): Promise<Deck[]> {
   try {
+    const isInitialized = (await getSettingFromDB("db_initialized")) === "true" || localStorage.getItem("vocab_learner_db_initialized") === "true";
+
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORES.decks, "readonly");
@@ -103,7 +105,14 @@ export async function getAllDecksFromDB(): Promise<Deck[]> {
       req.onsuccess = async () => {
         const result = req.result as Deck[];
         if (result && result.length > 0) {
+          if (!isInitialized) {
+            await saveSettingToDB("db_initialized", "true");
+            localStorage.setItem("vocab_learner_db_initialized", "true");
+          }
           resolve(result);
+        } else if (isInitialized) {
+          // User initialized DB previously and explicitly cleared or deleted all decks
+          resolve([]);
         } else {
           // Check localStorage for migration
           const legacyDecks = localStorage.getItem("vocab_learner_decks");
@@ -112,6 +121,8 @@ export async function getAllDecksFromDB(): Promise<Deck[]> {
               const parsed = JSON.parse(legacyDecks);
               if (Array.isArray(parsed) && parsed.length > 0) {
                 await saveAllDecksToDB(parsed);
+                await saveSettingToDB("db_initialized", "true");
+                localStorage.setItem("vocab_learner_db_initialized", "true");
                 resolve(parsed);
                 return;
               }
@@ -119,20 +130,23 @@ export async function getAllDecksFromDB(): Promise<Deck[]> {
               console.error("Failed parsing legacy decks from localStorage:", e);
             }
           }
-          // Default fallback
+          // Default fallback on fresh install
           await saveAllDecksToDB(DEFAULT_DECKS);
+          await saveSettingToDB("db_initialized", "true");
+          localStorage.setItem("vocab_learner_db_initialized", "true");
           resolve(DEFAULT_DECKS);
         }
       };
 
       req.onerror = () => {
         console.error("Failed reading decks from IndexedDB:", req.error);
-        resolve(DEFAULT_DECKS);
+        resolve(isInitialized ? [] : DEFAULT_DECKS);
       };
     });
   } catch (err) {
-    console.error("IndexedDB unavailable, falling back to defaults:", err);
-    return DEFAULT_DECKS;
+    console.error("IndexedDB unavailable, falling back:", err);
+    const isInitialized = localStorage.getItem("vocab_learner_db_initialized") === "true";
+    return isInitialized ? [] : DEFAULT_DECKS;
   }
 }
 
@@ -140,7 +154,7 @@ export async function getAllDecksFromDB(): Promise<Deck[]> {
 export async function saveAllDecksToDB(decks: Deck[]): Promise<void> {
   try {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORES.decks, "readwrite");
       const store = tx.objectStore(STORES.decks);
 
@@ -155,6 +169,11 @@ export async function saveAllDecksToDB(decks: Deck[]): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
+
+    await saveSettingToDB("db_initialized", "true");
+    try {
+      localStorage.setItem("vocab_learner_db_initialized", "true");
+    } catch (e) {}
   } catch (err) {
     console.error("Error saving decks to IndexedDB:", err);
   }
@@ -533,5 +552,30 @@ export async function resetIndexedDBDatabase(): Promise<void> {
 
   // Restore defaults
   await saveAllDecksToDB(DEFAULT_DECKS);
+  await saveSettingToDB("db_initialized", "true");
+  try {
+    localStorage.setItem("vocab_learner_db_initialized", "true");
+    localStorage.removeItem("vocab_learner_decks");
+    localStorage.removeItem("vocab_learner_decks_backup");
+  } catch (e) {}
+}
+
+// Clear all notebooks completely without restoring default decks
+export async function clearAllNotebooksFromDB(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORES.decks, "readwrite");
+    const store = tx.objectStore(STORES.decks);
+    const clearReq = store.clear();
+    clearReq.onsuccess = () => resolve();
+    clearReq.onerror = () => reject(clearReq.error);
+  });
+
+  await saveSettingToDB("db_initialized", "true");
+  try {
+    localStorage.setItem("vocab_learner_db_initialized", "true");
+    localStorage.removeItem("vocab_learner_decks");
+    localStorage.removeItem("vocab_learner_decks_backup");
+  } catch (e) {}
 }
 

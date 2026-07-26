@@ -96,15 +96,10 @@ export async function callLLMClientSide(
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
   if (provider === "github") defaultBaseUrl = "https://models.github.ai/inference";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
 
-  // Sanitize target URL (replace ollama.com default if stale)
-  let rawBaseUrl = baseUrl || defaultBaseUrl;
-  if (rawBaseUrl.includes("ollama.com/v1")) {
-    rawBaseUrl = "http://localhost:11434/v1";
-  }
-  const targetUrl = rawBaseUrl.replace(/\/$/, "") + "/chat/completions";
+  const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
   const headers: Record<string, string> = {
     "Authorization": `Bearer ${effectiveApiKey}`,
@@ -146,10 +141,12 @@ export async function callLLMClientSide(
     if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
       const isLocalHost = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");
 
-      // Attempt CORS Proxy fallback for remote endpoints when browser direct fetch fails
+      // Attempt CORS Proxy fallbacks for remote endpoints when browser direct fetch fails due to browser CORS policy
       if (!isLocalHost) {
+        console.warn(`Direct fetch to ${targetUrl} failed with CORS error. Retrying via CORS proxy...`);
+
+        // Proxy Attempt 1: corsproxy.io
         try {
-          console.warn(`Direct fetch to ${targetUrl} failed with CORS error. Retrying via CORS proxy...`);
           const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
           const proxyRes = await fetch(proxyUrl, {
             method: "POST",
@@ -164,22 +161,41 @@ export async function callLLMClientSide(
               return cleanJsonResponse(proxyText);
             }
           }
-        } catch (proxyErr) {
-          console.warn("CORS proxy attempt failed:", proxyErr);
+        } catch (p1Err) {
+          console.warn("corsproxy.io fallback failed:", p1Err);
+        }
+
+        // Proxy Attempt 2: allorigins
+        try {
+          const proxyUrl2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+          const proxyRes2 = await fetch(proxyUrl2, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(reqBody)
+          });
+
+          if (proxyRes2.ok) {
+            const proxyData2: any = await proxyRes2.json();
+            const proxyText2 = proxyData2.choices?.[0]?.message?.content || "";
+            if (proxyText2) {
+              return cleanJsonResponse(proxyText2);
+            }
+          }
+        } catch (p2Err) {
+          console.warn("allorigins fallback failed:", p2Err);
         }
       }
 
       if (isLocalHost) {
         throw new Error(
-          `CORS / Local Network Error: Cannot reach local Ollama endpoint (${targetUrl}). ` +
-          `If running Ollama locally, launch it with OLLAMA_ORIGINS="*" (e.g. OLLAMA_ORIGINS="*" ollama serve) to allow browser access.`
+          `Local Network / CORS Error: Cannot connect to local LLM endpoint (${targetUrl}). ` +
+          `Ensure local service is running.`
         );
       }
 
       throw new Error(
-        `CORS Error reaching ${provider.toUpperCase()} at (${targetUrl}). ` +
-        `Direct browser calls were blocked by CORS. ` +
-        `Ensure your Cloud Ollama or server has CORS enabled ('OLLAMA_ORIGINS="*"') or use a CORS-friendly proxy URL.`
+        `Browser CORS Error: ${provider.toUpperCase()} endpoint (${targetUrl}) blocked direct browser requests. ` +
+        `If using full-stack deployment, backend requests handle CORS automatically. For static frontend hosting (e.g. GitHub Pages), ensure the provider API allows CORS or your API key is authorized.`
       );
     }
     throw err;

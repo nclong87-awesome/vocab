@@ -421,20 +421,10 @@ export default function App() {
 
   // Memoize Today's Practice Deck so object reference remains stable across renders
   const todayPracticeDeck = useMemo((): Deck => {
-    const activeDecksList = decks.length > 0 ? decks : DEFAULT_DECKS;
-    
-    // Gather all unique words
+    // Gather all unique words from active decks
     const allUniqueWordsMap = new Map<string, Word>();
     
-    // First, add all default words as a base
-    DEFAULT_DECKS.forEach(d => {
-      d.words.forEach(w => {
-        allUniqueWordsMap.set(w.word.toLowerCase(), w);
-      });
-    });
-
-    // Then overlay user's active decks to ensure custom progress is prioritized
-    activeDecksList.forEach(d => {
+    decks.forEach(d => {
       d.words.forEach(w => {
         allUniqueWordsMap.set(w.word.toLowerCase(), w);
       });
@@ -474,7 +464,7 @@ export default function App() {
     incorrectWordIds?: string[]
   ) => {
     setDecks(prevDecks => {
-      let updatedDecks = prevDecks.length > 0 ? [...prevDecks] : [...DEFAULT_DECKS];
+      let updatedDecks = [...prevDecks];
       if (correctWordIds || incorrectWordIds) {
         updatedDecks = updatedDecks.map(deck => {
           const updatedWords = deck.words.map(word => {
