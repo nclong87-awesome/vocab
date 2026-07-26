@@ -169,7 +169,7 @@ export default function FlashcardDeck({
           </div>
 
           {/* Flashcard Animation */}
-          <div className="relative h-[360px] w-full preserve-3d" id="flashcard-container">
+          <div className="relative min-h-[400px] sm:min-h-[440px] w-full preserve-3d" id="flashcard-container">
             <AnimatePresence mode="wait">
               {currentWord && (
                 <motion.div
@@ -178,14 +178,14 @@ export default function FlashcardDeck({
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.98 }}
                   transition={{ duration: 0.2 }}
-                  className="w-full h-full relative cursor-pointer group"
+                  className="w-full h-full relative cursor-pointer group flex flex-col"
                   onClick={handleFlip}
                 >
                   {/* Card Shell */}
-                  <div className="w-full h-full bg-white border border-stone-200 flex flex-col justify-between p-4 sm:p-8 overflow-hidden relative">
+                  <div className="w-full min-h-[400px] sm:min-h-[440px] bg-white border border-stone-200 flex flex-col justify-between p-4 sm:p-6 relative">
                     
                     {/* Background Decorative Element */}
-                    <div className="absolute -right-16 -top-16 w-32 h-32 rounded-full bg-stone-50 blur-2xl" />
+                    <div className="absolute -right-16 -top-16 w-32 h-32 rounded-full bg-stone-50 blur-2xl pointer-events-none" />
 
                     {/* Quick Star & Audio Indicators */}
                     <div className="flex justify-between items-center z-10">
@@ -220,8 +220,8 @@ export default function FlashcardDeck({
                       </div>
                     </div>
 
-                    {/* Word Display (Body) */}
-                    <div className="text-center py-6 flex flex-col items-center justify-center flex-1">
+                    {/* Word Display (Body) with Scroll Support */}
+                    <div className="text-center py-2 my-auto flex flex-col items-center justify-center flex-1 w-full overflow-y-auto max-h-[300px] sm:max-h-[340px] pr-1 z-10">
                       <AnimatePresence mode="wait">
                         {!isFlipped ? (
                           <motion.div 
@@ -229,7 +229,7 @@ export default function FlashcardDeck({
                             initial={{ opacity: 0, y: 5 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -5 }}
-                            className="space-y-4"
+                            className="space-y-4 my-auto"
                           >
                             <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-stone-950">
                               {currentWord.word}
@@ -247,24 +247,27 @@ export default function FlashcardDeck({
                             initial={{ opacity: 0, y: 5 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -5 }}
-                            className="space-y-4 w-full"
+                            className="space-y-3 w-full my-auto"
                           >
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <span className="text-xs font-semibold text-stone-500 font-mono">Meaning & Translation</span>
-                              <h4 className="text-2xl font-bold text-stone-900 leading-tight font-serif italic">
+                              <h4 className="text-xl sm:text-2xl font-bold text-stone-900 leading-tight font-serif italic">
                                 "{currentWord.translation}"
                               </h4>
-                              <p className="text-sm text-stone-500 max-w-md mx-auto leading-relaxed pt-1 font-sans">
+                              <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto leading-relaxed pt-0.5 font-sans">
                                 {currentWord.definition}
                               </p>
                             </div>
 
-                            <div className="bg-stone-50 p-4 border border-stone-200 text-left space-y-1.5 mt-2">
+                            <div 
+                              className="bg-stone-50 p-3.5 border border-stone-200 text-left space-y-1.5 mt-2 max-h-48 overflow-y-auto"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <span className="text-xs font-semibold text-stone-500 font-mono">Example Usage</span>
                               <p className="text-xs md:text-sm text-stone-800 font-serif italic leading-relaxed">
                                 "{currentWord.example}"
                               </p>
-                              <p className="text-[11px] text-stone-400 italic">
+                              <p className="text-xs text-stone-500 italic">
                                 "{currentWord.exampleTranslation}"
                               </p>
                             </div>

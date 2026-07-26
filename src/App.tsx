@@ -18,9 +18,10 @@ import {
   Sliders
 } from "lucide-react";
 
-import { Deck, Word, UserStats, LLMConfig, TTSConfig } from "./types";
+import { Deck, Word, UserStats, LLMConfig, TTSConfig, LLMProvider } from "./types";
 import { DEFAULT_DECKS } from "./defaultDecks";
 import { calculateNewStreak, getTodayStr } from "./utils";
+import { switchActiveProvider } from "./utils/llmHelpers";
 import { 
   getAllDecksFromDB, 
   saveAllDecksToDB, 
@@ -201,6 +202,21 @@ export default function App() {
       totalWordsStudied: totalStudiedCount,
       streak: updatedStreak
     });
+  };
+
+  // Open LLM Modal with optional target provider
+  const handleOpenLlmModal = (initialProvider?: LLMProvider) => {
+    if (initialProvider && initialProvider !== llmConfig.provider) {
+      const switched = switchActiveProvider(llmConfig, initialProvider);
+      setLlmConfig(switched);
+      saveLLMConfigToDB(switched).catch(e => console.error("IndexedDB config save error:", e));
+      try {
+        localStorage.setItem("vocab_learner_llm_config", JSON.stringify(switched));
+      } catch (e) {
+        console.error("Failed to save LLM config to localStorage", e);
+      }
+    }
+    setIsLlmModalOpen(true);
   };
 
   // Save LLM Config
@@ -682,7 +698,8 @@ export default function App() {
                 ttsConfig={ttsConfig}
                 llmConfig={llmConfig}
                 onSaveTTSConfig={handleSaveTTSConfig}
-                onOpenLlmModal={() => setIsLlmModalOpen(true)}
+                onSaveLLMConfig={handleSaveLlmConfig}
+                onOpenLlmModal={handleOpenLlmModal}
                 onReloadData={reloadAllDataFromDB}
               />
             )}

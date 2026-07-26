@@ -18,10 +18,13 @@ import {
   Server,
   Globe2,
   BookOpen,
-  Check
+  Check,
+  Zap,
+  BookmarkCheck
 } from "lucide-react";
-import { LLMConfig, LLMProvider } from "../types";
+import { LLMConfig, LLMProvider, SavedProviderConfig, SavedProvidersMap } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { getSavedProvidersMap } from "../utils/llmHelpers";
 
 export interface LanguageOption {
   code: string;
@@ -81,6 +84,9 @@ export default function LlmLoginModal({
   const [customNative, setCustomNative] = useState<string>("");
   const [customTarget, setCustomTarget] = useState<string>("");
 
+  // Saved Providers Profiles Map
+  const [savedProfiles, setSavedProfiles] = useState<SavedProvidersMap>({});
+
   // LLM Config state
   const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "ollama");
   const [model, setModel] = useState<string>(currentConfig.model || "gemma4:31b");
@@ -96,10 +102,24 @@ export default function LlmLoginModal({
   useEffect(() => {
     if (isOpen) {
       setStep(canDismiss ? 3 : 1);
-      setProvider(currentConfig.provider || "ollama");
-      setModel(currentConfig.model || "gemma4:31b");
-      setApiKey(currentConfig.apiKey || "");
-      setBaseUrl(currentConfig.baseUrl || "");
+
+      const profiles = getSavedProvidersMap(currentConfig);
+      setSavedProfiles(profiles);
+
+      const activeP = currentConfig.provider || "ollama";
+      setProvider(activeP);
+
+      const activeSaved = profiles[activeP];
+      if (activeSaved) {
+        setModel(activeSaved.model || currentConfig.model || "gemma4:31b");
+        setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
+        setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
+      } else {
+        setModel(currentConfig.model || "gemma4:31b");
+        setApiKey(currentConfig.apiKey || "");
+        setBaseUrl(currentConfig.baseUrl || "");
+      }
+
       setTestingStatus("idle");
       setTestMessage("");
       
@@ -117,13 +137,29 @@ export default function LlmLoginModal({
   const handleProviderSelect = (pId: LLMProvider) => {
     const meta = PROVIDER_OPTIONS.find(p => p.id === pId);
     setProvider(pId);
-    if (meta) {
+    setTestingStatus("idle");
+    setTestMessage("");
+
+    // Auto-fill from saved profile if available
+    const saved = savedProfiles[pId];
+    if (saved) {
+      setApiKey(saved.apiKey || "");
+      setBaseUrl(saved.baseUrl !== undefined ? saved.baseUrl : (meta?.defaultBaseUrl || ""));
+      
+      if (meta && meta.models.includes(saved.model)) {
+        setModel(saved.model);
+        setIsCustomModelMode(false);
+      } else {
+        setModel(saved.model || meta?.defaultModel || "");
+        setCustomModel(saved.model || "");
+        setIsCustomModelMode(meta ? !meta.models.includes(saved.model) : false);
+      }
+    } else if (meta) {
       setModel(meta.defaultModel);
+      setApiKey("");
       setBaseUrl(meta.defaultBaseUrl || "");
       setIsCustomModelMode(false);
     }
-    setTestingStatus("idle");
-    setTestMessage("");
   };
 
   const handleTestConnection = async () => {
@@ -191,12 +227,25 @@ export default function LlmLoginModal({
       return;
     }
 
+    const updatedSavedProfiles: SavedProvidersMap = {
+      ...savedProfiles,
+      [provider]: {
+        provider,
+        model: activeModel,
+        apiKey: apiKey.trim(),
+        baseUrl: baseUrl.trim(),
+        isLoggedIn: true,
+        lastUsedAt: new Date().toISOString()
+      }
+    };
+
     const newConfig: LLMConfig = {
       provider,
       model: activeModel,
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim(),
-      isLoggedIn: true
+      isLoggedIn: true,
+      savedProviders: updatedSavedProfiles
     };
 
     if (onSaveOnboarding) {
@@ -487,6 +536,38 @@ export default function LlmLoginModal({
               </button>
             </div>
 
+            {/* Quick Switch Saved Engine Profiles Bar */}
+            {Object.keys(savedProfiles).length > 0 && (
+              <div className="bg-amber-50/60 border border-amber-200/80 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-900 uppercase tracking-wider">
+                  <BookmarkCheck className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Stored AI Engine Profiles</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.values(savedProfiles) as SavedProviderConfig[]).map((sp) => {
+                    const isCurrent = provider === sp.provider;
+                    const meta = PROVIDER_OPTIONS.find(p => p.id === sp.provider);
+                    return (
+                      <button
+                        key={sp.provider}
+                        type="button"
+                        onClick={() => handleProviderSelect(sp.provider)}
+                        className={`px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                          isCurrent 
+                            ? "bg-amber-900 text-white border-amber-950 shadow-xs" 
+                            : "bg-white hover:bg-amber-100/70 text-amber-950 border-amber-300"
+                        }`}
+                      >
+                        <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                        <span>{meta?.name || sp.provider}</span>
+                        <span className="opacity-75 font-mono text-[10px]">({sp.model})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Select Provider */}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-stone-900 flex items-center gap-2">
@@ -495,28 +576,41 @@ export default function LlmLoginModal({
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-2.5">
                 {PROVIDER_OPTIONS.map((p) => {
                   const isSelected = provider === p.id;
+                  const saved = savedProfiles[p.id];
+                  const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
                   return (
                     <button
                       type="button"
                       key={p.id}
                       onClick={() => handleProviderSelect(p.id)}
-                      className={`p-2.5 sm:p-3 border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      className={`p-2.5 sm:p-3 border text-left transition-all cursor-pointer flex flex-col justify-between relative ${
                         isSelected 
                           ? "bg-stone-900 text-white border-stone-900 shadow-xs" 
                           : "bg-stone-50 text-stone-800 border-stone-200 hover:bg-stone-100 hover:border-stone-400"
                       }`}
                     >
                       <div>
-                        <div className="font-bold text-xs tracking-tight">{p.name}</div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-xs tracking-tight">{p.name}</span>
+                          {isSaved && !isSelected && (
+                            <span className="text-[9px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.5 border border-amber-300">
+                              Saved
+                            </span>
+                          )}
+                        </div>
                         <div className={`text-[10px] mt-0.5 font-serif italic line-clamp-1 ${isSelected ? "text-stone-300" : "text-stone-500"}`}>
                           {p.tagline}
                         </div>
                       </div>
-                      {isSelected && (
-                        <div className="mt-1.5 self-end">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                        </div>
-                      )}
+
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className={`text-[10px] font-mono ${isSelected ? "text-stone-300" : "text-stone-500"}`}>
+                          {saved ? saved.model : p.defaultModel}
+                        </span>
+                        {isSelected && (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0 ml-1" />
+                        )}
+                      </div>
                     </button>
                   );
                 })}

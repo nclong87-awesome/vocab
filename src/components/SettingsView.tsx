@@ -23,9 +23,15 @@ import {
   AlertTriangle,
   Trash2,
   FileJson,
-  CheckCircle2
+  CheckCircle2,
+  Zap,
+  BookmarkCheck,
+  ShieldCheck,
+  ExternalLink
 } from "lucide-react";
-import { TTSConfig, TTSEngine, LLMConfig } from "../types";
+import { TTSConfig, TTSEngine, LLMConfig, LLMProvider, SavedProviderConfig } from "../types";
+import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
 import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { 
   exportIndexedDBDatabase, 
@@ -37,7 +43,8 @@ interface SettingsViewProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   onSaveTTSConfig: (newConfig: TTSConfig) => void;
-  onOpenLlmModal: () => void;
+  onSaveLLMConfig?: (newConfig: LLMConfig) => void;
+  onOpenLlmModal: (initialProvider?: LLMProvider) => void;
   onReloadData?: () => Promise<void>;
 }
 
@@ -45,6 +52,7 @@ export default function SettingsView({
   ttsConfig,
   llmConfig,
   onSaveTTSConfig,
+  onSaveLLMConfig,
   onOpenLlmModal,
   onReloadData
 }: SettingsViewProps) {
@@ -54,10 +62,53 @@ export default function SettingsView({
   const [isTesting, setIsTesting] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(false);
 
+  // LLM Test state
+  const [testingLlm, setTestingLlm] = useState(false);
+  const [llmTestResult, setLlmTestResult] = useState<{ success: boolean; msg: string } | null>(null);
+
   // IndexedDB Import / Export State
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [dbStatusMessage, setDbStatusMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+
+  // LLM Multi-Provider Handlers
+  const savedProvidersMap = getSavedProvidersMap(llmConfig);
+
+  const handleSwitchProvider = (pId: LLMProvider) => {
+    const newConfig = switchActiveProvider(llmConfig, pId);
+    if (onSaveLLMConfig) {
+      onSaveLLMConfig(newConfig);
+    }
+  };
+
+  const handleRemoveProvider = (pId: LLMProvider) => {
+    const newConfig = removeProviderProfile(llmConfig, pId);
+    if (onSaveLLMConfig) {
+      onSaveLLMConfig(newConfig);
+    }
+  };
+
+  const handleTestActiveLLM = async () => {
+    setTestingLlm(true);
+    setLlmTestResult(null);
+    try {
+      const res = await fetch("/api/test-llm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ llmConfig })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setLlmTestResult({ success: true, msg: "Active model test passed! Responded successfully." });
+      } else {
+        setLlmTestResult({ success: false, msg: data.error || "Connection test failed." });
+      }
+    } catch (err: any) {
+      setLlmTestResult({ success: false, msg: err.message || "Failed to reach server." });
+    } finally {
+      setTestingLlm(false);
+    }
+  };
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load system voices for browser TTS
@@ -748,35 +799,202 @@ export default function SettingsView({
             <div className={`w-3 h-3 rounded-full ${config.autoPlayAudioInQuiz ? "bg-amber-400" : "bg-stone-300"}`} />
           </button>
         </div>
+      </div>
 
-        {/* LLM AI Provider Status */}
-        <div className="bg-white border border-stone-200 p-6 space-y-4 flex flex-col justify-between">
+      {/* Section 4: AI Model Engine Multi-Provider Connections */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+        <div className="border-b border-stone-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-stone-800" />
-                Vocabulary Generator LLM
-              </h3>
-              <span className={`w-2 h-2 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500" : "bg-red-500"}`} />
-            </div>
-            <p className="text-xs text-stone-500 mt-1">
-              Active model for AI deck generation and single-word autofill details
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Bot className="w-4 h-4 text-stone-800" />
+              AI Model Provider Connections & Key Storage
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Connect and store credentials for multiple LLM providers (Ollama, OpenAI, GitHub Models, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
             </p>
           </div>
 
-          <div className="bg-stone-50 border border-stone-200 p-3 flex items-center justify-between text-xs">
-            <div>
-              <p className="font-semibold text-stone-900 capitalize">{llmConfig.provider}</p>
-              <p className="text-[11px] text-stone-500 font-mono mt-0.5">{llmConfig.model}</p>
+          <button
+            type="button"
+            onClick={() => onOpenLlmModal()}
+            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0 self-start md:self-auto"
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>Add / Edit Provider Credentials</span>
+          </button>
+        </div>
+
+        {/* Active Engine Highlight Box */}
+        <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Active AI Engine:</span>
+              <span className="text-sm font-black text-stone-900 capitalize flex items-center gap-1.5">
+                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
+                <span className="text-xs font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2 py-0.5">
+                  {llmConfig.model}
+                </span>
+              </span>
             </div>
+
             <button
               type="button"
-              onClick={onOpenLlmModal}
-              className="px-3 py-1.5 bg-stone-900 text-white text-xs font-medium hover:bg-stone-800 transition-all cursor-pointer flex items-center gap-1"
+              onClick={handleTestActiveLLM}
+              disabled={testingLlm}
+              className="px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
             >
-              <Key className="w-3 h-3" />
-              <span>Configure Key</span>
+              {testingLlm ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-600" />
+                  <span>Testing Active Engine...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                  <span>Test Active Connection</span>
+                </>
+              )}
             </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key Status</span>
+              <span className="font-mono text-stone-800 font-semibold">
+                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
+              <span className="font-mono text-stone-800 font-semibold truncate block">
+                {llmConfig.baseUrl || "Default API Gateway"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Total Saved Profiles</span>
+              <span className="font-semibold text-stone-800">
+                {Object.keys(savedProvidersMap).length} Provider Credentials Stored
+              </span>
+            </div>
+          </div>
+
+          {llmTestResult && (
+            <div className={`p-2.5 text-xs font-semibold flex items-center gap-2 border ${
+              llmTestResult.success ? "bg-emerald-50 border-emerald-300 text-emerald-900" : "bg-red-50 border-red-300 text-red-900"
+            }`}>
+              {llmTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+              <span>{llmTestResult.msg}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Provider Cards Grid */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
+            Stored AI Engine Profiles ({PROVIDER_OPTIONS.length} Supported Providers)
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {PROVIDER_OPTIONS.map((p) => {
+              const isActive = llmConfig.provider === p.id;
+              const saved = savedProvidersMap[p.id];
+              const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
+
+              return (
+                <div
+                  key={p.id}
+                  className={`p-4 border flex flex-col justify-between space-y-3 transition-all ${
+                    isActive 
+                      ? "bg-stone-900 text-white border-stone-900 shadow-sm" 
+                      : isSaved 
+                      ? "bg-amber-50/40 border-amber-200 text-stone-900" 
+                      : "bg-white border-stone-200 text-stone-800"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs tracking-tight">{p.name}</span>
+                      {isActive ? (
+                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 flex items-center gap-1">
+                          <Zap className="w-2.5 h-2.5 fill-current" />
+                          ACTIVE
+                        </span>
+                      ) : isSaved ? (
+                        <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1">
+                          <BookmarkCheck className="w-2.5 h-2.5" />
+                          SAVED
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-stone-400">Not Saved</span>
+                      )}
+                    </div>
+                    <p className={`text-[11px] font-serif italic line-clamp-1 ${isActive ? "text-stone-300" : "text-stone-500"}`}>
+                      {p.tagline}
+                    </p>
+                  </div>
+
+                  <div className={`p-2 text-[11px] font-mono border space-y-0.5 ${
+                    isActive ? "bg-stone-800 border-stone-700 text-stone-200" : "bg-white/80 border-stone-200 text-stone-700"
+                  }`}>
+                    <div className="flex justify-between">
+                      <span className="opacity-60">Model:</span>
+                      <span className="font-bold">{saved ? saved.model : p.defaultModel}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="opacity-60">Key:</span>
+                      <span>
+                        {saved?.apiKey 
+                          ? `••••${saved.apiKey.slice(-4)}` 
+                          : p.requiresKey ? "None" : "Free / Local"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    {!isActive && isSaved && (
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchProvider(p.id)}
+                        className="flex-1 py-1.5 px-2 bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="Switch to this provider profile"
+                      >
+                        <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                        <span>Switch</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenLlmModal(p.id)}
+                      className={`py-1.5 px-2.5 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                        isActive 
+                          ? "w-full bg-white text-stone-900 hover:bg-stone-100" 
+                          : isSaved 
+                          ? "bg-white border border-stone-300 text-stone-900 hover:bg-stone-100" 
+                          : "w-full bg-stone-900 hover:bg-black text-white"
+                      }`}
+                    >
+                      <Key className="w-3 h-3" />
+                      <span>{isSaved ? "Edit" : "Configure"}</span>
+                    </button>
+
+                    {isSaved && !isActive && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveProvider(p.id)}
+                        className="p-1.5 bg-white hover:bg-red-50 border border-stone-200 hover:border-red-300 text-stone-400 hover:text-red-600 transition-all cursor-pointer"
+                        title="Remove stored credentials for this provider"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

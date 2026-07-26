@@ -24,12 +24,24 @@ export interface LLMProviderOption {
   requiresKey: boolean;
 }
 
+export interface SavedProviderConfig {
+  provider: LLMProvider;
+  model: string;
+  apiKey: string;
+  baseUrl?: string;
+  isLoggedIn: boolean;
+  lastUsedAt?: string;
+}
+
+export type SavedProvidersMap = Record<string, SavedProviderConfig>;
+
 export interface LLMConfig {
   provider: LLMProvider;
   model: string;
   apiKey: string;
   baseUrl?: string;
   isLoggedIn: boolean;
+  savedProviders?: SavedProvidersMap;
 }
 
 export interface Word {

@@ -11,7 +11,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Local & cloud open-weights models",
     defaultModel: "gemma4:31b",
     models: ["gemma4:31b", "gpt-oss:20b", "nemotron-3-nano:30b-cloud"],
-    defaultBaseUrl: "http://localhost:11434/v1",
+    defaultBaseUrl: "https://ollama.com/v1",
     requiresKey: false
   },
   {
