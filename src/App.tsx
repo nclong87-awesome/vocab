@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Sparkles, 
@@ -26,6 +26,8 @@ import { generateDeckService } from "./services/llmClientService";
 import { 
   getAllDecksFromDB, 
   saveAllDecksToDB, 
+  saveSingleDeckToDB,
+  deleteDeckFromDB,
   getStatsFromDB, 
   saveStatsToDB, 
   getLLMConfigFromDB, 
@@ -126,84 +128,88 @@ export default function App() {
   };
 
   // Save decks to IndexedDB when changed
-  const saveDecksToStorage = (updatedDecks: Deck[]) => {
+  const saveDecksToStorage = useCallback((updatedDecks: Deck[]) => {
     setDecks(updatedDecks);
     saveAllDecksToDB(updatedDecks).catch(e => console.error("IndexedDB deck save error:", e));
-    try {
-      localStorage.setItem("vocab_learner_decks", JSON.stringify(updatedDecks));
-    } catch (e) {
-      console.error("Failed to save decks to localStorage", e);
-    }
-  };
+  }, []);
 
   // Save stats to IndexedDB when changed
-  const saveStatsToStorage = (updatedStats: UserStats) => {
+  const saveStatsToStorage = useCallback((updatedStats: UserStats) => {
     setStats(updatedStats);
     saveStatsToDB(updatedStats).catch(e => console.error("IndexedDB stats save error:", e));
-    try {
-      localStorage.setItem("vocab_learner_stats", JSON.stringify(updatedStats));
-    } catch (e) {
-      console.error("Failed to save stats to localStorage", e);
-    }
-  };
+  }, []);
 
   // Word interactions (starred state)
-  const handleToggleStar = (wordId: string) => {
-    const updatedDecks = decks.map(deck => {
-      const wordIdx = deck.words.findIndex(w => w.id === wordId);
-      if (wordIdx !== -1) {
-        const updatedWords = [...deck.words];
-        updatedWords[wordIdx] = { 
-          ...updatedWords[wordIdx], 
-          starred: !updatedWords[wordIdx].starred 
-        };
-        return { ...deck, words: updatedWords };
+  const handleToggleStar = useCallback((wordId: string) => {
+    setDecks(prevDecks => {
+      let modifiedDeck: Deck | null = null;
+      const updatedDecks = prevDecks.map(deck => {
+        const wordIdx = deck.words.findIndex(w => w.id === wordId);
+        if (wordIdx !== -1) {
+          const updatedWords = [...deck.words];
+          updatedWords[wordIdx] = { 
+            ...updatedWords[wordIdx], 
+            starred: !updatedWords[wordIdx].starred 
+          };
+          modifiedDeck = { ...deck, words: updatedWords };
+          return modifiedDeck;
+        }
+        return deck;
+      });
+
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB star save error:", e));
       }
-      return deck;
+      return updatedDecks;
     });
-    saveDecksToStorage(updatedDecks);
-  };
+  }, []);
 
   // Word mastery interaction
-  const handleToggleLearned = (wordId: string) => {
-    let isNowMastered = false;
-    const updatedDecks = decks.map(deck => {
-      const wordIdx = deck.words.findIndex(w => w.id === wordId);
-      if (wordIdx !== -1) {
-        const updatedWords = [...deck.words];
-        isNowMastered = !updatedWords[wordIdx].learned;
-        updatedWords[wordIdx] = { 
-          ...updatedWords[wordIdx], 
-          learned: isNowMastered,
-          lastReviewed: new Date().toISOString(),
-          strength: isNowMastered ? 4 : 0
-        };
-        return { ...deck, words: updatedWords };
+  const handleToggleLearned = useCallback((wordId: string) => {
+    setDecks(prevDecks => {
+      let modifiedDeck: Deck | null = null;
+      const updatedDecks = prevDecks.map(deck => {
+        const wordIdx = deck.words.findIndex(w => w.id === wordId);
+        if (wordIdx !== -1) {
+          const updatedWords = [...deck.words];
+          const isNowMastered = !updatedWords[wordIdx].learned;
+          updatedWords[wordIdx] = { 
+            ...updatedWords[wordIdx], 
+            learned: isNowMastered,
+            lastReviewed: new Date().toISOString(),
+            strength: isNowMastered ? 4 : 0
+          };
+          modifiedDeck = { ...deck, words: updatedWords };
+          return modifiedDeck;
+        }
+        return deck;
+      });
+
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB learned save error:", e));
       }
-      return deck;
+
+      setStats(prevStats => {
+        const updatedStreak = calculateNewStreak(prevStats.streak);
+        const totalMasteredCount = updatedDecks.reduce((acc, d) => 
+          acc + d.words.filter(w => w.learned).length, 0
+        );
+        const totalStudiedCount = updatedDecks.reduce((acc, d) => 
+          acc + d.words.filter(w => w.lastReviewed !== null).length, 0
+        );
+        const newStats = {
+          ...prevStats,
+          totalWordsMastered: totalMasteredCount,
+          totalWordsStudied: totalStudiedCount,
+          streak: updatedStreak
+        };
+        saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
+        return newStats;
+      });
+
+      return updatedDecks;
     });
-    
-    saveDecksToStorage(updatedDecks);
-
-    // Update statistics
-    const todayStr = getTodayStr();
-    const updatedStreak = calculateNewStreak(stats.streak);
-
-    const totalMasteredCount = updatedDecks.reduce((acc, d) => 
-      acc + d.words.filter(w => w.learned).length, 0
-    );
-
-    const totalStudiedCount = updatedDecks.reduce((acc, d) => 
-      acc + d.words.filter(w => w.lastReviewed !== null).length, 0
-    );
-
-    saveStatsToStorage({
-      ...stats,
-      totalWordsMastered: totalMasteredCount,
-      totalWordsStudied: totalStudiedCount,
-      streak: updatedStreak
-    });
-  };
+  }, []);
 
   // Open LLM Modal with optional target provider
   const handleOpenLlmModal = (initialProvider?: LLMProvider) => {
@@ -261,15 +267,6 @@ export default function App() {
     }
 
     setIsLlmModalOpen(false);
-  };
-
-  // Handle deck deletion
-  const handleDeleteDeck = (deckId: string) => {
-    const updatedDecks = decks.filter(d => d.id !== deckId);
-    saveDecksToStorage(updatedDecks);
-    if (selectedDeckId === deckId) {
-      setSelectedDeckId(null);
-    }
   };
 
   // Handle AI deck generation
@@ -342,42 +339,57 @@ export default function App() {
   };
 
   // Add custom manual word
-  const handleAddCustomWord = (
+  const handleAddCustomWord = useCallback((
     deckId: string, 
     wordData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">
   ) => {
-    const updatedDecks = decks.map(deck => {
-      if (deck.id === deckId) {
-        const newWordItem: Word = {
-          ...wordData,
-          id: `manual-word-${Date.now()}`,
-          learned: false,
-          starred: false,
-          createdAt: new Date().toISOString(),
-          lastReviewed: null,
-          strength: 0
-        };
-        return { ...deck, words: [...deck.words, newWordItem] };
-      }
-      return deck;
-    });
+    setDecks(prevDecks => {
+      let modifiedDeck: Deck | null = null;
+      const updatedDecks = prevDecks.map(deck => {
+        if (deck.id === deckId) {
+          const newWordItem: Word = {
+            ...wordData,
+            id: `manual-word-${Date.now()}`,
+            learned: false,
+            starred: false,
+            createdAt: new Date().toISOString(),
+            lastReviewed: null,
+            strength: 0
+          };
+          modifiedDeck = { ...deck, words: [...deck.words, newWordItem] };
+          return modifiedDeck;
+        }
+        return deck;
+      });
 
-    saveDecksToStorage(updatedDecks);
-  };
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB add word save error:", e));
+      }
+      return updatedDecks;
+    });
+  }, []);
 
   // Delete individual word
-  const handleDeleteWord = (deckId: string, wordId: string) => {
-    const updatedDecks = decks.map(deck => {
-      if (deck.id === deckId) {
-        return { ...deck, words: deck.words.filter(w => w.id !== wordId) };
+  const handleDeleteWord = useCallback((deckId: string, wordId: string) => {
+    setDecks(prevDecks => {
+      let modifiedDeck: Deck | null = null;
+      const updatedDecks = prevDecks.map(deck => {
+        if (deck.id === deckId) {
+          modifiedDeck = { ...deck, words: deck.words.filter(w => w.id !== wordId) };
+          return modifiedDeck;
+        }
+        return deck;
+      });
+
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB delete word save error:", e));
       }
-      return deck;
+      return updatedDecks;
     });
-    saveDecksToStorage(updatedDecks);
-  };
+  }, []);
 
   // Create an empty custom notebook
-  const handleAddCustomDeck = (
+  const handleAddCustomDeck = useCallback((
     name: string, 
     description: string, 
     targetLanguage: string, 
@@ -392,12 +404,23 @@ export default function App() {
       targetLanguage,
       nativeLanguage
     };
-    saveDecksToStorage([newDeck, ...decks]);
+    setDecks(prevDecks => {
+      const updated = [newDeck, ...prevDecks];
+      saveAllDecksToDB(updated).catch(e => console.error("IndexedDB create deck save error:", e));
+      return updated;
+    });
     setSelectedDeckId(newDeck.id);
-  };
+  }, []);
 
-  // Helper to generate Today's Practice Deck
-  const getTodayPracticeDeck = (): Deck => {
+  // Handle deck deletion
+  const handleDeleteDeck = useCallback((deckId: string) => {
+    setDecks(prevDecks => prevDecks.filter(d => d.id !== deckId));
+    deleteDeckFromDB(deckId).catch(e => console.error("IndexedDB delete deck error:", e));
+    setSelectedDeckId(prev => prev === deckId ? null : prev);
+  }, []);
+
+  // Memoize Today's Practice Deck so object reference remains stable across renders
+  const todayPracticeDeck = useMemo((): Deck => {
     const activeDecksList = decks.length > 0 ? decks : DEFAULT_DECKS;
     
     // Gather all unique words
@@ -441,68 +464,76 @@ export default function App() {
       targetLanguage: "English",
       nativeLanguage: "Spanish"
     };
-  };
+  }, [decks]);
 
   // Quiz completion handler
-  const handleFinishQuiz = (
+  const handleFinishQuiz = useCallback((
     score: number, 
     total: number, 
     correctWordIds?: string[], 
     incorrectWordIds?: string[]
   ) => {
-    const updatedStreak = calculateNewStreak(stats.streak);
-    
-    // Update individual words' strength and learned status if passed
-    let updatedDecks = decks.length > 0 ? [...decks] : [...DEFAULT_DECKS];
-    if (correctWordIds || incorrectWordIds) {
-      updatedDecks = updatedDecks.map(deck => {
-        const updatedWords = deck.words.map(word => {
-          const originalId = word.id;
-          const virtualId = `today-${word.id}`;
-          
-          if (correctWordIds?.includes(originalId) || correctWordIds?.includes(virtualId)) {
-            const newStrength = Math.min(4, word.strength + 1);
-            return {
-              ...word,
-              strength: newStrength,
-              learned: newStrength >= 3 ? true : word.learned,
-              lastReviewed: new Date().toISOString()
-            };
-          }
-          if (incorrectWordIds?.includes(originalId) || incorrectWordIds?.includes(virtualId)) {
-            const newStrength = Math.max(0, word.strength - 1);
-            return {
-              ...word,
-              strength: newStrength,
-              lastReviewed: new Date().toISOString()
-            };
-          }
-          return word;
+    setDecks(prevDecks => {
+      let updatedDecks = prevDecks.length > 0 ? [...prevDecks] : [...DEFAULT_DECKS];
+      if (correctWordIds || incorrectWordIds) {
+        updatedDecks = updatedDecks.map(deck => {
+          const updatedWords = deck.words.map(word => {
+            const originalId = word.id;
+            const virtualId = `today-${word.id}`;
+            
+            if (correctWordIds?.includes(originalId) || correctWordIds?.includes(virtualId)) {
+              const newStrength = Math.min(4, word.strength + 1);
+              return {
+                ...word,
+                strength: newStrength,
+                learned: newStrength >= 3 ? true : word.learned,
+                lastReviewed: new Date().toISOString()
+              };
+            }
+            if (incorrectWordIds?.includes(originalId) || incorrectWordIds?.includes(virtualId)) {
+              const newStrength = Math.max(0, word.strength - 1);
+              return {
+                ...word,
+                strength: newStrength,
+                lastReviewed: new Date().toISOString()
+              };
+            }
+            return word;
+          });
+          return { ...deck, words: updatedWords };
         });
-        return { ...deck, words: updatedWords };
+        saveAllDecksToDB(updatedDecks).catch(e => console.error("IndexedDB quiz decks save error:", e));
+      }
+
+      setStats(prevStats => {
+        const updatedStreak = calculateNewStreak(prevStats.streak);
+        const totalMasteredCount = updatedDecks.reduce((acc, d) => 
+          acc + d.words.filter(w => w.learned).length, 0
+        );
+
+        const totalStudiedCount = updatedDecks.reduce((acc, d) => 
+          acc + d.words.filter(w => w.lastReviewed !== null).length, 0
+        );
+
+        const newStats = {
+          ...prevStats,
+          totalQuizzesTaken: prevStats.totalQuizzesTaken + 1,
+          totalCorrectAnswers: prevStats.totalCorrectAnswers + score,
+          totalWordsMastered: totalMasteredCount > 0 ? totalMasteredCount : prevStats.totalWordsMastered,
+          totalWordsStudied: totalStudiedCount > 0 ? totalStudiedCount : prevStats.totalWordsStudied,
+          streak: updatedStreak
+        };
+        saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
+        return newStats;
       });
-      saveDecksToStorage(updatedDecks);
-    }
 
-    const totalMasteredCount = updatedDecks.reduce((acc, d) => 
-      acc + d.words.filter(w => w.learned).length, 0
-    );
-
-    const totalStudiedCount = updatedDecks.reduce((acc, d) => 
-      acc + d.words.filter(w => w.lastReviewed !== null).length, 0
-    );
-
-    saveStatsToStorage({
-      ...stats,
-      totalQuizzesTaken: stats.totalQuizzesTaken + 1,
-      totalCorrectAnswers: stats.totalCorrectAnswers + score,
-      totalWordsMastered: totalMasteredCount > 0 ? totalMasteredCount : stats.totalWordsMastered,
-      totalWordsStudied: totalStudiedCount > 0 ? totalStudiedCount : stats.totalWordsStudied,
-      streak: updatedStreak
+      return updatedDecks;
     });
-  };
+  }, []);
 
-  const activeDeck = decks.find(d => d.id === selectedDeckId) || null;
+  const activeDeck = useMemo(() => {
+    return decks.find(d => d.id === selectedDeckId) || null;
+  }, [decks, selectedDeckId]);
 
   return (
     <div className="min-h-screen bg-stone-50/40 text-stone-900 flex flex-col antialiased border-0 sm:border-[12px] md:border-[18px] border-stone-100/70">
@@ -621,7 +652,7 @@ export default function App() {
               <Dashboard 
                 stats={stats}
                 decks={decks}
-                todayPracticeDeck={getTodayPracticeDeck()}
+                todayPracticeDeck={todayPracticeDeck}
                 onSelectDeck={(deckId) => {
                   setSelectedDeckId(deckId);
                   setCurrentView("learn");

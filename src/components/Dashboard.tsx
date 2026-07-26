@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Sparkles, 
@@ -107,7 +107,7 @@ export default function Dashboard({
   };
 
   // Helper to check study calendar history
-  const getPastSevenDays = () => {
+  const pastSevenDays = useMemo(() => {
     const days = [];
     const date = new Date();
     for (let i = 6; i >= 0; i--) {
@@ -122,9 +122,7 @@ export default function Dashboard({
       });
     }
     return days;
-  };
-
-  const pastSevenDays = getPastSevenDays();
+  }, [stats.streak.history]);
 
   return (
     <div className="space-y-12" id="dashboard-container">

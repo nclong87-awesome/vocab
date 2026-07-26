@@ -26,54 +26,68 @@ export async function callLLMClientSide(
 
   const requiresKey = provider !== "ollama" && provider !== "custom";
   if (requiresKey && !apiKey) {
-    throw new Error(`API Key is required for ${provider.toUpperCase()}. Please enter a valid key in LLM settings.`);
+    throw new Error(`API Key is required for ${provider.toUpperCase()}. Please enter a valid API key in LLM settings.`);
   }
 
   const effectiveApiKey = apiKey || "local-token";
 
   if (provider === "gemini") {
-    const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
-    const response = await ai.models.generateContent({
-      model: model || "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
+    try {
+      const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
+      const response = await ai.models.generateContent({
+        model: model || "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json"
+        }
+      });
 
-    if (!response.text) {
-      throw new Error("Empty response received from Gemini API.");
+      if (!response.text) {
+        throw new Error("Empty response received from Gemini API.");
+      }
+      return cleanJsonResponse(response.text);
+    } catch (err: any) {
+      if (err.name === "TypeError" || err.message?.includes("Failed to fetch")) {
+        throw new Error("Gemini API Network Error: Unable to reach Google Gemini API from browser.");
+      }
+      throw err;
     }
-    return cleanJsonResponse(response.text);
   }
 
   if (provider === "anthropic") {
     const endpoint = (baseUrl || "https://api.anthropic.com") + "/v1/messages";
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "x-api-key": effectiveApiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        model: model || "claude-3-5-haiku-20241022",
-        max_tokens: 2048,
-        system: systemInstruction + "\nOutput MUST be strictly valid raw JSON complying with schema:\n" + schemaDescription,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "x-api-key": effectiveApiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: model || "claude-3-5-haiku-20241022",
+          max_tokens: 2048,
+          system: systemInstruction + "\nOutput MUST be strictly valid raw JSON complying with schema:\n" + schemaDescription,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Anthropic Error (${res.status}): ${errText}`);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Anthropic Error (${res.status}): ${errText}`);
+      }
+
+      const data: any = await res.json();
+      const contentText = data.content?.[0]?.text || "";
+      return cleanJsonResponse(contentText);
+    } catch (err: any) {
+      if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
+        throw new Error(`Anthropic CORS/Network Error: Direct browser call to Anthropic blocked. Ensure API key is valid.`);
+      }
+      throw err;
     }
-
-    const data: any = await res.json();
-    const contentText = data.content?.[0]?.text || "";
-    return cleanJsonResponse(contentText);
   }
 
   // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom
@@ -92,9 +106,6 @@ export async function callLLMClientSide(
   };
 
   if (provider === "openrouter") {
-    if (typeof window !== "undefined") {
-      headers["HTTP-Referer"] = window.location.origin;
-    }
     headers["X-Title"] = "Vocabulary Learner";
   }
 
@@ -106,53 +117,47 @@ export async function callLLMClientSide(
     ]
   };
 
-  if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "9flare") {
+  if (provider === "openai" || provider === "groq" || provider === "openrouter") {
     reqBody.response_format = { type: "json_object" };
   }
 
-  const res = await fetch(targetUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(reqBody)
-  });
+  try {
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(reqBody)
+    });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
+    }
+
+    const data: any = await res.json();
+    const text = data.choices?.[0]?.message?.content || "";
+    return cleanJsonResponse(text);
+  } catch (err: any) {
+    if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
+      if (provider === "ollama" || targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1")) {
+        throw new Error(`CORS Error: Cannot connect to local Ollama (${targetUrl}). Ensure Ollama is running and set OLLAMA_ORIGINS="*" in your terminal.`);
+      }
+      throw new Error(`Browser CORS / Connection Error for ${provider.toUpperCase()} (${targetUrl}). Direct browser access was blocked by security policy or endpoint is unreachable.`);
+    }
+    throw err;
   }
+}
 
-  const data: any = await res.json();
-  const text = data.choices?.[0]?.message?.content || "";
-  return cleanJsonResponse(text);
+// Helper to check if running in a pure static client host (e.g. GitHub Pages)
+function isStaticHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host.endsWith("github.io") || host.endsWith("netlify.app") || host.endsWith("vercel.app") || window.location.protocol === "file:";
 }
 
 // 1. Test LLM Connection
 export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success: boolean; response?: string; error?: string }> {
-  try {
-    const response = await fetch("/api/test-llm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ llmConfig })
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    }
-
-    // 405 (Method Not Allowed - e.g. GitHub Pages static server) or 404 or server error
-    if (response.status === 405 || response.status === 404 || !response.ok) {
-      console.warn(`Backend /api/test-llm returned HTTP ${response.status}. Falling back to direct client-side LLM call.`);
-      const text = await callLLMClientSide(
-        "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
-        "You are a helpful dictionary test assistant.",
-        "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
-        llmConfig
-      );
-      return { success: true, response: text };
-    }
-  } catch (err: any) {
-    console.warn("Server endpoint call failed, attempting client-side direct LLM execution:", err);
+  // If running on static host (GitHub Pages), skip backend /api call directly
+  if (isStaticHost()) {
     try {
       const text = await callLLMClientSide(
         "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
@@ -166,7 +171,47 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success
     }
   }
 
-  return { success: false, error: "Unable to reach LLM provider." };
+  try {
+    const response = await fetch("/api/test-llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llmConfig })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data;
+    }
+
+    if (response.status === 405 || response.status === 404) {
+      const text = await callLLMClientSide(
+        "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
+        "You are a helpful dictionary test assistant.",
+        "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
+        llmConfig
+      );
+      return { success: true, response: text };
+    }
+
+    const errData = await response.json().catch(() => null);
+    if (errData && errData.error) {
+      return { success: false, error: errData.error };
+    }
+  } catch (err: any) {
+    // Fallback to client-side
+  }
+
+  try {
+    const text = await callLLMClientSide(
+      "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
+      "You are a helpful dictionary test assistant.",
+      "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
+      llmConfig
+    );
+    return { success: true, response: text };
+  } catch (clientErr: any) {
+    return { success: false, error: clientErr.message || "Failed to connect to LLM provider" };
+  }
 }
 
 // 2. Generate Deck
@@ -209,6 +254,11 @@ Ensure the words selected cover different skill levels and are practical for rea
   ]
 }`;
 
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
   try {
     const res = await fetch("/api/generate-deck", {
       method: "POST",
@@ -221,7 +271,6 @@ Ensure the words selected cover different skill levels and are practical for rea
     }
 
     if (res.status === 405 || res.status === 404) {
-      console.warn(`Backend /api/generate-deck returned HTTP ${res.status}. Executing client-side LLM call.`);
       const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
       return JSON.parse(text);
     }
@@ -229,7 +278,6 @@ Ensure the words selected cover different skill levels and are practical for rea
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(errData.error || `Server Error ${res.status}`);
   } catch (err: any) {
-    console.warn("Backend request failed, executing client-side direct LLM call:", err);
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     return JSON.parse(text);
   }
@@ -269,6 +317,11 @@ CRITICAL MANDATORY REQUIREMENT:
   "exampleTranslation": "string (example translation in ${userNative})"
 }`;
 
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
   try {
     const res = await fetch("/api/autofill-word", {
       method: "POST",
@@ -281,7 +334,6 @@ CRITICAL MANDATORY REQUIREMENT:
     }
 
     if (res.status === 405 || res.status === 404) {
-      console.warn(`Backend /api/autofill-word returned HTTP ${res.status}. Executing client-side LLM call.`);
       const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
       return JSON.parse(text);
     }
@@ -289,7 +341,6 @@ CRITICAL MANDATORY REQUIREMENT:
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(errData.error || `Server Error ${res.status}`);
   } catch (err: any) {
-    console.warn("Backend request failed, executing client-side direct LLM call:", err);
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     return JSON.parse(text);
   }

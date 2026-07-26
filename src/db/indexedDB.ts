@@ -160,6 +160,38 @@ export async function saveAllDecksToDB(decks: Deck[]): Promise<void> {
   }
 }
 
+// Save or update a single deck efficiently without clearing entire store
+export async function saveSingleDeckToDB(deck: Deck): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.decks, "readwrite");
+      const store = tx.objectStore(STORES.decks);
+      store.put(deck);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.error("Error saving single deck to IndexedDB:", err);
+  }
+}
+
+// Remove a single deck from IndexedDB
+export async function deleteDeckFromDB(deckId: string): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORES.decks, "readwrite");
+      const store = tx.objectStore(STORES.decks);
+      store.delete(deckId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.error("Error deleting deck from IndexedDB:", err);
+  }
+}
+
 // Load stats from IndexedDB
 export async function getStatsFromDB(defaultStats: UserStats): Promise<UserStats> {
   try {

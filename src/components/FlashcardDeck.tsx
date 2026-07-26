@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Volume2, 
@@ -110,7 +110,7 @@ export default function FlashcardDeck({
   const percentage = Math.round(((currentIndex + 1) / words.length) * 100);
 
   // Statistics for completion screen
-  const masteredCount = words.filter(w => w.learned).length;
+  const masteredCount = useMemo(() => words.filter(w => w.learned).length, [words]);
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto" id="flashcard-deck-view">

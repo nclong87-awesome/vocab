@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Plus, 
@@ -103,21 +103,27 @@ export default function DeckManager({
   const [isAutofilling, setIsAutofilling] = useState(false);
   const [autofillError, setAutofillError] = useState("");
 
-  const activeDeck = decks.find(d => d.id === selectedDeckId) || decks[0] || null;
+  const activeDeck = useMemo(() => {
+    return decks.find(d => d.id === selectedDeckId) || decks[0] || null;
+  }, [decks, selectedDeckId]);
 
   // Search and filter words within the active deck
-  const filteredWords = activeDeck 
-    ? activeDeck.words.filter(w => {
-        const matchesSearch = w.word.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          w.definition.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          w.translation.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        if (activeFilter === "starred") return matchesSearch && w.starred;
-        if (activeFilter === "mastered") return matchesSearch && w.learned;
-        if (activeFilter === "learning") return matchesSearch && !w.learned;
-        return matchesSearch;
-      })
-    : [];
+  const filteredWords = useMemo(() => {
+    if (!activeDeck) return [];
+    const query = searchTerm.trim().toLowerCase();
+    
+    return activeDeck.words.filter(w => {
+      const matchesSearch = !query || 
+        w.word.toLowerCase().includes(query) ||
+        (w.definition && w.definition.toLowerCase().includes(query)) ||
+        (w.translation && w.translation.toLowerCase().includes(query));
+      
+      if (activeFilter === "starred") return matchesSearch && w.starred;
+      if (activeFilter === "mastered") return matchesSearch && w.learned;
+      if (activeFilter === "learning") return matchesSearch && !w.learned;
+      return matchesSearch;
+    });
+  }, [activeDeck, searchTerm, activeFilter]);
 
   // Trigger Gemini AI details autofill
   const handleAIAutofill = async (overrideWord?: string) => {

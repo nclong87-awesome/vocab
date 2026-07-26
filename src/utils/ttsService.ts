@@ -22,6 +22,8 @@ export function stopSpeech(): void {
   }
 }
 
+const ttsAudioCache = new Map<string, string>();
+
 export async function speakText(
   text: string,
   ttsConfig: TTSConfig = DEFAULT_TTS_CONFIG,
@@ -78,6 +80,35 @@ export async function speakText(
     return;
   }
 
+  // Check cache for AI TTS
+  const cacheKey = `${ttsConfig.engine}:${ttsConfig.model}:${ttsConfig.voice}:${text}`;
+  const cachedDataUrl = ttsAudioCache.get(cacheKey);
+
+  if (cachedDataUrl) {
+    try {
+      if (onStart) onStart();
+      const audio = new Audio(cachedDataUrl);
+      currentAudioElement = audio;
+      audio.playbackRate = ttsConfig.speed ?? 1.0;
+
+      audio.onended = () => {
+        currentAudioElement = null;
+        if (onEnd) onEnd();
+      };
+
+      audio.onerror = (e) => {
+        console.warn("Cached audio playback error, falling back to browser speech:", e);
+        currentAudioElement = null;
+        speakWithBrowser();
+      };
+
+      await audio.play();
+      return;
+    } catch (err) {
+      console.warn("Cached audio play exception:", err);
+    }
+  }
+
   // AI TTS Model generation via server proxy
   try {
     if (onStart) onStart();
@@ -110,6 +141,9 @@ export async function speakText(
       speakWithBrowser();
       return;
     }
+
+    // Cache generated audio data URL
+    ttsAudioCache.set(cacheKey, data.audioDataUrl);
 
     const audio = new Audio(data.audioDataUrl);
     currentAudioElement = audio;
