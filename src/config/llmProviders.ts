@@ -9,8 +9,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "ollama",
     name: "Ollama",
     tagline: "Ollama Cloud API (https://ollama.com/v1)",
-    defaultModel: "llama3.2",
-    models: ["llama3.2", "gemma2", "mistral", "qwen2.5", "deepseek-r1"],
+    defaultModel: "gemma4:31b",
+    models: ["gemma4:31b","gpt-oss:20b","nemotron-3-nano:30b-cloud"],
     defaultBaseUrl: "https://rough-meadow-47c1.nclong87.workers.dev/v1",
     requiresKey: true
   },
