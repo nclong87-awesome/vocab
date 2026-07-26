@@ -11,25 +11,134 @@ const PORT = 3000;
 
 app.use(express.json());
 
-// Lazy-initialized Gemini Client
-let aiInstance: GoogleGenAI | null = null;
+interface LLMRequestConfig {
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
+}
 
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is required. Please configure it in the Secrets panel.");
+// Helper to clean JSON response text
+function cleanJsonResponse(rawText: string): string {
+  let cleaned = rawText.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```\s*/, "").replace(/```$/i, "").trim();
   }
-  if (!aiInstance) {
-    aiInstance = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
+  return cleaned;
+}
+
+// Call LLM based on provider
+async function callLLM(
+  prompt: string, 
+  systemInstruction: string, 
+  schemaDescription: string,
+  llmConfig?: LLMRequestConfig
+): Promise<string> {
+  const provider = llmConfig?.provider || "gemini";
+  const model = llmConfig?.model || (provider === "gemini" ? "gemini-3.5-flash" : "gpt-4o-mini");
+  const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
+  const baseUrl = llmConfig?.baseUrl || "";
+
+  const effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
+
+  if (!effectiveApiKey) {
+    throw new Error(`API Key is required for provider: ${provider}. Please enter a valid API key in the LLM settings.`);
+  }
+
+  if (provider === "gemini") {
+    const ai = new GoogleGenAI({
+      apiKey: effectiveApiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+
+    const response = await ai.models.generateContent({
+      model: model || "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
       }
     });
+
+    if (!response.text) {
+      throw new Error("Empty response received from Gemini model.");
+    }
+    return cleanJsonResponse(response.text);
+  } 
+
+  if (provider === "anthropic") {
+    const endpoint = (baseUrl || "https://api.anthropic.com") + "/v1/messages";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "x-api-key": effectiveApiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model: model || "claude-3-5-haiku-20241022",
+        max_tokens: 2048,
+        system: systemInstruction + "\nOutput MUST be strictly valid raw JSON complying with schema:\n" + schemaDescription,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Anthropic Error (${res.status}): ${errText}`);
+    }
+
+    const data: any = await res.json();
+    const contentText = data.content?.[0]?.text || "";
+    return cleanJsonResponse(contentText);
   }
-  return aiInstance;
+
+  // OpenAI-compatible providers: openai, groq, openrouter, custom
+  let defaultBaseUrl = "https://api.openai.com/v1";
+  if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
+  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
+
+  const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
+
+  const headers: Record<string, string> = {
+    "Authorization": `Bearer ${effectiveApiKey}`,
+    "Content-Type": "application/json"
+  };
+
+  if (provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://aistudio.google.com";
+    headers["X-Title"] = "Vocabulary Learner";
+  }
+
+  const reqBody: any = {
+    model: model || (provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
+    messages: [
+      { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
+      { role: "user", content: prompt }
+    ]
+  };
+
+  // Many OpenAI compatible endpoints accept response_format: { type: "json_object" }
+  if (provider === "openai" || provider === "groq" || provider === "openrouter") {
+    reqBody.response_format = { type: "json_object" };
+  }
+
+  const res = await fetch(targetUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(reqBody)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
+  }
+
+  const data: any = await res.json();
+  const text = data.choices?.[0]?.message?.content || "";
+  return cleanJsonResponse(text);
 }
 
 // 1. Health check endpoint
@@ -37,62 +146,57 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
 
-// 2. Generate custom vocabulary deck
+// 2. Test LLM Connection endpoint
+app.post("/api/test-llm", async (req, res) => {
+  try {
+    const { llmConfig } = req.body;
+    const text = await callLLM(
+      "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
+      "You are a helpful dictionary test assistant.",
+      "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
+      llmConfig
+    );
+    res.json({ success: true, response: text });
+  } catch (error: any) {
+    console.error("LLM Test Error:", error);
+    res.status(400).json({ success: false, error: error.message || "Failed to connect to LLM provider" });
+  }
+});
+
+// 3. Generate custom vocabulary deck
 app.post("/api/generate-deck", async (req, res) => {
   try {
-    const { topic, targetLanguage, nativeLanguage, quantity = 8 } = req.body;
+    const { topic, targetLanguage, nativeLanguage, quantity = 8, llmConfig } = req.body;
 
     if (!topic) {
       return res.status(400).json({ error: "Topic is required" });
     }
 
-    const ai = getGeminiClient();
     const prompt = `Generate a high-quality list of ${quantity} vocabulary words/expressions on the topic: "${topic}".
 The target language that the user wants to learn is "${targetLanguage || 'English'}".
 The user's native language for translation is "${nativeLanguage || 'Spanish'}".
 Ensure the words selected cover different skill levels (beginner, intermediate, advanced) and are practical.
 Provide clear definitions, pronunciations, parts of speech, and illustrative example sentences with translations.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: "You are an expert language teacher specializing in creating optimal vocabulary learning material.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING, description: "A creative, concise name for this vocabulary list (e.g., 'At the Airport', 'Business Idioms')" },
-            description: { type: Type.STRING, description: "A short, engaging description summarizing what words are included and why" },
-            words: {
-              type: Type.ARRAY,
-              description: `Exactly ${quantity} vocabulary items`,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  word: { type: Type.STRING, description: "The word or common expression in the target language" },
-                  pronunciation: { type: Type.STRING, description: "Phonetic transcription or simple pronunciation helper, e.g. /pər-ˈspɛk-tɪv/" },
-                  partOfSpeech: { type: Type.STRING, description: "noun, verb, adjective, adverb, idiom, expression, etc." },
-                  definition: { type: Type.STRING, description: "A simple, clear definition in the target language" },
-                  translation: { type: Type.STRING, description: "The direct meaning or translation in the native language" },
-                  example: { type: Type.STRING, description: "A practical, contextual sentence in the target language demonstrating typical usage" },
-                  exampleTranslation: { type: Type.STRING, description: "The translation of the example sentence in the native language" }
-                },
-                required: ["word", "pronunciation", "partOfSpeech", "definition", "translation", "example", "exampleTranslation"]
-              }
-            }
-          },
-          required: ["name", "description", "words"]
-        }
-      }
-    });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response received from AI model");
+    const systemInstruction = "You are an expert language teacher specializing in creating optimal vocabulary learning material.";
+    const schemaDesc = `{
+  "name": "Creative deck name",
+  "description": "Short description",
+  "words": [
+    {
+      "word": "string",
+      "pronunciation": "string",
+      "partOfSpeech": "string",
+      "definition": "string",
+      "translation": "string",
+      "example": "string",
+      "exampleTranslation": "string"
     }
+  ]
+}`;
 
-    const result = JSON.parse(text.trim());
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error generating deck:", error);
@@ -100,52 +204,150 @@ Provide clear definitions, pronunciations, parts of speech, and illustrative exa
   }
 });
 
-// 3. Auto-fill a single word
+// 4. Auto-fill a single word
 app.post("/api/autofill-word", async (req, res) => {
   try {
-    const { word, targetLanguage, nativeLanguage } = req.body;
+    const { word, targetLanguage, nativeLanguage, llmConfig } = req.body;
 
     if (!word) {
       return res.status(400).json({ error: "Word is required" });
     }
 
-    const ai = getGeminiClient();
     const prompt = `Provide detailed vocabulary learning material for the word "${word}".
 Target language being learned: "${targetLanguage || 'English'}".
 Native language for translation: "${nativeLanguage || 'Spanish'}".`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: "You are a professional dictionary database engine and linguistic tutor.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            word: { type: Type.STRING },
-            pronunciation: { type: Type.STRING, description: "Phonetic spelling or pronunciation guide" },
-            partOfSpeech: { type: Type.STRING, description: "noun, verb, adjective, adverb, expression, etc." },
-            definition: { type: Type.STRING, description: "Clear and simple definition in target language" },
-            translation: { type: Type.STRING, description: "Direct translation in native language" },
-            example: { type: Type.STRING, description: "High-quality example sentence in target language" },
-            exampleTranslation: { type: Type.STRING, description: "Translation of example sentence in native language" }
-          },
-          required: ["word", "pronunciation", "partOfSpeech", "definition", "translation", "example", "exampleTranslation"]
-        }
-      }
-    });
+    const systemInstruction = "You are a professional dictionary database engine and linguistic tutor.";
+    const schemaDesc = `{
+  "word": "string",
+  "pronunciation": "string",
+  "partOfSpeech": "string",
+  "definition": "string",
+  "translation": "string",
+  "example": "string",
+  "exampleTranslation": "string"
+}`;
 
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response received from AI model");
-    }
-
-    const result = JSON.parse(text.trim());
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error autofilling word:", error);
     res.status(500).json({ error: error.message || "Failed to auto-fill word details" });
+  }
+});
+
+// 5. Text-to-Speech API
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text, engine, model, voice, apiKey, customEndpoint, llmConfig } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: "Text is required for TTS generation" });
+    }
+
+    const effectiveApiKey = apiKey || llmConfig?.apiKey || (engine === "gemini" ? process.env.GEMINI_API_KEY : "");
+
+    if (engine === "gemini") {
+      const keyToUse = effectiveApiKey || process.env.GEMINI_API_KEY;
+      if (!keyToUse) {
+        return res.status(400).json({ error: "Gemini API key is required for Gemini AI TTS model" });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey: keyToUse,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const response = await ai.models.generateContent({
+        model: model || "gemini-2.5-flash",
+        contents: `Pronounce the following text clearly for a language learner: "${text}"`,
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voice || "Puck"
+              }
+            }
+          }
+        }
+      });
+
+      const candidate = response.candidates?.[0];
+      const part = candidate?.content?.parts?.find((p: any) => p.inlineData);
+
+      if (part && part.inlineData) {
+        const mimeType = part.inlineData.mimeType || "audio/mp3";
+        const base64Data = part.inlineData.data;
+        return res.json({ audioDataUrl: `data:${mimeType};base64,${base64Data}` });
+      }
+
+      return res.status(422).json({ error: "Gemini model did not return inline audio. Falling back to browser speech synthesis." });
+    }
+
+    if (engine === "openai") {
+      if (!effectiveApiKey) {
+        return res.status(400).json({ error: "OpenAI API key is required for OpenAI TTS model" });
+      }
+
+      const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${effectiveApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: model || "tts-1",
+          input: text,
+          voice: voice || "alloy"
+        })
+      });
+
+      if (!ttsRes.ok) {
+        const errText = await ttsRes.text();
+        throw new Error(`OpenAI TTS API Error (${ttsRes.status}): ${errText}`);
+      }
+
+      const audioBuffer = await ttsRes.arrayBuffer();
+      const base64Audio = Buffer.from(audioBuffer).toString("base64");
+      return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
+    }
+
+    if (engine === "custom") {
+      if (!customEndpoint) {
+        return res.status(400).json({ error: "Custom endpoint URL is required for custom TTS model" });
+      }
+
+      const customRes = await fetch(customEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(effectiveApiKey ? { "Authorization": `Bearer ${effectiveApiKey}` } : {})
+        },
+        body: JSON.stringify({ text, voice, model })
+      });
+
+      if (!customRes.ok) {
+        const errText = await customRes.text();
+        throw new Error(`Custom TTS Error (${customRes.status}): ${errText}`);
+      }
+
+      const contentType = customRes.headers.get("content-type") || "";
+      if (contentType.includes("json")) {
+        const json: any = await customRes.json();
+        return res.json({ audioDataUrl: json.audioDataUrl || json.url || json.audio });
+      } else {
+        const audioBuffer = await customRes.arrayBuffer();
+        const base64Audio = Buffer.from(audioBuffer).toString("base64");
+        return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
+      }
+    }
+
+    return res.status(400).json({ error: "Unsupported TTS engine specified" });
+  } catch (error: any) {
+    console.error("TTS API Error:", error);
+    res.status(500).json({ error: error.message || "Failed to generate speech with AI TTS model" });
   }
 });
 
@@ -171,3 +373,4 @@ async function startServer() {
 }
 
 startServer();
+

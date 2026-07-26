@@ -1,0 +1,909 @@
+import React, { useState, useEffect, useRef } from "react";
+import { 
+  Volume2, 
+  VolumeX, 
+  Settings, 
+  Sparkles, 
+  Cpu, 
+  Check, 
+  Radio, 
+  Sliders, 
+  Key, 
+  RefreshCw, 
+  Play, 
+  Square, 
+  Server, 
+  Bot,
+  Globe,
+  Database,
+  ArrowRight,
+  Download,
+  Upload,
+  HardDrive,
+  AlertTriangle,
+  Trash2,
+  FileJson,
+  CheckCircle2
+} from "lucide-react";
+import { TTSConfig, TTSEngine, LLMConfig } from "../types";
+import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
+import { 
+  exportIndexedDBDatabase, 
+  importIndexedDBDatabase, 
+  resetIndexedDBDatabase 
+} from "../db/indexedDB";
+
+interface SettingsViewProps {
+  ttsConfig: TTSConfig;
+  llmConfig: LLMConfig;
+  onSaveTTSConfig: (newConfig: TTSConfig) => void;
+  onOpenLlmModal: () => void;
+  onReloadData?: () => Promise<void>;
+}
+
+export default function SettingsView({
+  ttsConfig,
+  llmConfig,
+  onSaveTTSConfig,
+  onOpenLlmModal,
+  onReloadData
+}: SettingsViewProps) {
+  const [config, setConfig] = useState<TTSConfig>(ttsConfig);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [testText, setTestText] = useState("Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.");
+  const [isTesting, setIsTesting] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState(false);
+
+  // IndexedDB Import / Export State
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [dbStatusMessage, setDbStatusMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Load system voices for browser TTS
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const updateVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        setAvailableVoices(voices);
+      };
+
+      updateVoices();
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, []);
+
+  // Update internal state if prop updates
+  useEffect(() => {
+    setConfig(ttsConfig);
+  }, [ttsConfig]);
+
+  const handleTestAudio = async () => {
+    if (isTesting) {
+      stopSpeech();
+      setIsTesting(false);
+      return;
+    }
+
+    setIsTesting(true);
+    await speakText(
+      testText,
+      config,
+      llmConfig,
+      undefined,
+      () => setIsTesting(true),
+      () => setIsTesting(false)
+    );
+  };
+
+  const handleSave = () => {
+    onSaveTTSConfig(config);
+    setSaveSuccessMessage(true);
+    setTimeout(() => setSaveSuccessMessage(false), 3000);
+  };
+
+  // Export IndexedDB Database to JSON file
+  const handleExportDB = async () => {
+    try {
+      setIsExporting(true);
+      setDbStatusMessage({ type: "info", text: "Generating IndexedDB database backup..." });
+      
+      const dbData = await exportIndexedDBDatabase();
+      const jsonString = JSON.stringify(dbData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filename = `vocab_learner_indexeddb_backup_${timestamp}.json`;
+      
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      const deckCount = dbData.stores.decks ? dbData.stores.decks.length : 0;
+      setDbStatusMessage({
+        type: "success",
+        text: `Export successful! Database backup downloaded (${deckCount} decks, version ${dbData.version}).`
+      });
+    } catch (err: any) {
+      console.error("Export IndexedDB failed:", err);
+      setDbStatusMessage({
+        type: "error",
+        text: `Failed to export IndexedDB: ${err.message || "Unknown error"}`
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Import JSON file into IndexedDB
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setDbStatusMessage({ type: "info", text: "Reading backup file..." });
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+
+        setDbStatusMessage({ type: "info", text: "Restoring database into IndexedDB..." });
+        const result = await importIndexedDBDatabase(parsed);
+
+        if (onReloadData) {
+          await onReloadData();
+        }
+
+        setDbStatusMessage({
+          type: "success",
+          text: `IndexedDB restored successfully! Loaded ${result.recordCounts.decks} decks into local storage.`
+        });
+      } catch (err: any) {
+        console.error("Import IndexedDB failed:", err);
+        setDbStatusMessage({
+          type: "error",
+          text: `Import failed: ${err.message || "Invalid JSON or corrupt backup file."}`
+        });
+      } finally {
+        setIsImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+
+    reader.onerror = () => {
+      setDbStatusMessage({ type: "error", text: "Error reading selected JSON file." });
+      setIsImporting(false);
+    };
+
+    reader.readAsText(file);
+  };
+
+  // Reset database to default
+  const handleResetDB = async () => {
+    if (!window.confirm("Are you sure you want to reset the IndexedDB database to default decks? Custom decks and study history will be cleared.")) {
+      return;
+    }
+
+    try {
+      setDbStatusMessage({ type: "info", text: "Resetting IndexedDB database..." });
+      await resetIndexedDBDatabase();
+      if (onReloadData) {
+        await onReloadData();
+      }
+      setDbStatusMessage({
+        type: "success",
+        text: "Database reset to default starter vocabulary decks."
+      });
+    } catch (err: any) {
+      setDbStatusMessage({
+        type: "error",
+        text: `Reset failed: ${err.message || "Unknown error"}`
+      });
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8" id="settings-view">
+      {/* Header Banner */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-stone-900 text-white">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+                Settings & Voice Engine
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-500 font-normal mt-0.5">
+                Configure Text-to-Speech AI Models, speech pitch, speed, and learning preferences
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-stone-800 bg-stone-100 border border-stone-200 px-3 py-1.5 flex items-center gap-1.5">
+              <Volume2 className="w-3.5 h-3.5 text-stone-900" />
+              Active TTS: <strong className="text-stone-900 capitalize">{config.engine}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Save Toast Notification */}
+      {saveSuccessMessage && (
+        <div className="bg-emerald-900 text-white p-4 flex items-center justify-between text-xs font-semibold tracking-normal animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
+            <span>Settings saved successfully! Updated preferences are now active.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Section 1: TTS AI Model & Engine Selection */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+        <div className="border-b border-stone-100 pb-4">
+          <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-stone-700" />
+            Select Text-to-Speech (TTS) Engine
+          </h3>
+          <p className="text-xs text-stone-500 mt-1">
+            Choose between offline browser speech synthesis or server-side AI voice models.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Browser TTS */}
+          <button
+            type="button"
+            onClick={() => setConfig({ ...config, engine: 'browser' })}
+            className={`p-4 text-left border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+              config.engine === 'browser'
+                ? "border-stone-900 bg-stone-900 text-white shadow-sm"
+                : "border-stone-200 bg-white text-stone-800 hover:border-stone-400"
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div className={`p-1.5 ${config.engine === 'browser' ? "bg-stone-800 text-amber-400" : "bg-stone-100 text-stone-800"}`}>
+                <Globe className="w-4 h-4" />
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 ${
+                config.engine === 'browser' ? "bg-amber-400 text-stone-950" : "bg-stone-100 text-stone-600"
+              }`}>
+                Default
+              </span>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-xs tracking-normal">Browser Native</h4>
+              <p className={`text-[11px] mt-1 ${config.engine === 'browser' ? "text-stone-300" : "text-stone-500"}`}>
+                Instant & offline system speech synthesis. Zero latency.
+              </p>
+            </div>
+          </button>
+
+          {/* Gemini AI Audio TTS */}
+          <button
+            type="button"
+            onClick={() => setConfig({ ...config, engine: 'gemini' })}
+            className={`p-4 text-left border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+              config.engine === 'gemini'
+                ? "border-stone-900 bg-stone-900 text-white shadow-sm"
+                : "border-stone-200 bg-white text-stone-800 hover:border-stone-400"
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div className={`p-1.5 ${config.engine === 'gemini' ? "bg-stone-800 text-amber-400" : "bg-stone-100 text-stone-800"}`}>
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 ${
+                config.engine === 'gemini' ? "bg-amber-400 text-stone-950" : "bg-stone-100 text-stone-600"
+              }`}>
+                AI Voice
+              </span>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-xs tracking-normal">Gemini AI TTS</h4>
+              <p className={`text-[11px] mt-1 ${config.engine === 'gemini' ? "text-stone-300" : "text-stone-500"}`}>
+                Natural AI human speech via Gemini prebuilt audio voices.
+              </p>
+            </div>
+          </button>
+
+          {/* OpenAI TTS */}
+          <button
+            type="button"
+            onClick={() => setConfig({ ...config, engine: 'openai' })}
+            className={`p-4 text-left border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+              config.engine === 'openai'
+                ? "border-stone-900 bg-stone-900 text-white shadow-sm"
+                : "border-stone-200 bg-white text-stone-800 hover:border-stone-400"
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div className={`p-1.5 ${config.engine === 'openai' ? "bg-stone-800 text-amber-400" : "bg-stone-100 text-stone-800"}`}>
+                <Bot className="w-4 h-4" />
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 ${
+                config.engine === 'openai' ? "bg-amber-400 text-stone-950" : "bg-stone-100 text-stone-600"
+              }`}>
+                Studio
+              </span>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-xs tracking-normal">OpenAI Speech</h4>
+              <p className={`text-[11px] mt-1 ${config.engine === 'openai' ? "text-stone-300" : "text-stone-500"}`}>
+                Studio quality audio with tts-1 & tts-1-hd voice models.
+              </p>
+            </div>
+          </button>
+
+          {/* Custom Webhook API */}
+          <button
+            type="button"
+            onClick={() => setConfig({ ...config, engine: 'custom' })}
+            className={`p-4 text-left border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+              config.engine === 'custom'
+                ? "border-stone-900 bg-stone-900 text-white shadow-sm"
+                : "border-stone-200 bg-white text-stone-800 hover:border-stone-400"
+            }`}
+          >
+            <div className="flex justify-between items-start">
+              <div className={`p-1.5 ${config.engine === 'custom' ? "bg-stone-800 text-amber-400" : "bg-stone-100 text-stone-800"}`}>
+                <Server className="w-4 h-4" />
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 ${
+                config.engine === 'custom' ? "bg-amber-400 text-stone-950" : "bg-stone-100 text-stone-600"
+              }`}>
+                Custom
+              </span>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-xs tracking-normal">Custom Endpoint</h4>
+              <p className={`text-[11px] mt-1 ${config.engine === 'custom' ? "text-stone-300" : "text-stone-500"}`}>
+                Connect self-hosted speech services or external ElevenLabs proxy.
+              </p>
+            </div>
+          </button>
+        </div>
+
+        {/* Engine Specific Configuration Options */}
+        <div className="bg-stone-50 border border-stone-200 p-5 space-y-5">
+          {/* Browser Voice Options */}
+          {config.engine === 'browser' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold text-stone-900">
+                  Browser System Voice Selection
+                </h4>
+                <span className="text-[10px] text-stone-500 font-mono">
+                  {availableVoices.length} voices found
+                </span>
+              </div>
+
+              <div>
+                <select
+                  value={config.voiceURI || ""}
+                  onChange={(e) => setConfig({ ...config, voiceURI: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                >
+                  <option value="">Default System Voice</option>
+                  {availableVoices.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Speech Rate: {config.speed.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2.0"
+                    step="0.1"
+                    value={config.speed}
+                    onChange={(e) => setConfig({ ...config, speed: parseFloat(e.target.value) })}
+                    className="w-full accent-stone-900 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-stone-500 font-mono mt-0.5">
+                    <span>0.5x Slow</span>
+                    <span>1.0x Normal</span>
+                    <span>2.0x Fast</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Voice Pitch: {config.pitch.toFixed(1)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.5"
+                    step="0.1"
+                    value={config.pitch}
+                    onChange={(e) => setConfig({ ...config, pitch: parseFloat(e.target.value) })}
+                    className="w-full accent-stone-900 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-stone-500 font-mono mt-0.5">
+                    <span>0.5 Low</span>
+                    <span>1.0 Medium</span>
+                    <span>1.5 High</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Gemini AI Audio Voice Options */}
+          {config.engine === 'gemini' && (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                Gemini AI Voice Configuration
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Prebuilt AI Voice Persona
+                  </label>
+                  <select
+                    value={config.voice || "Puck"}
+                    onChange={(e) => setConfig({ ...config, voice: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                  >
+                    <option value="Puck">Puck (Enthusiastic & Clear)</option>
+                    <option value="Charon">Charon (Deep & Resonant)</option>
+                    <option value="Kore">Kore (Warm & Melodic)</option>
+                    <option value="Fenrir">Fenrir (Strong & Expressive)</option>
+                    <option value="Aoede">Aoede (Soft & Precise)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Gemini Model Alias
+                  </label>
+                  <select
+                    value={config.model || "gemini-2.5-flash"}
+                    onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                  >
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</option>
+                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Custom Gemini API Key (Optional Override)
+                </label>
+                <input
+                  type="password"
+                  value={config.apiKey || ""}
+                  onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+                  placeholder="Leave blank to use default system/login API key"
+                  className="w-full p-2.5 bg-white border border-stone-300 text-xs font-mono text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                />
+                <p className="text-[11px] text-stone-500 mt-1">
+                  If left empty, Gemini TTS uses your active LLM login key or server environment key.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Playback Speed: {config.speed.toFixed(1)}x
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.8"
+                  step="0.1"
+                  value={config.speed}
+                  onChange={(e) => setConfig({ ...config, speed: parseFloat(e.target.value) })}
+                  className="w-full accent-stone-900 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* OpenAI TTS Options */}
+          {config.engine === 'openai' && (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-stone-900">
+                OpenAI Speech Model Options
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Speech Voice Persona
+                  </label>
+                  <select
+                    value={config.voice || "alloy"}
+                    onChange={(e) => setConfig({ ...config, voice: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                  >
+                    <option value="alloy">Alloy (Neutral & Versatile)</option>
+                    <option value="echo">Echo (Warm & Grounded)</option>
+                    <option value="fable">Fable (Narrative & Expressive)</option>
+                    <option value="onyx">Onyx (Deep & Authoritative)</option>
+                    <option value="nova">Nova (Energetic & Friendly)</option>
+                    <option value="shimmer">Shimmer (Clear & Bright)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    OpenAI Audio Model
+                  </label>
+                  <select
+                    value={config.model || "tts-1"}
+                    onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                  >
+                    <option value="tts-1">tts-1 (Fast & High Quality)</option>
+                    <option value="tts-1-hd">tts-1-hd (Ultra HD Quality)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  OpenAI API Key
+                </label>
+                <input
+                  type="password"
+                  value={config.apiKey || ""}
+                  onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+                  placeholder="sk-proj-..."
+                  className="w-full p-2.5 bg-white border border-stone-300 text-xs font-mono text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Custom Endpoint Options */}
+          {config.engine === 'custom' && (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-stone-900">
+                Custom Webhook / TTS Proxy Endpoint
+              </h4>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Endpoint URL
+                </label>
+                <input
+                  type="url"
+                  value={config.customEndpoint || ""}
+                  onChange={(e) => setConfig({ ...config, customEndpoint: e.target.value })}
+                  placeholder="https://my-tts-proxy.example.com/api/speak"
+                  className="w-full p-2.5 bg-white border border-stone-300 text-xs font-mono text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                />
+                <p className="text-[11px] text-stone-500 mt-1">
+                  Accepts POST requests with JSON payload &#123; text, voice, model &#125; returning audio arrayBuffer or base64 audio URL.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Voice / Persona Name
+                  </label>
+                  <input
+                    type="text"
+                    value={config.voice || ""}
+                    onChange={(e) => setConfig({ ...config, voice: e.target.value })}
+                    placeholder="e.g. Rachel, Adam, CustomVoice"
+                    className="w-full p-2.5 bg-white border border-stone-300 text-xs font-mono text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    API Authorization Token
+                  </label>
+                  <input
+                    type="password"
+                    value={config.apiKey || ""}
+                    onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+                    placeholder="Bearer token or secret key"
+                    className="w-full p-2.5 bg-white border border-stone-300 text-xs font-mono text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Section 2: Interactive Voice Tester Studio */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-4">
+        <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-stone-800" />
+              Test Voice Studio
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Listen to a sample text using the currently selected voice settings
+            </p>
+          </div>
+          <span className="text-xs font-mono font-medium text-stone-500 capitalize">
+            {config.engine}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <textarea
+            value={testText}
+            onChange={(e) => setTestText(e.target.value)}
+            rows={2}
+            className="w-full p-3 bg-stone-50 border border-stone-200 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900 rounded-none"
+            placeholder="Type sample text to test pronunciation..."
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleTestAudio}
+              className={`px-5 py-2.5 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all ${
+                isTesting 
+                  ? "bg-amber-400 text-stone-950 animate-pulse" 
+                  : "bg-stone-900 text-white hover:bg-stone-800"
+              }`}
+            >
+              {isTesting ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Stop Audio</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Test Voice Model</span>
+                </>
+              )}
+            </button>
+
+            <span className="text-xs font-medium text-stone-500">
+              {isTesting ? "Playing speech..." : "Click button to test output"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 3: Quiz Audio Preference & LLM Provider Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Quiz Auto-Play Audio Toggle */}
+        <div className="bg-white border border-stone-200 p-6 space-y-4 flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-stone-800" />
+              Quiz Session Audio
+            </h3>
+            <p className="text-xs text-stone-500 mt-1">
+              Automatically pronounce questions when transitioning between quiz items
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setConfig({ ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz })}
+            className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
+              config.autoPlayAudioInQuiz 
+                ? "bg-stone-900 border-stone-900 text-white" 
+                : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {config.autoPlayAudioInQuiz ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
+              <span>Auto-Play Quiz Voice: {config.autoPlayAudioInQuiz ? "Enabled" : "Disabled"}</span>
+            </div>
+            <div className={`w-3 h-3 rounded-full ${config.autoPlayAudioInQuiz ? "bg-amber-400" : "bg-stone-300"}`} />
+          </button>
+        </div>
+
+        {/* LLM AI Provider Status */}
+        <div className="bg-white border border-stone-200 p-6 space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                <Bot className="w-4 h-4 text-stone-800" />
+                Vocabulary Generator LLM
+              </h3>
+              <span className={`w-2 h-2 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500" : "bg-red-500"}`} />
+            </div>
+            <p className="text-xs text-stone-500 mt-1">
+              Active model for AI deck generation and single-word autofill details
+            </p>
+          </div>
+
+          <div className="bg-stone-50 border border-stone-200 p-3 flex items-center justify-between text-xs">
+            <div>
+              <p className="font-semibold text-stone-900 capitalize">{llmConfig.provider}</p>
+              <p className="text-[11px] text-stone-500 font-mono mt-0.5">{llmConfig.model}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenLlmModal}
+              className="px-3 py-1.5 bg-stone-900 text-white text-xs font-medium hover:bg-stone-800 transition-all cursor-pointer flex items-center gap-1"
+            >
+              <Key className="w-3 h-3" />
+              <span>Configure Key</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 4: IndexedDB Database Management (Import & Export) */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Database className="w-4 h-4 text-stone-800" />
+              IndexedDB Database Backup & Restore
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Manage local browser storage, export full database backups to JSON, or restore previous backups.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold bg-stone-100 text-stone-800 px-2.5 py-1 border border-stone-200 flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-stone-600" />
+              VocabLearnerDB (v1)
+            </span>
+          </div>
+        </div>
+
+        {/* Database Action Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Export Database Card */}
+          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                <Download className="w-4 h-4 text-stone-800" />
+                <span>Export IndexedDB Database</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Download a complete JSON snapshot containing all custom vocabulary decks, word cards, study statistics, and app settings.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportDB}
+              disabled={isExporting}
+              className="w-full py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+            >
+              {isExporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting JSON...</span>
+                </>
+              ) : (
+                <>
+                  <FileJson className="w-3.5 h-3.5" />
+                  <span>Export Database JSON</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Import Database Card */}
+          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                <Upload className="w-4 h-4 text-stone-800" />
+                <span>Import IndexedDB Backup</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Restore a previously exported `.json` database file to load custom decks and study history into local browser storage.
+              </p>
+            </div>
+
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="indexeddb-file-input"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+              >
+                {isImporting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Restoring Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Select JSON File to Restore</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Alert Banner */}
+        {dbStatusMessage && (
+          <div className={`p-4 border text-xs font-medium flex items-start gap-3 transition-all ${
+            dbStatusMessage.type === "success" 
+              ? "bg-emerald-50 border-emerald-300 text-emerald-900" 
+              : dbStatusMessage.type === "error"
+              ? "bg-red-50 border-red-300 text-red-900"
+              : "bg-blue-50 border-blue-300 text-blue-900"
+          }`}>
+            {dbStatusMessage.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
+            {dbStatusMessage.type === "error" && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
+            {dbStatusMessage.type === "info" && <RefreshCw className="w-4 h-4 text-blue-600 animate-spin shrink-0 mt-0.5" />}
+            <span className="flex-1">{dbStatusMessage.text}</span>
+          </div>
+        )}
+
+        {/* Reset Database Footer Option */}
+        <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-stone-500 text-xs">
+            <AlertTriangle className="w-3.5 h-3.5 text-stone-400" />
+            <span>Need to restore default starter decks?</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetDB}
+            className="text-xs text-red-700 hover:text-red-900 font-medium underline underline-offset-2 flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Reset Database to Defaults</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Save Settings Action Bar */}
+      <div className="bg-stone-900 text-white p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div>
+          <h4 className="font-bold text-base">Save Voice & Audio Preferences</h4>
+          <p className="text-xs text-stone-300 mt-0.5">
+            Applies chosen speech synthesis engine across practice quizzes, flashcards, and deck collection
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          className="w-full sm:w-auto px-8 py-3 bg-white text-stone-950 font-bold text-xs hover:bg-amber-400 transition-all cursor-pointer shadow-md shrink-0 flex items-center justify-center gap-2"
+        >
+          <Check className="w-4 h-4 stroke-[3]" />
+          <span>Save Settings</span>
+        </button>
+      </div>
+    </div>
+  );
+}

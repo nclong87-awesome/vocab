@@ -1,3 +1,27 @@
+export type TTSEngine = 'browser' | 'gemini' | 'openai' | 'custom';
+
+export interface TTSConfig {
+  engine: TTSEngine;
+  voiceURI?: string;
+  speed: number;
+  pitch: number;
+  model: string;
+  voice: string;
+  apiKey?: string;
+  customEndpoint?: string;
+  autoPlayAudioInQuiz: boolean;
+}
+
+export type LLMProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'openrouter' | 'custom';
+
+export interface LLMConfig {
+  provider: LLMProvider;
+  model: string;
+  apiKey: string;
+  baseUrl?: string;
+  isLoggedIn: boolean;
+}
+
 export interface Word {
   id: string;
   word: string;
@@ -28,7 +52,7 @@ export interface QuizQuestion {
   id: string;
   wordId: string;
   word: string;
-  type: 'definition' | 'translation' | 'sentence' | 'spelling';
+  type: 'definition' | 'translation' | 'sentence' | 'spelling' | 'listening';
   question: string;
   options?: string[]; // For multiple choice
   correctAnswer: string;

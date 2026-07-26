@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Sparkles, 
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Deck, UserStats, Word } from "../types";
 import QuizView from "./QuizView";
+import { getSettingFromDB, saveSettingToDB } from "../db/indexedDB";
 
 interface DashboardProps {
   stats: UserStats;
@@ -69,14 +70,23 @@ export default function Dashboard({
 
   // Today's practice quiz states
   const [isQuizActive, setIsQuizActive] = useState(false);
-  const [completedToday, setCompletedToday] = useState<boolean>(() => {
-    const today = new Date().toISOString().split("T")[0];
-    return localStorage.getItem("last_completed_daily_quiz_date") === today;
-  });
+  const [completedToday, setCompletedToday] = useState<boolean>(false);
   const [sessionScore, setSessionScore] = useState<{ score: number; total: number } | null>(null);
 
-  const handleDailyQuizFinish = (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => {
+  useEffect(() => {
+    async function checkDailyQuizStatus() {
+      const today = new Date().toISOString().split("T")[0];
+      const savedDate = await getSettingFromDB("last_completed_daily_quiz_date");
+      if (savedDate === today) {
+        setCompletedToday(true);
+      }
+    }
+    checkDailyQuizStatus();
+  }, []);
+
+  const handleDailyQuizFinish = async (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => {
     const today = new Date().toISOString().split("T")[0];
+    await saveSettingToDB("last_completed_daily_quiz_date", today);
     localStorage.setItem("last_completed_daily_quiz_date", today);
     setCompletedToday(true);
     setIsQuizActive(false);
@@ -158,14 +168,14 @@ export default function Dashboard({
 
       {/* Dynamic Today's Practice Session Module */}
       {isQuizActive ? (
-        <div className="bg-white border border-stone-200 p-8 md:p-12 relative" id="active-daily-quiz-container">
+        <div className="bg-white border border-stone-200 p-3.5 sm:p-6 md:p-10 relative" id="active-daily-quiz-container">
           <div className="flex justify-between items-center border-b border-stone-100 pb-4 mb-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-900 text-white text-[10px] font-bold tracking-widest uppercase">
-              <Sparkles className="w-3 h-3 animate-pulse" /> Active Session
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-900 text-white text-xs font-medium">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Active Session
             </div>
             <button 
               onClick={() => setIsQuizActive(false)}
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors"
+              className="text-xs font-medium text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
             >
               Cancel Practice
             </button>
@@ -177,35 +187,35 @@ export default function Dashboard({
           />
         </div>
       ) : (
-        <div className="bg-white border border-stone-200 p-8 md:p-12 relative overflow-hidden" id="hero-banner">
+        <div className="bg-white border border-stone-200 p-4 sm:p-8 md:p-12 relative overflow-hidden" id="hero-banner">
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
             
             {/* Left Content Column */}
             <div className="md:col-span-8 flex flex-col justify-between space-y-6">
               <div className="space-y-4">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-800 text-[10px] font-bold tracking-widest uppercase border border-stone-200">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-800 text-xs font-medium border border-stone-200">
                   <Calendar className="w-3.5 h-3.5 text-stone-900" /> Today's Focus Session • {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
                 </div>
                 
                 {completedToday ? (
                   <div className="space-y-4" id="daily-completed-message">
-                    <h1 className="text-4xl font-extralight tracking-tight text-stone-950 leading-tight">
+                    <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-stone-950 leading-tight">
                       Today's Practice <br />
                       <span className="font-bold text-stone-900">Completed!</span>
                     </h1>
-                    <p className="text-stone-500 max-w-lg text-sm font-serif italic leading-relaxed">
+                    <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
                       "Congratulations! You completed today's vocabulary memory check. Your streak is secure and your recall is sharpening. Come back tomorrow for new customized material."
                     </p>
                     {sessionScore && (
                       <div className="inline-flex items-center gap-3 bg-stone-50 border border-stone-200 px-4 py-2.5">
-                        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">Score:</span>
+                        <span className="text-xs font-medium text-stone-500">Score:</span>
                         <span className="text-sm font-bold text-stone-950 font-mono">{sessionScore.score} / {sessionScore.total} Correct</span>
                       </div>
                     )}
                     <div className="pt-2">
                       <button 
                         onClick={() => setIsQuizActive(true)}
-                        className="px-6 py-3 border border-stone-200 hover:border-stone-900 bg-white transition-colors text-stone-900 font-bold text-xs uppercase tracking-widest cursor-pointer rounded-none animate-fade-in"
+                        className="px-6 py-3 border border-stone-200 hover:border-stone-900 bg-white transition-colors text-stone-900 font-bold text-xs cursor-pointer rounded-none animate-fade-in"
                         id="btn-retake-quiz"
                       >
                         Retake Daily Quiz
@@ -214,22 +224,22 @@ export default function Dashboard({
                   </div>
                 ) : (
                   <div className="space-y-4" id="daily-pending-message">
-                    <h1 className="text-4xl font-extralight tracking-tight text-stone-950 leading-tight">
+                    <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-stone-950 leading-tight">
                       Today's Vocabulary <br />
                       <span className="font-bold">Practice Quiz</span>
                     </h1>
-                    <p className="text-stone-500 max-w-lg text-sm font-serif italic leading-relaxed">
+                    <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
                       "Challenge your memory with {todayPracticeDeck?.words.length || 0} priority words compiled from your target languages. Finish the quiz to secure your daily streak."
                     </p>
                     
                     {/* Word Preview List */}
                     <div className="pt-2">
-                      <span className="block text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3">Words in today's session:</span>
+                      <span className="block text-xs font-medium text-stone-500 mb-3">Words in today's session:</span>
                       <div className="flex flex-wrap gap-2 max-w-xl">
                         {todayPracticeDeck?.words.map((word) => (
                           <span 
                             key={word.id} 
-                            className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-xs text-stone-700 font-medium tracking-tight hover:border-stone-900 hover:text-stone-950 transition-all cursor-default"
+                            className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-xs text-stone-800 font-semibold tracking-tight hover:border-stone-900 hover:text-stone-950 transition-all cursor-default"
                             title={`${word.partOfSpeech}: ${word.translation}`}
                           >
                             {word.word}
@@ -241,7 +251,7 @@ export default function Dashboard({
                     <div className="pt-4">
                       <button 
                         onClick={() => setIsQuizActive(true)}
-                        className="px-8 py-4 bg-stone-900 hover:bg-black transition-all text-white font-bold text-xs uppercase tracking-widest flex items-center gap-3 cursor-pointer rounded-none shadow-sm hover:shadow"
+                        className="px-8 py-4 bg-stone-900 hover:bg-black transition-all text-white font-bold text-xs flex items-center gap-3 cursor-pointer rounded-none shadow-sm hover:shadow"
                         id="btn-start-daily-quiz"
                       >
                         Start Today's Quiz <ArrowRight className="w-4 h-4" />
@@ -253,21 +263,21 @@ export default function Dashboard({
             </div>
             
             {/* Right Streak Column */}
-            <div className="md:col-span-4 bg-stone-50 p-8 border border-stone-200 flex flex-col justify-between items-center text-center relative" id="streak-panel">
+            <div className="md:col-span-4 bg-stone-50 p-4 sm:p-8 border border-stone-200 flex flex-col justify-between items-center text-center relative" id="streak-panel">
               <div className="my-auto space-y-4">
                 <div className="relative inline-block">
                   <Flame className={`w-14 h-14 mx-auto transition-transform duration-300 hover:scale-105 ${stats.streak.count > 0 ? "text-stone-950" : "text-stone-300"}`} />
                 </div>
                 <div>
-                  <div className="text-5xl font-extralight tracking-tight text-stone-950">{stats.streak.count} Day{stats.streak.count === 1 ? "" : "s"}</div>
-                  <p className="text-[10px] text-stone-400 mt-2.5 uppercase font-bold tracking-widest">Active Study Streak</p>
+                  <div className="text-5xl font-bold tracking-tight text-stone-950">{stats.streak.count} Day{stats.streak.count === 1 ? "" : "s"}</div>
+                  <p className="text-xs text-stone-500 mt-2.5 font-medium">Active Study Streak</p>
                 </div>
               </div>
               
-              <div className="w-full pt-4 border-t border-stone-200/60 flex justify-between items-center text-[9px] font-mono font-bold text-stone-400 uppercase tracking-wider">
+              <div className="w-full pt-4 border-t border-stone-200/60 flex justify-between items-center text-xs text-stone-500 font-medium">
                 <span>Completed today:</span>
-                <span className={completedToday ? "text-stone-900 font-black" : "text-stone-300 font-medium"}>
-                  {completedToday ? "YES ✓" : "PENDING ◯"}
+                <span className={completedToday ? "text-stone-900 font-bold" : "text-stone-400 font-medium"}>
+                  {completedToday ? "Yes ✓" : "Pending ◯"}
                 </span>
               </div>
             </div>
@@ -277,40 +287,40 @@ export default function Dashboard({
       )}
 
       {/* Stats Blocks */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" id="stats-grid">
-        <div className="bg-white p-6 border border-stone-200 flex items-center gap-4">
-          <div className="p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-            <BookOpen className="w-5 h-5" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4" id="stats-grid">
+        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-3 sm:gap-4">
+          <div className="p-2 sm:p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
+            <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <div className="text-2xl font-extralight tracking-tight text-stone-950">{stats.totalWordsStudied}</div>
-            <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold">Words Studied</div>
+            <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalWordsStudied}</div>
+            <div className="text-xs text-stone-500 font-medium">Words Studied</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 border border-stone-200 flex items-center gap-4">
-          <div className="p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-            <CheckCircle className="w-5 h-5" />
+        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-3 sm:gap-4">
+          <div className="p-2 sm:p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
+            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <div className="text-2xl font-extralight tracking-tight text-stone-950">{stats.totalWordsMastered}</div>
-            <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold">Mastered</div>
+            <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalWordsMastered}</div>
+            <div className="text-[9px] sm:text-[10px] text-stone-500 uppercase tracking-widest font-bold">Mastered</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 border border-stone-200 flex items-center gap-4">
-          <div className="p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-            <GraduationCap className="w-5 h-5" />
+        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-4">
+          <div className="p-2 sm:p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
+            <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <div className="text-2xl font-extralight tracking-tight text-stone-950">{stats.totalQuizzesTaken}</div>
-            <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold">Quizzes Taken</div>
+            <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalQuizzesTaken}</div>
+            <div className="text-[9px] sm:text-[10px] text-stone-500 uppercase tracking-widest font-bold">Quizzes Taken</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 border border-stone-200 flex items-center gap-4">
+        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-4">
           <div className="w-full">
-            <div className="text-[10px] text-stone-400 uppercase font-bold mb-2 tracking-widest">Activity Calendar</div>
+            <div className="text-[9px] sm:text-[10px] text-stone-400 uppercase font-bold mb-2 tracking-widest">Activity Calendar</div>
             <div className="flex gap-2 justify-between">
               {pastSevenDays.map((day, idx) => (
                 <div 
@@ -327,7 +337,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
         {/* Decks Column */}
         <div className="lg:col-span-7 space-y-6" id="dashboard-left-column">
           <div className="flex justify-between items-center border-b border-stone-200 pb-4">
@@ -342,9 +352,9 @@ export default function Dashboard({
             </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {decks.length === 0 ? (
-              <div className="bg-white border border-stone-200 p-12 text-center text-stone-500">
+              <div className="bg-white border border-stone-200 p-6 sm:p-12 text-center text-stone-500">
                 <Compass className="w-12 h-12 text-stone-300 mx-auto mb-4" />
                 <p className="font-bold text-stone-800 uppercase tracking-wider text-xs">No decks available</p>
                 <p className="text-xs text-stone-400 mt-2 font-serif italic">"Design custom learning lists on the right panel to begin."</p>
@@ -358,7 +368,7 @@ export default function Dashboard({
                 return (
                   <div 
                     key={deck.id}
-                    className="group bg-white p-8 border border-stone-200 hover:border-stone-900 transition-all duration-300 relative"
+                    className="group bg-white p-4 sm:p-8 border border-stone-200 hover:border-stone-900 transition-all duration-300 relative"
                     id={`deck-card-${deck.id}`}
                   >
                     <div className="flex justify-between items-start">
@@ -446,7 +456,7 @@ export default function Dashboard({
         {/* AI Generator Column */}
         <div className="lg:col-span-5" id="dashboard-right-column">
           <div 
-            className="bg-white border border-stone-200 p-8 space-y-8 sticky top-6"
+            className="bg-white border border-stone-200 p-4 sm:p-8 space-y-5 sm:space-y-8 sticky top-6"
             id="ai-deck-builder"
           >
             <div className="flex items-center gap-3 pb-4 border-b border-stone-100">

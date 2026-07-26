@@ -15,7 +15,8 @@ import {
   List,
   Layers
 } from "lucide-react";
-import { Word, Deck } from "../types";
+import { Word, Deck, TTSConfig, LLMConfig } from "../types";
+import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 
 interface FlashcardDeckProps {
   deck: Deck | null;
@@ -23,6 +24,8 @@ interface FlashcardDeckProps {
   onToggleLearned: (wordId: string) => void;
   onGoBack: () => void;
   onStartQuiz: () => void;
+  ttsConfig?: TTSConfig;
+  llmConfig?: LLMConfig;
 }
 
 export default function FlashcardDeck({
@@ -30,7 +33,9 @@ export default function FlashcardDeck({
   onToggleStar,
   onToggleLearned,
   onGoBack,
-  onStartQuiz
+  onStartQuiz,
+  ttsConfig = DEFAULT_TTS_CONFIG,
+  llmConfig
 }: FlashcardDeckProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -74,17 +79,10 @@ export default function FlashcardDeck({
     setIsFlipped(!isFlipped);
   };
 
-  // Modern robust Text-to-Speech using standard browser SpeechSynthesis
+  // Modern robust Text-to-Speech using configured TTS service
   const speakWord = (text: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.speechSynthesis) return;
 
-    window.speechSynthesis.cancel(); // Stop any ongoing speech
-    setIsSpeaking(true);
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Map languages to matching synthesis tags
     const langMap: Record<string, string> = {
       English: "en-US",
       Spanish: "es-ES",
@@ -97,18 +95,16 @@ export default function FlashcardDeck({
       Chinese: "zh-CN"
     };
 
-    const code = langMap[deck.targetLanguage] || "en-US";
-    utterance.lang = code;
+    const code = deck ? (langMap[deck.targetLanguage] || "en-US") : "en-US";
 
-    // Find custom voice matching target language
-    const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find(v => v.lang.startsWith(code));
-    if (voice) utterance.voice = voice;
-
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
+    speakTextService(
+      text,
+      ttsConfig,
+      llmConfig,
+      code,
+      () => setIsSpeaking(true),
+      () => setIsSpeaking(false)
+    );
   };
 
   const percentage = Math.round(((currentIndex + 1) / words.length) * 100);
@@ -127,8 +123,8 @@ export default function FlashcardDeck({
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
           </button>
-          <h2 className="text-2xl font-extralight tracking-tight text-stone-900">{deck.name}</h2>
-          <p className="text-xs text-stone-400 mt-1 font-serif italic">"{deck.description}"</p>
+          <h2 className="text-2xl font-bold tracking-tight text-stone-900">{deck.name}</h2>
+          <p className="text-xs text-stone-500 mt-1 font-serif italic">"{deck.description}"</p>
         </div>
 
         {/* Mode Toggle Button */}
@@ -186,7 +182,7 @@ export default function FlashcardDeck({
                   onClick={handleFlip}
                 >
                   {/* Card Shell */}
-                  <div className="w-full h-full bg-white border border-stone-200 flex flex-col justify-between p-8 overflow-hidden relative">
+                  <div className="w-full h-full bg-white border border-stone-200 flex flex-col justify-between p-4 sm:p-8 overflow-hidden relative">
                     
                     {/* Background Decorative Element */}
                     <div className="absolute -right-16 -top-16 w-32 h-32 rounded-full bg-stone-50 blur-2xl" />
@@ -235,7 +231,7 @@ export default function FlashcardDeck({
                             exit={{ opacity: 0, y: -5 }}
                             className="space-y-4"
                           >
-                            <h3 className="text-5xl md:text-6xl font-extralight tracking-tight text-stone-950">
+                            <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-stone-950">
                               {currentWord.word}
                             </h3>
                             <p className="text-sm font-mono text-stone-400 italic">
@@ -345,7 +341,7 @@ export default function FlashcardDeck({
             {words.map((w, idx) => (
               <div 
                 key={w.id} 
-                className="p-6 hover:bg-stone-50/50 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-6"
+                className="p-3.5 sm:p-6 hover:bg-stone-50/50 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6"
               >
                 <div className="space-y-2 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

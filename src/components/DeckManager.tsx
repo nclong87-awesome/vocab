@@ -14,11 +14,14 @@ import {
   Loader2,
   AlertCircle
 } from "lucide-react";
-import { Deck, Word } from "../types";
+import { Deck, Word, LLMConfig, TTSConfig } from "../types";
+import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 
 interface DeckManagerProps {
   decks: Deck[];
   selectedDeckId: string | null;
+  llmConfig?: LLMConfig;
+  ttsConfig?: TTSConfig;
   onSelectDeck: (deckId: string) => void;
   onAddCustomWord: (deckId: string, wordData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">) => void;
   onDeleteWord: (deckId: string, wordId: string) => void;
@@ -30,6 +33,8 @@ interface DeckManagerProps {
 export default function DeckManager({
   decks,
   selectedDeckId,
+  llmConfig,
+  ttsConfig = DEFAULT_TTS_CONFIG,
   onSelectDeck,
   onAddCustomWord,
   onDeleteWord,
@@ -95,7 +100,8 @@ export default function DeckManager({
         body: JSON.stringify({
           word: wordToFill,
           targetLanguage: activeDeck?.targetLanguage || "English",
-          nativeLanguage: activeDeck?.nativeLanguage || "Spanish"
+          nativeLanguage: activeDeck?.nativeLanguage || "Spanish",
+          llmConfig
         })
       });
 
@@ -160,10 +166,8 @@ export default function DeckManager({
   };
 
   const speakWord = (text: string) => {
-    if (!window.speechSynthesis) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = activeDeck?.targetLanguage === "English" ? "en-US" : "es-ES";
-    window.speechSynthesis.speak(utterance);
+    const langCode = activeDeck?.targetLanguage === "English" ? "en-US" : "es-ES";
+    speakTextService(text, ttsConfig, llmConfig, langCode);
   };
 
   return (
@@ -172,7 +176,7 @@ export default function DeckManager({
       {/* Top Banner Row */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-stone-200">
         <div>
-          <h2 className="text-xl font-extralight tracking-tight text-stone-900 flex items-center gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
             <Layers className="w-5 h-5 text-stone-900" /> Deck Workshop
           </h2>
           <p className="text-xs text-stone-400 font-serif italic mt-0.5">Organize vocabulary items, manage manual logs, and invoke AI dictionaries.</p>
