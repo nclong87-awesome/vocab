@@ -28,6 +28,7 @@ import {
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { autofillWordService } from "../services/llmClientService";
+import { ConfirmModal } from "./ConfirmModal";
 
 interface DeckManagerProps {
   decks: Deck[];
@@ -37,6 +38,7 @@ interface DeckManagerProps {
   onSelectDeck: (deckId: string) => void;
   onAddCustomWord: (deckId: string, wordData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">) => void;
   onDeleteWord: (deckId: string, wordId: string) => void;
+  onDeleteDeck?: (deckId: string) => void;
   onToggleStar: (wordId: string) => void;
   onToggleLearned: (wordId: string) => void;
   onAddCustomDeck: (name: string, description: string, targetLanguage: string, nativeLanguage: string) => void;
@@ -51,6 +53,7 @@ export default function DeckManager({
   onSelectDeck,
   onAddCustomWord,
   onDeleteWord,
+  onDeleteDeck,
   onToggleStar,
   onToggleLearned,
   onAddCustomDeck,
@@ -62,6 +65,7 @@ export default function DeckManager({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showAddWordModal, setShowAddWordModal] = useState(false);
   const [showAddDeckModal, setShowAddDeckModal] = useState(false);
+  const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // New Word Form State
   const [newWord, setNewWord] = useState("");
@@ -301,7 +305,7 @@ export default function DeckManager({
 
             <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
               {decks.map(deck => (
-                <button
+                <div
                   key={deck.id}
                   onClick={() => onSelectDeck(deck.id)}
                   className={`w-full text-left p-3.5 border transition-all flex justify-between items-center group cursor-pointer ${
@@ -310,18 +314,33 @@ export default function DeckManager({
                       : "border-stone-200 bg-white hover:border-stone-400"
                   }`}
                 >
-                  <div>
-                    <h4 className={`text-xs md:text-sm font-bold tracking-tight transition-colors ${
+                  <div className="pr-2 min-w-0">
+                    <h4 className={`text-xs md:text-sm font-bold tracking-tight transition-colors truncate ${
                       selectedDeckId === deck.id ? "text-stone-950" : "text-stone-800"
                     }`}>
                       {deck.name}
                     </h4>
                     <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5 font-serif italic">"{deck.description}"</p>
                   </div>
-                  <span className="text-[10px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5">
-                    {deck.words.length} words
-                  </span>
-                </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5">
+                      {deck.words.length} words
+                    </span>
+                    {onDeleteDeck && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeckToDelete({ id: deck.id, name: deck.name });
+                        }}
+                        className="p-1 text-stone-400 hover:text-red-600 hover:bg-stone-200 transition-colors cursor-pointer rounded"
+                        title="Delete Notebook"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -398,6 +417,20 @@ export default function DeckManager({
                   >
                     {isSidebarOpen ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
                   </button>
+
+                  {onDeleteDeck && activeDeck && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeckToDelete({ id: activeDeck.id, name: activeDeck.name });
+                      }}
+                      className="px-2.5 py-1 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Delete this notebook"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Delete Notebook</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1213,6 +1246,19 @@ export default function DeckManager({
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        isOpen={Boolean(deckToDelete)}
+        title="Delete Notebook"
+        message={`Are you sure you want to delete "${deckToDelete?.name}"? All words inside this notebook will be deleted.`}
+        onConfirm={() => {
+          if (deckToDelete && onDeleteDeck) {
+            onDeleteDeck(deckToDelete.id);
+            setDeckToDelete(null);
+          }
+        }}
+        onCancel={() => setDeckToDelete(null)}
+      />
 
     </div>
   );

@@ -16,6 +16,7 @@ import {
 import { Deck, UserStats, Word } from "../types";
 import QuizView from "./QuizView";
 import { getSettingFromDB, saveSettingToDB } from "../db/indexedDB";
+import { ConfirmModal } from "./ConfirmModal";
 
 interface DashboardProps {
   stats: UserStats;
@@ -67,6 +68,7 @@ export default function Dashboard({
   const [targetLanguage, setTargetLanguage] = useState("English");
   const [nativeLanguage, setNativeLanguage] = useState("Spanish");
   const [quantity, setQuantity] = useState(8);
+  const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Today's practice quiz states
   const [isQuizActive, setIsQuizActive] = useState(false);
@@ -389,20 +391,16 @@ export default function Dashboard({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {deck.id.startsWith("custom-") && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if(confirm(`Are you sure you want to delete deck "${deck.name}"?`)) {
-                                onDeleteDeck(deck.id);
-                              }
-                            }}
-                            className="p-1.5 text-stone-300 hover:text-stone-900 hover:bg-stone-100 transition-all cursor-pointer"
-                            title="Delete Deck"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeckToDelete({ id: deck.id, name: deck.name });
+                          }}
+                          className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-stone-100 transition-all cursor-pointer"
+                          title="Delete Deck"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
 
@@ -570,6 +568,19 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={Boolean(deckToDelete)}
+        title="Delete Notebook"
+        message={`Are you sure you want to delete "${deckToDelete?.name}"? All words inside this notebook will be deleted.`}
+        onConfirm={() => {
+          if (deckToDelete) {
+            onDeleteDeck(deckToDelete.id);
+            setDeckToDelete(null);
+          }
+        }}
+        onCancel={() => setDeckToDelete(null)}
+      />
     </div>
   );
 }

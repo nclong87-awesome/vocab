@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMConfig } from "../types";
+import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 // Clean raw JSON strings
 export function cleanJsonResponse(rawText: string): string {
@@ -12,6 +13,18 @@ export function cleanJsonResponse(rawText: string): string {
   return cleaned;
 }
 
+const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+
+// Sanitize model names for provider
+function sanitizeModel(provider: string, model?: string): string {
+  if (provider === "gemini") {
+    if (!model || !VALID_GEMINI_MODELS.includes(model)) {
+      return "gemini-2.5-flash";
+    }
+  }
+  return model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+}
+
 // Client-side direct LLM API invocation
 export async function callLLMClientSide(
   prompt: string, 
@@ -20,11 +33,11 @@ export async function callLLMClientSide(
   llmConfig?: LLMConfig
 ): Promise<string> {
   const provider = llmConfig?.provider || "gemini";
-  const model = llmConfig?.model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+  const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || "";
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "ollama" && provider !== "custom";
+  const requiresKey = provider !== "ollama" && provider !== "custom" && provider !== "gemini";
   if (requiresKey && !apiKey) {
     throw new Error(`API Key is required for ${provider.toUpperCase()}. Please enter a valid API key in LLM settings.`);
   }
@@ -35,7 +48,7 @@ export async function callLLMClientSide(
     try {
       const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
       const response = await ai.models.generateContent({
-        model: model || "gemini-2.5-flash",
+        model: model || "gemini-3.6-flash",
         contents: prompt,
         config: {
           systemInstruction,
@@ -288,6 +301,9 @@ Ensure the words selected cover different skill levels and are practical for rea
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(errData.error || `Server Error ${res.status}`);
   } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     return JSON.parse(text);
   }
@@ -351,6 +367,9 @@ CRITICAL MANDATORY REQUIREMENT:
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(errData.error || `Server Error ${res.status}`);
   } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     return JSON.parse(text);
   }

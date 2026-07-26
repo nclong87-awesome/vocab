@@ -4,7 +4,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   engine: 'browser',
   speed: 1.0,
   pitch: 1.0,
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.6-flash',
   voice: 'Puck',
   autoPlayAudioInQuiz: true
 };

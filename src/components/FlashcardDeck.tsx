@@ -61,6 +61,23 @@ export default function FlashcardDeck({
   const words = deck.words;
   const currentWord = words[currentIndex];
 
+  if (!words || words.length === 0) {
+    return (
+      <div className="text-center py-16 space-y-4 max-w-md mx-auto">
+        <h2 className="text-xl font-bold text-stone-900 font-serif">{deck.name} is empty</h2>
+        <p className="text-xs text-stone-500 font-serif italic">This notebook doesn't have any words yet. You can add words manually or generate them with AI.</p>
+        <div className="flex justify-center gap-3 pt-2">
+          <button 
+            onClick={onGoBack}
+            className="px-5 py-2.5 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleNext = () => {
     setIsFlipped(false);
     if (currentIndex < words.length - 1) {

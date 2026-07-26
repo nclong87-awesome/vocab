@@ -29,6 +29,18 @@ function cleanJsonResponse(rawText: string): string {
   return cleaned;
 }
 
+const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+
+// Sanitize model names for provider
+function sanitizeModel(provider: string, model?: string): string {
+  if (provider === "gemini") {
+    if (!model || !VALID_GEMINI_MODELS.includes(model)) {
+      return "gemini-2.5-flash";
+    }
+  }
+  return model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+}
+
 // Call LLM based on provider
 async function callLLM(
   prompt: string, 
@@ -37,15 +49,19 @@ async function callLLM(
   llmConfig?: LLMRequestConfig
 ): Promise<string> {
   const provider = llmConfig?.provider || "gemini";
-  const model = llmConfig?.model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+  const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "ollama" && provider !== "custom";
+  const requiresKey = provider !== "ollama" && provider !== "custom" && provider !== "gemini";
   let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
 
   if (requiresKey && !effectiveApiKey) {
     throw new Error(`API Key is required for provider: ${provider}. Please enter a valid API key in the LLM settings.`);
+  }
+
+  if (provider === "gemini" && !effectiveApiKey) {
+    throw new Error(`Gemini API Key is missing. Please enter your Gemini API key in LLM settings or configure GEMINI_API_KEY.`);
   }
 
   if (!effectiveApiKey) {
@@ -58,19 +74,38 @@ async function callLLM(
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
-    const response = await ai.models.generateContent({
-      model: model || "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
+    const targetModel = model || "gemini-2.5-flash";
+    try {
+      const response = await ai.models.generateContent({
+        model: targetModel,
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json"
+        }
+      });
 
-    if (!response.text) {
-      throw new Error("Empty response received from Gemini model.");
+      if (!response.text) {
+        throw new Error("Empty response received from Gemini model.");
+      }
+      return cleanJsonResponse(response.text);
+    } catch (err: any) {
+      console.warn(`Gemini generation failed on model ${targetModel}, retrying with gemini-2.0-flash...`, err?.message);
+      if (targetModel !== "gemini-2.0-flash") {
+        const fallbackRes = await ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: prompt,
+          config: {
+            systemInstruction,
+            responseMimeType: "application/json"
+          }
+        });
+        if (fallbackRes.text) {
+          return cleanJsonResponse(fallbackRes.text);
+        }
+      }
+      throw err;
     }
-    return cleanJsonResponse(response.text);
   } 
 
   if (provider === "anthropic") {
@@ -287,8 +322,9 @@ app.post("/api/tts", async (req, res) => {
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
       });
 
+      const targetTtsModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-2.5-flash";
       const response = await ai.models.generateContent({
-        model: model || "gemini-2.5-flash",
+        model: targetTtsModel,
         contents: `Pronounce the following text clearly for a language learner: "${text}"`,
         config: {
           responseModalities: ["AUDIO"],
