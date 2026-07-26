@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="16" fill="#1c1917" />
+  <!-- Left Page -->
+  <path d="M 16 20 C 23 23 27 23 31 21.5 L 31 46.5 C 27 48 23 48 16 45 Z" fill="#fafaf9" />
+  <!-- Right Page -->
+  <path d="M 33 21.5 C 37 23 41 23 48 20 L 48 45 C 41 48 37 48 33 46.5 Z" fill="#f5f5f4" />
+  <!-- Spine Divider -->
+  <line x1="32" y1="20" x2="32" y2="47" stroke="#e7e5e4" stroke-width="2" stroke-linecap="round" />
+  <!-- Gold Bookmark Ribbon -->
+  <path d="M 39 21 L 39 36 L 43 32.5 L 47 36 L 47 20 Z" fill="#f59e0b" />
+</svg>
