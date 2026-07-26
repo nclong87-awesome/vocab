@@ -94,9 +94,10 @@ export async function callLLMClientSide(
   let defaultBaseUrl = "https://api.openai.com/v1";
   if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
-  if (provider === "github") defaultBaseUrl = "https://models.inference.ai.azure.com";
+  if (provider === "github") defaultBaseUrl = "https://models.github.ai/inference";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
-  if (provider === "ollama" || provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
+  if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
 
   const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
@@ -110,7 +111,7 @@ export async function callLLMClientSide(
   }
 
   const reqBody: any = {
-    model: model || "gpt-5.4-mini",
+    model: model || "gemma4:31b",
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
@@ -138,10 +139,11 @@ export async function callLLMClientSide(
     return cleanJsonResponse(text);
   } catch (err: any) {
     if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
-      if (provider === "ollama" || targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1")) {
-        throw new Error(`CORS Error: Cannot connect to local Ollama (${targetUrl}). Ensure Ollama is running and set OLLAMA_ORIGINS="*" in your terminal.`);
+      const isLocalHost = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");
+      if (isLocalHost) {
+        throw new Error(`CORS/Connection Error: Cannot connect to local LLM endpoint (${targetUrl}). Ensure local server is running and CORS allows requests.`);
       }
-      throw new Error(`Browser CORS / Connection Error for ${provider.toUpperCase()} (${targetUrl}). Direct browser access was blocked by security policy or endpoint is unreachable.`);
+      throw new Error(`Browser Connection / CORS Error for ${provider.toUpperCase()} (${targetUrl}). Direct browser access was blocked by CORS policy or the cloud endpoint is unreachable.`);
     }
     throw err;
   }

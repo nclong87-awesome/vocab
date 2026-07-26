@@ -29,7 +29,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Inference API via GitHub Personal Access Token",
     defaultModel: "openai/gpt-4o",
     models: ["openai/gpt-4o", "openai/gpt-4.1", "cohere/cohere-command-a"],
-    defaultBaseUrl: "https://models.inference.ai.azure.com",
+    defaultBaseUrl: "https://models.github.ai/inference/",
     requiresKey: true
   },
   {
