@@ -187,27 +187,52 @@ export default function SettingsView({
     reader.readAsText(file);
   };
 
-  // Reset database to default
-  const handleResetDB = async () => {
-    if (!window.confirm("Are you sure you want to reset the IndexedDB database to default decks? Custom decks and study history will be cleared.")) {
-      return;
-    }
+  // Reset database state & modal
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+  const [resetMode, setResetMode] = useState<"defaults" | "empty">("defaults");
+  const [isResetting, setIsResetting] = useState(false);
 
+  // Reset database execution
+  const handleConfirmReset = async () => {
     try {
-      setDbStatusMessage({ type: "info", text: "Resetting IndexedDB database..." });
-      await resetIndexedDBDatabase();
+      setIsResetting(true);
+      setDbStatusMessage({ type: "info", text: "Resetting vocabulary notebooks database..." });
+
+      if (resetMode === "defaults") {
+        await resetIndexedDBDatabase();
+      } else {
+        // Clear all notebooks completely
+        const { saveAllDecksToDB } = await import("../db/indexedDB");
+        await saveAllDecksToDB([]);
+      }
+
+      // Clear any cached localStorage backups
+      try {
+        localStorage.removeItem("vocab_learner_decks_backup");
+        localStorage.removeItem("vocab_learner_stats_backup");
+      } catch (e) {
+        // ignore storage quota errors
+      }
+
       if (onReloadData) {
         await onReloadData();
       }
+
       setDbStatusMessage({
         type: "success",
-        text: "Database reset to default starter vocabulary decks."
+        text: resetMode === "defaults" 
+          ? "Successfully reset vocabulary data to default starter notebooks." 
+          : "Successfully cleared all notebooks and vocabulary data."
       });
+      setShowResetConfirmModal(false);
     } catch (err: any) {
+      console.error("Reset DB error:", err);
       setDbStatusMessage({
         type: "error",
         text: `Reset failed: ${err.message || "Unknown error"}`
       });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -869,22 +894,130 @@ export default function SettingsView({
           </div>
         )}
 
-        {/* Reset Database Footer Option */}
-        <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-stone-500 text-xs">
-            <AlertTriangle className="w-3.5 h-3.5 text-stone-400" />
-            <span>Need to restore default starter decks?</span>
+        {/* Danger Zone: Reset Vocabularies & Notebooks Data */}
+        <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+                <span>Reset Vocabularies Data & Notebooks</span>
+              </div>
+              <p className="text-xs text-red-700 font-normal">
+                Wipe all custom notebooks, generated decks, and study history. Reset database to default starter notebooks or clear completely.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowResetConfirmModal(true)}
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Vocabulary Data</span>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleResetDB}
-            className="text-xs text-red-700 hover:text-red-900 font-medium underline underline-offset-2 flex items-center gap-1 cursor-pointer transition-colors"
-          >
-            <Trash2 className="w-3 h-3" />
-            <span>Reset Database to Defaults</span>
-          </button>
         </div>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirmModal && (
+        <div className="fixed inset-0 bg-stone-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 p-6 sm:p-8 w-full max-w-md space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-start pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
+                <AlertTriangle className="w-5 h-5" />
+                <span>Confirm Reset Data</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmModal(false)}
+                disabled={isResetting}
+                className="text-stone-400 hover:text-stone-900 p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-stone-600">
+              <p className="font-semibold text-stone-900">
+                Are you sure you want to reset your vocabulary data?
+              </p>
+              <p>
+                This will delete custom notebooks, AI-generated decks, and saved study statistics stored in browser IndexedDB.
+              </p>
+
+              <div className="space-y-2 pt-2">
+                <label className="block text-xs font-semibold text-stone-900">Choose Reset Mode:</label>
+                
+                <label className={`flex items-start gap-3 p-3 border cursor-pointer transition-all ${
+                  resetMode === 'defaults' ? "bg-stone-50 border-stone-900 text-stone-900" : "border-stone-200 bg-white"
+                }`}>
+                  <input
+                    type="radio"
+                    name="resetMode"
+                    checked={resetMode === 'defaults'}
+                    onChange={() => setResetMode('defaults')}
+                    className="mt-0.5 accent-stone-900"
+                  />
+                  <div>
+                    <span className="font-bold block text-xs">Restore Default Starter Notebooks</span>
+                    <span className="text-[11px] text-stone-500 font-normal">
+                      Replaces custom data with original starter decks (Spanish, French, Food, Tech).
+                    </span>
+                  </div>
+                </label>
+
+                <label className={`flex items-start gap-3 p-3 border cursor-pointer transition-all ${
+                  resetMode === 'empty' ? "bg-red-50/50 border-red-500 text-red-950" : "border-stone-200 bg-white"
+                }`}>
+                  <input
+                    type="radio"
+                    name="resetMode"
+                    checked={resetMode === 'empty'}
+                    onChange={() => setResetMode('empty')}
+                    className="mt-0.5 accent-red-600"
+                  />
+                  <div>
+                    <span className="font-bold block text-xs text-red-900">Completely Clear All Notebooks</span>
+                    <span className="text-[11px] text-stone-500 font-normal">
+                      Removes all decks and leaves your notebook workshop completely blank.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmModal(false)}
+                disabled={isResetting}
+                className="px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                disabled={isResetting}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-40"
+              >
+                {isResetting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Resetting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Reset</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save Settings Action Bar */}
       <div className="bg-stone-900 text-white p-6 flex flex-col sm:flex-row items-center justify-between gap-4">

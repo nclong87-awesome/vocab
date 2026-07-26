@@ -180,25 +180,33 @@ app.post("/api/generate-deck", async (req, res) => {
       return res.status(400).json({ error: "Topic is required" });
     }
 
-    const prompt = `Generate a high-quality list of ${quantity} vocabulary words/expressions on the topic: "${topic}".
-The target language that the user wants to learn is "${targetLanguage || 'English'}".
-The user's native language for translation is "${nativeLanguage || 'Spanish'}".
-Ensure the words selected cover different skill levels (beginner, intermediate, advanced) and are practical.
-Provide clear definitions, pronunciations, parts of speech, and illustrative example sentences with translations.`;
+    const userNative = nativeLanguage || localStorage?.getItem?.("vocab_learner_native_lang") || "English";
+    const userTarget = targetLanguage || "Spanish";
 
-    const systemInstruction = "You are an expert language teacher specializing in creating optimal vocabulary learning material.";
+    const prompt = `Generate a high-quality list of ${quantity} vocabulary words/expressions on the topic: "${topic}".
+The target language that the user wants to learn is "${userTarget}".
+The user's native language for definitions and explanations is "${userNative}".
+
+CRITICAL INSTRUCTIONS:
+- "definition": Write clear, easy-to-understand definitions of each target word in the user's NATIVE language (${userNative}).
+- "translation": Direct translation into the user's native language (${userNative}).
+- "example": Example sentence in target language (${userTarget}).
+- "exampleTranslation": Translation of the example sentence into the user's native language (${userNative}).
+Ensure the words selected cover different skill levels and are practical for real conversation.`;
+
+    const systemInstruction = `You are an expert language teacher specializing in creating vocabulary material for ${userNative} native speakers learning ${userTarget}.`;
     const schemaDesc = `{
-  "name": "Creative deck name",
-  "description": "Short description",
+  "name": "Creative deck title",
+  "description": "Short description in ${userNative}",
   "words": [
     {
-      "word": "string",
-      "pronunciation": "string",
+      "word": "string (target word in ${userTarget})",
+      "pronunciation": "string (IPA format)",
       "partOfSpeech": "string",
-      "definition": "string",
-      "translation": "string",
-      "example": "string",
-      "exampleTranslation": "string"
+      "definition": "string (definition written in ${userNative})",
+      "translation": "string (direct translation in ${userNative})",
+      "example": "string (sentence in ${userTarget})",
+      "exampleTranslation": "string (sentence translation in ${userNative})"
     }
   ]
 }`;
@@ -221,19 +229,30 @@ app.post("/api/autofill-word", async (req, res) => {
       return res.status(400).json({ error: "Word is required" });
     }
 
-    const prompt = `Provide detailed vocabulary learning material for the word "${word}".
-Target language being learned: "${targetLanguage || 'English'}".
-Native language for translation: "${nativeLanguage || 'Spanish'}".`;
+    const userNative = nativeLanguage || "English";
+    const userTarget = targetLanguage || "Spanish";
 
-    const systemInstruction = "You are a professional dictionary database engine and linguistic tutor.";
+    const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
+Target language being learned: "${userTarget}".
+User's native language: "${userNative}".
+
+CRITICAL MANDATORY REQUIREMENT:
+- "definition": You MUST write the definition/explanation in the user's native language (${userNative}) so the learner clearly understands it.
+- "translation": Provide the direct, accurate translation of "${word}" into the user's native language (${userNative}).
+- "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
+- "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
+- "example": A realistic, high-quality example sentence in the target language (${userTarget}).
+- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).`;
+
+    const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions and translations in the user's native language (${userNative}).`;
     const schemaDesc = `{
   "word": "string",
   "pronunciation": "string",
   "partOfSpeech": "string",
-  "definition": "string",
-  "translation": "string",
-  "example": "string",
-  "exampleTranslation": "string"
+  "definition": "string (definition in ${userNative})",
+  "translation": "string (translation in ${userNative})",
+  "example": "string (example in ${userTarget})",
+  "exampleTranslation": "string (example translation in ${userNative})"
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);

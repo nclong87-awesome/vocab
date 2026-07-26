@@ -150,7 +150,7 @@ export default function Dashboard({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className="text-lg font-bold tracking-widest text-white uppercase mb-3 font-sans"
+              className="text-lg font-bold text-white mb-3 font-sans"
             >
               Curating Vocabulary material
             </motion.h3>
@@ -158,7 +158,7 @@ export default function Dashboard({
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.4 }}
-              className="text-stone-400 max-w-sm text-xs font-mono tracking-widest uppercase"
+              className="text-stone-400 max-w-sm text-xs font-mono"
             >
               {loadingMessage}
             </motion.p>
@@ -304,7 +304,7 @@ export default function Dashboard({
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalWordsMastered}</div>
-            <div className="text-[9px] sm:text-[10px] text-stone-500 uppercase tracking-widest font-bold">Mastered</div>
+            <div className="text-xs text-stone-500 font-semibold">Mastered</div>
           </div>
         </div>
 
@@ -314,13 +314,13 @@ export default function Dashboard({
           </div>
           <div>
             <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalQuizzesTaken}</div>
-            <div className="text-[9px] sm:text-[10px] text-stone-500 uppercase tracking-widest font-bold">Quizzes Taken</div>
+            <div className="text-xs text-stone-500 font-semibold">Quizzes Taken</div>
           </div>
         </div>
 
         <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-4">
           <div className="w-full">
-            <div className="text-[9px] sm:text-[10px] text-stone-400 uppercase font-bold mb-2 tracking-widest">Activity Calendar</div>
+            <div className="text-xs text-stone-500 font-semibold mb-2">Activity Calendar</div>
             <div className="flex gap-2 justify-between">
               {pastSevenDays.map((day, idx) => (
                 <div 
@@ -329,7 +329,7 @@ export default function Dashboard({
                   title={`${day.dateStr}: ${day.studied ? "Studied" : "No activity"}`}
                 >
                   <div className={`w-2 h-2 ${day.studied ? "bg-stone-900" : "bg-stone-200"}`} />
-                  <span className="text-[9px] text-stone-400 font-bold mt-1.5 uppercase">{day.dayName[0]}</span>
+                  <span className="text-[10px] text-stone-500 font-bold mt-1.5">{day.dayName[0]}</span>
                 </div>
               ))}
             </div>
@@ -341,12 +341,12 @@ export default function Dashboard({
         {/* Decks Column */}
         <div className="lg:col-span-7 space-y-6" id="dashboard-left-column">
           <div className="flex justify-between items-center border-b border-stone-200 pb-4">
-            <h2 className="text-xs font-black uppercase tracking-widest text-stone-950 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-stone-950 flex items-center gap-2">
               Collection Decks
             </h2>
             <button 
               onClick={() => onSelectTab("decks")} 
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-400 hover:text-stone-950 flex items-center gap-1 cursor-pointer"
+              className="text-xs font-semibold text-stone-500 hover:text-stone-950 flex items-center gap-1 cursor-pointer"
             >
               Add Custom Deck <Plus className="w-3.5 h-3.5" />
             </button>
@@ -356,7 +356,7 @@ export default function Dashboard({
             {decks.length === 0 ? (
               <div className="bg-white border border-stone-200 p-6 sm:p-12 text-center text-stone-500">
                 <Compass className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                <p className="font-bold text-stone-800 uppercase tracking-wider text-xs">No decks available</p>
+                <p className="font-bold text-stone-800 text-xs">No decks available</p>
                 <p className="text-xs text-stone-400 mt-2 font-serif italic">"Design custom learning lists on the right panel to begin."</p>
               </div>
             ) : (
@@ -374,10 +374,10 @@ export default function Dashboard({
                     <div className="flex justify-between items-start">
                       <div className="space-y-2 pr-6">
                         <div className="flex flex-wrap items-center gap-3">
-                          <span className="px-2.5 py-0.5 border border-stone-200 text-stone-500 bg-stone-50 text-[9px] font-bold uppercase tracking-widest">
+                          <span className="px-2.5 py-0.5 border border-stone-200 text-stone-600 bg-stone-50 text-[11px] font-semibold">
                             {deck.isCustom ? "Custom" : "Standard"}
                           </span>
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                          <span className="text-xs font-mono font-semibold text-stone-500 flex items-center gap-1">
                             <Globe2 className="w-3.5 h-3.5" /> 
                             {deck.targetLanguage} ↔ {deck.nativeLanguage}
                           </span>
@@ -409,10 +409,10 @@ export default function Dashboard({
                     </div>
 
                     <div className="mt-8 grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-6 border-t border-stone-100">
-                      <div className="sm:col-span-5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-stone-500">
+                      <div className="sm:col-span-5 flex items-center gap-2 text-xs font-semibold text-stone-600">
                         <GraduationCap className="w-4 h-4 text-stone-900" />
                         <span>{totalWords} Words</span>
-                        <span className="text-stone-200">•</span>
+                        <span className="text-stone-300">•</span>
                         <span className="text-stone-900">{masteredWords} mastered</span>
                       </div>
 
@@ -431,7 +431,7 @@ export default function Dashboard({
                       <div className="sm:col-span-3 flex gap-2 justify-end">
                         <button
                           onClick={() => onSelectDeck(deck.id)}
-                          className="px-4 py-2 border border-stone-200 hover:border-stone-900 bg-white transition-colors text-stone-900 text-[10px] font-bold uppercase tracking-widest cursor-pointer"
+                          className="px-3.5 py-1.5 border border-stone-200 hover:border-stone-900 bg-white transition-colors text-stone-900 text-xs font-semibold cursor-pointer"
                         >
                           Learn
                         </button>
@@ -440,7 +440,7 @@ export default function Dashboard({
                             onSelectDeck(deck.id);
                             onSelectTab("quiz");
                           }}
-                          className="px-4 py-2 bg-stone-900 hover:bg-black transition-colors text-white text-[10px] font-bold uppercase tracking-widest cursor-pointer"
+                          className="px-3.5 py-1.5 bg-stone-900 hover:bg-black transition-colors text-white text-xs font-semibold cursor-pointer"
                         >
                           Quiz
                         </button>
@@ -464,15 +464,15 @@ export default function Dashboard({
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-xs uppercase tracking-widest text-stone-950">AI Deck Generator</h3>
-                <p className="text-[10px] text-stone-400 uppercase tracking-wider font-bold mt-0.5">Let Gemini curate unique study decks</p>
+                <h3 className="font-bold text-sm text-stone-950">AI Deck Generator</h3>
+                <p className="text-xs text-stone-500 font-medium mt-0.5">Let Gemini curate unique study decks</p>
               </div>
             </div>
 
             {/* Language Selection */}
-            <div className="grid grid-cols-2 gap-4 text-[10px] uppercase tracking-widest font-bold">
+            <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
               <div>
-                <label className="block text-stone-400 mb-2">Target Language</label>
+                <label className="block text-stone-600 mb-1.5">Target Language</label>
                 <select 
                   value={targetLanguage} 
                   onChange={(e) => setTargetLanguage(e.target.value)}
@@ -485,7 +485,7 @@ export default function Dashboard({
                 </select>
               </div>
               <div>
-                <label className="block text-stone-400 mb-2">Native Language</label>
+                <label className="block text-stone-600 mb-1.5">Native Language</label>
                 <select 
                   value={nativeLanguage} 
                   onChange={(e) => setNativeLanguage(e.target.value)}
@@ -500,18 +500,18 @@ export default function Dashboard({
             </div>
 
             {/* Quantity */}
-            <div className="text-[10px] uppercase tracking-widest font-bold">
-              <label className="block text-stone-400 mb-2">Deck Size</label>
+            <div className="text-xs font-semibold">
+              <label className="block text-stone-600 mb-1.5">Deck Size</label>
               <div className="flex gap-2">
                 {[5, 8, 12].map((num) => (
                   <button
                     key={num}
                     type="button"
                     onClick={() => setQuantity(num)}
-                    className={`flex-1 py-2 border text-center font-bold transition-all text-xs cursor-pointer ${
+                    className={`flex-1 py-2 border text-center font-semibold transition-all text-xs cursor-pointer ${
                       quantity === num 
                         ? "border-stone-950 bg-stone-950 text-white" 
-                        : "border-stone-200 bg-stone-50 text-stone-400 hover:border-stone-400 hover:text-stone-900"
+                        : "border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-400 hover:text-stone-900"
                     }`}
                   >
                     {num} Words
@@ -522,8 +522,8 @@ export default function Dashboard({
 
             {/* Custom Topic Form */}
             <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="text-[10px] uppercase tracking-widest font-bold">
-                <label className="block text-stone-400 mb-2">Custom Topic</label>
+              <div className="text-xs font-semibold">
+                <label className="block text-stone-600 mb-1.5">Custom Topic</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -546,8 +546,8 @@ export default function Dashboard({
             </form>
 
             {/* Preset Topics */}
-            <div className="space-y-4">
-              <label className="block text-[10px] uppercase tracking-widest font-bold text-stone-400">Or Select a Preset Theme</label>
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-stone-600">Or Select a Preset Theme</label>
               <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1" id="presets-container">
                 {PRESET_TOPICS.map((preset, idx) => (
                   <button

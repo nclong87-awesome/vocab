@@ -215,6 +215,37 @@ export default function App() {
     setIsLlmModalOpen(false);
   };
 
+  // Save Onboarding (Languages + LLM Config)
+  const handleSaveOnboarding = (
+    languages: { nativeLanguage: string; targetLanguage: string },
+    newConfig: LLMConfig
+  ) => {
+    setLlmConfig(newConfig);
+    saveLLMConfigToDB(newConfig).catch(e => console.error("IndexedDB config save error:", e));
+    try {
+      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(newConfig));
+      if (languages.nativeLanguage) {
+        localStorage.setItem("vocab_learner_native_lang", languages.nativeLanguage);
+      }
+      if (languages.targetLanguage) {
+        localStorage.setItem("vocab_learner_target_lang", languages.targetLanguage);
+      }
+    } catch (e) {
+      console.error("Failed to save onboarding settings to localStorage", e);
+    }
+
+    if (languages.targetLanguage && languages.nativeLanguage && decks.length > 0) {
+      const updatedDecks = decks.map(deck => ({
+        ...deck,
+        targetLanguage: languages.targetLanguage,
+        nativeLanguage: languages.nativeLanguage
+      }));
+      saveDecksToStorage(updatedDecks);
+    }
+
+    setIsLlmModalOpen(false);
+  };
+
   // Handle deck deletion
   const handleDeleteDeck = (deckId: string) => {
     const updatedDecks = decks.filter(d => d.id !== deckId);
@@ -642,6 +673,7 @@ export default function App() {
                 onToggleStar={handleToggleStar}
                 onToggleLearned={handleToggleLearned}
                 onAddCustomDeck={handleAddCustomDeck}
+                onGenerateDeck={handleGenerateDeck}
               />
             )}
 
@@ -658,11 +690,12 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      {/* LLM Login & Settings Modal */}
+      {/* LLM Login & Onboarding Modal */}
       <LlmLoginModal
         isOpen={isLlmModalOpen}
         currentConfig={llmConfig}
         onSaveConfig={handleSaveLlmConfig}
+        onSaveOnboarding={handleSaveOnboarding}
         onClose={() => setIsLlmModalOpen(false)}
         canDismiss={Boolean(llmConfig.isLoggedIn && llmConfig.provider)}
       />
@@ -671,7 +704,7 @@ export default function App() {
       <footer className="bg-white border-t border-stone-200 py-6 px-6 text-center text-stone-400 text-xs">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
           <p>© 2026 Vocabulary Learner. Designed with extreme typographic precision and absolute utility.</p>
-          <div className="flex gap-4 font-bold text-stone-500 uppercase tracking-widest text-[10px]">
+          <div className="flex gap-4 font-semibold text-stone-500 text-xs">
             <span>Powered by Gemini AI</span>
           </div>
         </div>

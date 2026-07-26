@@ -222,11 +222,11 @@ export default function QuizView({
     return (
       <div className="bg-white p-12 border border-stone-200 text-center space-y-6 max-w-md mx-auto rounded-none" id="no-words-for-quiz">
         <AlertCircle className="w-16 h-16 text-stone-300 mx-auto" />
-        <h3 className="text-sm font-bold text-stone-900 uppercase tracking-widest">Lacking Vocabulary Items</h3>
+        <h3 className="text-sm font-bold text-stone-900">Lacking Vocabulary Items</h3>
         <p className="text-xs text-stone-400 font-serif italic">"A deck needs at least 2 words to generate an interactive practice quiz."</p>
         <button 
           onClick={onGoBack}
-          className="px-6 py-3 bg-stone-900 text-white font-bold text-xs uppercase tracking-widest hover:bg-black transition-colors cursor-pointer rounded-none"
+          className="px-6 py-3 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer rounded-none"
         >
           Go Back
         </button>
@@ -498,7 +498,7 @@ export default function QuizView({
 
                   {/* Strategy 4: Contextual Sentence Anchoring */}
                   <div className="bg-stone-50 p-4 border border-stone-200 rounded-none space-y-2">
-                    <div className="flex items-center gap-2 text-stone-900 font-bold text-xs uppercase tracking-wider">
+                    <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
                       <BookOpen className="w-4 h-4 text-stone-800" />
                       <span>4. Sentence Anchoring</span>
                     </div>
@@ -512,7 +512,7 @@ export default function QuizView({
               {/* Detailed Wrong Answers Review List */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-widest">
+                  <span className="text-xs font-semibold text-stone-600">
                     Detailed Item Breakdown ({wrongAnswersList.length})
                   </span>
                   <span className="text-[10px] text-stone-400 italic">
@@ -534,7 +534,7 @@ export default function QuizView({
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-stone-950 text-base">{item.question.word}</span>
-                              <span className="text-[9px] text-stone-500 font-bold uppercase tracking-widest bg-stone-200 px-1.5 py-0.5">
+                              <span className="text-xs text-stone-600 font-semibold bg-stone-200 px-2 py-0.5">
                                 {matchingWordObj?.partOfSpeech || "word"}
                               </span>
                             </div>
@@ -572,12 +572,12 @@ export default function QuizView({
                         {/* Answers comparison */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-stone-200 text-[11px]">
                           <div className="bg-red-50/50 p-2 border border-red-100 text-red-900 font-mono">
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-red-500 block mb-0.5">Your Choice:</span>
+                            <span className="text-xs font-semibold text-red-600 block mb-0.5">Your Choice:</span>
                             <span className="line-through font-semibold">{item.wrongPicked || "(No input)"}</span>
                           </div>
 
                           <div className="bg-emerald-50/50 p-2 border border-emerald-100 text-emerald-950 font-mono">
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 block mb-0.5">Correct Target:</span>
+                            <span className="text-xs font-semibold text-emerald-700 block mb-0.5">Correct Target:</span>
                             <span className="font-bold text-emerald-900">{item.question.correctAnswer}</span>
                           </div>
                         </div>

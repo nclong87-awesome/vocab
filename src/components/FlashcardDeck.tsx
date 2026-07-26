@@ -46,11 +46,11 @@ export default function FlashcardDeck({
     return (
       <div className="bg-white p-12 rounded-none border border-stone-200 text-center space-y-6 max-w-md mx-auto" id="no-deck-selected">
         <Layers className="w-16 h-16 text-stone-300 mx-auto" />
-        <h3 className="text-sm font-bold text-stone-900 uppercase tracking-widest">No active study deck</h3>
+        <h3 className="text-sm font-bold text-stone-900">No active study deck</h3>
         <p className="text-xs text-stone-400 font-serif italic">"Please select a deck from your dashboard or build a custom list."</p>
         <button 
           onClick={onGoBack}
-          className="px-6 py-3 bg-stone-900 text-white font-bold text-xs uppercase tracking-widest hover:bg-black transition-colors cursor-pointer rounded-none"
+          className="px-6 py-3 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer rounded-none"
         >
           Go to Dashboard
         </button>
@@ -119,7 +119,7 @@ export default function FlashcardDeck({
         <div>
           <button 
             onClick={onGoBack}
-            className="inline-flex items-center gap-1.5 text-[10px] font-bold text-stone-400 hover:text-stone-900 uppercase tracking-widest transition-colors mb-2 cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-900 transition-colors mb-2 cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
           </button>
@@ -131,20 +131,20 @@ export default function FlashcardDeck({
         <div className="flex bg-stone-100 p-1 border border-stone-200" id="mode-selector">
           <button
             onClick={() => setViewMode("card")}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               viewMode === "card" 
                 ? "bg-white text-stone-900 border border-stone-200" 
-                : "text-stone-400 hover:text-stone-900"
+                : "text-stone-500 hover:text-stone-900"
             }`}
           >
             <Layers className="w-3.5 h-3.5" /> Card Mode
           </button>
           <button
             onClick={() => setViewMode("list")}
-            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               viewMode === "list" 
                 ? "bg-white text-stone-900 border border-stone-200" 
-                : "text-stone-400 hover:text-stone-900"
+                : "text-stone-500 hover:text-stone-900"
             }`}
           >
             <List className="w-3.5 h-3.5" /> List View
@@ -156,7 +156,7 @@ export default function FlashcardDeck({
         <div className="space-y-8">
           {/* Progress Tracker */}
           <div className="bg-white px-6 py-4 border border-stone-200 flex items-center justify-between gap-4">
-            <span className="text-[10px] font-bold text-stone-400 font-mono uppercase tracking-widest">
+            <span className="text-xs font-semibold text-stone-500 font-mono">
               Word {currentIndex + 1} of {words.length}
             </span>
             <div className="flex-1 h-[2px] bg-stone-100 overflow-hidden">
@@ -165,7 +165,7 @@ export default function FlashcardDeck({
                 style={{ width: `${percentage}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-stone-900 font-mono tracking-widest">{percentage}%</span>
+            <span className="text-xs font-semibold text-stone-900 font-mono">{percentage}%</span>
           </div>
 
           {/* Flashcard Animation */}
@@ -189,7 +189,7 @@ export default function FlashcardDeck({
 
                     {/* Quick Star & Audio Indicators */}
                     <div className="flex justify-between items-center z-10">
-                      <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase font-mono">
+                      <span className="text-xs font-semibold text-stone-500 font-mono">
                         {currentWord.partOfSpeech}
                       </span>
                       <div className="flex gap-2">
@@ -237,7 +237,7 @@ export default function FlashcardDeck({
                             <p className="text-sm font-mono text-stone-400 italic">
                               {currentWord.pronunciation}
                             </p>
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-50 text-stone-500 border border-stone-200 text-[10px] uppercase font-bold tracking-widest mt-4">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-50 text-stone-500 border border-stone-200 text-xs font-medium mt-4">
                               <RefreshCw className="w-3 h-3 text-stone-400 animate-spin" /> Click to Flip Card
                             </span>
                           </motion.div>
@@ -250,7 +250,7 @@ export default function FlashcardDeck({
                             className="space-y-4 w-full"
                           >
                             <div className="space-y-2">
-                              <span className="text-[10px] font-bold text-stone-400 font-mono uppercase tracking-widest">Meaning & Translation</span>
+                              <span className="text-xs font-semibold text-stone-500 font-mono">Meaning & Translation</span>
                               <h4 className="text-2xl font-bold text-stone-900 leading-tight font-serif italic">
                                 "{currentWord.translation}"
                               </h4>
@@ -260,7 +260,7 @@ export default function FlashcardDeck({
                             </div>
 
                             <div className="bg-stone-50 p-4 border border-stone-200 text-left space-y-1.5 mt-2">
-                              <span className="text-[9px] font-bold text-stone-400 tracking-widest uppercase font-mono">Example Usage</span>
+                              <span className="text-xs font-semibold text-stone-500 font-mono">Example Usage</span>
                               <p className="text-xs md:text-sm text-stone-800 font-serif italic leading-relaxed">
                                 "{currentWord.example}"
                               </p>
@@ -280,10 +280,10 @@ export default function FlashcardDeck({
                           e.stopPropagation();
                           onToggleLearned(currentWord.id);
                         }}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 transition-all font-bold uppercase tracking-widest text-[10px] cursor-pointer ${
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 transition-all font-semibold text-xs cursor-pointer ${
                           currentWord.learned 
                             ? "bg-stone-900 text-white" 
-                            : "bg-white text-stone-400 hover:border-stone-900 border border-stone-200"
+                            : "bg-white text-stone-600 hover:border-stone-900 border border-stone-200"
                         }`}
                       >
                         {currentWord.learned ? (
@@ -296,7 +296,7 @@ export default function FlashcardDeck({
                           </>
                         )}
                       </button>
-                      <span className="text-[10px] text-stone-400 font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                      <span className="text-xs text-stone-500 font-mono font-medium flex items-center gap-1">
                         <HelpCircle className="w-3.5 h-3.5" /> Flip Card
                       </span>
                     </div>
@@ -312,7 +312,7 @@ export default function FlashcardDeck({
             <button
               onClick={handlePrev}
               disabled={currentIndex === 0}
-              className="px-6 py-3 border border-stone-200 hover:border-stone-900 bg-white text-stone-700 font-bold uppercase tracking-widest rounded-none disabled:opacity-30 disabled:hover:border-stone-200 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
+              className="px-6 py-3 border border-stone-200 hover:border-stone-900 bg-white text-stone-700 font-semibold rounded-none disabled:opacity-30 disabled:hover:border-stone-200 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" /> Previous
             </button>
@@ -320,14 +320,14 @@ export default function FlashcardDeck({
             {currentIndex < words.length - 1 ? (
               <button
                 onClick={handleNext}
-                className="px-6 py-3 bg-stone-900 hover:bg-black text-white font-bold uppercase tracking-widest rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-6 py-3 bg-stone-900 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 Next Word <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <button
                 onClick={onStartQuiz}
-                className="px-6 py-3 bg-stone-950 hover:bg-black text-white font-bold uppercase tracking-widest rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-6 py-3 bg-stone-950 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 Take Deck Quiz <Trophy className="w-4 h-4" />
               </button>
@@ -350,15 +350,15 @@ export default function FlashcardDeck({
                     </span>
                     <h4 className="text-base font-bold text-stone-950">{w.word}</h4>
                     <span className="text-xs text-stone-400 font-mono italic">{w.pronunciation}</span>
-                    <span className="text-[9px] text-stone-400 uppercase tracking-widest font-bold bg-stone-50 px-1.5 py-0.5 border border-stone-200">
+                    <span className="text-xs text-stone-500 font-semibold bg-stone-50 px-2 py-0.5 border border-stone-200">
                       {w.partOfSpeech}
                     </span>
                   </div>
                   <p className="text-xs font-serif italic text-stone-700">
-                    <span className="font-sans font-bold text-stone-400 uppercase tracking-widest text-[9px] not-italic mr-1">Meaning:</span> {w.translation}
+                    <span className="font-sans font-bold text-stone-500 text-xs not-italic mr-1">Meaning:</span> {w.translation}
                   </p>
                   <p className="text-xs text-stone-500 font-sans leading-relaxed">
-                    <span className="font-bold text-stone-400 uppercase tracking-widest text-[9px] mr-1">Definition:</span> {w.definition}
+                    <span className="font-bold text-stone-500 text-xs mr-1">Definition:</span> {w.definition}
                   </p>
                   <div className="text-xs border-l-2 border-stone-900 pl-3 mt-2 py-1 bg-stone-50">
                     <p className="italic text-stone-800 font-serif">"{w.example}"</p>
@@ -388,10 +388,10 @@ export default function FlashcardDeck({
 
                   <button
                     onClick={() => onToggleLearned(w.id)}
-                    className={`text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 border transition-all cursor-pointer ${
+                    className={`text-xs font-semibold px-3 py-1 border transition-all cursor-pointer ${
                       w.learned 
                         ? "bg-stone-900 border-stone-900 text-white" 
-                        : "bg-white text-stone-400 hover:border-stone-900 border-stone-200"
+                        : "bg-white text-stone-600 hover:border-stone-900 border-stone-200"
                     }`}
                   >
                     {w.learned ? "Mastered" : "Study"}
@@ -404,7 +404,7 @@ export default function FlashcardDeck({
           <div className="p-6 bg-stone-50 border-t border-stone-200 text-center">
             <button
               onClick={onStartQuiz}
-              className="inline-flex items-center gap-1.5 px-8 py-3 bg-stone-950 hover:bg-black text-white font-bold rounded-none text-xs uppercase tracking-widest transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-8 py-3 bg-stone-950 hover:bg-black text-white font-semibold rounded-none text-xs transition-all cursor-pointer"
             >
               Start Practice Quiz <Trophy className="w-4 h-4 text-white" />
             </button>
