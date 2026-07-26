@@ -68,6 +68,8 @@ export default function App() {
     streak: { count: 0, lastActiveDate: "", history: [] }
   });
 
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
   // Initialize and load from IndexedDB on mount
   const reloadAllDataFromDB = async () => {
     try {
@@ -84,24 +86,37 @@ export default function App() {
       setStats(loadedStats);
 
       const loadedConfig = await getLLMConfigFromDB({
-        provider: "gemini",
-        model: "gemini-2.5-flash",
+        provider: "",
+        model: "",
         apiKey: "",
         isLoggedIn: false
       });
       setLlmConfig(loadedConfig);
+
+      if (!loadedConfig.isLoggedIn || !loadedConfig.provider) {
+        setIsLlmModalOpen(true);
+      }
 
       const loadedTTS = await getTTSConfigFromDB(DEFAULT_TTS_CONFIG);
       setTtsConfig(loadedTTS);
     } catch (e) {
       console.error("IndexedDB load error:", e);
       setDecks(DEFAULT_DECKS);
+      setIsLlmModalOpen(true);
+    } finally {
+      setIsDataLoaded(true);
     }
   };
 
   useEffect(() => {
     reloadAllDataFromDB();
   }, []);
+
+  useEffect(() => {
+    if (isDataLoaded && (!llmConfig.isLoggedIn || !llmConfig.provider)) {
+      setIsLlmModalOpen(true);
+    }
+  }, [llmConfig.isLoggedIn, llmConfig.provider, isDataLoaded]);
 
   const handleSaveTTSConfig = (newConfig: TTSConfig) => {
     setTtsConfig(newConfig);
@@ -649,7 +664,7 @@ export default function App() {
         currentConfig={llmConfig}
         onSaveConfig={handleSaveLlmConfig}
         onClose={() => setIsLlmModalOpen(false)}
-        canDismiss={llmConfig.isLoggedIn}
+        canDismiss={Boolean(llmConfig.isLoggedIn && llmConfig.provider)}
       />
 
       {/* Humble footer */}

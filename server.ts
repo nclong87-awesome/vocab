@@ -37,14 +37,19 @@ async function callLLM(
   llmConfig?: LLMRequestConfig
 ): Promise<string> {
   const provider = llmConfig?.provider || "gemini";
-  const model = llmConfig?.model || (provider === "gemini" ? "gemini-3.5-flash" : "gpt-4o-mini");
+  const model = llmConfig?.model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
   const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
+  const requiresKey = provider !== "ollama" && provider !== "custom";
+  let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
+
+  if (requiresKey && !effectiveApiKey) {
+    throw new Error(`API Key is required for provider: ${provider}. Please enter a valid API key in the LLM settings.`);
+  }
 
   if (!effectiveApiKey) {
-    throw new Error(`API Key is required for provider: ${provider}. Please enter a valid API key in the LLM settings.`);
+    effectiveApiKey = "local-token";
   }
 
   if (provider === "gemini") {
@@ -54,7 +59,7 @@ async function callLLM(
     });
 
     const response = await ai.models.generateContent({
-      model: model || "gemini-3.5-flash",
+      model: model || "gemini-2.5-flash",
       contents: prompt,
       config: {
         systemInstruction,
@@ -95,10 +100,13 @@ async function callLLM(
     return cleanJsonResponse(contentText);
   }
 
-  // OpenAI-compatible providers: openai, groq, openrouter, custom
+  // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom
   let defaultBaseUrl = "https://api.openai.com/v1";
   if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
+  if (provider === "github") defaultBaseUrl = "https://models.inference.ai.azure.com";
+  if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
+  if (provider === "ollama" || provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
 
   const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
@@ -113,7 +121,7 @@ async function callLLM(
   }
 
   const reqBody: any = {
-    model: model || (provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini"),
+    model: model || "gpt-5.4-mini",
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
@@ -121,7 +129,7 @@ async function callLLM(
   };
 
   // Many OpenAI compatible endpoints accept response_format: { type: "json_object" }
-  if (provider === "openai" || provider === "groq" || provider === "openrouter") {
+  if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "9flare") {
     reqBody.response_format = { type: "json_object" };
   }
 
