@@ -36,8 +36,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "gemini",
     name: "Google Gemini",
     tagline: "Fast & highly structured intelligence",
-    defaultModel: "gemini-2.5-flash",
-    models: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash"],
+    defaultModel: "gemini-3.5-flash",
+    models: ["gemini-3.5-flash-lite", "gemini-3.5-flash"],
     requiresKey: true
   },
   {

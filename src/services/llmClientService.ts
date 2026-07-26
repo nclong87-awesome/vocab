@@ -141,51 +141,6 @@ export async function callLLMClientSide(
     if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
       const isLocalHost = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");
 
-      // Attempt CORS Proxy fallbacks for remote endpoints when browser direct fetch fails due to browser CORS policy
-      if (!isLocalHost) {
-        console.warn(`Direct fetch to ${targetUrl} failed with CORS error. Retrying via CORS proxy...`);
-
-        // Proxy Attempt 1: corsproxy.io
-        try {
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-          const proxyRes = await fetch(proxyUrl, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(reqBody)
-          });
-
-          if (proxyRes.ok) {
-            const proxyData: any = await proxyRes.json();
-            const proxyText = proxyData.choices?.[0]?.message?.content || "";
-            if (proxyText) {
-              return cleanJsonResponse(proxyText);
-            }
-          }
-        } catch (p1Err) {
-          console.warn("corsproxy.io fallback failed:", p1Err);
-        }
-
-        // Proxy Attempt 2: allorigins
-        try {
-          const proxyUrl2 = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-          const proxyRes2 = await fetch(proxyUrl2, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(reqBody)
-          });
-
-          if (proxyRes2.ok) {
-            const proxyData2: any = await proxyRes2.json();
-            const proxyText2 = proxyData2.choices?.[0]?.message?.content || "";
-            if (proxyText2) {
-              return cleanJsonResponse(proxyText2);
-            }
-          }
-        } catch (p2Err) {
-          console.warn("allorigins fallback failed:", p2Err);
-        }
-      }
-
       if (isLocalHost) {
         throw new Error(
           `Local Network / CORS Error: Cannot connect to local LLM endpoint (${targetUrl}). ` +
@@ -194,8 +149,8 @@ export async function callLLMClientSide(
       }
 
       throw new Error(
-        `Browser CORS Error: ${provider.toUpperCase()} endpoint (${targetUrl}) blocked direct browser requests. ` +
-        `If using full-stack deployment, backend requests handle CORS automatically. For static frontend hosting (e.g. GitHub Pages), ensure the provider API allows CORS or your API key is authorized.`
+        `Browser Connection / CORS Error: ${provider.toUpperCase()} endpoint (${targetUrl}) blocked direct browser requests. ` +
+        `Direct browser calls were blocked by CORS policy or the endpoint is unreachable.`
       );
     }
     throw err;
