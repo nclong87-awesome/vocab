@@ -99,8 +99,7 @@ export async function speakText(
     });
 
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      console.warn("AI TTS server error, falling back to browser speech:", errData.error);
+      console.warn(`AI TTS server returned status ${response.status}, falling back to browser speech synthesis`);
       speakWithBrowser();
       return;
     }

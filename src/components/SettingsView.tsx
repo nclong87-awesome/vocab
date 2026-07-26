@@ -32,6 +32,7 @@ import {
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider, SavedProviderConfig } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
+import { testLlmConnection } from "../services/llmClientService";
 import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { 
   exportIndexedDBDatabase, 
@@ -92,19 +93,14 @@ export default function SettingsView({
     setTestingLlm(true);
     setLlmTestResult(null);
     try {
-      const res = await fetch("/api/test-llm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ llmConfig })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await testLlmConnection(llmConfig);
+      if (data.success) {
         setLlmTestResult({ success: true, msg: "Active model test passed! Responded successfully." });
       } else {
         setLlmTestResult({ success: false, msg: data.error || "Connection test failed." });
       }
     } catch (err: any) {
-      setLlmTestResult({ success: false, msg: err.message || "Failed to reach server." });
+      setLlmTestResult({ success: false, msg: err.message || "Failed to reach model." });
     } finally {
       setTestingLlm(false);
     }

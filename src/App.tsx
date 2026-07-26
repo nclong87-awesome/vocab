@@ -22,6 +22,7 @@ import { Deck, Word, UserStats, LLMConfig, TTSConfig, LLMProvider } from "./type
 import { DEFAULT_DECKS } from "./defaultDecks";
 import { calculateNewStreak, getTodayStr } from "./utils";
 import { switchActiveProvider } from "./utils/llmHelpers";
+import { generateDeckService } from "./services/llmClientService";
 import { 
   getAllDecksFromDB, 
   saveAllDecksToDB, 
@@ -291,26 +292,15 @@ export default function App() {
         setLoadingMessage("Translating words and engineering phonetic audio tags...");
       }, 3500);
 
-      const response = await fetch("/api/generate-deck", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          topic, 
-          targetLanguage, 
-          nativeLanguage, 
-          quantity,
-          llmConfig
-        })
+      const generatedData = await generateDeckService({ 
+        topic, 
+        targetLanguage, 
+        nativeLanguage, 
+        quantity,
+        llmConfig
       });
 
       clearTimeout(timeoutMsgId);
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Failed to generate vocabulary material.");
-      }
-
-      const generatedData = await response.json();
 
       // Transform raw words to include system learning status
       const mappedWords: Word[] = (generatedData.words || []).map((w: any, idx: number) => ({

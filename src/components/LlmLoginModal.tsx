@@ -25,6 +25,7 @@ import {
 import { LLMConfig, LLMProvider, SavedProviderConfig, SavedProvidersMap } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap } from "../utils/llmHelpers";
+import { testLlmConnection } from "../services/llmClientService";
 
 export interface LanguageOption {
   code: string;
@@ -180,22 +181,15 @@ export default function LlmLoginModal({
     setTestMessage("Verifying LLM provider connection...");
 
     try {
-      const response = await fetch("/api/test-llm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          llmConfig: {
-            provider,
-            model: activeModel,
-            apiKey: apiKey.trim(),
-            baseUrl: baseUrl.trim(),
-            isLoggedIn: true
-          }
-        })
+      const data = await testLlmConnection({
+        provider,
+        model: activeModel,
+        apiKey: apiKey.trim(),
+        baseUrl: baseUrl.trim(),
+        isLoggedIn: true
       });
 
-      const data = await response.json();
-      if (response.ok && data.success) {
+      if (data.success) {
         setTestingStatus("success");
         setTestMessage("Connection verified! Model responded successfully.");
       } else {

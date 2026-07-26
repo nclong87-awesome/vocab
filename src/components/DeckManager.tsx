@@ -17,10 +17,17 @@ import {
   ChevronDown,
   ChevronUp,
   Lightbulb,
-  Wand2
+  Wand2,
+  LayoutGrid,
+  List,
+  PanelLeftClose,
+  PanelLeft,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
+import { autofillWordService } from "../services/llmClientService";
 
 interface DeckManagerProps {
   decks: Deck[];
@@ -51,6 +58,8 @@ export default function DeckManager({
 }: DeckManagerProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "starred" | "mastered" | "learning">("all");
+  const [viewMode, setViewMode] = useState<"grid" | "row">("grid");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showAddWordModal, setShowAddWordModal] = useState(false);
   const [showAddDeckModal, setShowAddDeckModal] = useState(false);
 
@@ -129,22 +138,12 @@ export default function DeckManager({
       const userNativeLang = activeDeck?.nativeLanguage || localStorage.getItem("vocab_learner_native_lang") || "English";
       const userTargetLang = activeDeck?.targetLanguage || localStorage.getItem("vocab_learner_target_lang") || "Spanish";
 
-      const response = await fetch("/api/autofill-word", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          word: wordToFill,
-          targetLanguage: userTargetLang,
-          nativeLanguage: userNativeLang,
-          llmConfig
-        })
+      const data = await autofillWordService({
+        word: wordToFill,
+        targetLanguage: userTargetLang,
+        nativeLanguage: userNativeLang,
+        llmConfig
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to consult Gemini for details.");
-      }
-
-      const data = await response.json();
       setNewPronunciation(data.pronunciation || "");
       setNewPartOfSpeech(data.partOfSpeech || "noun");
       setNewDefinition(data.definition || "");
@@ -278,43 +277,126 @@ export default function DeckManager({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Hand side select column */}
-        <div className="lg:col-span-4 space-y-3">
-          <label className="block text-xs font-semibold text-stone-500">Your Active Decks</label>
-          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-            {decks.map(deck => (
+        {/* Left Hand side notebook selection column (collapsible) */}
+        {isSidebarOpen && (
+          <div className="lg:col-span-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider">Your Notebooks</label>
               <button
-                key={deck.id}
-                onClick={() => onSelectDeck(deck.id)}
-                className={`w-full text-left p-4 rounded-none border transition-all flex justify-between items-center group cursor-pointer ${
-                  selectedDeckId === deck.id 
-                    ? "border-stone-900 bg-stone-50" 
-                    : "border-stone-200 bg-white hover:border-stone-400"
-                }`}
+                type="button"
+                onClick={() => setIsSidebarOpen(false)}
+                className="hidden lg:flex items-center gap-1 text-[11px] font-semibold text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
+                title="Collapse notebook sidebar to expand word view"
               >
-                <div>
-                  <h4 className={`text-xs md:text-sm font-bold tracking-tight transition-colors ${
-                    selectedDeckId === deck.id ? "text-stone-950" : "text-stone-800"
-                  }`}>
-                    {deck.name}
-                  </h4>
-                  <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5 font-serif italic">"{deck.description}"</p>
-                </div>
-                <span className="text-[10px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2.5 py-0.5 rounded-none">
-                  {deck.words.length} words
-                </span>
+                <PanelLeftClose className="w-3.5 h-3.5" />
+                <span>Collapse</span>
               </button>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Right Hand side word browser column */}
-        <div className="lg:col-span-8 space-y-4">
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              {decks.map(deck => (
+                <button
+                  key={deck.id}
+                  onClick={() => onSelectDeck(deck.id)}
+                  className={`w-full text-left p-3.5 border transition-all flex justify-between items-center group cursor-pointer ${
+                    selectedDeckId === deck.id 
+                      ? "border-stone-900 bg-stone-50 shadow-2xs" 
+                      : "border-stone-200 bg-white hover:border-stone-400"
+                  }`}
+                >
+                  <div>
+                    <h4 className={`text-xs md:text-sm font-bold tracking-tight transition-colors ${
+                      selectedDeckId === deck.id ? "text-stone-950" : "text-stone-800"
+                    }`}>
+                      {deck.name}
+                    </h4>
+                    <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5 font-serif italic">"{deck.description}"</p>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5">
+                    {deck.words.length} words
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Right Hand side word collection browser column */}
+        <div className={isSidebarOpen ? "lg:col-span-8 space-y-4" : "lg:col-span-12 space-y-4"}>
           {activeDeck ? (
-            <div className="bg-white border border-stone-200 p-6 space-y-6 rounded-none" id="word-browser">
+            <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-5 shadow-2xs" id="word-browser">
               
-              {/* Filter Row */}
-              <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+              {/* Header Info & Controls Bar */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-stone-100 pb-4">
+                <div className="flex items-center gap-3">
+                  {!isSidebarOpen && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSidebarOpen(true)}
+                      className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
+                      title="Show notebook sidebar"
+                    >
+                      <PanelLeft className="w-4 h-4" />
+                      <span className="hidden sm:inline">Notebooks</span>
+                    </button>
+                  )}
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-black text-stone-900">{activeDeck.name}</h3>
+                      <span className="text-xs font-mono font-semibold bg-stone-100 border border-stone-200 text-stone-700 px-2 py-0.5">
+                        {activeDeck.targetLanguage} → {activeDeck.nativeLanguage}
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-500 font-serif italic mt-0.5">
+                      Showing {filteredWords.length} of {activeDeck.words.length} vocabulary entries
+                    </p>
+                  </div>
+                </div>
+
+                {/* View Mode & Layout Actions */}
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <div className="flex bg-stone-100 p-0.5 border border-stone-200">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      className={`px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        viewMode === "grid" 
+                          ? "bg-stone-900 text-white shadow-2xs" 
+                          : "text-stone-600 hover:text-stone-950"
+                      }`}
+                      title="Card Grid View"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span className="hidden min-[480px]:inline">Grid</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("row")}
+                      className={`px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        viewMode === "row" 
+                          ? "bg-stone-900 text-white shadow-2xs" 
+                          : "text-stone-600 hover:text-stone-950"
+                      }`}
+                      title="Compact List View"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      <span className="hidden min-[480px]:inline">List</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className="p-1.5 bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                    title={isSidebarOpen ? "Expand to Full Width" : "Show Notebook Sidebar"}
+                  >
+                    {isSidebarOpen ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search & Filter Row */}
+              <div className="flex flex-col md:flex-row gap-3 justify-between items-start md:items-center">
                 <div className="relative w-full md:max-w-xs">
                   <Search className="absolute left-3 top-2.5 w-4 h-4 text-stone-400" />
                   <input
@@ -322,96 +404,264 @@ export default function DeckManager({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search word, meaning, context..."
-                    className="w-full bg-stone-50 border border-stone-200 rounded-none pl-9 pr-4 py-2 text-xs font-semibold text-stone-800 outline-none focus:border-stone-950 focus:bg-white transition-all font-serif"
+                    className="w-full bg-stone-50 border border-stone-200 pl-9 pr-8 py-2 text-xs font-semibold text-stone-800 outline-none focus:border-stone-950 focus:bg-white transition-all font-serif"
                   />
+                  {searchTerm && (
+                    <button 
+                      onClick={() => setSearchTerm("")} 
+                      className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-900 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex flex-wrap gap-1">
-                  {(["all", "starred", "mastered", "learning"] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setActiveFilter(filter)}
-                      className={`px-3 py-1.5 rounded-none text-xs font-medium capitalize transition-all cursor-pointer ${
-                        activeFilter === filter 
-                          ? "bg-stone-900 text-white font-semibold" 
-                          : "bg-stone-50 border border-stone-200 text-stone-600 hover:text-stone-950 hover:border-stone-450"
-                      }`}
-                    >
-                      {filter}
-                    </button>
-                  ))}
+                <div className="flex flex-wrap gap-1.5">
+                  {(["all", "starred", "mastered", "learning"] as const).map((filter) => {
+                    let count = activeDeck.words.length;
+                    if (filter === "starred") count = activeDeck.words.filter(w => w.starred).length;
+                    if (filter === "mastered") count = activeDeck.words.filter(w => w.learned).length;
+                    if (filter === "learning") count = activeDeck.words.filter(w => !w.learned).length;
+
+                    return (
+                      <button
+                        key={filter}
+                        onClick={() => setActiveFilter(filter)}
+                        className={`px-3 py-1.5 text-xs font-semibold capitalize transition-all cursor-pointer flex items-center gap-1.5 ${
+                          activeFilter === filter 
+                            ? "bg-stone-900 text-white border border-stone-900 shadow-2xs" 
+                            : "bg-stone-50 border border-stone-200 text-stone-600 hover:text-stone-950 hover:border-stone-400"
+                        }`}
+                      >
+                        <span>{filter}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.2 ${
+                          activeFilter === filter ? "bg-stone-800 text-stone-200" : "bg-stone-200/80 text-stone-700"
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Word List table */}
-              <div className="divide-y divide-stone-100 max-h-[480px] overflow-y-auto pr-1">
-                {filteredWords.length === 0 ? (
-                  <div className="py-12 text-center text-stone-400 space-y-4">
-                    <BookOpen className="w-12 h-12 text-stone-200 mx-auto" />
-                    <p className="text-sm font-semibold text-stone-600">No entries matched</p>
-                    <p className="text-xs font-serif italic">"Try adjusting your keyword filter or check another category list."</p>
+              {/* Word Collection Container */}
+              {filteredWords.length === 0 ? (
+                <div className="py-16 text-center text-stone-400 space-y-4 border border-dashed border-stone-200 bg-stone-50/50">
+                  <BookOpen className="w-12 h-12 text-stone-300 mx-auto" />
+                  <div>
+                    <p className="text-sm font-bold text-stone-700">No entries matched your search</p>
+                    <p className="text-xs font-serif italic mt-1 text-stone-500">
+                      "Try adjusting your keyword query or switching filter tabs."
+                    </p>
                   </div>
-                ) : (
-                  filteredWords.map((word) => (
-                    <div key={word.id} className="py-4 flex justify-between items-start gap-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                </div>
+              ) : viewMode === "grid" ? (
+                /* GRID VIEW CARDS */
+                <div className={`grid grid-cols-1 ${isSidebarOpen ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-3"} gap-4 max-h-[680px] overflow-y-auto pr-1`}>
+                  {filteredWords.map((word) => (
+                    <div 
+                      key={word.id} 
+                      className="p-4 bg-white border border-stone-200 hover:border-stone-400 transition-all flex flex-col justify-between space-y-3.5 shadow-2xs group relative"
+                    >
+                      {/* Card Header & Controls */}
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-2.5">
+                          <div className="space-y-1">
+                            <h4 className="text-base font-black text-stone-900 tracking-tight leading-snug">{word.word}</h4>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {word.pronunciation && (
+                                <span className="text-[10px] font-mono text-stone-500 bg-stone-100 border border-stone-200 px-1.5 py-0.5">
+                                  {word.pronunciation}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-bold uppercase font-mono bg-stone-900 text-white px-1.5 py-0.5">
+                                {word.partOfSpeech || "noun"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Top-Right Action Buttons Bar (Always spacious, never overlaps) */}
+                          <div className="flex items-center gap-1 shrink-0 bg-stone-50 p-1 border border-stone-200">
+                            <button
+                              type="button"
+                              onClick={() => speakWord(word.word)}
+                              className="p-1.5 text-stone-500 hover:text-stone-950 hover:bg-white transition-all cursor-pointer"
+                              title="Listen Pronunciation"
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onToggleStar(word.id)}
+                              className={`p-1.5 transition-all cursor-pointer ${
+                                word.starred ? "text-amber-500 fill-current bg-white shadow-2xs" : "text-stone-300 hover:text-stone-600"
+                              }`}
+                              title={word.starred ? "Unstar" : "Star"}
+                            >
+                              <Star className="w-3.5 h-3.5 fill-current" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onToggleLearned(word.id)}
+                              className={`p-1.5 transition-all cursor-pointer ${
+                                word.learned ? "text-emerald-600 bg-white shadow-2xs" : "text-stone-300 hover:text-stone-600"
+                              }`}
+                              title={word.learned ? "Mastered" : "Mark Mastered"}
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteWord(activeDeck.id, word.id)}
+                              className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-white transition-all cursor-pointer"
+                              title="Delete Entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Meaning Highlight Block */}
+                        <div className="bg-amber-50/80 border border-amber-200/90 p-2.5 space-y-0.5">
+                          <span className="text-[10px] font-mono font-bold uppercase text-amber-800 tracking-wider block">Meaning</span>
+                          <p className="text-xs font-black text-amber-950">{word.translation}</p>
+                        </div>
+
+                        {/* Definition Text */}
+                        {word.definition && (
+                          <div className="space-y-0.5 pt-1">
+                            <span className="text-[10px] font-mono font-bold uppercase text-stone-400 block">Definition</span>
+                            <p className="text-xs text-stone-700 font-serif italic leading-relaxed">
+                              "{word.definition}"
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Context Example Box */}
+                        {word.example && (
+                          <div className="bg-stone-50 border border-stone-200 p-2.5 space-y-1 text-xs">
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context</span>
+                            <p className="font-serif italic text-stone-800 leading-snug">"{word.example}"</p>
+                            {word.exampleTranslation && (
+                              <p className="text-[11px] text-stone-500 font-sans">{word.exampleTranslation}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Card Footer Status Pill */}
+                      <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px]">
+                        <span className={`font-semibold px-2 py-0.5 flex items-center gap-1 ${
+                          word.learned 
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
+                            : "bg-stone-100 text-stone-600 border border-stone-200"
+                        }`}>
+                          {word.learned ? "✓ Mastered" : "• Learning"}
+                        </span>
+                        {word.starred && (
+                          <span className="text-amber-700 font-semibold flex items-center gap-1">
+                            ★ Starred
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* COMPACT LIST VIEW ROWS */
+                <div className="space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
+                  {filteredWords.map((word) => (
+                    <div 
+                      key={word.id} 
+                      className="p-4 bg-white border border-stone-200 hover:border-stone-400 transition-all grid grid-cols-1 lg:grid-cols-12 gap-3 items-center shadow-2xs"
+                    >
+                      {/* Col 1: Word & Meaning */}
+                      <div className="lg:col-span-4 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-bold text-stone-900">{word.word}</h4>
-                          <span className="text-[10px] text-stone-400 font-mono italic">{word.pronunciation}</span>
-                          <span className="text-[10px] font-semibold text-stone-600 bg-stone-50 border border-stone-200 px-1.5 py-0.5 rounded-none font-mono">
+                          {word.pronunciation && (
+                            <span className="text-[10px] text-stone-400 font-mono italic">{word.pronunciation}</span>
+                          )}
+                          <span className="text-[10px] font-semibold text-stone-600 bg-stone-100 border border-stone-200 px-1.5 py-0.5 font-mono">
                             {word.partOfSpeech}
                           </span>
                         </div>
-                        <p className="text-xs font-bold text-stone-950">Meaning: {word.translation}</p>
-                        <p className="text-xs text-stone-500 font-serif italic">Definition: "{word.definition}"</p>
-                        <p className="text-[11px] text-stone-400 font-mono">Context: {word.example}</p>
+                        <p className="text-xs font-bold text-stone-900 bg-amber-50 px-2 py-1 border border-amber-200 inline-block">
+                          Meaning: {word.translation}
+                        </p>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => speakWord(word.word)}
-                          className="p-1.5 border border-stone-200 text-stone-400 hover:text-stone-950 hover:border-stone-900 rounded-none transition-all cursor-pointer"
-                          title="Listen Pronunciation"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => onToggleStar(word.id)}
-                          className={`p-1.5 border border-stone-200 rounded-none transition-all cursor-pointer ${
-                            word.starred 
-                              ? "bg-stone-50 text-stone-950 border-stone-900" 
-                              : "text-stone-300 hover:text-stone-600"
-                          }`}
-                        >
-                          <Star className="w-4 h-4 fill-current" />
-                        </button>
-                        <button
-                          onClick={() => onToggleLearned(word.id)}
-                          className={`p-1.5 border border-stone-200 rounded-none transition-all cursor-pointer ${
-                            word.learned 
-                              ? "bg-stone-50 text-stone-950 border-stone-900" 
-                              : "text-stone-300 hover:text-stone-600"
-                          }`}
-                          title={word.learned ? "Mastered" : "Mark Mastered"}
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => onDeleteWord(activeDeck.id, word.id)}
-                          className="p-1.5 border border-stone-200 text-stone-300 hover:text-red-600 hover:border-red-600 rounded-none transition-all cursor-pointer"
-                          title="Remove Entry"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      {/* Col 2: Definition & Example Context */}
+                      <div className="lg:col-span-5 space-y-0.5 text-xs">
+                        <p className="text-stone-600 font-serif italic line-clamp-2">
+                          "{word.definition}"
+                        </p>
+                        {word.example && (
+                          <p className="text-[11px] text-stone-400 font-mono line-clamp-1">
+                            Context: {word.example}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Col 3: Status & Action Buttons */}
+                      <div className="lg:col-span-3 flex items-center justify-between lg:justify-end gap-2 shrink-0">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 ${
+                          word.learned ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-stone-100 text-stone-600"
+                        }`}>
+                          {word.learned ? "Mastered" : "Learning"}
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => speakWord(word.word)}
+                            className="p-1.5 border border-stone-200 text-stone-500 hover:text-stone-950 hover:bg-stone-50 transition-all cursor-pointer"
+                            title="Listen Pronunciation"
+                          >
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggleStar(word.id)}
+                            className={`p-1.5 border transition-all cursor-pointer ${
+                              word.starred 
+                                ? "bg-amber-50 text-amber-600 border-amber-300" 
+                                : "border-stone-200 text-stone-300 hover:text-stone-600"
+                            }`}
+                          >
+                            <Star className="w-3.5 h-3.5 fill-current" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onToggleLearned(word.id)}
+                            className={`p-1.5 border transition-all cursor-pointer ${
+                              word.learned 
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-300" 
+                                : "border-stone-200 text-stone-300 hover:text-stone-600"
+                            }`}
+                            title={word.learned ? "Mastered" : "Mark Mastered"}
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteWord(activeDeck.id, word.id)}
+                            className="p-1.5 border border-stone-200 text-stone-300 hover:text-red-600 hover:border-red-300 transition-all cursor-pointer"
+                            title="Remove Entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
 
             </div>
           ) : (
-            <div className="bg-stone-50 border border-stone-200 rounded-none p-12 text-center space-y-4">
+            <div className="bg-stone-50 border border-stone-200 p-12 text-center space-y-4">
               <Layers className="w-12 h-12 text-stone-300 mx-auto" />
               <h3 className="text-sm font-semibold text-stone-900">Select an Active Deck</h3>
               <p className="text-xs text-stone-400 font-serif italic">Choose one of your notebooks from the sidebar list to browse vocabulary entries.</p>
