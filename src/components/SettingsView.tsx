@@ -27,7 +27,8 @@ import {
   Zap,
   BookmarkCheck,
   ShieldCheck,
-  ExternalLink
+  ExternalLink,
+  Cloud
 } from "lucide-react";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider, SavedProviderConfig } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
@@ -39,6 +40,7 @@ import {
   importIndexedDBDatabase, 
   resetIndexedDBDatabase 
 } from "../db/indexedDB";
+import { syncToGist, syncFromGist } from "../services/githubGistService";
 
 interface SettingsViewProps {
   ttsConfig: TTSConfig;
@@ -71,6 +73,76 @@ export default function SettingsView({
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [dbStatusMessage, setDbStatusMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+
+  // GitHub Gist Sync State
+  const [gistToken, setGistToken] = useState(() => localStorage.getItem("github_gist_token") || "");
+  const [gistId, setGistId] = useState(() => localStorage.getItem("github_gist_id") || "");
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+
+  const handleGistTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setGistToken(e.target.value);
+    localStorage.setItem("github_gist_token", e.target.value);
+  };
+
+  const handleGistIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setGistId(e.target.value);
+    localStorage.setItem("github_gist_id", e.target.value);
+  };
+
+  const handleSyncToCloud = async () => {
+    if (!gistToken) {
+      setDbStatusMessage({ type: "error", text: "GitHub Personal Access Token is required for Gist sync" });
+      return;
+    }
+
+    try {
+      setIsCloudSyncing(true);
+      setDbStatusMessage({ type: "info", text: "Generating backup and syncing to GitHub Gist..." });
+      
+      const dbData = await exportIndexedDBDatabase();
+      const jsonString = JSON.stringify(dbData);
+      
+      const newGistId = await syncToGist(gistToken, jsonString, gistId);
+      if (!gistId) {
+        setGistId(newGistId);
+        localStorage.setItem("github_gist_id", newGistId);
+      }
+      
+      setDbStatusMessage({ type: "success", text: "Backup successfully synced to GitHub Gist!" });
+    } catch (error: any) {
+      console.error("Cloud Sync Error", error);
+      setDbStatusMessage({ type: "error", text: `Failed to sync to cloud: ${error.message}` });
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
+
+  const handleSyncFromCloud = async () => {
+    if (!gistToken || !gistId) {
+      setDbStatusMessage({ type: "error", text: "Token and Gist ID are required to restore from GitHub Gist" });
+      return;
+    }
+
+    try {
+      setIsCloudSyncing(true);
+      setDbStatusMessage({ type: "info", text: "Downloading backup from GitHub Gist..." });
+      
+      const data = await syncFromGist(gistToken, gistId);
+      
+      setDbStatusMessage({ type: "info", text: "Restoring database..." });
+      await importIndexedDBDatabase(data);
+      
+      setDbStatusMessage({ type: "success", text: "Successfully restored database from GitHub Gist!" });
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error: any) {
+      console.error("Cloud Restore Error", error);
+      setDbStatusMessage({ type: "error", text: `Failed to restore from cloud: ${error.message}` });
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
 
   // LLM Multi-Provider Handlers
   const savedProvidersMap = getSavedProvidersMap(llmConfig);
@@ -1090,6 +1162,72 @@ export default function SettingsView({
                     <span>Select JSON File to Restore</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Cloud Sync Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div className="md:col-span-2 border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                  <Cloud className="w-4 h-4 text-stone-800" />
+                  <span>GitHub Gist Cloud Sync</span>
+                </div>
+              </div>
+              <p className="text-xs text-stone-600">
+                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices.
+                You can create a Personal Access Token (classic) with the <code className="bg-stone-200 px-1 py-0.5 rounded">gist</code> scope at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub Settings</a>.
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  GitHub Personal Access Token
+                </label>
+                <input
+                  type="password"
+                  value={gistToken}
+                  onChange={handleGistTokenChange}
+                  placeholder="ghp_..."
+                  className="w-full bg-white border border-stone-200 p-2 text-xs font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  Gist ID (Leave blank to create a new Gist)
+                </label>
+                <input
+                  type="text"
+                  value={gistId}
+                  onChange={handleGistIdChange}
+                  placeholder="Gist ID (e.g. 64abc123...)"
+                  className="w-full bg-white border border-stone-200 p-2 text-xs font-mono font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleSyncToCloud}
+                disabled={isCloudSyncing || isExporting || isImporting || !gistToken}
+                className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Backup to Cloud
+              </button>
+              <button
+                type="button"
+                onClick={handleSyncFromCloud}
+                disabled={isCloudSyncing || isExporting || isImporting || !gistToken || !gistId}
+                className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Restore from Cloud
               </button>
             </div>
           </div>
