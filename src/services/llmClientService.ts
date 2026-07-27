@@ -765,3 +765,99 @@ CRITICAL MANDATORY REQUIREMENT:
     return JSON.parse(text);
   }
 }
+
+// 4. Analyze Performance with AI Service
+export interface PerformanceAnalysisRequest {
+  stats: any;
+  totalWords: number;
+  masteredWords?: any[];
+  improvingWords?: any[];
+  decksSummary?: { name: string; totalWords: number; masteredCount: number }[];
+  llmConfig?: LLMConfig;
+}
+
+export interface PerformanceAnalysisResult {
+  overallAssessment: string;
+  strengthsSummary: string;
+  weaknessesSummary: string;
+  actionableTips: string[];
+  recommendedFocusTopics: string[];
+  motivationQuote: string;
+}
+
+export async function analyzePerformanceService(params: PerformanceAnalysisRequest): Promise<PerformanceAnalysisResult> {
+  const { stats, totalWords, masteredWords = [], improvingWords = [], decksSummary = [], llmConfig } = params;
+
+  const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
+  const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (level ${w.strength ?? 0}, ${w.translation || w.definition})`).join(", ") || "None yet";
+  const decksStr = (decksSummary || []).map((d: any) => `${d.name}: ${d.masteredCount}/${d.totalWords} mastered`).join("; ") || "No custom decks yet";
+
+  const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report.
+
+STUDENT PERFORMANCE DATA:
+- Total Vocabulary Words in Collection: ${totalWords || 0}
+- Total Words Mastered: ${stats?.totalWordsMastered || 0}
+- Total Words Studied/Reviewed: ${stats?.totalWordsStudied || 0}
+- Quizzes Completed: ${stats?.totalQuizzesTaken || 0}
+- Correct Answers in Quizzes: ${stats?.totalCorrectAnswers || 0}
+- Active Study Streak: ${stats?.streak?.count || 0} days
+
+DECKS PROGRESS SUMMARY:
+${decksStr}
+
+SAMPLE MASTERED WORDS:
+${masteredSampleStr}
+
+SAMPLE WORDS NEEDING IMPROVEMENT:
+${improvingSampleStr}
+
+Provide a structured AI analysis with constructive insights, memory retention strategies, and actionable guidance for the learner.`;
+
+  const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly structured JSON analytics.`;
+  const schemaDesc = `{
+  "overallAssessment": "string (Empowering 2-3 sentence overview of learner's trajectory)",
+  "strengthsSummary": "string (Key strengths and patterns where the learner excels)",
+  "weaknessesSummary": "string (Specific word patterns or areas needing improvement)",
+  "actionableTips": [
+    "string (Actionable study tip 1)",
+    "string (Actionable study tip 2)",
+    "string (Actionable study tip 3)"
+  ],
+  "recommendedFocusTopics": [
+    "string (Suggested focus theme 1)",
+    "string (Suggested focus theme 2)"
+  ],
+  "motivationQuote": "string (Short inspiring quote for language learners)"
+}`;
+
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
+  try {
+    const res = await fetch("/api/analyze-performance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stats, totalWords, masteredWords, improvingWords, decksSummary, llmConfig })
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 405 || res.status === 404) {
+      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      return JSON.parse(text);
+    }
+
+    const errData = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errData.error || `Server Error ${res.status}`);
+  } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+}

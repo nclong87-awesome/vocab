@@ -42,12 +42,13 @@ import FlashcardDeck from "./components/FlashcardDeck";
 import QuizView from "./components/QuizView";
 import DeckManager from "./components/DeckManager";
 import SettingsView from "./components/SettingsView";
+import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
 
 export default function App() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<"dashboard" | "learn" | "quiz" | "manage" | "settings">("dashboard");
+  const [currentView, setCurrentView] = useState<"dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings">("dashboard");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   
@@ -618,6 +619,18 @@ export default function App() {
 
               <button
                 onClick={() => {
+                  setCurrentView("analytics");
+                }}
+                className={`transition-colors cursor-pointer flex items-center gap-1 ${
+                  currentView === "analytics" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
+                }`}
+                id="nav-analytics-btn"
+              >
+                <span>Analytics</span>
+              </button>
+
+              <button
+                onClick={() => {
                   setCurrentView("settings");
                 }}
                 className={`transition-colors cursor-pointer flex items-center gap-1.5 ${
@@ -671,6 +684,7 @@ export default function App() {
                 onSelectTab={(tab) => {
                   if (tab === "decks") setCurrentView("manage");
                   if (tab === "quiz") setCurrentView("quiz");
+                  if (tab === "analytics") setCurrentView("analytics");
                 }}
                 onGenerateDeck={handleGenerateDeck}
                 onDeleteDeck={handleDeleteDeck}
@@ -723,6 +737,38 @@ export default function App() {
                 onToggleLearned={handleToggleLearned}
                 onAddCustomDeck={handleAddCustomDeck}
                 onGenerateDeck={handleGenerateDeck}
+              />
+            )}
+
+            {currentView === "analytics" && (
+              <AnalyticsDashboard 
+                decks={decks}
+                stats={stats}
+                llmConfig={llmConfig}
+                ttsConfig={ttsConfig}
+                onStartPracticeWeakWords={(weakWords) => {
+                  const practiceDeck: Deck = {
+                    id: "weak-words-practice",
+                    name: "Weak Words Practice Quiz",
+                    description: "Targeted practice session focused exclusively on words needing improvement.",
+                    words: weakWords,
+                    isCustom: false,
+                    targetLanguage: "English",
+                    nativeLanguage: "Spanish"
+                  };
+                  setSelectedDeckId("weak-words-practice");
+                  setDecks(prev => {
+                    const filtered = prev.filter(d => d.id !== "weak-words-practice");
+                    return [practiceDeck, ...filtered];
+                  });
+                  setCurrentView("quiz");
+                }}
+                onToggleLearnedWord={(deckId, wordId) => handleToggleLearned(wordId)}
+                onToggleStarWord={(wordId) => handleToggleStar(wordId)}
+                onNavigateToView={(view) => {
+                  setCurrentView(view);
+                  if (view === 'dashboard') setSelectedDeckId(null);
+                }}
               />
             )}
 

@@ -508,6 +508,64 @@ app.post("/api/tts", async (req, res) => {
   }
 });
 
+// 6. Analyze Performance with AI endpoint
+app.post("/api/analyze-performance", async (req, res) => {
+  try {
+    const { stats, totalWords, masteredWords = [], improvingWords = [], decksSummary = [], llmConfig } = req.body;
+
+    const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
+    const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (level ${w.strength ?? 0}, ${w.translation || w.definition})`).join(", ") || "None yet";
+    const decksStr = (decksSummary || []).map((d: any) => `${d.name}: ${d.masteredCount}/${d.totalWords} mastered`).join("; ") || "No custom decks yet";
+
+    const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report.
+
+STUDENT PERFORMANCE DATA:
+- Total Vocabulary Words in Collection: ${totalWords || 0}
+- Total Words Mastered: ${stats?.totalWordsMastered || 0}
+- Total Words Studied/Reviewed: ${stats?.totalWordsStudied || 0}
+- Quizzes Completed: ${stats?.totalQuizzesTaken || 0}
+- Correct Answers in Quizzes: ${stats?.totalCorrectAnswers || 0}
+- Active Study Streak: ${stats?.streak?.count || 0} days
+
+DECKS PROGRESS SUMMARY:
+${decksStr}
+
+SAMPLE MASTERED WORDS:
+${masteredSampleStr}
+
+SAMPLE WORDS NEEDING IMPROVEMENT:
+${improvingSampleStr}
+
+Provide a structured AI analysis with constructive insights, memory retention strategies, and actionable guidance for the learner.`;
+
+    const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly structured JSON analytics.`;
+    const schemaDesc = `{
+  "overallAssessment": "string (Empowering 2-3 sentence overview of learner's trajectory)",
+  "strengthsSummary": "string (Key strengths and patterns where the learner excels)",
+  "weaknessesSummary": "string (Specific word patterns or areas needing improvement)",
+  "actionableTips": [
+    "string (Actionable study tip 1)",
+    "string (Actionable study tip 2)",
+    "string (Actionable study tip 3)"
+  ],
+  "recommendedFocusTopics": [
+    "string (Suggested focus theme 1)",
+    "string (Suggested focus theme 2)"
+  ],
+  "motivationQuote": "string (Short inspiring quote for language learners)"
+}`;
+
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error analyzing performance:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
 // Start express server with Vite configuration
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
