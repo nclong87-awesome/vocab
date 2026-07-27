@@ -560,8 +560,8 @@ export async function resetIndexedDBDatabase(): Promise<void> {
   } catch (e) {}
 }
 
-// Clear all notebooks completely without restoring default decks
-export async function clearAllNotebooksFromDB(): Promise<void> {
+// Clear all decks completely without restoring default decks
+export async function clearAllDecksFromDB(): Promise<void> {
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORES.decks, "readwrite");
@@ -578,4 +578,6 @@ export async function clearAllNotebooksFromDB(): Promise<void> {
     localStorage.removeItem("vocab_learner_decks_backup");
   } catch (e) {}
 }
+
+export const clearAllNotebooksFromDB = clearAllDecksFromDB;
 

@@ -89,7 +89,7 @@ export default function SettingsView({
   const handleSaveLanguagePreferences = (applyToDecks: boolean = false) => {
     if (onSelectLanguages) {
       onSelectLanguages(selectedTargetLang, selectedNativeLang, applyToDecks);
-      setLangSaveSuccess(applyToDecks ? "Default languages updated and applied to all notebooks!" : "Global default language preferences updated!");
+      setLangSaveSuccess(applyToDecks ? "Default languages updated and applied to all decks!" : "Global default language preferences updated!");
       setTimeout(() => setLangSaveSuccess(null), 3000);
     }
   };
@@ -396,14 +396,14 @@ export default function SettingsView({
   const handleConfirmReset = async () => {
     try {
       setIsResetting(true);
-      setDbStatusMessage({ type: "info", text: "Resetting vocabulary notebooks database..." });
+      setDbStatusMessage({ type: "info", text: "Resetting vocabulary decks database..." });
 
       if (resetMode === "defaults") {
         await resetIndexedDBDatabase();
       } else {
-        // Clear all notebooks completely
-        const { clearAllNotebooksFromDB } = await import("../db/indexedDB");
-        await clearAllNotebooksFromDB();
+        // Clear all decks completely
+        const { clearAllDecksFromDB } = await import("../db/indexedDB");
+        await clearAllDecksFromDB();
       }
 
       // Clear any cached localStorage backups
@@ -421,8 +421,8 @@ export default function SettingsView({
       setDbStatusMessage({
         type: "success",
         text: resetMode === "defaults" 
-          ? "Successfully reset vocabulary data to default starter notebooks." 
-          : "Successfully cleared all notebooks and vocabulary data."
+          ? "Successfully reset vocabulary data to default starter decks." 
+          : "Successfully cleared all decks and vocabulary data."
       });
       setShowResetConfirmModal(false);
     } catch (err: any) {
@@ -556,7 +556,7 @@ export default function SettingsView({
               type="button"
               onClick={() => handleSaveLanguagePreferences(true)}
               className="px-3.5 py-2 border border-stone-300 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold transition-all cursor-pointer"
-              title="Batch update all existing notebook target and native languages to these selections"
+              title="Batch update all existing deck target and native languages to these selections"
             >
               Apply to All Existing Decks
             </button>
@@ -950,16 +950,16 @@ export default function SettingsView({
           </div>
         )}
 
-        {/* Danger Zone: Reset Vocabularies & Notebooks Data */}
+        {/* Danger Zone: Reset Vocabularies & Decks Data */}
         <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
                 <AlertTriangle className="w-4 h-4 text-red-600" />
-                <span>Reset Vocabularies Data & Notebooks</span>
+                <span>Reset Vocabularies Data & Decks</span>
               </div>
               <p className="text-xs text-red-700 font-normal">
-                Wipe all custom notebooks, generated decks, and study history. Reset database to default starter notebooks or clear completely.
+                Wipe all custom decks, generated decks, and study history. Reset database to default starter decks or clear completely.
               </p>
             </div>
 
@@ -1450,209 +1450,7 @@ export default function SettingsView({
         </button>
       </div>
 
-      {/* Section 4: IndexedDB Database Management (Import & Export) */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
-        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <Database className="w-4 h-4 text-stone-800" />
-              IndexedDB Database Backup & Restore
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Manage local browser storage, export full database backups to JSON, or restore previous backups.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold bg-stone-100 text-stone-800 px-2.5 py-1 border border-stone-200 flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5 text-stone-600" />
-              VocabLearnerDB (v1)
-            </span>
-          </div>
-        </div>
 
-        {/* Database Action Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Export Database Card */}
-          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
-                <Download className="w-4 h-4 text-stone-800" />
-                <span>Export IndexedDB Database</span>
-              </div>
-              <p className="text-xs text-stone-600">
-                Download a complete JSON snapshot containing all custom vocabulary decks, word cards, study statistics, and app settings.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleExportDB}
-              disabled={isExporting}
-              className="w-full py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-            >
-              {isExporting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Exporting JSON...</span>
-                </>
-              ) : (
-                <>
-                  <FileJson className="w-3.5 h-3.5" />
-                  <span>Export Database JSON</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Import Database Card */}
-          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
-                <Upload className="w-4 h-4 text-stone-800" />
-                <span>Import IndexedDB Backup</span>
-              </div>
-              <p className="text-xs text-stone-600">
-                Restore a previously exported `.json` database file to load custom decks and study history into local browser storage.
-              </p>
-            </div>
-
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="indexeddb-file-input"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-              >
-                {isImporting ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Restoring Database...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Select JSON File to Restore</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Cloud Sync Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-          <div className="md:col-span-2 border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
-                  <Cloud className="w-4 h-4 text-stone-800" />
-                  <span>GitHub Gist Cloud Sync</span>
-                </div>
-              </div>
-              <p className="text-xs text-stone-600">
-                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices.
-                You can create a Personal Access Token (classic) with the <code className="bg-stone-200 px-1 py-0.5 rounded">gist</code> scope at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub Settings</a>.
-              </p>
-            </div>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                  GitHub Personal Access Token
-                </label>
-                <input
-                  type="password"
-                  value={gistToken}
-                  onChange={handleGistTokenChange}
-                  placeholder="ghp_..."
-                  className="w-full bg-white border border-stone-200 p-2 text-xs font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                  Gist ID (Leave blank to create a new Gist)
-                </label>
-                <input
-                  type="text"
-                  value={gistId}
-                  onChange={handleGistIdChange}
-                  placeholder="Gist ID (e.g. 64abc123...)"
-                  className="w-full bg-white border border-stone-200 p-2 text-xs font-mono font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleSyncToCloud}
-                disabled={isCloudSyncing || isExporting || isImporting || !gistToken}
-                className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Backup to Cloud
-              </button>
-              <button
-                type="button"
-                onClick={handleSyncFromCloud}
-                disabled={isCloudSyncing || isExporting || isImporting || !gistToken || !gistId}
-                className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Restore from Cloud
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Alert Banner */}
-        {dbStatusMessage && (
-          <div className={`p-4 border text-xs font-medium flex items-start gap-3 transition-all ${
-            dbStatusMessage.type === "success" 
-              ? "bg-emerald-50 border-emerald-300 text-emerald-900" 
-              : dbStatusMessage.type === "error"
-              ? "bg-red-50 border-red-300 text-red-900"
-              : "bg-blue-50 border-blue-300 text-blue-900"
-          }`}>
-            {dbStatusMessage.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
-            {dbStatusMessage.type === "error" && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
-            {dbStatusMessage.type === "info" && <RefreshCw className="w-4 h-4 text-blue-600 animate-spin shrink-0 mt-0.5" />}
-            <span className="flex-1">{dbStatusMessage.text}</span>
-          </div>
-        )}
-
-        {/* Danger Zone: Reset Vocabularies & Notebooks Data */}
-        <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
-                <AlertTriangle className="w-4 h-4 text-red-600" />
-                <span>Reset Vocabularies Data & Notebooks</span>
-              </div>
-              <p className="text-xs text-red-700 font-normal">
-                Wipe all custom notebooks, generated decks, and study history. Reset database to default starter notebooks or clear completely.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowResetConfirmModal(true)}
-              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs shrink-0"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Reset Vocabulary Data</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Reset Confirmation Modal */}
       {showResetConfirmModal && (
@@ -1678,7 +1476,7 @@ export default function SettingsView({
                 Are you sure you want to reset your vocabulary data?
               </p>
               <p>
-                This will delete custom notebooks, AI-generated decks, and saved study statistics stored in browser IndexedDB.
+                This will delete custom decks, AI-generated decks, and saved study statistics stored in browser IndexedDB.
               </p>
 
               <div className="space-y-2 pt-2">
@@ -1695,7 +1493,7 @@ export default function SettingsView({
                     className="mt-0.5 accent-stone-900"
                   />
                   <div>
-                    <span className="font-bold block text-xs">Restore Default Starter Notebooks</span>
+                    <span className="font-bold block text-xs">Restore Default Starter Decks</span>
                     <span className="text-[11px] text-stone-500 font-normal">
                       Replaces custom data with original starter decks (Spanish, French, Food, Tech).
                     </span>
@@ -1713,9 +1511,9 @@ export default function SettingsView({
                     className="mt-0.5 accent-red-600"
                   />
                   <div>
-                    <span className="font-bold block text-xs text-red-900">Completely Clear All Notebooks</span>
+                    <span className="font-bold block text-xs text-red-900">Completely Clear All Decks</span>
                     <span className="text-[11px] text-stone-500 font-normal">
-                      Removes all decks and leaves your notebook workshop completely blank.
+                      Removes all decks and leaves your deck workshop completely blank.
                     </span>
                   </div>
                 </label>

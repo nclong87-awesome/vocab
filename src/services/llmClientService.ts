@@ -703,32 +703,37 @@ export async function autofillWordService(params: {
   word: string;
   targetLanguage?: string;
   nativeLanguage?: string;
+  deckName?: string;
+  deckDescription?: string;
   notebookName?: string;
   notebookDescription?: string;
   llmConfig?: LLMConfig;
 }): Promise<any> {
-  const { word, targetLanguage, nativeLanguage, notebookName, notebookDescription, llmConfig } = params;
+  const { word, targetLanguage, nativeLanguage, llmConfig } = params;
+  const activeDeckName = params.deckName || params.notebookName;
+  const activeDeckDesc = params.deckDescription || params.notebookDescription;
+
   const userNative = nativeLanguage || "English";
   const userTarget = targetLanguage || "Spanish";
 
-  const notebookContextText = notebookName 
-    ? `\nNOTEBOOK CONTEXT: The term "${word}" belongs to the Vocabulary Notebook "${notebookName}"${notebookDescription ? ` (${notebookDescription})` : ""}. Tailor the definition, example sentence, and image visual description specifically to fit this notebook context.`
+  const deckContextText = activeDeckName 
+    ? `\nDECK CONTEXT: The term "${word}" belongs to the Vocabulary Deck "${activeDeckName}"${activeDeckDesc ? ` (${activeDeckDesc})` : ""}. Tailor the definition, example sentence, and image visual description specifically to fit this deck context.`
     : "";
 
   const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
 Target language being learned: "${userTarget}".
-User's native language: "${userNative}".${notebookContextText}
+User's native language: "${userNative}".${deckContextText}
 
 CRITICAL MANDATORY REQUIREMENT:
-- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}). Tailor it to the notebook topic if applicable.
+- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}). Tailor it to the deck topic if applicable.
 - "translation": Provide the direct, accurate translation of "${word}" into the user's native language (${userNative}).
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
-- "example": A realistic, high-quality example sentence in the target language (${userTarget})${notebookName ? ` contextualized to ${notebookName}` : ""}.
+- "example": A realistic, high-quality example sentence in the target language (${userTarget})${activeDeckName ? ` contextualized to ${activeDeckName}` : ""}.
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
-- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word${notebookName ? `-in-context-of-${encodeURIComponent(notebookName.toLowerCase().replace(/[^a-z0-0]/g, '-'))}` : ""}]?width=800&height=600&nologo=true"`;
+- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word${activeDeckName ? `-in-context-of-${encodeURIComponent(activeDeckName.toLowerCase().replace(/[^a-z0-0]/g, '-'))}` : ""}]?width=800&height=600&nologo=true"`;
 
-  const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).${notebookName ? ` Notebook topic context: ${notebookName}.` : ""}`;
+  const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).${activeDeckName ? ` Deck topic context: ${activeDeckName}.` : ""}`;
   const schemaDesc = `{
   "word": "string",
   "pronunciation": "string",
@@ -749,7 +754,7 @@ CRITICAL MANDATORY REQUIREMENT:
     const res = await fetch("/api/autofill-word", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word, targetLanguage: userTarget, nativeLanguage: userNative, notebookName, notebookDescription, llmConfig })
+      body: JSON.stringify({ word, targetLanguage: userTarget, nativeLanguage: userNative, deckName: activeDeckName, deckDescription: activeDeckDesc, llmConfig })
     });
 
     if (res.ok) {
@@ -772,7 +777,7 @@ CRITICAL MANDATORY REQUIREMENT:
   }
 }
 
-// 3.5. Generate Random Words for Notebook (Deduplicated)
+// 3.5. Generate Random Words for Deck (Deduplicated)
 export async function generateRandomWordsService(params: {
   topic: string;
   targetLanguage?: string;
@@ -786,14 +791,14 @@ export async function generateRandomWordsService(params: {
   const userTarget = targetLanguage || "Spanish";
 
   const avoidText = Array.isArray(existingWords) && existingWords.length > 0
-    ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the notebook:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
+    ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the deck:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
     : "";
 
-  const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the notebook topic "${topic || "Vocabulary"}".
+  const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the deck topic "${topic || "Vocabulary"}".
 The user's native language is "${userNative}".${avoidText}
 
 CRITICAL INSTRUCTIONS:
-- Every word generated MUST BE UNIQUE and NOT present in the existing notebook list above.
+- Every word generated MUST BE UNIQUE and NOT present in the existing deck list above.
 - "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Realistic example sentence in target language (${userTarget}).

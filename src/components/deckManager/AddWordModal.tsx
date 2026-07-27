@@ -74,13 +74,13 @@ export default function AddWordModal({
           </button>
         </div>
 
-        {/* Notebook Context Banner */}
+        {/* Deck Context Banner */}
         {activeDeck && (
           <div className="bg-stone-100 border border-stone-300 p-3.5 space-y-1.5 rounded-none shadow-2xs">
             <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-stone-600">
               <span className="flex items-center gap-1.5 font-mono text-stone-800">
                 <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                Target Notebook Context
+                Target Deck Context
               </span>
               <span className="bg-amber-400 text-stone-950 px-2 py-0.5 font-bold text-[10px]">
                 {activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}
@@ -114,7 +114,7 @@ export default function AddWordModal({
                   onClick={handleAiSuggestRelatedWord}
                   disabled={autofilling}
                   className="px-2 py-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all"
-                  title="AI will pick an unlearned, contextual word for this notebook"
+                  title="AI will pick an unlearned, contextual word for this deck"
                 >
                   <Wand2 className={`w-3 h-3 text-stone-700 ${autofilling ? "animate-spin" : ""}`} />
                   <span>Suggest Word</span>

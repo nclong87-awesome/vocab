@@ -3,19 +3,19 @@ import { X, Languages, Globe, Save } from "lucide-react";
 import { Deck } from "../../types";
 import { SUPPORTED_LANGUAGES } from "../../config/languages";
 
-interface EditNotebookModalProps {
+interface EditDeckModalProps {
   isOpen: boolean;
   onClose: () => void;
   deck: Deck;
   onUpdateDeckDetails: (deckId: string, updates: { name: string; description: string; targetLanguage: string; nativeLanguage: string }) => void;
 }
 
-export default function EditNotebookModal({
+export default function EditDeckModal({
   isOpen,
   onClose,
   deck,
   onUpdateDeckDetails
-}: EditNotebookModalProps) {
+}: EditDeckModalProps) {
   const [name, setName] = useState(deck.name);
   const [description, setDescription] = useState(deck.description);
   const [targetLanguage, setTargetLanguage] = useState(deck.targetLanguage || "English");
@@ -54,7 +54,7 @@ export default function EditNotebookModal({
               <Languages className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-stone-950">Notebook & Language Settings</h3>
+              <h3 className="text-lg font-black text-stone-950">Language Settings</h3>
               <p className="text-xs text-stone-500 font-serif italic mt-0.5">Edit topic name, target language, and explanation language.</p>
             </div>
           </div>
@@ -69,7 +69,7 @@ export default function EditNotebookModal({
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold">
           <div className="space-y-1">
-            <label className="text-stone-800 font-bold">Notebook Name / Topic *</label>
+            <label className="text-stone-800 font-bold">List Name / Topic *</label>
             <input 
               type="text" 
               required
@@ -136,7 +136,7 @@ export default function EditNotebookModal({
               className="px-5 py-2 bg-stone-900 hover:bg-black text-white font-bold flex items-center gap-1.5 shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4 text-emerald-400" />
-              <span>Save Notebook Settings</span>
+              <span>Save Settings</span>
             </button>
           </div>
         </form>

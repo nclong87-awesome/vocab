@@ -18,13 +18,11 @@ import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsS
 import { autofillWordService, generateRandomWordsService } from "../services/llmClientService";
 import { ConfirmModal } from "./ConfirmModal";
 
-import NotebookSidebar from "./deckManager/NotebookSidebar";
 import WordCard from "./deckManager/WordCard";
 import WordRow from "./deckManager/WordRow";
 import AddWordModal from "./deckManager/AddWordModal";
-import CreateNotebookModal from "./deckManager/CreateNotebookModal";
 import RandomWordsModal from "./deckManager/RandomWordsModal";
-import EditNotebookModal from "./deckManager/EditNotebookModal";
+import EditDeckModal from "./deckManager/EditDeckModal";
 
 interface DeckManagerProps {
   decks: Deck[];
@@ -71,7 +69,7 @@ export default function DeckManager({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateDeckModalOpen, setIsCreateDeckModalOpen] = useState(false);
   const [isRandomWordsModalOpen, setIsRandomWordsModalOpen] = useState(false);
-  const [isEditNotebookModalOpen, setIsEditNotebookModalOpen] = useState(false);
+  const [isEditDeckModalOpen, setIsEditDeckModalOpen] = useState(false);
 
   // Form input states for adding a single word
   const [wordInput, setWordInput] = useState("");
@@ -156,8 +154,8 @@ export default function DeckManager({
         word: word.word,
         targetLanguage: activeDeck.targetLanguage,
         nativeLanguage: activeDeck.nativeLanguage,
-        notebookName: activeDeck.name,
-        notebookDescription: activeDeck.description,
+        deckName: activeDeck.name,
+        deckDescription: activeDeck.description,
         llmConfig
       });
 
@@ -209,8 +207,8 @@ export default function DeckManager({
         word: wordInput.trim(),
         targetLanguage: activeDeck.targetLanguage,
         nativeLanguage: activeDeck.nativeLanguage,
-        notebookName: activeDeck.name,
-        notebookDescription: activeDeck.description,
+        deckName: activeDeck.name,
+        deckDescription: activeDeck.description,
         llmConfig
       });
 
@@ -300,7 +298,7 @@ export default function DeckManager({
 
     onCreateDeck({
       name: newDeckName.trim(),
-      description: newDeckDesc.trim() || "Custom user notebook",
+      description: newDeckDesc.trim() || "Custom user deck",
       targetLanguage: newDeckTargetLang,
       nativeLanguage: newDeckNativeLang,
       words: [],
@@ -346,7 +344,7 @@ export default function DeckManager({
 
       onCreateDeck({
         name: newDeckName.trim(),
-        description: newDeckDesc.trim() || `AI generated notebook on ${newDeckName.trim()}`,
+        description: newDeckDesc.trim() || `AI generated deck on ${newDeckName.trim()}`,
         targetLanguage: newDeckTargetLang,
         nativeLanguage: newDeckNativeLang,
         words: wordsWithIds,
@@ -470,11 +468,11 @@ export default function DeckManager({
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 bg-stone-900 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
             <BookOpen className="w-3.5 h-3.5" />
-            <span>Notebook Manager</span>
+            <span>Deck Manager</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">Vocabulary Collections & Words</h1>
           <p className="text-xs text-stone-500 font-serif italic max-w-xl">
-            "Manage custom vocabulary notebooks, auto-fill definitions with Gemini AI, and track term mastery."
+            "Manage custom vocabulary decks, auto-fill definitions with Gemini AI, and track term mastery."
           </p>
         </div>
 
@@ -484,79 +482,54 @@ export default function DeckManager({
             className="px-4 py-3 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Notebook</span>
+            <span>Create Deck</span>
           </button>
         </div>
       </div>
 
-      {/* Main Split Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Notebook Sidebar */}
-        {isSidebarOpen ? (
-          <NotebookSidebar
-            decks={decks}
-            selectedDeckId={selectedDeckId}
-            onSelectDeck={onSelectDeck}
-            setIsSidebarOpen={setIsSidebarOpen}
-            setDeckToDelete={setDeckToDelete}
-            onDeleteDeck={onDeleteDeck}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(true)}
-            className="hidden lg:flex items-center gap-2 px-3 py-2 bg-white border border-stone-200 hover:border-stone-900 text-stone-800 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-            title="Expand Notebook Sidebar"
-          >
-            <PanelLeft className="w-4 h-4" />
-            <span>Show Notebooks</span>
-          </button>
-        )}
-
-        {/* Right Active Notebook & Words Breakdown */}
-        <div className={`${isSidebarOpen ? "lg:col-span-8" : "lg:col-span-12"} space-y-6`}>
-          {activeDeck ? (
-            <div className="bg-white border border-stone-200 p-6 space-y-6 shadow-2xs">
-              {/* Notebook Active Title & Quick Controls */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-5">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-500">
-                    <Globe2 className="w-3.5 h-3.5 text-stone-900" />
-                    <span>{activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}</span>
-                    <span className="text-stone-300">•</span>
-                    <span className="text-stone-900">{activeDeck.words.length} terms</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditNotebookModalOpen(true)}
-                      className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 px-2 py-0.5 font-bold flex items-center gap-1 cursor-pointer transition-all ml-1.5"
-                      title="Edit Notebook Name & Languages"
-                    >
-                      <Settings className="w-3 h-3 text-stone-700" />
-                      <span>Edit Languages</span>
-                    </button>
-                  </div>
-                  <h2 className="text-xl font-bold text-stone-950">{activeDeck.name}</h2>
-                  <p className="text-xs text-stone-500 font-serif italic max-w-lg">{activeDeck.description}</p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+      {/* Main Container (No sidebar) */}
+      <div className="space-y-6">
+        {activeDeck ? (
+          <div className="bg-white border border-stone-200 p-6 space-y-6 shadow-2xs">
+            {/* Active List Title & Quick Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-5">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-500">
+                  <Globe2 className="w-3.5 h-3.5 text-stone-900" />
+                  <span>{activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}</span>
+                  <span className="text-stone-300">•</span>
+                  <span className="text-stone-900">{activeDeck.words.length} terms</span>
                   <button
-                    onClick={() => setIsRandomWordsModalOpen(true)}
-                    className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer border border-amber-500 transition-all shadow-2xs"
-                    title="Generate random non-duplicate words for this notebook with AI"
+                    type="button"
+                    onClick={() => setIsEditDeckModalOpen(true)}
+                    className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 px-2 py-0.5 font-bold flex items-center gap-1 cursor-pointer transition-all ml-1.5"
+                    title="Edit Languages"
                   >
-                    <Wand2 className="w-3.5 h-3.5" />
-                    <span>AI Random Words</span>
-                  </button>
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="px-3.5 py-2 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Word</span>
+                    <Settings className="w-3 h-3 text-stone-700" />
+                    <span>Edit Languages</span>
                   </button>
                 </div>
+                <h2 className="text-xl font-bold text-stone-950">Vocabulary List</h2>
               </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setIsRandomWordsModalOpen(true)}
+                  className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer border border-amber-500 transition-all shadow-2xs"
+                  title="Generate random non-duplicate words with AI"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  <span>AI Random Words</span>
+                </button>
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="px-3.5 py-2 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Word</span>
+                </button>
+              </div>
+            </div>
 
               {/* Search, Sort & Layout View Bar */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-50 p-3 border border-stone-200">
@@ -668,18 +641,17 @@ export default function DeckManager({
                   <BookOpen className="w-8 h-8 text-stone-400 mx-auto" />
                   <h4 className="font-bold text-sm text-stone-900">No Vocabulary Words Found</h4>
                   <p className="text-xs text-stone-500 font-serif italic max-w-sm mx-auto">
-                    {searchQuery ? "No terms match your search filter." : "This notebook is empty. Click 'Add Word' or 'AI Random Words' to begin adding vocabulary!"}
+                    {searchQuery ? "No terms match your search filter." : "Your vocabulary list is empty. Click 'Add Word' or 'AI Random Words' to begin adding vocabulary!"}
                   </p>
                 </div>
               )}
             </div>
           ) : (
             <div className="p-12 text-center bg-white border border-stone-200 text-stone-500">
-              Select or create a notebook to begin managing vocabulary terms.
+              Your vocabulary list is not loaded yet.
             </div>
           )}
         </div>
-      </div>
 
       {/* Add Word Modal */}
       <AddWordModal
@@ -708,23 +680,6 @@ export default function DeckManager({
         handleAddWordSubmit={handleAddWordSubmit}
       />
 
-      {/* Create Notebook Modal */}
-      <CreateNotebookModal
-        isCreateDeckModalOpen={isCreateDeckModalOpen}
-        setIsCreateDeckModalOpen={setIsCreateDeckModalOpen}
-        newDeckName={newDeckName}
-        setNewDeckName={setNewDeckName}
-        newDeckDesc={newDeckDesc}
-        setNewDeckDesc={setNewDeckDesc}
-        newDeckTargetLang={newDeckTargetLang}
-        setNewDeckTargetLang={setNewDeckTargetLang}
-        newDeckNativeLang={newDeckNativeLang}
-        setNewDeckNativeLang={setNewDeckNativeLang}
-        isAiGeneratingDeck={isAiGeneratingDeck}
-        handleCreateDeckSubmit={handleCreateDeckSubmit}
-        handleAiGenerateWholeDeck={handleAiGenerateWholeDeck}
-      />
-
       {/* Random Words Modal */}
       <RandomWordsModal
         isRandomWordsModalOpen={isRandomWordsModalOpen}
@@ -738,11 +693,11 @@ export default function DeckManager({
         handleGenerateRandomWordsSubmit={handleGenerateRandomWordsSubmit}
       />
 
-      {/* Delete Notebook Confirmation Modal */}
+      {/* Delete Deck Confirmation Modal */}
       <ConfirmModal
         isOpen={Boolean(deckToDelete)}
-        title="Delete Notebook"
-        message={`Are you sure you want to delete "${deckToDelete?.name}"? All words inside this notebook will be deleted.`}
+        title="Delete Deck"
+        message={`Are you sure you want to delete "${deckToDelete?.name}"? All words inside this deck will be deleted.`}
         onConfirm={() => {
           if (deckToDelete && onDeleteDeck) {
             onDeleteDeck(deckToDelete.id);
@@ -752,11 +707,11 @@ export default function DeckManager({
         onCancel={() => setDeckToDelete(null)}
       />
 
-      {/* Edit Notebook Details & Languages Modal */}
+      {/* Edit Deck Details & Languages Modal */}
       {activeDeck && (
-        <EditNotebookModal
-          isOpen={isEditNotebookModalOpen}
-          onClose={() => setIsEditNotebookModalOpen(false)}
+        <EditDeckModal
+          isOpen={isEditDeckModalOpen}
+          onClose={() => setIsEditDeckModalOpen(false)}
           deck={activeDeck}
           onUpdateDeckDetails={(deckId, updates) => {
             if (onUpdateDeckDetails) {

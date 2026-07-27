@@ -39,24 +39,24 @@ export default function AppHeader({
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 sm:gap-6">
         
         {/* Top Header Row: Logo & Quick AI / Language / Cloud Sync Switchers */}
-        <div className="flex items-center justify-between gap-1 sm:gap-4 flex-nowrap min-w-0">
+        <div className="flex items-center justify-between gap-1 sm:gap-3 flex-nowrap min-w-0 w-full">
           {/* Logo / Title */}
           <div 
             onClick={() => {
               setCurrentView("dashboard");
               setSelectedDeckId(null);
             }} 
-            className="flex items-center gap-1.5 sm:gap-3 cursor-pointer group shrink-0"
+            className="flex items-center gap-1 sm:gap-2 cursor-pointer group shrink-0"
             id="brand-logo"
           >
-            <div className="w-7 h-7 sm:w-9 sm:h-9 bg-stone-900 text-white flex items-center justify-center font-black text-sm sm:text-lg tracking-tight transition-transform duration-300 group-hover:scale-105 shrink-0">
+            <div className="w-6 h-6 sm:w-9 sm:h-9 bg-stone-900 text-white flex items-center justify-center font-black text-xs sm:text-lg tracking-tight transition-transform duration-300 group-hover:scale-105 shrink-0">
               V
             </div>
             <div>
               <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-0.5 sm:gap-1.5">
                 Vocab
               </h1>
-              <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden xs:block">Clean Learning Coach</p>
+              <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden sm:block">Clean Learning Coach</p>
             </div>
           </div>
 

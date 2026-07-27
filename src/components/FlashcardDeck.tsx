@@ -46,8 +46,8 @@ export default function FlashcardDeck({
     return (
       <div className="bg-white p-12 rounded-none border border-stone-200 text-center space-y-6 max-w-md mx-auto" id="no-deck-selected">
         <Layers className="w-16 h-16 text-stone-300 mx-auto" />
-        <h3 className="text-sm font-bold text-stone-900">No active study deck</h3>
-        <p className="text-xs text-stone-400 font-serif italic">"Please select a deck from your dashboard or build a custom list."</p>
+        <h3 className="text-sm font-bold text-stone-900">No vocabulary list loaded</h3>
+        <p className="text-xs text-stone-400 font-serif italic">"Please add some words to begin."</p>
         <button 
           onClick={onGoBack}
           className="px-6 py-3 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer rounded-none"
@@ -86,8 +86,8 @@ export default function FlashcardDeck({
   if (!words || words.length === 0) {
     return (
       <div className="text-center py-16 space-y-4 max-w-md mx-auto">
-        <h2 className="text-xl font-bold text-stone-900 font-serif">{deck.name} is empty</h2>
-        <p className="text-xs text-stone-500 font-serif italic">This notebook doesn't have any words yet. You can add words manually or generate them with AI.</p>
+        <h2 className="text-xl font-bold text-stone-900 font-serif">Vocabulary list is empty</h2>
+        <p className="text-xs text-stone-500 font-serif italic">This list doesn't have any words yet. You can add words manually or generate them with AI.</p>
         <div className="flex justify-center gap-3 pt-2">
           <button 
             onClick={onGoBack}
@@ -376,7 +376,7 @@ export default function FlashcardDeck({
                 onClick={onStartQuiz}
                 className="px-6 py-3 bg-stone-950 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
-                Take Deck Quiz <Trophy className="w-4 h-4" />
+                Take Quiz <Trophy className="w-4 h-4" />
               </button>
             )}
           </div>

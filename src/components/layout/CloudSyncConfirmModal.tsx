@@ -113,7 +113,7 @@ export default function CloudSyncConfirmModal({
               <div className="space-y-1.5 text-xs text-stone-700 font-medium">
                 <div className="flex items-center justify-between">
                   <span className="text-stone-500 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5" /> Notebooks:
+                    <Layers className="w-3.5 h-3.5" /> Decks:
                   </span>
                   <strong className="font-bold text-stone-950">{localDecksCount}</strong>
                 </div>
@@ -151,7 +151,7 @@ export default function CloudSyncConfirmModal({
               <div className="space-y-1.5 text-xs text-stone-700 font-medium">
                 <div className="flex items-center justify-between">
                   <span className="text-stone-500 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5" /> Notebooks:
+                    <Layers className="w-3.5 h-3.5" /> Decks:
                   </span>
                   <strong className="font-bold text-stone-950">{remoteDecksCount}</strong>
                 </div>
@@ -200,7 +200,7 @@ export default function CloudSyncConfirmModal({
                     </span>
                   </div>
                   <p className="text-xs text-stone-300 mt-0.5">
-                    Overwrite cloud backup with your latest local database ({localDecksCount} notebooks, {localWordsCount} words)
+                    Overwrite cloud backup with your latest local database ({localDecksCount} decks, {localWordsCount} words)
                   </p>
                 </div>
               </div>
@@ -226,7 +226,7 @@ export default function CloudSyncConfirmModal({
                     </span>
                   </div>
                   <p className="text-xs text-stone-600 mt-0.5">
-                    Download cloud backup and replace local data ({remoteDecksCount} notebooks, {remoteWordsCount} words)
+                    Download cloud backup and replace local data ({remoteDecksCount} decks, {remoteWordsCount} words)
                   </p>
                 </div>
               </div>

@@ -192,16 +192,20 @@ export default function QuizView({
   // Auto scroll to header of new question on mobile/desktop when switching questions
   useEffect(() => {
     if (questions.length > 0 && !showSummary) {
-      const timer = setTimeout(() => {
-        if (questionHeaderRef.current) {
-          questionHeaderRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else {
-          const headerEl = document.getElementById("quiz-question-view") || document.getElementById("quiz-header");
-          if (headerEl) {
-            headerEl.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
+      const scrollToHeader = () => {
+        const headerEl = questionHeaderRef.current || document.getElementById("quiz-question-view") || document.getElementById("quiz-header");
+        if (headerEl) {
+          const headerOffset = 80;
+          const elementPosition = headerEl.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: "smooth"
+          });
         }
-      }, 50);
+      };
+
+      const timer = setTimeout(scrollToHeader, 60);
       return () => clearTimeout(timer);
     }
   }, [currentQuestionIdx, showSummary, questions.length]);
@@ -354,7 +358,7 @@ export default function QuizView({
       <div className="bg-white p-12 border border-stone-200 text-center space-y-6 max-w-md mx-auto rounded-none" id="no-words-for-quiz">
         <AlertCircle className="w-16 h-16 text-stone-300 mx-auto" />
         <h3 className="text-sm font-bold text-stone-900">Lacking Vocabulary Items</h3>
-        <p className="text-xs text-stone-400 font-serif italic">"A deck needs at least 2 words to generate an interactive practice quiz."</p>
+        <p className="text-xs text-stone-400 font-serif italic">"Your vocabulary list needs at least 2 words to generate an interactive practice quiz."</p>
         <button 
           onClick={onGoBack}
           className="px-6 py-3 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer rounded-none"
@@ -418,6 +422,15 @@ export default function QuizView({
 
     if (currentQuestionIdx < questions.length - 1) {
       setCurrentQuestionIdx(prev => prev + 1);
+      setTimeout(() => {
+        const headerEl = questionHeaderRef.current || document.getElementById("quiz-question-view");
+        if (headerEl) {
+          const headerOffset = 80;
+          const elementPosition = headerEl.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({ top: Math.max(0, offsetPosition), behavior: "smooth" });
+        }
+      }, 30);
     } else {
       setShowSummary(true);
       try {
