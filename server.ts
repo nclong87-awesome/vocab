@@ -35,10 +35,10 @@ const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-f
 function sanitizeModel(provider: string, model?: string): string {
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
-      return "gemini-2.5-flash";
+      return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+  return model || (provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
 }
 
 // Parse server-side LLM error
@@ -150,8 +150,8 @@ async function callLLM(
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
-    const primaryModel = model || "gemini-2.5-flash";
-    const fallbackModels = ["gemini-2.5-flash", "gemini-2.0-flash"].filter(m => m !== primaryModel);
+    const primaryModel = model || "gemini-3.6-flash";
+    const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
 
     let lastError: any = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -415,7 +415,7 @@ app.post("/api/tts", async (req, res) => {
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
       });
 
-      const targetTtsModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-2.5-flash";
+      const targetTtsModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-3.6-flash";
       const response = await ai.models.generateContent({
         model: targetTtsModel,
         contents: `Pronounce the following text clearly for a language learner: "${text}"`,

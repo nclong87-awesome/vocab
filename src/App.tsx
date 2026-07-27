@@ -92,16 +92,26 @@ export default function App() {
 
       const loadedConfig = await getLLMConfigFromDB({
         provider: "gemini",
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
         apiKey: "",
         isLoggedIn: true
       });
 
       const sanitizedProvider = loadedConfig.provider || "gemini";
-      let sanitizedModel = loadedConfig.model || "gemini-2.5-flash";
-      const validGeminiModels = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
-      if (sanitizedProvider === "gemini" && !validGeminiModels.includes(sanitizedModel)) {
-        sanitizedModel = "gemini-2.5-flash";
+      let sanitizedModel = loadedConfig.model || "gemini-3.6-flash";
+      const validGeminiModels = [
+        "gemini-3.6-flash",
+        "gemini-3.6-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash"
+      ];
+      if (sanitizedProvider === "gemini" && (sanitizedModel === "gemini-2.5-flash" || !validGeminiModels.includes(sanitizedModel))) {
+        sanitizedModel = "gemini-3.6-flash";
       }
 
       const activeConfig: LLMConfig = {
@@ -112,6 +122,7 @@ export default function App() {
       };
 
       setLlmConfig(activeConfig);
+      await saveLLMConfigToDB(activeConfig);
 
       if (!activeConfig.isLoggedIn && activeConfig.provider !== "gemini") {
         setIsLlmModalOpen(true);

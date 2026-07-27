@@ -679,12 +679,12 @@ export default function SettingsView({
                     Gemini Model Alias
                   </label>
                   <select
-                    value={config.model || "gemini-2.5-flash"}
+                    value={config.model || "gemini-3.6-flash"}
                     onChange={(e) => setConfig({ ...config, model: e.target.value })}
                     className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
                   >
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</option>
-                    {PROVIDER_OPTIONS.find(p => p.id === "gemini")?.tts_models?.filter(m => m !== "gemini-2.5-flash").map(m => (
+                    <option value="gemini-3.6-flash">gemini-3.6-flash (Recommended)</option>
+                    {PROVIDER_OPTIONS.find(p => p.id === "gemini")?.tts_models?.filter(m => m !== "gemini-3.6-flash").map(m => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>

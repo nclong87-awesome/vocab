@@ -30,10 +30,10 @@ const VALID_GEMINI_MODELS = [
 export function sanitizeModel(provider: string, model?: string): string {
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
-      return "gemini-2.5-flash";
+      return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+  return model || (provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
 }
 
 export type LLMErrorType =
@@ -369,8 +369,8 @@ export async function callLLMClientSide(
       });
     }
 
-    const primaryModel = model || "gemini-2.5-flash";
-    const fallbackModels = ["gemini-2.5-flash", "gemini-2.0-flash"].filter(m => m !== primaryModel);
+    const primaryModel = model || "gemini-3.6-flash";
+    const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
 
     return callWithRetry(
       async (attempt) => {
