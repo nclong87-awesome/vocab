@@ -55,7 +55,7 @@ export default function App() {
   // LLM Provider Login Config state
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({
     provider: "gemini",
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     apiKey: "",
     isLoggedIn: true
   });
