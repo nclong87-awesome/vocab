@@ -684,10 +684,9 @@ export default function SettingsView({
                     className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
                   >
                     <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
-                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                    {PROVIDER_OPTIONS.find(p => p.id === "gemini")?.tts_models?.filter(m => m !== "gemini-2.5-flash").map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
                   </select>
                 </div>
               </div>

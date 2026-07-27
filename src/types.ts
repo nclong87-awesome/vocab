@@ -20,6 +20,7 @@ export interface LLMProviderOption {
   tagline: string;
   defaultModel: string;
   models: string[];
+  tts_models?: string[];
   defaultBaseUrl?: string;
   requiresKey: boolean;
 }
@@ -58,6 +59,7 @@ export interface Word {
   createdAt: string;
   lastReviewed: string | null;
   strength: number; // 0 to 4 (representing levels of familiarity)
+  imageUrl?: string;
 }
 
 export interface Deck {

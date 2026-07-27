@@ -228,6 +228,7 @@ CRITICAL INSTRUCTIONS:
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Example sentence in target language (${userTarget}).
 - "exampleTranslation": Translation of the example sentence into the user's native language (${userNative}).
+- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word-or-topic]?width=800&height=600&nologo=true"
 Ensure the words selected cover different skill levels and are practical for real conversation.`;
 
     const systemInstruction = `You are an expert language teacher specializing in creating vocabulary material for ${userNative} native speakers learning ${userTarget}.`;
@@ -242,7 +243,8 @@ Ensure the words selected cover different skill levels and are practical for rea
       "definition": "string (definition written in ${userNative})",
       "translation": "string (direct translation in ${userNative})",
       "example": "string (sentence in ${userTarget})",
-      "exampleTranslation": "string (sentence translation in ${userNative})"
+      "exampleTranslation": "string (sentence translation in ${userNative})",
+      "imageUrl": "string (pollinations AI image URL)"
     }
   ]
 }`;
@@ -278,7 +280,8 @@ CRITICAL MANDATORY REQUIREMENT:
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
 - "example": A realistic, high-quality example sentence in the target language (${userTarget}).
-- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).`;
+- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
+- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word]?width=800&height=600&nologo=true"`;
 
     const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions and translations in the user's native language (${userNative}).`;
     const schemaDesc = `{
@@ -288,7 +291,8 @@ CRITICAL MANDATORY REQUIREMENT:
   "definition": "string (definition in ${userNative})",
   "translation": "string (translation in ${userNative})",
   "example": "string (example in ${userTarget})",
-  "exampleTranslation": "string (example translation in ${userNative})"
+  "exampleTranslation": "string (example translation in ${userNative})",
+  "imageUrl": "string (pollinations AI image URL)"
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);

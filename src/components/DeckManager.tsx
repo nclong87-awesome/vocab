@@ -75,6 +75,7 @@ export default function DeckManager({
   const [newTranslation, setNewTranslation] = useState("");
   const [newExample, setNewExample] = useState("");
   const [newExampleTranslation, setNewExampleTranslation] = useState("");
+  const [newImageUrl, setNewImageUrl] = useState("");
   const [showManualFields, setShowManualFields] = useState(false);
   
   // New Deck Form State (Manual)
@@ -160,6 +161,7 @@ export default function DeckManager({
       setNewTranslation(data.translation || "");
       setNewExample(data.example || "");
       setNewExampleTranslation(data.exampleTranslation || "");
+      setNewImageUrl(data.imageUrl || "");
     } catch (err: any) {
       console.error(err);
       setAutofillError(err.message || "Autofill failed. Check internet/secrets.");
@@ -185,7 +187,8 @@ export default function DeckManager({
       definition: newDefinition.trim(),
       translation: newTranslation.trim(),
       example: newExample.trim() || "No example provided.",
-      exampleTranslation: newExampleTranslation.trim() || "No translation provided."
+      exampleTranslation: newExampleTranslation.trim() || "No translation provided.",
+      imageUrl: newImageUrl.trim() || undefined
     });
 
     // Reset Form
@@ -196,6 +199,7 @@ export default function DeckManager({
     setNewTranslation("");
     setNewExample("");
     setNewExampleTranslation("");
+    setNewImageUrl("");
     setShowManualFields(false);
     setShowAddWordModal(false);
   };
@@ -578,6 +582,11 @@ export default function DeckManager({
                         )}
 
                         {/* Context Example Box */}
+                        {word.imageUrl && (
+                          <div className="bg-stone-50 border border-stone-200 p-1">
+                            <img src={word.imageUrl} alt={word.word} className="w-full h-24 object-cover" />
+                          </div>
+                        )}
                         {word.example && (
                           <div className="bg-stone-50 border border-stone-200 p-2.5 space-y-1 text-xs">
                             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context</span>
@@ -636,6 +645,11 @@ export default function DeckManager({
                         <p className="text-stone-600 font-serif italic line-clamp-2">
                           "{word.definition}"
                         </p>
+                        {word.imageUrl && (
+                          <div className="bg-stone-50 border border-stone-200 p-1">
+                            <img src={word.imageUrl} alt={word.word} className="w-full h-24 object-cover" />
+                          </div>
+                        )}
                         {word.example && (
                           <p className="text-[11px] text-stone-400 font-mono line-clamp-1">
                             Context: {word.example}
@@ -848,6 +862,11 @@ export default function DeckManager({
                       </p>
                     )}
 
+                    {newImageUrl && (
+                      <div className="mt-2">
+                        <img src={newImageUrl} alt="Preview" className="w-full h-32 object-cover rounded border border-stone-200" />
+                      </div>
+                    )}
                     {newExample && (
                       <div className="bg-white p-2.5 border border-stone-200 text-xs font-serif space-y-1">
                         <p className="text-stone-900">"{newExample}"</p>
@@ -950,6 +969,17 @@ export default function DeckManager({
                         onChange={(e) => setNewExampleTranslation(e.target.value)}
                         placeholder="Translation of example sentence..."
                         className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs resize-none font-serif"
+                      />
+                    </div>
+                    
+                    <div className="text-xs mt-3">
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">Image URL</label>
+                      <input
+                        type="text"
+                        value={newImageUrl}
+                        onChange={(e) => setNewImageUrl(e.target.value)}
+                        placeholder="https://image.pollinations.ai/..."
+                        className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs font-serif"
                       />
                     </div>
                   </motion.div>

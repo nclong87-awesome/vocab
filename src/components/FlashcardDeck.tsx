@@ -280,6 +280,11 @@ export default function FlashcardDeck({
                               className="bg-stone-50 p-3.5 border border-stone-200 text-left space-y-1.5 mt-2 max-h-48 overflow-y-auto"
                               onClick={(e) => e.stopPropagation()}
                             >
+                              {currentWord.imageUrl && (
+                                <div className="mb-3 border border-stone-200">
+                                  <img src={currentWord.imageUrl} alt={currentWord.word} className="w-full h-32 md:h-40 object-cover" />
+                                </div>
+                              )}
                               <span className="text-xs font-semibold text-stone-500 font-mono">Example Usage</span>
                               <p className="text-xs md:text-sm text-stone-800 font-serif italic leading-relaxed">
                                 "{currentWord.example}"
@@ -380,6 +385,11 @@ export default function FlashcardDeck({
                   <p className="text-xs text-stone-500 font-sans leading-relaxed">
                     <span className="font-bold text-stone-500 text-xs mr-1">Definition:</span> {w.definition}
                   </p>
+                  {w.imageUrl && (
+                    <div className="mt-2 mb-1">
+                      <img src={w.imageUrl} alt={w.word} className="w-full h-24 sm:w-32 sm:h-24 object-cover border border-stone-200" />
+                    </div>
+                  )}
                   <div className="text-xs border-l-2 border-stone-900 pl-3 mt-2 py-1 bg-stone-50">
                     <p className="italic text-stone-800 font-serif">"{w.example}"</p>
                     <p className="italic text-stone-400 text-[11px] mt-0.5">"{w.exampleTranslation}"</p>
