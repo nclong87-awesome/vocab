@@ -27,28 +27,9 @@ import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap } from "../utils/llmHelpers";
 import { testLlmConnection } from "../services/llmClientService";
 
-export interface LanguageOption {
-  code: string;
-  name: string;
-  nativeName: string;
-  flag: string;
-}
+import { SUPPORTED_LANGUAGES, LanguageOption } from "../config/languages";
 
-export const ONBOARDING_LANGUAGES: LanguageOption[] = [
-  { code: "English", name: "English", nativeName: "English", flag: "🇬🇧" },
-  { code: "Spanish", name: "Spanish", nativeName: "Español", flag: "🇪🇸" },
-  { code: "French", name: "French", nativeName: "Français", flag: "🇫🇷" },
-  { code: "German", name: "German", nativeName: "Deutsch", flag: "🇩🇪" },
-  { code: "Vietnamese", name: "Vietnamese", nativeName: "Tiếng Việt", flag: "🇻🇳" },
-  { code: "Japanese", name: "Japanese", nativeName: "日本語", flag: "🇯🇵" },
-  { code: "Chinese", name: "Chinese", nativeName: "中文", flag: "🇨🇳" },
-  { code: "Italian", name: "Italian", nativeName: "Italiano", flag: "🇮🇹" },
-  { code: "Portuguese", name: "Portuguese", nativeName: "Português", flag: "🇵🇹" },
-  { code: "Korean", name: "Korean", nativeName: "한국어", flag: "🇰🇷" },
-  { code: "Russian", name: "Russian", nativeName: "Русский", flag: "🇷🇺" },
-  { code: "Dutch", name: "Dutch", nativeName: "Nederlands", flag: "🇳🇱" },
-  { code: "Arabic", name: "Arabic", nativeName: "العربية", flag: "🇸🇦" },
-];
+export const ONBOARDING_LANGUAGES: LanguageOption[] = SUPPORTED_LANGUAGES;
 
 interface LlmLoginModalProps {
   isOpen: boolean;

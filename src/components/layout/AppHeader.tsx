@@ -1,6 +1,8 @@
 import React from "react";
-import { Key, Sliders } from "lucide-react";
-import { LLMConfig, UserStats } from "../../types";
+import { Sliders } from "lucide-react";
+import { LLMConfig, LLMProvider, UserStats } from "../../types";
+import QuickAiSwitcher from "./QuickAiSwitcher";
+import QuickLanguageSwitcher from "./QuickLanguageSwitcher";
 
 interface AppHeaderProps {
   currentView: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings";
@@ -9,6 +11,11 @@ interface AppHeaderProps {
   setIsLlmModalOpen: (open: boolean) => void;
   llmConfig: LLMConfig;
   stats: UserStats;
+  onSwitchProvider: (providerId: LLMProvider, modelOverride?: string) => void;
+  onOpenLlmModal: (providerId?: LLMProvider) => void;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  onSelectLanguages?: (targetLang: string, nativeLang: string, applyToDecks?: boolean) => void;
 }
 
 export default function AppHeader({
@@ -17,47 +24,56 @@ export default function AppHeader({
   setSelectedDeckId,
   setIsLlmModalOpen,
   llmConfig,
-  stats
+  stats,
+  onSwitchProvider,
+  onOpenLlmModal,
+  targetLanguage = "English",
+  nativeLanguage = "Spanish",
+  onSelectLanguages
 }: AppHeaderProps) {
   return (
     <header className="bg-white border-b border-stone-200 py-3.5 px-3.5 sm:py-5 sm:px-8 sticky top-0 z-40" id="main-header">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-6">
         
-        {/* Top Header Row: Logo & AI Model Badge */}
-        <div className="flex items-center justify-between gap-4">
+        {/* Top Header Row: Logo & Quick AI / Language Switchers */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
           {/* Logo / Title */}
           <div 
             onClick={() => {
               setCurrentView("dashboard");
               setSelectedDeckId(null);
             }} 
-            className="flex items-center gap-3.5 cursor-pointer group"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group shrink-0"
             id="brand-logo"
           >
-            <div className="w-9 h-9 bg-stone-900 text-white flex items-center justify-center font-black text-lg tracking-tight transition-transform duration-300 group-hover:scale-105 shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-stone-900 text-white flex items-center justify-center font-black text-base sm:text-lg tracking-tight transition-transform duration-300 group-hover:scale-105 shrink-0">
               V
             </div>
             <div>
-              <h1 className="text-sm sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-2">
+              <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-1 sm:gap-1.5">
                 Vocab
-                <span className="text-[9px] border border-stone-900 text-stone-900 font-semibold px-1.5 py-0.5 rounded-none tracking-normal">Pro</span>
+                <span className="text-[8px] sm:text-[9px] border border-stone-900 text-stone-900 font-semibold px-1 py-0.2 sm:px-1.5 sm:py-0.5 rounded-none tracking-normal">Pro</span>
               </h1>
-              <p className="text-[11px] text-stone-500 font-normal tracking-normal mt-0.5">Clean Minimalist Learning Coach</p>
+              <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden xs:block">Clean Learning Coach</p>
             </div>
           </div>
 
-          {/* Select AI Model Button (Top Right) */}
-          <button
-            onClick={() => setIsLlmModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-900 text-xs font-medium tracking-normal transition-all cursor-pointer shadow-2xs shrink-0"
-            title="Click to configure LLM Provider & API Key"
-            id="llm-auth-badge"
-          >
-            <span className={`w-2 h-2 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-            <Key className="w-3 h-3 text-stone-700" />
-            <span>{llmConfig.isLoggedIn ? `${llmConfig.provider.charAt(0).toUpperCase() + llmConfig.provider.slice(1)}` : "AI Model Login"}</span>
-            <span className="text-[10px] text-stone-500 font-normal hidden lg:inline">({llmConfig.model})</span>
-          </button>
+          {/* Quick Language & AI Switchers */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {onSelectLanguages && (
+              <QuickLanguageSwitcher
+                targetLanguage={targetLanguage}
+                nativeLanguage={nativeLanguage}
+                onSelectLanguages={onSelectLanguages}
+              />
+            )}
+            
+            <QuickAiSwitcher 
+              llmConfig={llmConfig}
+              onSwitchProvider={onSwitchProvider}
+              onOpenLlmModal={onOpenLlmModal}
+            />
+          </div>
         </div>
 
         {/* Navigation Links & Quick Stats */}

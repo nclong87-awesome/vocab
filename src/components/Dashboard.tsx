@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Plus, Compass } from "lucide-react";
-import { Deck, UserStats } from "../types";
+import { Deck, LLMConfig, LLMProvider, UserStats } from "../types";
 import { getSettingFromDB, saveSettingToDB } from "../db/indexedDB";
 import { ConfirmModal } from "./ConfirmModal";
+import { SUPPORTED_LANGUAGES } from "../config/languages";
 
 import TodayFocusHero from "./dashboard/TodayFocusHero";
 import StatsGrid from "./dashboard/StatsGrid";
@@ -22,6 +23,11 @@ interface DashboardProps {
   isLoading: boolean;
   loadingMessage: string;
   onFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
+  llmConfig?: LLMConfig;
+  onSwitchProvider?: (providerId: LLMProvider, modelOverride?: string) => void;
+  onOpenLlmModal?: (providerId?: LLMProvider) => void;
+  targetLanguage?: string;
+  nativeLanguage?: string;
 }
 
 const PRESET_TOPICS = [
@@ -33,17 +39,10 @@ const PRESET_TOPICS = [
   { label: "Academic / TOEFL High-Scoring", emoji: "🎓", topic: "Advanced vocabulary for university lectures, TOEFL preparation, and research" },
 ];
 
-const LANGUAGES = [
-  { code: "English", name: "English" },
-  { code: "Spanish", name: "Spanish (Español)" },
-  { code: "French", name: "French (Français)" },
-  { code: "German", name: "German (Deutsch)" },
-  { code: "Italian", name: "Italian (Italiano)" },
-  { code: "Vietnamese", name: "Vietnamese (Tiếng Việt)" },
-  { code: "Japanese", name: "Japanese (日本語)" },
-  { code: "Korean", name: "Korean (한국어)" },
-  { code: "Chinese", name: "Chinese (中文)" },
-];
+const LANGUAGES = SUPPORTED_LANGUAGES.map(l => ({
+  code: l.code,
+  name: `${l.flag} ${l.name} (${l.nativeName})`
+}));
 
 export default function Dashboard({
   stats,
@@ -56,10 +55,23 @@ export default function Dashboard({
   isLoading,
   loadingMessage,
   onFinishQuiz,
+  llmConfig,
+  onSwitchProvider,
+  onOpenLlmModal,
+  targetLanguage: initialTargetLang = "English",
+  nativeLanguage: initialNativeLang = "Spanish",
 }: DashboardProps) {
   const [customTopic, setCustomTopic] = useState("");
-  const [targetLanguage, setTargetLanguage] = useState("English");
-  const [nativeLanguage, setNativeLanguage] = useState("Spanish");
+  const [targetLanguage, setTargetLanguage] = useState(initialTargetLang);
+  const [nativeLanguage, setNativeLanguage] = useState(initialNativeLang);
+
+  useEffect(() => {
+    if (initialTargetLang) setTargetLanguage(initialTargetLang);
+  }, [initialTargetLang]);
+
+  useEffect(() => {
+    if (initialNativeLang) setNativeLanguage(initialNativeLang);
+  }, [initialNativeLang]);
   const [quantity, setQuantity] = useState(8);
   const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
 
@@ -228,6 +240,9 @@ export default function Dashboard({
             isLoading={isLoading}
             languages={LANGUAGES}
             presetTopics={PRESET_TOPICS}
+            llmConfig={llmConfig}
+            onSwitchProvider={onSwitchProvider}
+            onOpenLlmModal={onOpenLlmModal}
           />
         </div>
       </div>

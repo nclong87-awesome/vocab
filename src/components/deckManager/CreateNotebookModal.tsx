@@ -1,5 +1,6 @@
 import React from "react";
 import { Sparkles, Wand2, X } from "lucide-react";
+import { SUPPORTED_LANGUAGES } from "../../config/languages";
 
 interface CreateNotebookModalProps {
   isCreateDeckModalOpen: boolean;
@@ -66,26 +67,28 @@ export default function CreateNotebookModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-stone-800">Target Language *</label>
-              <input 
-                type="text" 
-                required
+              <label className="text-stone-800 font-bold">Target Language *</label>
+              <select 
                 value={newDeckTargetLang}
                 onChange={(e) => setNewDeckTargetLang(e.target.value)}
-                placeholder="e.g. English, French, Japanese"
-                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-900 outline-none focus:border-stone-900"
-              />
+                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-bold text-stone-900 outline-none focus:border-stone-900 cursor-pointer"
+              >
+                {SUPPORTED_LANGUAGES.map(lang => (
+                  <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
-              <label className="text-stone-800">Native Language *</label>
-              <input 
-                type="text" 
-                required
+              <label className="text-stone-800 font-bold">Native Language *</label>
+              <select 
                 value={newDeckNativeLang}
                 onChange={(e) => setNewDeckNativeLang(e.target.value)}
-                placeholder="e.g. Spanish, German, Vietnamese"
-                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-900 outline-none focus:border-stone-900"
-              />
+                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-bold text-stone-900 outline-none focus:border-stone-900 cursor-pointer"
+              >
+                {SUPPORTED_LANGUAGES.map(lang => (
+                  <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 

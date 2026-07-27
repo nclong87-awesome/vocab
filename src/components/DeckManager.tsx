@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   BookOpen, 
   Plus, 
@@ -10,7 +10,8 @@ import {
   Grid, 
   List, 
   Globe2,
-  ArrowUpDown
+  ArrowUpDown,
+  Settings
 } from "lucide-react";
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -23,6 +24,7 @@ import WordRow from "./deckManager/WordRow";
 import AddWordModal from "./deckManager/AddWordModal";
 import CreateNotebookModal from "./deckManager/CreateNotebookModal";
 import RandomWordsModal from "./deckManager/RandomWordsModal";
+import EditNotebookModal from "./deckManager/EditNotebookModal";
 
 interface DeckManagerProps {
   decks: Deck[];
@@ -41,8 +43,11 @@ interface DeckManagerProps {
   onCreateDeck: (deck: Omit<Deck, "id">) => void;
   onDeleteDeck?: (deckId: string) => void;
   onUpdateDeckWords?: (deckId: string, updatedWords: Word[]) => void;
+  onUpdateDeckDetails?: (deckId: string, updates: { name: string; description: string; targetLanguage: string; nativeLanguage: string }) => void;
   llmConfig?: LLMConfig;
   ttsConfig?: TTSConfig;
+  targetLanguage?: string;
+  nativeLanguage?: string;
 }
 
 export default function DeckManager({
@@ -56,13 +61,17 @@ export default function DeckManager({
   onCreateDeck,
   onDeleteDeck,
   onUpdateDeckWords,
+  onUpdateDeckDetails,
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
+  targetLanguage = "English",
+  nativeLanguage = "Spanish",
 }: DeckManagerProps) {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateDeckModalOpen, setIsCreateDeckModalOpen] = useState(false);
   const [isRandomWordsModalOpen, setIsRandomWordsModalOpen] = useState(false);
+  const [isEditNotebookModalOpen, setIsEditNotebookModalOpen] = useState(false);
 
   // Form input states for adding a single word
   const [wordInput, setWordInput] = useState("");
@@ -78,9 +87,24 @@ export default function DeckManager({
   // Form input states for creating a whole notebook/deck
   const [newDeckName, setNewDeckName] = useState("");
   const [newDeckDesc, setNewDeckDesc] = useState("");
-  const [newDeckTargetLang, setNewDeckTargetLang] = useState("English");
-  const [newDeckNativeLang, setNewDeckNativeLang] = useState("Spanish");
+  const [newDeckTargetLang, setNewDeckTargetLang] = useState(targetLanguage);
+  const [newDeckNativeLang, setNewDeckNativeLang] = useState(nativeLanguage);
   const [isAiGeneratingDeck, setIsAiGeneratingDeck] = useState(false);
+
+  useEffect(() => {
+    setNewDeckTargetLang(targetLanguage);
+  }, [targetLanguage]);
+
+  useEffect(() => {
+    setNewDeckNativeLang(nativeLanguage);
+  }, [nativeLanguage]);
+
+  // Reset languages when opening the create modal
+  const handleOpenCreateModal = () => {
+    setNewDeckTargetLang(targetLanguage);
+    setNewDeckNativeLang(nativeLanguage);
+    setIsCreateDeckModalOpen(true);
+  };
 
   // Form input states for generating N random words
   const [randomCount, setRandomCount] = useState(5);
@@ -456,7 +480,7 @@ export default function DeckManager({
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => setIsCreateDeckModalOpen(true)}
+            onClick={handleOpenCreateModal}
             className="px-4 py-3 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
@@ -501,6 +525,15 @@ export default function DeckManager({
                     <span>{activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}</span>
                     <span className="text-stone-300">•</span>
                     <span className="text-stone-900">{activeDeck.words.length} terms</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditNotebookModalOpen(true)}
+                      className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 px-2 py-0.5 font-bold flex items-center gap-1 cursor-pointer transition-all ml-1.5"
+                      title="Edit Notebook Name & Languages"
+                    >
+                      <Settings className="w-3 h-3 text-stone-700" />
+                      <span>Edit Languages</span>
+                    </button>
                   </div>
                   <h2 className="text-xl font-bold text-stone-950">{activeDeck.name}</h2>
                   <p className="text-xs text-stone-500 font-serif italic max-w-lg">{activeDeck.description}</p>
@@ -718,6 +751,20 @@ export default function DeckManager({
         }}
         onCancel={() => setDeckToDelete(null)}
       />
+
+      {/* Edit Notebook Details & Languages Modal */}
+      {activeDeck && (
+        <EditNotebookModal
+          isOpen={isEditNotebookModalOpen}
+          onClose={() => setIsEditNotebookModalOpen(false)}
+          deck={activeDeck}
+          onUpdateDeckDetails={(deckId, updates) => {
+            if (onUpdateDeckDetails) {
+              onUpdateDeckDetails(deckId, updates);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

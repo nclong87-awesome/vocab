@@ -51,6 +51,63 @@ export default function App() {
 
   const [isLlmModalOpen, setIsLlmModalOpen] = useState<boolean>(false);
 
+  // Global Language Preferences
+  const [targetLanguage, setTargetLanguage] = useState<string>(() => {
+    return localStorage.getItem("vocab_learner_target_lang") || "English";
+  });
+  const [nativeLanguage, setNativeLanguage] = useState<string>(() => {
+    return localStorage.getItem("vocab_learner_native_lang") || "Spanish";
+  });
+
+  const handleSelectLanguages = useCallback((targetLang: string, nativeLang: string, applyToDecks: boolean = false) => {
+    setTargetLanguage(targetLang);
+    setNativeLanguage(nativeLang);
+    try {
+      localStorage.setItem("vocab_learner_target_lang", targetLang);
+      localStorage.setItem("vocab_learner_native_lang", nativeLang);
+    } catch (e) {
+      console.error("Failed to save language preferences to localStorage", e);
+    }
+
+    if (applyToDecks && decks.length > 0) {
+      setDecks(prev => {
+        const updated = prev.map(d => ({
+          ...d,
+          targetLanguage: targetLang,
+          nativeLanguage: nativeLang
+        }));
+        saveAllDecksToDB(updated).catch(e => console.error("IndexedDB batch language update error:", e));
+        return updated;
+      });
+    }
+  }, [decks]);
+
+  const handleUpdateDeckDetails = useCallback((
+    deckId: string, 
+    updates: { name: string; description: string; targetLanguage: string; nativeLanguage: string }
+  ) => {
+    setDecks(prev => {
+      let modifiedDeck: Deck | null = null;
+      const updated = prev.map(d => {
+        if (d.id === deckId) {
+          modifiedDeck = {
+            ...d,
+            name: updates.name,
+            description: updates.description,
+            targetLanguage: updates.targetLanguage,
+            nativeLanguage: updates.nativeLanguage
+          };
+          return modifiedDeck;
+        }
+        return d;
+      });
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB save deck details error:", e));
+      }
+      return updated;
+    });
+  }, []);
+
   const [stats, setStats] = useState<UserStats>({
     totalWordsStudied: 0,
     totalWordsMastered: 0,
@@ -231,6 +288,21 @@ export default function App() {
     }
     setIsLlmModalOpen(true);
   };
+
+  // Quick switch active LLM provider or model
+  const handleSwitchProviderQuick = useCallback((providerId: LLMProvider, modelOverride?: string) => {
+    let switched = switchActiveProvider(llmConfig, providerId);
+    if (modelOverride) {
+      switched = { ...switched, model: modelOverride };
+    }
+    setLlmConfig(switched);
+    saveLLMConfigToDB(switched).catch(e => console.error("IndexedDB config save error:", e));
+    try {
+      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(switched));
+    } catch (e) {
+      console.error("Failed to save LLM config to localStorage", e);
+    }
+  }, [llmConfig]);
 
   // Save LLM Config
   const handleSaveLlmConfig = (newConfig: LLMConfig) => {
@@ -555,6 +627,11 @@ export default function App() {
         setIsLlmModalOpen={setIsLlmModalOpen}
         llmConfig={llmConfig}
         stats={stats}
+        onSwitchProvider={handleSwitchProviderQuick}
+        onOpenLlmModal={handleOpenLlmModal}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
+        onSelectLanguages={handleSelectLanguages}
       />
 
       {/* Main Viewport Container */}
@@ -586,6 +663,11 @@ export default function App() {
                 isLoading={isLoading}
                 loadingMessage={loadingMessage}
                 onFinishQuiz={handleFinishQuiz}
+                llmConfig={llmConfig}
+                onSwitchProvider={handleSwitchProviderQuick}
+                onOpenLlmModal={handleOpenLlmModal}
+                targetLanguage={targetLanguage}
+                nativeLanguage={nativeLanguage}
               />
             )}
 
@@ -632,6 +714,9 @@ export default function App() {
                 onCreateDeck={handleCreateDeck}
                 onDeleteDeck={handleDeleteDeck}
                 onUpdateDeckWords={handleUpdateDeckWords}
+                onUpdateDeckDetails={handleUpdateDeckDetails}
+                targetLanguage={targetLanguage}
+                nativeLanguage={nativeLanguage}
               />
             )}
 
@@ -648,8 +733,8 @@ export default function App() {
                     description: "Targeted practice session focused exclusively on words needing improvement.",
                     words: weakWords,
                     isCustom: false,
-                    targetLanguage: "English",
-                    nativeLanguage: "Spanish"
+                    targetLanguage: targetLanguage,
+                    nativeLanguage: nativeLanguage
                   };
                   setSelectedDeckId("weak-words-practice");
                   setDecks(prev => {
@@ -675,6 +760,9 @@ export default function App() {
                 onSaveLLMConfig={handleSaveLlmConfig}
                 onOpenLlmModal={handleOpenLlmModal}
                 onReloadData={reloadAllDataFromDB}
+                targetLanguage={targetLanguage}
+                nativeLanguage={nativeLanguage}
+                onSelectLanguages={handleSelectLanguages}
               />
             )}
           </motion.div>

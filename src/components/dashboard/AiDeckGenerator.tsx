@@ -1,5 +1,7 @@
 import React from "react";
 import { Sparkles, Plus } from "lucide-react";
+import { LLMConfig, LLMProvider } from "../../types";
+import QuickAiSwitcher from "../layout/QuickAiSwitcher";
 
 interface AiDeckGeneratorProps {
   targetLanguage: string;
@@ -15,6 +17,9 @@ interface AiDeckGeneratorProps {
   isLoading: boolean;
   languages: Array<{ code: string; name: string }>;
   presetTopics: Array<{ label: string; emoji: string; topic: string }>;
+  llmConfig?: LLMConfig;
+  onSwitchProvider?: (providerId: LLMProvider, modelOverride?: string) => void;
+  onOpenLlmModal?: (providerId?: LLMProvider) => void;
 }
 
 export default function AiDeckGenerator({
@@ -30,21 +35,35 @@ export default function AiDeckGenerator({
   onPresetClick,
   isLoading,
   languages,
-  presetTopics
+  presetTopics,
+  llmConfig,
+  onSwitchProvider,
+  onOpenLlmModal
 }: AiDeckGeneratorProps) {
   return (
     <div 
       className="bg-white border border-stone-200 p-4 sm:p-8 space-y-5 sm:space-y-8 sticky top-6"
       id="ai-deck-builder"
     >
-      <div className="flex items-center gap-3 pb-4 border-b border-stone-100">
-        <div className="p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-          <Sparkles className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-100">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
+            <Sparkles className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm text-stone-950">AI Deck Generator</h3>
+            <p className="text-xs text-stone-500 font-medium mt-0.5">Instant AI vocabulary curation</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-bold text-sm text-stone-950">AI Deck Generator</h3>
-          <p className="text-xs text-stone-500 font-medium mt-0.5">Let Gemini curate unique study decks</p>
-        </div>
+
+        {llmConfig && onSwitchProvider && onOpenLlmModal && (
+          <QuickAiSwitcher 
+            llmConfig={llmConfig}
+            onSwitchProvider={onSwitchProvider}
+            onOpenLlmModal={onOpenLlmModal}
+            compact
+          />
+        )}
       </div>
 
       {/* Language Selection */}

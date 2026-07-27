@@ -42,6 +42,8 @@ import {
 } from "../db/indexedDB";
 import { syncToGist, syncFromGist } from "../services/githubGistService";
 
+import { SUPPORTED_LANGUAGES } from "../config/languages";
+
 interface SettingsViewProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
@@ -49,6 +51,9 @@ interface SettingsViewProps {
   onSaveLLMConfig?: (newConfig: LLMConfig) => void;
   onOpenLlmModal: (initialProvider?: LLMProvider) => void;
   onReloadData?: () => Promise<void>;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  onSelectLanguages?: (targetLang: string, nativeLang: string, applyToDecks?: boolean) => void;
 }
 
 export default function SettingsView({
@@ -57,13 +62,37 @@ export default function SettingsView({
   onSaveTTSConfig,
   onSaveLLMConfig,
   onOpenLlmModal,
-  onReloadData
+  onReloadData,
+  targetLanguage = "English",
+  nativeLanguage = "Spanish",
+  onSelectLanguages
 }: SettingsViewProps) {
   const [config, setConfig] = useState<TTSConfig>(ttsConfig);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testText, setTestText] = useState("Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.");
   const [isTesting, setIsTesting] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(false);
+
+  // Language Preferences State
+  const [selectedTargetLang, setSelectedTargetLang] = useState<string>(targetLanguage);
+  const [selectedNativeLang, setSelectedNativeLang] = useState<string>(nativeLanguage);
+  const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedTargetLang(targetLanguage);
+  }, [targetLanguage]);
+
+  useEffect(() => {
+    setSelectedNativeLang(nativeLanguage);
+  }, [nativeLanguage]);
+
+  const handleSaveLanguagePreferences = (applyToDecks: boolean = false) => {
+    if (onSelectLanguages) {
+      onSelectLanguages(selectedTargetLang, selectedNativeLang, applyToDecks);
+      setLangSaveSuccess(applyToDecks ? "Default languages updated and applied to all notebooks!" : "Global default language preferences updated!");
+      setTimeout(() => setLangSaveSuccess(null), 3000);
+    }
+  };
 
   // LLM Test state
   const [testingLlm, setTestingLlm] = useState(false);
@@ -444,6 +473,105 @@ export default function SettingsView({
           </div>
         </div>
       )}
+
+      {/* Language & Translation Preferences Card */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-600" />
+              Language & Explanation Preferences
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Set your global Target Language (what you want to learn) and Native/Explanation Language.
+            </p>
+          </div>
+
+          <span className="text-xs font-semibold px-2.5 py-1 bg-stone-100 border border-stone-200 text-stone-700 self-start sm:self-auto">
+            Used for AI Curations & Quizzes
+          </span>
+        </div>
+
+        {langSaveSuccess && (
+          <div className="bg-emerald-900 text-white p-3.5 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+            <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
+            <span>{langSaveSuccess}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Target Language */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              Target Language (Language to Learn)
+            </label>
+            <select
+              value={selectedTargetLang}
+              onChange={(e) => setSelectedTargetLang(e.target.value)}
+              className="w-full border border-stone-300 bg-stone-50 p-3 text-xs font-bold text-stone-900 outline-none focus:border-stone-900 cursor-pointer"
+            >
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={`target-${lang.code}`} value={lang.code}>
+                  {lang.flag} {lang.name} ({lang.nativeName})
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-stone-500 font-serif italic">
+              Vocabulary words, examples, and quizzes will be generated in this language.
+            </p>
+          </div>
+
+          {/* Native Language */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              User Native Language (Explanations & Translations)
+            </label>
+            <select
+              value={selectedNativeLang}
+              onChange={(e) => setSelectedNativeLang(e.target.value)}
+              className="w-full border border-stone-300 bg-stone-50 p-3 text-xs font-bold text-stone-900 outline-none focus:border-stone-900 cursor-pointer"
+            >
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={`native-${lang.code}`} value={lang.code}>
+                  {lang.flag} {lang.name} ({lang.nativeName})
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-stone-500 font-serif italic">
+              Definitions, example translations, and hints will be explained in this language.
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[11px] text-stone-500">
+            Current Defaults: <strong className="text-stone-900">{selectedTargetLang}</strong> (Target) → <strong className="text-stone-900">{selectedNativeLang}</strong> (Native)
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleSaveLanguagePreferences(true)}
+              className="px-3.5 py-2 border border-stone-300 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold transition-all cursor-pointer"
+              title="Batch update all existing notebook target and native languages to these selections"
+            >
+              Apply to All Existing Decks
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSaveLanguagePreferences(false)}
+              className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            >
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Save Language Defaults</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Section 1: AI Model Engine Multi-Provider Connections */}
       <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
