@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Trophy, 
@@ -187,6 +187,24 @@ export default function QuizView({
   const [autoPlayAudio, setAutoPlayAudio] = useState(ttsConfig?.autoPlayAudioInQuiz ?? false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [starFeedback, setStarFeedback] = useState<string | null>(null);
+  const questionHeaderRef = useRef<HTMLDivElement>(null);
+
+  // Auto scroll to header of new question on mobile/desktop when switching questions
+  useEffect(() => {
+    if (questions.length > 0 && !showSummary) {
+      const timer = setTimeout(() => {
+        if (questionHeaderRef.current) {
+          questionHeaderRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          const headerEl = document.getElementById("quiz-question-view") || document.getElementById("quiz-header");
+          if (headerEl) {
+            headerEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [currentQuestionIdx, showSummary, questions.length]);
 
   // Advanced speak helper using configured TTS service
   const speakText = (text: string, customLang?: string) => {
@@ -221,19 +239,86 @@ export default function QuizView({
     );
   };
 
-  // Generate the quiz when deck is available
+  // Generate or restore the quiz when deck is available
   useEffect(() => {
     if (!deck || deck.words.length < 2) return;
-    const generated = generateQuizQuestions(deck);
-    setQuestions(generated);
-    setCurrentQuestionIdx(0);
-    setSelectedAnswer(null);
-    setTypedAnswer("");
-    setIsAnswered(false);
-    setScore(0);
-    setShowSummary(false);
-    setWrongAnswersList([]);
+
+    let restored = false;
+    try {
+      const raw = localStorage.getItem("vocab_learner_active_quiz_session");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          parsed.deckId === deck.id &&
+          Array.isArray(parsed.questions) &&
+          parsed.questions.length > 0 &&
+          typeof parsed.currentQuestionIdx === "number" &&
+          parsed.currentQuestionIdx < parsed.questions.length
+        ) {
+          setQuestions(parsed.questions);
+          setCurrentQuestionIdx(parsed.currentQuestionIdx);
+          setScore(parsed.score || 0);
+          setWrongAnswersList(parsed.wrongAnswersList || []);
+          setSelectedAnswer(null);
+          setTypedAnswer("");
+          setIsAnswered(false);
+          setShowSummary(false);
+          restored = true;
+        }
+      }
+    } catch (e) {
+      console.error("Error reading saved quiz session", e);
+    }
+
+    if (!restored) {
+      const generated = generateQuizQuestions(deck);
+      setQuestions(generated);
+      setCurrentQuestionIdx(0);
+      setSelectedAnswer(null);
+      setTypedAnswer("");
+      setIsAnswered(false);
+      setScore(0);
+      setShowSummary(false);
+      setWrongAnswersList([]);
+    }
   }, [deck]);
+
+  // Auto-save active quiz session to localStorage on question/score progress
+  useEffect(() => {
+    if (deck && questions.length > 0 && !showSummary) {
+      try {
+        const session = {
+          deckId: deck.id,
+          deckName: deck.name,
+          questions,
+          currentQuestionIdx,
+          score,
+          wrongAnswersList,
+          savedAt: new Date().toISOString()
+        };
+        localStorage.setItem("vocab_learner_active_quiz_session", JSON.stringify(session));
+      } catch (e) {
+        console.error("Failed to auto-save active quiz session", e);
+      }
+    }
+  }, [deck, questions, currentQuestionIdx, score, wrongAnswersList, showSummary]);
+
+  // Start fresh handler
+  const handleStartFresh = () => {
+    localStorage.removeItem("vocab_learner_active_quiz_session");
+    if (deck) {
+      const generated = generateQuizQuestions(deck);
+      setQuestions(generated);
+      setCurrentQuestionIdx(0);
+      setScore(0);
+      setWrongAnswersList([]);
+      setSelectedAnswer(null);
+      setTypedAnswer("");
+      setIsAnswered(false);
+      setShowSummary(false);
+    }
+  };
 
   // Auto-read question or spoken word when switching questions
   useEffect(() => {
@@ -335,6 +420,11 @@ export default function QuizView({
       setCurrentQuestionIdx(prev => prev + 1);
     } else {
       setShowSummary(true);
+      try {
+        localStorage.removeItem("vocab_learner_active_quiz_session");
+      } catch (e) {
+        console.error("Error removing session storage", e);
+      }
       const incorrectWordIds = wrongAnswersList.map(item => item.question?.wordId).filter(Boolean) as string[];
       const correctWordIds = questions
         .filter(q => q?.wordId && !incorrectWordIds.includes(q.wordId))
@@ -721,7 +811,7 @@ export default function QuizView({
   const wordDetails = deck?.words?.find(w => w.id === currentQuestion?.wordId);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6" id="quiz-question-view">
+    <div className="max-w-2xl mx-auto space-y-6 scroll-mt-16 sm:scroll-mt-20" id="quiz-question-view" ref={questionHeaderRef}>
       {/* Quiz Progress header */}
       <div className="space-y-3" id="quiz-header">
         {/* Top Navigation & Progress */}
@@ -733,9 +823,19 @@ export default function QuizView({
             <ArrowLeft className="w-3 h-3" /> Back to Study
           </button>
           
-          <span className="text-xs font-mono font-bold text-stone-900 bg-stone-50 border border-stone-200 px-2.5 py-1 rounded-none shrink-0">
-            Question {currentQuestionIdx + 1} of {questions.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleStartFresh}
+              className="inline-flex items-center gap-1 text-[10px] font-bold text-stone-400 hover:text-red-700 uppercase tracking-wider transition-colors cursor-pointer"
+              title="Discard current progress and start a fresh quiz"
+              id="btn-quiz-start-fresh"
+            >
+              <RotateCcw className="w-3 h-3" /> Start Fresh
+            </button>
+            <span className="text-xs font-mono font-bold text-stone-900 bg-stone-50 border border-stone-200 px-2.5 py-1 rounded-none shrink-0">
+              Question {currentQuestionIdx + 1} of {questions.length}
+            </span>
+          </div>
         </div>
 
         {/* Title & Score & Voice Bar */}

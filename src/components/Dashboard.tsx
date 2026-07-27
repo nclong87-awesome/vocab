@@ -4,13 +4,11 @@ import { Sparkles, Plus, Compass } from "lucide-react";
 import { Deck, LLMConfig, LLMProvider, UserStats } from "../types";
 import { getSettingFromDB, saveSettingToDB } from "../db/indexedDB";
 import { ConfirmModal } from "./ConfirmModal";
-import { SUPPORTED_LANGUAGES } from "../config/languages";
 
 import TodayFocusHero from "./dashboard/TodayFocusHero";
 import StatsGrid from "./dashboard/StatsGrid";
 import AiAnalyticsBanner from "./dashboard/AiAnalyticsBanner";
 import DeckCard from "./dashboard/DeckCard";
-import AiDeckGenerator from "./dashboard/AiDeckGenerator";
 
 interface DashboardProps {
   stats: UserStats;
@@ -18,7 +16,7 @@ interface DashboardProps {
   todayPracticeDeck: Deck;
   onSelectDeck: (deckId: string) => void;
   onSelectTab: (tab: "learn" | "quiz" | "decks" | "analytics") => void;
-  onGenerateDeck: (topic: string, targetLanguage: string, nativeLanguage: string, quantity: number) => Promise<void>;
+  onGenerateDeck?: (topic: string, targetLanguage: string, nativeLanguage: string, quantity: number) => Promise<void>;
   onDeleteDeck: (deckId: string) => void;
   isLoading: boolean;
   loadingMessage: string;
@@ -30,49 +28,19 @@ interface DashboardProps {
   nativeLanguage?: string;
 }
 
-const PRESET_TOPICS = [
-  { label: "Travel & Airport", emoji: "✈️", topic: "Airport transit, lodging, exploring cities, and dining out" },
-  { label: "Business English", emoji: "💼", topic: "Professional business vocabulary, corporate meetings, negotiations, and leadership" },
-  { label: "Tech & Artificial Intelligence", emoji: "🤖", topic: "Modern artificial intelligence, coding, technology, web dev, and cybersecurity" },
-  { label: "Everyday Slang & Idioms", emoji: "💬", topic: "Informal street expressions, idioms, and causal slang used by native speakers" },
-  { label: "Culinary & Dining", emoji: "🍳", topic: "Gourmet terms, cooking methods, kitchen tools, and restaurant interactions" },
-  { label: "Academic / TOEFL High-Scoring", emoji: "🎓", topic: "Advanced vocabulary for university lectures, TOEFL preparation, and research" },
-];
-
-const LANGUAGES = SUPPORTED_LANGUAGES.map(l => ({
-  code: l.code,
-  name: `${l.flag} ${l.name} (${l.nativeName})`
-}));
-
 export default function Dashboard({
   stats,
   decks,
   todayPracticeDeck,
   onSelectDeck,
   onSelectTab,
-  onGenerateDeck,
   onDeleteDeck,
   isLoading,
   loadingMessage,
   onFinishQuiz,
-  llmConfig,
-  onSwitchProvider,
-  onOpenLlmModal,
-  targetLanguage: initialTargetLang = "English",
-  nativeLanguage: initialNativeLang = "Spanish",
+  targetLanguage = "English",
+  nativeLanguage = "Spanish",
 }: DashboardProps) {
-  const [customTopic, setCustomTopic] = useState("");
-  const [targetLanguage, setTargetLanguage] = useState(initialTargetLang);
-  const [nativeLanguage, setNativeLanguage] = useState(initialNativeLang);
-
-  useEffect(() => {
-    if (initialTargetLang) setTargetLanguage(initialTargetLang);
-  }, [initialTargetLang]);
-
-  useEffect(() => {
-    if (initialNativeLang) setNativeLanguage(initialNativeLang);
-  }, [initialNativeLang]);
-  const [quantity, setQuantity] = useState(8);
   const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Today's practice quiz states
@@ -99,18 +67,6 @@ export default function Dashboard({
     setIsQuizActive(false);
     setSessionScore({ score, total });
     onFinishQuiz(score, total, correctWordIds, incorrectWordIds);
-  };
-
-  const handleSubmitCustomTopic = (e: React.FormEvent) => {
-    e.preventDefault();
-    const topic = customTopic.trim();
-    if (!topic) return;
-    onGenerateDeck(topic, targetLanguage, nativeLanguage, quantity);
-    setCustomTopic("");
-  };
-
-  const handlePresetClick = (topic: string) => {
-    onGenerateDeck(topic, targetLanguage, nativeLanguage, quantity);
   };
 
   // Helper to check study calendar history
@@ -180,6 +136,10 @@ export default function Dashboard({
         todayPracticeDeck={todayPracticeDeck}
         onDailyQuizFinish={handleDailyQuizFinish}
         streakCount={stats.streak.count}
+        onResumeDeckQuiz={(deckId) => {
+          onSelectDeck(deckId);
+          onSelectTab("quiz");
+        }}
       />
 
       {/* Stats Blocks */}
@@ -188,62 +148,38 @@ export default function Dashboard({
       {/* AI Performance & Weak Words Banner Callout */}
       <AiAnalyticsBanner onSelectTab={onSelectTab} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-        {/* Decks Column */}
-        <div className="lg:col-span-7 space-y-6" id="dashboard-left-column">
-          <div className="flex justify-between items-center border-b border-stone-200 pb-4">
-            <h2 className="text-sm font-bold text-stone-950 flex items-center gap-2">
-              Collection Decks
-            </h2>
-            <button 
-              onClick={() => onSelectTab("decks")} 
-              className="text-xs font-semibold text-stone-500 hover:text-stone-950 flex items-center gap-1 cursor-pointer"
-            >
-              Add Custom Deck <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-4 sm:space-y-6">
-            {decks.length === 0 ? (
-              <div className="bg-white border border-stone-200 p-6 sm:p-12 text-center text-stone-500">
-                <Compass className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-                <p className="font-bold text-stone-800 text-xs">No decks available</p>
-                <p className="text-xs text-stone-400 mt-2 font-serif italic">"Design custom learning lists on the right panel to begin."</p>
-              </div>
-            ) : (
-              decks.map((deck) => (
-                <DeckCard
-                  key={deck.id}
-                  deck={deck}
-                  onSelectDeck={onSelectDeck}
-                  onSelectTab={onSelectTab}
-                  setDeckToDelete={setDeckToDelete}
-                />
-              ))
-            )}
-          </div>
+      {/* Full Width Decks Collection Section */}
+      <div className="space-y-6" id="dashboard-decks-section">
+        <div className="flex justify-between items-center border-b border-stone-200 pb-4">
+          <h2 className="text-sm font-bold text-stone-950 flex items-center gap-2">
+            Collection Decks
+          </h2>
+          <button 
+            onClick={() => onSelectTab("decks")} 
+            className="text-xs font-semibold text-stone-500 hover:text-stone-950 flex items-center gap-1 cursor-pointer"
+          >
+            Add Custom Deck <Plus className="w-3.5 h-3.5" />
+          </button>
         </div>
 
-        {/* AI Generator Column */}
-        <div className="lg:col-span-5" id="dashboard-right-column">
-          <AiDeckGenerator
-            targetLanguage={targetLanguage}
-            setTargetLanguage={setTargetLanguage}
-            nativeLanguage={nativeLanguage}
-            setNativeLanguage={setNativeLanguage}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            customTopic={customTopic}
-            setCustomTopic={setCustomTopic}
-            onSubmitCustomTopic={handleSubmitCustomTopic}
-            onPresetClick={handlePresetClick}
-            isLoading={isLoading}
-            languages={LANGUAGES}
-            presetTopics={PRESET_TOPICS}
-            llmConfig={llmConfig}
-            onSwitchProvider={onSwitchProvider}
-            onOpenLlmModal={onOpenLlmModal}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {decks.length === 0 ? (
+            <div className="col-span-full bg-white border border-stone-200 p-6 sm:p-12 text-center text-stone-500">
+              <Compass className="w-12 h-12 text-stone-300 mx-auto mb-4" />
+              <p className="font-bold text-stone-800 text-xs">No decks available</p>
+              <p className="text-xs text-stone-400 mt-2 font-serif italic">"Create custom notebooks in Collection view to begin."</p>
+            </div>
+          ) : (
+            decks.map((deck) => (
+              <DeckCard
+                key={deck.id}
+                deck={deck}
+                onSelectDeck={onSelectDeck}
+                onSelectTab={onSelectTab}
+                setDeckToDelete={setDeckToDelete}
+              />
+            ))
+          )}
         </div>
       </div>
 

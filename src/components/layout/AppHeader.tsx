@@ -55,7 +55,6 @@ export default function AppHeader({
             <div>
               <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-0.5 sm:gap-1.5">
                 Vocab
-                <span className="text-[7px] sm:text-[9px] border border-stone-900 text-stone-900 font-semibold px-0.5 py-0 sm:px-1.5 sm:py-0.5 rounded-none tracking-normal">Pro</span>
               </h1>
               <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden xs:block">Clean Learning Coach</p>
             </div>
