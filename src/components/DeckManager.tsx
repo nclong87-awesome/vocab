@@ -1,1522 +1,649 @@
 import React, { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { 
+  BookOpen, 
   Plus, 
   Search, 
   Sparkles, 
+  Wand2, 
   Trash2, 
-  Star, 
-  CheckCircle, 
-  Layers, 
-  X,
-  Volume2,
-  BookOpen,
-  Loader2,
-  AlertCircle,
-  Edit3,
-  ChevronDown,
-  ChevronUp,
-  Lightbulb,
-  Wand2,
-  LayoutGrid,
-  List,
-  PanelLeftClose,
-  PanelLeft,
-  Maximize2,
-  Minimize2,
-  RefreshCw
+  PanelLeft, 
+  Grid, 
+  List, 
+  Globe2
 } from "lucide-react";
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { autofillWordService, generateRandomWordsService } from "../services/llmClientService";
 import { ConfirmModal } from "./ConfirmModal";
 
+import NotebookSidebar from "./deckManager/NotebookSidebar";
+import WordCard from "./deckManager/WordCard";
+import WordRow from "./deckManager/WordRow";
+import AddWordModal from "./deckManager/AddWordModal";
+import CreateNotebookModal from "./deckManager/CreateNotebookModal";
+import RandomWordsModal from "./deckManager/RandomWordsModal";
+
 interface DeckManagerProps {
   decks: Deck[];
   selectedDeckId: string | null;
-  llmConfig?: LLMConfig;
-  ttsConfig?: TTSConfig;
   onSelectDeck: (deckId: string) => void;
-  onAddCustomWord: (deckId: string, wordData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">) => void;
-  onAddBatchWords?: (deckId: string, wordsData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">[]) => void;
-  onUpdateWord?: (deckId: string, wordId: string, updatedFields: Partial<Word>) => void;
+  onAddWord: (
+    deckId: string, 
+    word: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
+      createdAt?: string;
+      lastReviewed?: string | null;
+    }
+  ) => void;
   onDeleteWord: (deckId: string, wordId: string) => void;
-  onDeleteDeck?: (deckId: string) => void;
   onToggleStar: (wordId: string) => void;
   onToggleLearned: (wordId: string) => void;
-  onAddCustomDeck: (name: string, description: string, targetLanguage: string, nativeLanguage: string) => void;
-  onGenerateDeck?: (topic: string, targetLanguage: string, nativeLanguage: string, quantity: number) => Promise<void>;
+  onCreateDeck: (deck: Omit<Deck, "id">) => void;
+  onDeleteDeck?: (deckId: string) => void;
+  onUpdateDeckWords?: (deckId: string, updatedWords: Word[]) => void;
+  llmConfig?: LLMConfig;
+  ttsConfig?: TTSConfig;
 }
 
 export default function DeckManager({
   decks,
   selectedDeckId,
-  llmConfig,
-  ttsConfig = DEFAULT_TTS_CONFIG,
   onSelectDeck,
-  onAddCustomWord,
-  onAddBatchWords,
-  onUpdateWord,
+  onAddWord,
   onDeleteWord,
-  onDeleteDeck,
   onToggleStar,
   onToggleLearned,
-  onAddCustomDeck,
-  onGenerateDeck
+  onCreateDeck,
+  onDeleteDeck,
+  onUpdateDeckWords,
+  llmConfig,
+  ttsConfig = DEFAULT_TTS_CONFIG,
 }: DeckManagerProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "starred" | "mastered" | "learning">("all");
-  const [viewMode, setViewMode] = useState<"grid" | "row">("grid");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [showAddWordModal, setShowAddWordModal] = useState(false);
-  const [showAddDeckModal, setShowAddDeckModal] = useState(false);
-  const [showRandomWordsModal, setShowRandomWordsModal] = useState(false);
-  const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateDeckModalOpen, setIsCreateDeckModalOpen] = useState(false);
+  const [isRandomWordsModalOpen, setIsRandomWordsModalOpen] = useState(false);
 
-  // Random Words Generator State
-  const [randomWordsCount, setRandomWordsCount] = useState<number>(5);
-  const [randomWordsTopicRefinement, setRandomWordsTopicRefinement] = useState("");
+  // Form input states for adding a single word
+  const [wordInput, setWordInput] = useState("");
+  const [translationInput, setTranslationInput] = useState("");
+  const [definitionInput, setDefinitionInput] = useState("");
+  const [partOfSpeechInput, setPartOfSpeechInput] = useState("noun");
+  const [pronunciationInput, setPronunciationInput] = useState("");
+  const [exampleInput, setExampleInput] = useState("");
+  const [exampleTranslationInput, setExampleTranslationInput] = useState("");
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [autofilling, setAutofilling] = useState(false);
+
+  // Form input states for creating a whole notebook/deck
+  const [newDeckName, setNewDeckName] = useState("");
+  const [newDeckDesc, setNewDeckDesc] = useState("");
+  const [newDeckTargetLang, setNewDeckTargetLang] = useState("English");
+  const [newDeckNativeLang, setNewDeckNativeLang] = useState("Spanish");
+  const [isAiGeneratingDeck, setIsAiGeneratingDeck] = useState(false);
+
+  // Form input states for generating N random words
+  const [randomCount, setRandomCount] = useState(5);
+  const [randomWordsTopic, setRandomWordsTopic] = useState("");
   const [isGeneratingRandomWords, setIsGeneratingRandomWords] = useState(false);
-  const [randomWordsError, setRandomWordsError] = useState("");
-  const [randomWordsSuccessMsg, setRandomWordsSuccessMsg] = useState("");
 
-  // Word Re-generation State
+  // Re-generate individual word loading states
   const [regeneratingWordId, setRegeneratingWordId] = useState<string | null>(null);
   const [regeneratedSuccessWordId, setRegeneratedSuccessWordId] = useState<string | null>(null);
+
+  // UI layout and search states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
 
+  // Handle image load errors gracefully
   const handleImageError = (wordId: string) => {
-    setBrokenImageIds(prev => new Set(prev).add(wordId));
+    setBrokenImageIds(prev => {
+      const next = new Set(prev);
+      next.add(wordId);
+      return next;
+    });
   };
 
+  const activeDeck = useMemo(() => {
+    if (!selectedDeckId) return decks[0] || null;
+    return decks.find((d) => d.id === selectedDeckId) || decks[0] || null;
+  }, [selectedDeckId, decks]);
+
+  const activeDeckId = activeDeck?.id || "";
+
+  // Speak word TTS
+  const speakWord = (text: string) => {
+    const customLang = activeDeck ? activeDeck.targetLanguage : "en-US";
+    speakTextService(text, ttsConfig, llmConfig, customLang);
+  };
+
+  // Re-generate details for an existing word using AI
   const handleRegenerateWord = async (word: Word) => {
-    if (!activeDeck || !onUpdateWord) return;
+    if (!activeDeck) return;
     setRegeneratingWordId(word.id);
     setRegeneratedSuccessWordId(null);
 
     try {
-      const result = await autofillWordService({
+      const details = await autofillWordService({
         word: word.word,
         targetLanguage: activeDeck.targetLanguage,
         nativeLanguage: activeDeck.nativeLanguage,
+        notebookName: activeDeck.name,
+        notebookDescription: activeDeck.description,
         llmConfig
       });
 
-      const newImageUrl = result.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(word.word)}?width=800&height=600&nologo=true&seed=${Date.now()}`;
+      if (onUpdateDeckWords) {
+        const updatedWords = activeDeck.words.map(w => {
+          if (w.id === word.id) {
+            return {
+              ...w,
+              translation: details.translation || w.translation,
+              definition: details.definition || w.definition,
+              partOfSpeech: details.partOfSpeech || w.partOfSpeech,
+              pronunciation: details.pronunciation || w.pronunciation,
+              example: details.example || w.example,
+              exampleTranslation: details.exampleTranslation || w.exampleTranslation,
+              imageUrl: details.imageUrl || w.imageUrl
+            };
+          }
+          return w;
+        });
 
-      onUpdateWord(activeDeck.id, word.id, {
-        pronunciation: result.pronunciation?.trim() || word.pronunciation,
-        partOfSpeech: result.partOfSpeech || word.partOfSpeech,
-        definition: result.definition?.trim() || word.definition,
-        translation: result.translation?.trim() || word.translation,
-        example: result.example?.trim() || word.example,
-        exampleTranslation: result.exampleTranslation?.trim() || word.exampleTranslation,
-        imageUrl: newImageUrl
-      });
+        onUpdateDeckWords(activeDeck.id, updatedWords);
+        
+        // Remove from broken images set if new image generated
+        if (details.imageUrl) {
+          setBrokenImageIds(prev => {
+            const next = new Set(prev);
+            next.delete(word.id);
+            return next;
+          });
+        }
 
-      setBrokenImageIds(prev => {
-        const next = new Set(prev);
-        next.delete(word.id);
-        return next;
-      });
-
-      setRegeneratedSuccessWordId(word.id);
-      setTimeout(() => {
-        setRegeneratedSuccessWordId(null);
-      }, 2500);
+        setRegeneratedSuccessWordId(word.id);
+        setTimeout(() => setRegeneratedSuccessWordId(null), 4000);
+      }
     } catch (err) {
-      console.error("Failed to re-generate AI details for word:", err);
-      const freshImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(word.word)}?width=800&height=600&nologo=true&seed=${Date.now()}`;
-      onUpdateWord(activeDeck.id, word.id, {
-        imageUrl: freshImage
-      });
-      setBrokenImageIds(prev => {
-        const next = new Set(prev);
-        next.delete(word.id);
-        return next;
-      });
-      setRegeneratedSuccessWordId(word.id);
-      setTimeout(() => {
-        setRegeneratedSuccessWordId(null);
-      }, 2500);
+      console.error("Failed to re-generate word details:", err);
+      alert("Unable to re-generate word details. Please verify your AI Key.");
     } finally {
       setRegeneratingWordId(null);
     }
   };
 
-  // New Word Form State
-  const [newWord, setNewWord] = useState("");
-  const [newPronunciation, setNewPronunciation] = useState("");
-  const [newPartOfSpeech, setNewPartOfSpeech] = useState("noun");
-  const [newDefinition, setNewDefinition] = useState("");
-  const [newTranslation, setNewTranslation] = useState("");
-  const [newExample, setNewExample] = useState("");
-  const [newExampleTranslation, setNewExampleTranslation] = useState("");
-  const [newImageUrl, setNewImageUrl] = useState("");
-  const [showManualFields, setShowManualFields] = useState(false);
-  
-  // New Deck Form State (Manual)
-  const [newDeckName, setNewDeckName] = useState("");
-  const [newDeckDesc, setNewDeckDesc] = useState("");
-  const [newDeckTarget, setNewDeckTarget] = useState(() => {
-    return localStorage.getItem("vocab_learner_target_lang") || "English";
-  });
-  const [newDeckNative, setNewDeckNative] = useState(() => {
-    return localStorage.getItem("vocab_learner_native_lang") || "Spanish";
-  });
-
-  // AI Deck Form State
-  const [deckTopicInput, setDeckTopicInput] = useState("");
-  const [deckQuantity, setDeckQuantity] = useState<number>(8);
-  const [isManualCreateMode, setIsManualCreateMode] = useState(false);
-  const [isGeneratingDeck, setIsGeneratingDeck] = useState(false);
-  const [deckGenError, setDeckGenError] = useState("");
-
-  const POPULAR_TOPICS = [
-    { label: "Chess ♟️", value: "Chess" },
-    { label: "Kitchen & Cooking 🍳", value: "Cooking & Kitchen" },
-    { label: "Airport & Travel ✈️", value: "Airport & Travel" },
-    { label: "Business & Career 💼", value: "Business & Work" },
-    { label: "Medical Terms 🩺", value: "Medical & Health" },
-    { label: "Software & Coding 💻", value: "Software & Technology" },
-  ];
-
-  // AI Autofill Status
-  const [isAutofilling, setIsAutofilling] = useState(false);
-  const [autofillError, setAutofillError] = useState("");
-
-  const activeDeck = useMemo(() => {
-    return decks.find(d => d.id === selectedDeckId) || decks[0] || null;
-  }, [decks, selectedDeckId]);
-
-  // Search and filter words within the active deck
-  const filteredWords = useMemo(() => {
-    if (!activeDeck) return [];
-    const query = searchTerm.trim().toLowerCase();
-    
-    return activeDeck.words.filter(w => {
-      const matchesSearch = !query || 
-        w.word.toLowerCase().includes(query) ||
-        (w.definition && w.definition.toLowerCase().includes(query)) ||
-        (w.translation && w.translation.toLowerCase().includes(query));
-      
-      if (activeFilter === "starred") return matchesSearch && w.starred;
-      if (activeFilter === "mastered") return matchesSearch && w.learned;
-      if (activeFilter === "learning") return matchesSearch && !w.learned;
-      return matchesSearch;
-    });
-  }, [activeDeck, searchTerm, activeFilter]);
-
-  // Trigger Gemini AI details autofill
-  const handleAIAutofill = async (overrideWord?: string) => {
-    const wordToFill = (overrideWord !== undefined ? overrideWord : newWord).trim();
-    if (!wordToFill) {
-      setAutofillError("Please enter a word first");
-      return;
-    }
-
-    if (overrideWord !== undefined) {
-      setNewWord(overrideWord);
-    }
-
-    setIsAutofilling(true);
-    setAutofillError("");
-
+  // AI Auto-Fill for the Add Word form
+  const handleAiAutofill = async () => {
+    if (!wordInput.trim() || !activeDeck) return;
+    setAutofilling(true);
     try {
-      const userNativeLang = activeDeck?.nativeLanguage || localStorage.getItem("vocab_learner_native_lang") || "English";
-      const userTargetLang = activeDeck?.targetLanguage || localStorage.getItem("vocab_learner_target_lang") || "Spanish";
-
-      const data = await autofillWordService({
-        word: wordToFill,
-        targetLanguage: userTargetLang,
-        nativeLanguage: userNativeLang,
+      const details = await autofillWordService({
+        word: wordInput.trim(),
+        targetLanguage: activeDeck.targetLanguage,
+        nativeLanguage: activeDeck.nativeLanguage,
+        notebookName: activeDeck.name,
+        notebookDescription: activeDeck.description,
         llmConfig
       });
-      setNewPronunciation(data.pronunciation || "");
-      setNewPartOfSpeech(data.partOfSpeech || "noun");
-      setNewDefinition(data.definition || "");
-      setNewTranslation(data.translation || "");
-      setNewExample(data.example || "");
-      setNewExampleTranslation(data.exampleTranslation || "");
-      setNewImageUrl(data.imageUrl || `https://image.pollinations.ai/prompt/${encodeURIComponent(wordToFill)}?width=800&height=600&nologo=true`);
-    } catch (err: any) {
-      console.error(err);
-      setAutofillError(err.message || "Autofill failed. Check internet/secrets.");
+
+      if (details.translation) setTranslationInput(details.translation);
+      if (details.definition) setDefinitionInput(details.definition);
+      if (details.partOfSpeech) setPartOfSpeechInput(details.partOfSpeech);
+      if (details.pronunciation) setPronunciationInput(details.pronunciation);
+      if (details.example) setExampleInput(details.example);
+      if (details.exampleTranslation) setExampleTranslationInput(details.exampleTranslation);
+      if (details.imageUrl) setImageUrlInput(details.imageUrl);
+    } catch (err) {
+      console.error("Failed to autofill word:", err);
+      alert("AI Auto-fill failed. Please verify your LLM Key in Settings.");
     } finally {
-      setIsAutofilling(false);
+      setAutofilling(false);
     }
   };
 
-  const handleAddWordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeDeck || !newWord.trim()) return;
+  // AI Suggest Unlearned Word for Add Word form
+  const handleAiSuggestRelatedWord = async () => {
+    if (!activeDeck) return;
+    setAutofilling(true);
+    try {
+      const existingWords = activeDeck.words.map(w => w.word);
+      const res = await generateRandomWordsService({
+        topic: activeDeck.name + " " + (activeDeck.description || ""),
+        targetLanguage: activeDeck.targetLanguage,
+        nativeLanguage: activeDeck.nativeLanguage,
+        count: 5,
+        existingWords,
+        llmConfig
+      });
 
-    // If definition or translation is empty, trigger AI autofill first
-    if (!newDefinition.trim() || !newTranslation.trim()) {
-      await handleAIAutofill();
-      return;
+      const generatedList = res.words || [];
+      const freshWordObj = generatedList.find((item: any) => !existingWords.includes(item.word)) || generatedList[0];
+
+      if (freshWordObj) {
+        setWordInput(freshWordObj.word);
+        setTranslationInput(freshWordObj.translation);
+        setDefinitionInput(freshWordObj.definition);
+        setPartOfSpeechInput(freshWordObj.partOfSpeech || "noun");
+        setPronunciationInput(freshWordObj.pronunciation || "");
+        setExampleInput(freshWordObj.example || "");
+        setExampleTranslationInput(freshWordObj.exampleTranslation || "");
+        setImageUrlInput(freshWordObj.imageUrl || "");
+      }
+    } catch (err) {
+      console.error("AI word suggestion failed:", err);
+    } finally {
+      setAutofilling(false);
     }
+  };
 
-    onAddCustomWord(activeDeck.id, {
-      word: newWord.trim(),
-      pronunciation: newPronunciation.trim() || "/.../",
-      partOfSpeech: newPartOfSpeech,
-      definition: newDefinition.trim(),
-      translation: newTranslation.trim(),
-      example: newExample.trim() || "No example provided.",
-      exampleTranslation: newExampleTranslation.trim() || "No translation provided.",
-      imageUrl: newImageUrl.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(newWord.trim())}?width=800&height=600&nologo=true`
+  // Handle Add Word Form Submit
+  const handleAddWordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wordInput.trim() || !translationInput.trim() || !activeDeckId) return;
+
+    onAddWord(activeDeckId, {
+      word: wordInput.trim(),
+      translation: translationInput.trim(),
+      definition: definitionInput.trim(),
+      partOfSpeech: partOfSpeechInput,
+      pronunciation: pronunciationInput.trim() || undefined,
+      example: exampleInput.trim() || undefined,
+      exampleTranslation: exampleTranslationInput.trim() || undefined,
+      imageUrl: imageUrlInput.trim() || undefined,
+      starred: false
     });
 
-    // Reset Form
-    setNewWord("");
-    setNewPronunciation("");
-    setNewPartOfSpeech("noun");
-    setNewDefinition("");
-    setNewTranslation("");
-    setNewExample("");
-    setNewExampleTranslation("");
-    setNewImageUrl("");
-    setShowManualFields(false);
-    setShowAddWordModal(false);
+    // Reset inputs
+    setWordInput("");
+    setTranslationInput("");
+    setDefinitionInput("");
+    setPartOfSpeechInput("noun");
+    setPronunciationInput("");
+    setExampleInput("");
+    setExampleTranslationInput("");
+    setImageUrlInput("");
+    setIsModalOpen(false);
   };
 
-  const handleAddDeckSubmit = (e: React.FormEvent) => {
+  // Handle Create Deck Form Submit
+  const handleCreateDeckSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeckName.trim()) return;
 
-    onAddCustomDeck(
-      newDeckName.trim(),
-      newDeckDesc.trim() || "A custom vocabulary notebook.",
-      newDeckTarget,
-      newDeckNative
-    );
+    onCreateDeck({
+      name: newDeckName.trim(),
+      description: newDeckDesc.trim() || "Custom user notebook",
+      targetLanguage: newDeckTargetLang,
+      nativeLanguage: newDeckNativeLang,
+      words: [],
+      isCustom: true
+    });
 
     setNewDeckName("");
     setNewDeckDesc("");
-    setShowAddDeckModal(false);
+    setIsCreateDeckModalOpen(false);
   };
 
-  const handleAIGenerateDeckSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const topic = deckTopicInput.trim();
-    if (!topic) return;
+  // Generate whole new deck with AI
+  const handleAiGenerateWholeDeck = async () => {
+    if (!newDeckName.trim()) return;
+    setIsAiGeneratingDeck(true);
+    try {
+      const res = await generateRandomWordsService({
+        topic: newDeckName.trim(),
+        targetLanguage: newDeckTargetLang,
+        nativeLanguage: newDeckNativeLang,
+        count: 8,
+        llmConfig
+      });
 
-    if (onGenerateDeck) {
-      setIsGeneratingDeck(true);
-      setDeckGenError("");
-      try {
-        await onGenerateDeck(
-          topic,
-          newDeckTarget,
-          newDeckNative,
-          deckQuantity
-        );
-        setDeckTopicInput("");
-        setShowAddDeckModal(false);
-      } catch (err: any) {
-        console.error(err);
-        setDeckGenError(err.message || "Failed to generate notebook with AI.");
-      } finally {
-        setIsGeneratingDeck(false);
-      }
-    } else {
-      onAddCustomDeck(
-        topic,
-        `AI generated notebook for ${topic}.`,
-        newDeckTarget,
-        newDeckNative
-      );
-      setDeckTopicInput("");
-      setShowAddDeckModal(false);
+      const generatedList = res.words || [];
+
+      const wordsWithIds: Word[] = generatedList.map((item: any, idx: number) => ({
+        id: `gen-${Date.now()}-${idx}`,
+        word: item.word,
+        translation: item.translation,
+        definition: item.definition,
+        partOfSpeech: item.partOfSpeech || "noun",
+        pronunciation: item.pronunciation,
+        example: item.example,
+        exampleTranslation: item.exampleTranslation,
+        imageUrl: item.imageUrl,
+        starred: false,
+        learned: false,
+        strength: 0,
+        createdAt: new Date().toISOString(),
+        lastReviewed: null
+      }));
+
+      onCreateDeck({
+        name: newDeckName.trim(),
+        description: newDeckDesc.trim() || `AI generated notebook on ${newDeckName.trim()}`,
+        targetLanguage: newDeckTargetLang,
+        nativeLanguage: newDeckNativeLang,
+        words: wordsWithIds,
+        isCustom: true
+      });
+
+      setNewDeckName("");
+      setNewDeckDesc("");
+      setIsCreateDeckModalOpen(false);
+    } catch (err) {
+      console.error("AI Deck Generation failed:", err);
+      alert("Unable to generate deck. Please verify your LLM Key.");
+    } finally {
+      setIsAiGeneratingDeck(false);
     }
   };
 
+  // Generate N Random Words into existing deck
   const handleGenerateRandomWordsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeDeck) return;
 
     setIsGeneratingRandomWords(true);
-    setRandomWordsError("");
-    setRandomWordsSuccessMsg("");
-
     try {
-      const existingWordStrings = activeDeck.words.map(w => w.word.trim().toLowerCase());
-      const topicToUse = randomWordsTopicRefinement.trim() || activeDeck.name;
-
-      const result = await generateRandomWordsService({
-        topic: topicToUse,
+      const existingWords = activeDeck.words.map(w => w.word);
+      const res = await generateRandomWordsService({
+        topic: (randomWordsTopic.trim() || activeDeck.name) + " " + activeDeck.description,
         targetLanguage: activeDeck.targetLanguage,
         nativeLanguage: activeDeck.nativeLanguage,
-        count: randomWordsCount,
-        existingWords: existingWordStrings,
+        count: randomCount + 2,
+        existingWords,
         llmConfig
       });
 
-      const rawWords: any[] = result?.words || [];
-      
-      // Deduplicate words against existing notebook list
-      const existingSet = new Set(existingWordStrings);
-      const uniqueNewWords = rawWords.filter((w: any) => {
-        if (!w || !w.word) return false;
-        const normalized = w.word.trim().toLowerCase();
-        if (existingSet.has(normalized)) return false;
-        existingSet.add(normalized);
-        return true;
+      const generatedList = res.words || [];
+
+      const newUniqueWords = generatedList.filter((item: any) => !existingWords.includes(item.word)).slice(0, randomCount);
+
+      newUniqueWords.forEach((item: any) => {
+        onAddWord(activeDeck.id, {
+          word: item.word,
+          translation: item.translation,
+          definition: item.definition,
+          partOfSpeech: item.partOfSpeech || "noun",
+          pronunciation: item.pronunciation,
+          example: item.example,
+          exampleTranslation: item.exampleTranslation,
+          imageUrl: item.imageUrl,
+          starred: false
+        });
       });
 
-      if (uniqueNewWords.length === 0) {
-        setRandomWordsError("The generated words were all already in this notebook! Try refining the topic or choosing a different focus.");
-        setIsGeneratingRandomWords(false);
-        return;
-      }
-
-      const mappedWords = uniqueNewWords.map((w: any) => ({
-        word: w.word.trim(),
-        pronunciation: w.pronunciation?.trim() || "/.../",
-        partOfSpeech: w.partOfSpeech || "noun",
-        definition: w.definition?.trim() || "No definition provided.",
-        translation: w.translation?.trim() || "No translation provided.",
-        example: w.example?.trim() || "No example sentence provided.",
-        exampleTranslation: w.exampleTranslation?.trim() || "No example translation provided.",
-        imageUrl: w.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(w.word.trim())}?width=800&height=600&nologo=true`
-      }));
-
-      if (onAddBatchWords) {
-        onAddBatchWords(activeDeck.id, mappedWords);
-      } else {
-        mappedWords.forEach(w => onAddCustomWord(activeDeck.id, w));
-      }
-
-      setRandomWordsSuccessMsg(`Successfully added ${mappedWords.length} new words to "${activeDeck.name}"!`);
-      setTimeout(() => {
-        setShowRandomWordsModal(false);
-        setRandomWordsSuccessMsg("");
-        setRandomWordsTopicRefinement("");
-      }, 1400);
-    } catch (err: any) {
-      console.error(err);
-      setRandomWordsError(err.message || "Failed to generate random words. Please try again.");
+      setRandomWordsTopic("");
+      setIsRandomWordsModalOpen(false);
+    } catch (err) {
+      console.error("Failed to generate random words:", err);
+      alert("Unable to generate random words. Please verify your LLM Key.");
     } finally {
       setIsGeneratingRandomWords(false);
     }
   };
 
-  const speakWord = (text: string) => {
-    const langCode = activeDeck?.targetLanguage === "English" ? "en-US" : "es-ES";
-    speakTextService(text, ttsConfig, llmConfig, langCode);
-  };
+  // Filter words by search query
+  const filteredWords = useMemo(() => {
+    if (!activeDeck) return [];
+    if (!searchQuery.trim()) return activeDeck.words;
+    const q = searchQuery.toLowerCase().trim();
+    return activeDeck.words.filter(w => 
+      w.word.toLowerCase().includes(q) ||
+      w.translation.toLowerCase().includes(q) ||
+      w.definition.toLowerCase().includes(q)
+    );
+  }, [activeDeck, searchQuery]);
 
   return (
-    <div className="space-y-6" id="deck-manager-container">
-      
-      {/* Top Banner Row */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-stone-200">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
-            <Layers className="w-5 h-5 text-stone-900" /> Deck Workshop
-          </h2>
-          <p className="text-xs text-stone-400 font-serif italic mt-0.5">Organize vocabulary items, manage manual logs, and invoke AI dictionaries.</p>
+    <div className="space-y-8" id="deck-manager-container">
+      {/* Top Banner Header */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xs">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 bg-stone-900 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Notebook Manager</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">Vocabulary Collections & Words</h1>
+          <p className="text-xs text-stone-500 font-serif italic max-w-xl">
+            "Manage custom vocabulary notebooks, auto-fill definitions with Gemini AI, and track term mastery."
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full no-scrollbar shrink-0 py-0.5">
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            type="button"
-            onClick={() => setShowAddDeckModal(true)}
-            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 border border-stone-200 hover:border-stone-950 bg-stone-50 text-stone-800 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
+            onClick={() => setIsCreateDeckModalOpen(true)}
+            className="px-4 py-3 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-xs"
           >
-            Create Notebook
+            <Plus className="w-4 h-4" />
+            <span>Create Notebook</span>
           </button>
-          {activeDeck && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setRandomWordsTopicRefinement(activeDeck.name);
-                  setRandomWordsError("");
-                  setRandomWordsSuccessMsg("");
-                  setShowRandomWordsModal(true);
-                }}
-                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 border border-amber-300 hover:border-amber-500 bg-amber-50 text-amber-900 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
-                title="Generate N random non-duplicate words into this notebook using AI"
-              >
-                <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
-                <span>+ Random Words</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddWordModal(true)}
-                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-stone-900 hover:bg-black text-white text-[11px] sm:text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
-              >
-                <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
-                <span>Add Word</span>
-              </button>
-            </>
-          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Hand side notebook selection column (collapsible) */}
-        {isSidebarOpen && (
-          <div className="lg:col-span-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider">Your Notebooks</label>
-              <button
-                type="button"
-                onClick={() => setIsSidebarOpen(false)}
-                className="hidden lg:flex items-center gap-1 text-[11px] font-semibold text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
-                title="Collapse notebook sidebar to expand word view"
-              >
-                <PanelLeftClose className="w-3.5 h-3.5" />
-                <span>Collapse</span>
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-              {decks.map(deck => (
-                <div
-                  key={deck.id}
-                  onClick={() => onSelectDeck(deck.id)}
-                  className={`w-full text-left p-3.5 border transition-all flex justify-between items-center group cursor-pointer ${
-                    selectedDeckId === deck.id 
-                      ? "border-stone-900 bg-stone-50 shadow-2xs" 
-                      : "border-stone-200 bg-white hover:border-stone-400"
-                  }`}
-                >
-                  <div className="pr-2 min-w-0">
-                    <h4 className={`text-xs md:text-sm font-bold tracking-tight transition-colors truncate ${
-                      selectedDeckId === deck.id ? "text-stone-950" : "text-stone-800"
-                    }`}>
-                      {deck.name}
-                    </h4>
-                    <p className="text-[10px] text-stone-400 line-clamp-1 mt-0.5 font-serif italic">"{deck.description}"</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-mono font-bold text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5">
-                      {deck.words.length} words
-                    </span>
-                    {onDeleteDeck && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeckToDelete({ id: deck.id, name: deck.name });
-                        }}
-                        className="p-1 text-stone-400 hover:text-red-600 hover:bg-stone-200 transition-colors cursor-pointer rounded"
-                        title="Delete Notebook"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Main Split Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Notebook Sidebar */}
+        {isSidebarOpen ? (
+          <NotebookSidebar
+            decks={decks}
+            selectedDeckId={selectedDeckId}
+            onSelectDeck={onSelectDeck}
+            setIsSidebarOpen={setIsSidebarOpen}
+            setDeckToDelete={setDeckToDelete}
+            onDeleteDeck={onDeleteDeck}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="hidden lg:flex items-center gap-2 px-3 py-2 bg-white border border-stone-200 hover:border-stone-900 text-stone-800 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            title="Expand Notebook Sidebar"
+          >
+            <PanelLeft className="w-4 h-4" />
+            <span>Show Notebooks</span>
+          </button>
         )}
 
-        {/* Right Hand side word collection browser column */}
-        <div className={isSidebarOpen ? "lg:col-span-8 space-y-4" : "lg:col-span-12 space-y-4"}>
+        {/* Right Active Notebook & Words Breakdown */}
+        <div className={`${isSidebarOpen ? "lg:col-span-8" : "lg:col-span-12"} space-y-6`}>
           {activeDeck ? (
-            <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-5 shadow-2xs" id="word-browser">
-              
-              {/* Header Info & Controls Bar */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-stone-100 pb-4">
-                <div className="flex items-center gap-3">
-                  {!isSidebarOpen && (
-                    <button
-                      type="button"
-                      onClick={() => setIsSidebarOpen(true)}
-                      className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
-                      title="Show notebook sidebar"
-                    >
-                      <PanelLeft className="w-4 h-4" />
-                      <span className="hidden sm:inline">Notebooks</span>
-                    </button>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-base sm:text-lg font-black text-stone-900">{activeDeck.name}</h3>
-                      <span className="text-xs font-mono font-semibold bg-stone-100 border border-stone-200 text-stone-700 px-2 py-0.5">
-                        {activeDeck.targetLanguage} → {activeDeck.nativeLanguage}
-                      </span>
-                    </div>
-                    <p className="text-xs text-stone-500 font-serif italic mt-0.5">
-                      Showing {filteredWords.length} of {activeDeck.words.length} vocabulary entries
-                    </p>
+            <div className="bg-white border border-stone-200 p-6 space-y-6 shadow-2xs">
+              {/* Notebook Active Title & Quick Controls */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-5">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-500">
+                    <Globe2 className="w-3.5 h-3.5 text-stone-900" />
+                    <span>{activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}</span>
+                    <span className="text-stone-300">•</span>
+                    <span className="text-stone-900">{activeDeck.words.length} terms</span>
                   </div>
+                  <h2 className="text-xl font-bold text-stone-950">{activeDeck.name}</h2>
+                  <p className="text-xs text-stone-500 font-serif italic max-w-lg">{activeDeck.description}</p>
                 </div>
 
-                {/* View Mode & Layout Actions */}
-                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                  <div className="flex bg-stone-100 p-0.5 border border-stone-200">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("grid")}
-                      className={`px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        viewMode === "grid" 
-                          ? "bg-stone-900 text-white shadow-2xs" 
-                          : "text-stone-600 hover:text-stone-950"
-                      }`}
-                      title="Card Grid View"
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      <span className="hidden min-[480px]:inline">Grid</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("row")}
-                      className={`px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                        viewMode === "row" 
-                          ? "bg-stone-900 text-white shadow-2xs" 
-                          : "text-stone-600 hover:text-stone-950"
-                      }`}
-                      title="Compact List View"
-                    >
-                      <List className="w-3.5 h-3.5" />
-                      <span className="hidden min-[480px]:inline">List</span>
-                    </button>
-                  </div>
-
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
-                    type="button"
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="p-1.5 bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-700 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
-                    title={isSidebarOpen ? "Expand to Full Width" : "Show Notebook Sidebar"}
+                    onClick={() => setIsRandomWordsModalOpen(true)}
+                    className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer border border-amber-500 transition-all shadow-2xs"
+                    title="Generate random non-duplicate words for this notebook with AI"
                   >
-                    {isSidebarOpen ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>AI Random Words</span>
                   </button>
-
-                  {onDeleteDeck && activeDeck && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeckToDelete({ id: activeDeck.id, name: activeDeck.name });
-                      }}
-                      className="px-2.5 py-1 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 flex items-center gap-1.5 transition-all cursor-pointer"
-                      title="Delete this notebook"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Delete Notebook</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="px-3.5 py-2 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Word</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Search & Filter Row */}
-              <div className="flex flex-col md:flex-row gap-3 justify-between items-start md:items-center">
-                <div className="relative w-full md:max-w-xs">
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-stone-400" />
+              {/* Search & Layout View Bar */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-50 p-3 border border-stone-200">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search word, meaning, context..."
-                    className="w-full bg-stone-50 border border-stone-200 pl-9 pr-8 py-2 text-xs font-semibold text-stone-800 outline-none focus:border-stone-950 focus:bg-white transition-all font-serif"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filter terms by spelling, translation, or definition..."
+                    className="w-full pl-9 pr-3 py-2 bg-white border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-950 font-medium"
                   />
-                  {searchTerm && (
+                  {searchQuery && (
                     <button 
-                      onClick={() => setSearchTerm("")} 
-                      className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-900 cursor-pointer"
+                      onClick={() => setSearchQuery("")} 
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-900 text-xs"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      ✕
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-1.5">
-                  {(["all", "starred", "mastered", "learning"] as const).map((filter) => {
-                    let count = activeDeck.words.length;
-                    if (filter === "starred") count = activeDeck.words.filter(w => w.starred).length;
-                    if (filter === "mastered") count = activeDeck.words.filter(w => w.learned).length;
-                    if (filter === "learning") count = activeDeck.words.filter(w => !w.learned).length;
-
-                    return (
-                      <button
-                        key={filter}
-                        onClick={() => setActiveFilter(filter)}
-                        className={`px-3 py-1.5 text-xs font-semibold capitalize transition-all cursor-pointer flex items-center gap-1.5 ${
-                          activeFilter === filter 
-                            ? "bg-stone-900 text-white border border-stone-900 shadow-2xs" 
-                            : "bg-stone-50 border border-stone-200 text-stone-600 hover:text-stone-950 hover:border-stone-400"
-                        }`}
-                      >
-                        <span>{filter}</span>
-                        <span className={`text-[10px] font-mono px-1.5 py-0.2 ${
-                          activeFilter === filter ? "bg-stone-800 text-stone-200" : "bg-stone-200/80 text-stone-700"
-                        }`}>
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center gap-1 border-l border-stone-200 pl-3">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className={`p-2 border transition-all cursor-pointer ${
+                      viewMode === "grid" 
+                        ? "bg-stone-900 text-white border-stone-900" 
+                        : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
+                    }`}
+                    title="Grid Card View"
+                  >
+                    <Grid className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={`p-2 border transition-all cursor-pointer ${
+                      viewMode === "list" 
+                        ? "bg-stone-900 text-white border-stone-900" 
+                        : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
+                    }`}
+                    title="Compact Row List View"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
-              {/* Word Collection Container */}
-              {filteredWords.length === 0 ? (
-                <div className="py-16 text-center text-stone-400 space-y-4 border border-dashed border-stone-200 bg-stone-50/50">
-                  <BookOpen className="w-12 h-12 text-stone-300 mx-auto" />
-                  <div>
-                    <p className="text-sm font-bold text-stone-700">No entries matched your search</p>
-                    <p className="text-xs font-serif italic mt-1 text-stone-500">
-                      "Try adjusting your keyword query or switching filter tabs."
-                    </p>
+              {/* Words Display Grid/List */}
+              {filteredWords.length > 0 ? (
+                viewMode === "grid" ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="words-grid-container">
+                    {filteredWords.map((word) => (
+                      <WordCard
+                        key={word.id}
+                        word={word}
+                        activeDeckId={activeDeckId}
+                        speakWord={speakWord}
+                        handleRegenerateWord={handleRegenerateWord}
+                        regeneratingWordId={regeneratingWordId}
+                        regeneratedSuccessWordId={regeneratedSuccessWordId}
+                        onToggleStar={onToggleStar}
+                        onToggleLearned={onToggleLearned}
+                        onDeleteWord={onDeleteWord}
+                        brokenImageIds={brokenImageIds}
+                        handleImageError={handleImageError}
+                      />
+                    ))}
                   </div>
-                </div>
-              ) : viewMode === "grid" ? (
-                /* GRID VIEW CARDS */
-                <div className={`grid grid-cols-1 ${isSidebarOpen ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-3"} gap-4 max-h-[680px] overflow-y-auto pr-1`}>
-                  {filteredWords.map((word) => (
-                    <div 
-                      key={word.id} 
-                      className="p-4 bg-white border border-stone-200 hover:border-stone-400 transition-all flex flex-col justify-between space-y-3.5 shadow-2xs group relative"
-                    >
-                      {/* Card Header & Controls */}
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-2.5">
-                          <div className="space-y-1">
-                            <h4 className="text-base font-black text-stone-900 tracking-tight leading-snug">{word.word}</h4>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {word.pronunciation && (
-                                <span className="text-[10px] font-mono text-stone-500 bg-stone-100 border border-stone-200 px-1.5 py-0.5">
-                                  {word.pronunciation}
-                                </span>
-                              )}
-                              <span className="text-[10px] font-bold uppercase font-mono bg-stone-900 text-white px-1.5 py-0.5">
-                                {word.partOfSpeech || "noun"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Top-Right Action Buttons Bar (Always spacious, never overlaps) */}
-                          <div className="flex items-center gap-1 shrink-0 bg-stone-50 p-1 border border-stone-200">
-                            <button
-                              type="button"
-                              onClick={() => speakWord(word.word)}
-                              className="p-1.5 text-stone-500 hover:text-stone-950 hover:bg-white transition-all cursor-pointer"
-                              title="Listen Pronunciation"
-                            >
-                              <Volume2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRegenerateWord(word)}
-                              disabled={regeneratingWordId === word.id}
-                              className="p-1.5 text-stone-500 hover:text-amber-600 hover:bg-white transition-all cursor-pointer disabled:opacity-50"
-                              title="Re-generate definition, translation & image with AI"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onToggleStar(word.id)}
-                              className={`p-1.5 transition-all cursor-pointer ${
-                                word.starred ? "text-amber-500 fill-current bg-white shadow-2xs" : "text-stone-300 hover:text-stone-600"
-                              }`}
-                              title={word.starred ? "Unstar" : "Star"}
-                            >
-                              <Star className="w-3.5 h-3.5 fill-current" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onToggleLearned(word.id)}
-                              className={`p-1.5 transition-all cursor-pointer ${
-                                word.learned ? "text-emerald-600 bg-white shadow-2xs" : "text-stone-300 hover:text-stone-600"
-                              }`}
-                              title={word.learned ? "Mastered" : "Mark Mastered"}
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onDeleteWord(activeDeck.id, word.id)}
-                              className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-white transition-all cursor-pointer"
-                              title="Delete Entry"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Success message badge after regeneration */}
-                        {regeneratedSuccessWordId === word.id && (
-                          <div className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
-                            <span>AI details & image updated!</span>
-                          </div>
-                        )}
-
-                        {/* Meaning Highlight Block */}
-                        <div className="bg-amber-50/80 border border-amber-200/90 p-2.5 space-y-0.5">
-                          <span className="text-[10px] font-mono font-bold uppercase text-amber-800 tracking-wider block">Meaning</span>
-                          <p className="text-xs font-black text-amber-950">{word.translation}</p>
-                        </div>
-
-                        {/* Definition Text */}
-                        {word.definition && (
-                          <div className="space-y-0.5 pt-1">
-                            <span className="text-[10px] font-mono font-bold uppercase text-stone-400 block">Definition</span>
-                            <p className="text-xs text-stone-700 font-serif italic leading-relaxed">
-                              "{word.definition}"
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Context Example & Image Box */}
-                        {brokenImageIds.has(word.id) ? (
-                          <div className="bg-stone-50 border border-dashed border-stone-300 p-3 text-center space-y-1.5">
-                            <p className="text-[11px] text-stone-500 font-medium">Image preview broken or unavailable</p>
-                            <button
-                              type="button"
-                              onClick={() => handleRegenerateWord(word)}
-                              disabled={regeneratingWordId === word.id}
-                              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all"
-                            >
-                              <RefreshCw className={`w-3 h-3 ${regeneratingWordId === word.id ? "animate-spin" : ""}`} />
-                              <span>Re-generate Image</span>
-                            </button>
-                          </div>
-                        ) : word.imageUrl ? (
-                          <div className="bg-stone-50 border border-stone-200 p-1 relative group/img">
-                            <img 
-                              src={word.imageUrl} 
-                              alt={word.word} 
-                              referrerPolicy="no-referrer" 
-                              onError={() => handleImageError(word.id)}
-                              className="w-full h-28 object-cover" 
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRegenerateWord(word)}
-                              disabled={regeneratingWordId === word.id}
-                              className="absolute top-2 right-2 bg-stone-900/80 hover:bg-black text-white text-[10px] font-medium px-2 py-1 flex items-center gap-1 backdrop-blur-xs transition-all opacity-80 group-hover/img:opacity-100 cursor-pointer"
-                              title="Re-generate image using AI"
-                            >
-                              <RefreshCw className={`w-3 h-3 ${regeneratingWordId === word.id ? "animate-spin text-amber-400" : ""}`} />
-                              <span>Re-generate Image</span>
-                            </button>
-                          </div>
-                        ) : null}
-                        {word.example && (
-                          <div className="bg-stone-50 border border-stone-200 p-2.5 space-y-1 text-xs">
-                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context</span>
-                            <p className="font-serif italic text-stone-800 leading-snug">"{word.example}"</p>
-                            {word.exampleTranslation && (
-                              <p className="text-[11px] text-stone-500 font-sans">{word.exampleTranslation}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Card Footer Status Pill */}
-                      <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px]">
-                        <span className={`font-semibold px-2 py-0.5 flex items-center gap-1 ${
-                          word.learned 
-                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
-                            : "bg-stone-100 text-stone-600 border border-stone-200"
-                        }`}>
-                          {word.learned ? "✓ Mastered" : "• Learning"}
-                        </span>
-                        {word.starred && (
-                          <span className="text-amber-700 font-semibold flex items-center gap-1">
-                            ★ Starred
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                ) : (
+                  <div className="space-y-3" id="words-list-container">
+                    {filteredWords.map((word) => (
+                      <WordRow
+                        key={word.id}
+                        word={word}
+                        activeDeckId={activeDeckId}
+                        speakWord={speakWord}
+                        handleRegenerateWord={handleRegenerateWord}
+                        regeneratingWordId={regeneratingWordId}
+                        onToggleStar={onToggleStar}
+                        onToggleLearned={onToggleLearned}
+                        onDeleteWord={onDeleteWord}
+                        brokenImageIds={brokenImageIds}
+                        handleImageError={handleImageError}
+                      />
+                    ))}
+                  </div>
+                )
               ) : (
-                /* COMPACT LIST VIEW ROWS */
-                <div className="space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
-                  {filteredWords.map((word) => (
-                    <div 
-                      key={word.id} 
-                      className="p-4 bg-white border border-stone-200 hover:border-stone-400 transition-all grid grid-cols-1 lg:grid-cols-12 gap-3 items-center shadow-2xs"
-                    >
-                      {/* Col 1: Word & Meaning */}
-                      <div className="lg:col-span-4 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="text-sm font-bold text-stone-900">{word.word}</h4>
-                          {word.pronunciation && (
-                            <span className="text-[10px] text-stone-400 font-mono italic">{word.pronunciation}</span>
-                          )}
-                          <span className="text-[10px] font-semibold text-stone-600 bg-stone-100 border border-stone-200 px-1.5 py-0.5 font-mono">
-                            {word.partOfSpeech}
-                          </span>
-                        </div>
-                        <p className="text-xs font-bold text-stone-900 bg-amber-50 px-2 py-1 border border-amber-200 inline-block">
-                          Meaning: {word.translation}
-                        </p>
-                      </div>
-
-                      {/* Col 2: Definition & Example Context */}
-                      <div className="lg:col-span-5 space-y-0.5 text-xs">
-                        <p className="text-stone-600 font-serif italic line-clamp-2">
-                          "{word.definition}"
-                        </p>
-                        {brokenImageIds.has(word.id) ? (
-                          <div className="bg-stone-50 border border-dashed border-stone-300 p-1.5 my-1 text-center flex items-center justify-between gap-2">
-                            <span className="text-[10px] text-stone-500 font-medium">Image unavailable</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRegenerateWord(word)}
-                              disabled={regeneratingWordId === word.id}
-                              className="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-[9px] inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <RefreshCw className={`w-2.5 h-2.5 ${regeneratingWordId === word.id ? "animate-spin" : ""}`} />
-                              <span>Re-generate</span>
-                            </button>
-                          </div>
-                        ) : word.imageUrl ? (
-                          <div className="bg-stone-50 border border-stone-200 p-1 my-1 relative group/listimg">
-                            <img 
-                              src={word.imageUrl} 
-                              alt={word.word} 
-                              referrerPolicy="no-referrer" 
-                              onError={() => handleImageError(word.id)}
-                              className="w-full h-24 sm:w-32 sm:h-20 object-cover" 
-                            />
-                          </div>
-                        ) : null}
-                        {word.example && (
-                          <p className="text-[11px] text-stone-400 font-mono line-clamp-1">
-                            Context: {word.example}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Col 3: Status & Action Buttons */}
-                      <div className="lg:col-span-3 flex items-center justify-between lg:justify-end gap-2 shrink-0">
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 ${
-                          word.learned ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-stone-100 text-stone-600"
-                        }`}>
-                          {word.learned ? "Mastered" : "Learning"}
-                        </span>
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => speakWord(word.word)}
-                            className="p-1.5 border border-stone-200 text-stone-500 hover:text-stone-950 hover:bg-stone-50 transition-all cursor-pointer"
-                            title="Listen Pronunciation"
-                          >
-                            <Volume2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRegenerateWord(word)}
-                            disabled={regeneratingWordId === word.id}
-                            className="p-1.5 border border-stone-200 text-stone-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-all cursor-pointer disabled:opacity-50"
-                            title="Re-generate definition & image with AI"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onToggleStar(word.id)}
-                            className={`p-1.5 border transition-all cursor-pointer ${
-                              word.starred 
-                                ? "bg-amber-50 text-amber-600 border-amber-300" 
-                                : "border-stone-200 text-stone-300 hover:text-stone-600"
-                            }`}
-                          >
-                            <Star className="w-3.5 h-3.5 fill-current" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onToggleLearned(word.id)}
-                            className={`p-1.5 border transition-all cursor-pointer ${
-                              word.learned 
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-300" 
-                                : "border-stone-200 text-stone-300 hover:text-stone-600"
-                            }`}
-                            title={word.learned ? "Mastered" : "Mark Mastered"}
-                          >
-                            <CheckCircle className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteWord(activeDeck.id, word.id)}
-                            className="p-1.5 border border-stone-200 text-stone-300 hover:text-red-600 hover:border-red-300 transition-all cursor-pointer"
-                            title="Remove Entry"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="p-12 text-center bg-stone-50 border border-stone-200 space-y-3">
+                  <BookOpen className="w-8 h-8 text-stone-400 mx-auto" />
+                  <h4 className="font-bold text-sm text-stone-900">No Vocabulary Words Found</h4>
+                  <p className="text-xs text-stone-500 font-serif italic max-w-sm mx-auto">
+                    {searchQuery ? "No terms match your search filter." : "This notebook is empty. Click 'Add Word' or 'AI Random Words' to begin adding vocabulary!"}
+                  </p>
                 </div>
               )}
-
             </div>
           ) : (
-            <div className="bg-stone-50 border border-stone-200 p-12 text-center space-y-4">
-              <Layers className="w-12 h-12 text-stone-300 mx-auto" />
-              <h3 className="text-sm font-semibold text-stone-900">Select an Active Deck</h3>
-              <p className="text-xs text-stone-400 font-serif italic">Choose one of your notebooks from the sidebar list to browse vocabulary entries.</p>
+            <div className="p-12 text-center bg-white border border-stone-200 text-stone-500">
+              Select or create a notebook to begin managing vocabulary terms.
             </div>
           )}
         </div>
       </div>
 
       {/* Add Word Modal */}
-      <AnimatePresence>
-        {showAddWordModal && activeDeck && (
-          <div className="fixed inset-0 bg-stone-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-            <motion.div 
-              initial={{ scale: 0.98, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.98, opacity: 0 }}
-              className="bg-white border border-stone-200 p-5 sm:p-7 w-full max-w-lg space-y-5 shadow-2xl my-auto max-h-[92vh] flex flex-col overflow-hidden"
-            >
-              {/* Modal Header */}
-              <div className="flex justify-between items-start pb-3 border-b border-stone-100 shrink-0">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-stone-100 text-stone-700 px-2 py-0.5 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" /> AI-Powered Flashcard Creation
-                  </div>
-                  <h3 className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">Add Word or Phrase</h3>
-                  <p className="text-xs text-stone-500 font-serif italic">Saving to Notebook: <strong className="font-semibold text-stone-700 not-italic">{activeDeck.name}</strong> ({activeDeck.targetLanguage} → {activeDeck.nativeLanguage})</p>
-                </div>
-                <button 
-                  onClick={() => setShowAddWordModal(false)} 
-                  className="p-1 text-stone-400 hover:text-stone-900 cursor-pointer transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+      <AddWordModal
+        isModalOpen={isModalOpen}
+        setIsModalOpen={setIsModalOpen}
+        wordInput={wordInput}
+        setWordInput={setWordInput}
+        translationInput={translationInput}
+        setTranslationInput={setTranslationInput}
+        definitionInput={definitionInput}
+        setDefinitionInput={setDefinitionInput}
+        partOfSpeechInput={partOfSpeechInput}
+        setPartOfSpeechInput={setPartOfSpeechInput}
+        pronunciationInput={pronunciationInput}
+        setPronunciationInput={setPronunciationInput}
+        exampleInput={exampleInput}
+        setExampleInput={setExampleInput}
+        exampleTranslationInput={exampleTranslationInput}
+        setExampleTranslationInput={setExampleTranslationInput}
+        imageUrlInput={imageUrlInput}
+        setImageUrlInput={setImageUrlInput}
+        autofilling={autofilling}
+        activeDeck={activeDeck}
+        handleAiAutofill={handleAiAutofill}
+        handleAiSuggestRelatedWord={handleAiSuggestRelatedWord}
+        handleAddWordSubmit={handleAddWordSubmit}
+      />
 
-              <form onSubmit={handleAddWordSubmit} className="space-y-4 overflow-y-auto flex-1 pr-1">
-                {/* Single Primary Input Box */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-stone-700">
-                    Enter Target Vocabulary Word / Expression
-                  </label>
-                  <div className="relative flex items-center">
-                    <input
-                      type="text"
-                      required
-                      autoFocus
-                      value={newWord}
-                      onChange={(e) => setNewWord(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !isAutofilling) {
-                          e.preventDefault();
-                          handleAIAutofill();
-                        }
-                      }}
-                      placeholder={`e.g., Ubiquitous, Serendipity, or a phrase`}
-                      className="w-full border-2 border-stone-900 bg-stone-50/50 px-3.5 py-2.5 text-sm font-bold text-stone-900 placeholder:text-stone-400 placeholder:font-normal focus:bg-white focus:outline-none transition-all pr-28"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleAIAutofill()}
-                      disabled={isAutofilling || !newWord.trim()}
-                      className="absolute right-1 px-3 py-1.5 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer"
-                    >
-                      {isAutofilling ? (
-                        <>
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>Generating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3 h-3 text-amber-300" />
-                          <span>AI Fill</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+      {/* Create Notebook Modal */}
+      <CreateNotebookModal
+        isCreateDeckModalOpen={isCreateDeckModalOpen}
+        setIsCreateDeckModalOpen={setIsCreateDeckModalOpen}
+        newDeckName={newDeckName}
+        setNewDeckName={setNewDeckName}
+        newDeckDesc={newDeckDesc}
+        setNewDeckDesc={setNewDeckDesc}
+        newDeckTargetLang={newDeckTargetLang}
+        setNewDeckTargetLang={setNewDeckTargetLang}
+        newDeckNativeLang={newDeckNativeLang}
+        setNewDeckNativeLang={setNewDeckNativeLang}
+        isAiGeneratingDeck={isAiGeneratingDeck}
+        handleCreateDeckSubmit={handleCreateDeckSubmit}
+        handleAiGenerateWholeDeck={handleAiGenerateWholeDeck}
+      />
 
-                {/* AI Suggestions Row */}
-                <div className="bg-stone-50/80 p-3 border border-stone-200/80 space-y-1.5">
-                  <span className="text-xs font-semibold text-stone-700 flex items-center gap-1">
-                    <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> Topic Suggestions for {activeDeck.targetLanguage}:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(activeDeck.targetLanguage === "Spanish"
-                      ? ["Inefable", "Resiliencia", "Efímero", "Serendipia", "Perspicaz"]
-                      : activeDeck.targetLanguage === "French"
-                      ? ["Éphémère", "Inouï", "Bienveillance", "Savoir-faire", "Dépaysement"]
-                      : activeDeck.targetLanguage === "German"
-                      ? ["Feingefühl", "Sehnsucht", "Wanderlust", "Zeitgeist", "Fingerspitzengefühl"]
-                      : ["Ubiquitous", "Serendipity", "Pragmatic", "Eloquent", "Resilient", "Ephemeral"]
-                    ).map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => handleAIAutofill(suggestion)}
-                        disabled={isAutofilling}
-                        className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-stone-900 hover:text-white text-stone-800 transition-all border border-stone-200 cursor-pointer shadow-2xs hover:border-stone-900"
-                      >
-                        + {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+      {/* Random Words Modal */}
+      <RandomWordsModal
+        isRandomWordsModalOpen={isRandomWordsModalOpen}
+        setIsRandomWordsModalOpen={setIsRandomWordsModalOpen}
+        randomCount={randomCount}
+        setRandomCount={setRandomCount}
+        randomWordsTopic={randomWordsTopic}
+        setRandomWordsTopic={setRandomWordsTopic}
+        isGeneratingRandomWords={isGeneratingRandomWords}
+        activeDeck={activeDeck}
+        handleGenerateRandomWordsSubmit={handleGenerateRandomWordsSubmit}
+      />
 
-                {autofillError && (
-                  <div className="p-2.5 bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                    <span>{autofillError}</span>
-                  </div>
-                )}
-
-                {/* AI Generated Details Card Preview */}
-                {isAutofilling ? (
-                  <div className="p-5 bg-stone-50 border border-stone-200 text-center space-y-2 animate-pulse">
-                    <Loader2 className="w-5 h-5 text-stone-600 mx-auto animate-spin" />
-                    <p className="text-xs font-semibold text-stone-700">Consulting AI for definitions, IPA pronunciation & contextual sentence...</p>
-                  </div>
-                ) : (newDefinition || newTranslation) ? (
-                  <div className="p-4 bg-stone-50 border border-stone-200 space-y-3">
-                    <div className="flex items-start justify-between border-b border-stone-200 pb-2">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-base font-extrabold text-stone-900">{newWord}</span>
-                          {newPronunciation && (
-                            <span className="text-xs font-mono text-stone-600 bg-stone-200/70 px-1.5 py-0.5">{newPronunciation}</span>
-                          )}
-                          {newPartOfSpeech && (
-                            <span className="text-xs font-semibold bg-stone-900 text-white px-1.5 py-0.5">{newPartOfSpeech}</span>
-                          )}
-                        </div>
-                        {newTranslation && (
-                          <p className="text-xs font-serif italic text-stone-800 mt-1">
-                            <span className="font-sans text-xs font-semibold text-stone-500 not-italic mr-1.5">Translation:</span>
-                            {newTranslation}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {newDefinition && (
-                      <p className="text-xs text-stone-800 leading-relaxed">
-                        <span className="font-sans text-xs font-semibold text-stone-500 block mb-0.5">Definition ({activeDeck.nativeLanguage || "Native Language"}):</span>
-                        {newDefinition}
-                      </p>
-                    )}
-
-                    {newImageUrl && (
-                      <div className="mt-2">
-                        <img src={newImageUrl} alt="Preview" className="w-full h-32 object-cover rounded border border-stone-200" />
-                      </div>
-                    )}
-                    {newExample && (
-                      <div className="bg-white p-2.5 border border-stone-200 text-xs font-serif space-y-1">
-                        <p className="text-stone-900">"{newExample}"</p>
-                        {newExampleTranslation && (
-                          <p className="text-stone-500 italic text-[11px]">{newExampleTranslation}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
-                {/* Manual Edit Toggle */}
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setShowManualFields(!showManualFields)}
-                    className="text-xs font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>{showManualFields ? "Hide manual form fields" : "Edit fields manually"}</span>
-                    {showManualFields ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-
-                {/* Expandable Manual Form Fields */}
-                {showManualFields && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-3 pt-2 border-t border-stone-200"
-                  >
-                    <div className="grid grid-cols-2 gap-2.5 text-xs">
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">Pronunciation IPA</label>
-                        <input
-                          type="text"
-                          value={newPronunciation}
-                          onChange={(e) => setNewPronunciation(e.target.value)}
-                          placeholder="e.g., /yo͞oˈbikwədəs/"
-                          className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">Part of Speech</label>
-                        <select
-                          value={newPartOfSpeech}
-                          onChange={(e) => setNewPartOfSpeech(e.target.value)}
-                          className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 font-bold outline-none focus:border-stone-950 focus:bg-white text-xs cursor-pointer"
-                        >
-                          <option value="noun">noun</option>
-                          <option value="verb">verb</option>
-                          <option value="adjective">adjective</option>
-                          <option value="adverb">adverb</option>
-                          <option value="idiom">idiom</option>
-                          <option value="expression">expression</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5 text-xs">
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">Translation ({activeDeck.nativeLanguage})</label>
-                        <input
-                          type="text"
-                          value={newTranslation}
-                          onChange={(e) => setNewTranslation(e.target.value)}
-                          placeholder="Meaning in native tongue"
-                          className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs font-serif"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">Definition ({activeDeck.targetLanguage})</label>
-                        <input
-                          type="text"
-                          value={newDefinition}
-                          onChange={(e) => setNewDefinition(e.target.value)}
-                          placeholder="Definition in target tongue"
-                          className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs font-serif"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="text-xs">
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">Context Example Sentence</label>
-                      <textarea
-                        rows={2}
-                        value={newExample}
-                        onChange={(e) => setNewExample(e.target.value)}
-                        placeholder="Use the word in a high-quality example sentence..."
-                        className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs resize-none font-serif"
-                      />
-                    </div>
-
-                    <div className="text-xs">
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">Example Sentence Translation</label>
-                      <textarea
-                        rows={2}
-                        value={newExampleTranslation}
-                        onChange={(e) => setNewExampleTranslation(e.target.value)}
-                        placeholder="Translation of example sentence..."
-                        className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs resize-none font-serif"
-                      />
-                    </div>
-                    
-                    <div className="text-xs mt-3">
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">Image URL</label>
-                      <input
-                        type="text"
-                        value={newImageUrl}
-                        onChange={(e) => setNewImageUrl(e.target.value)}
-                        placeholder="https://image.pollinations.ai/..."
-                        className="w-full border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-stone-900 outline-none focus:border-stone-950 focus:bg-white text-xs font-serif"
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Form Footer Action Buttons */}
-                <div className="flex gap-2 justify-end pt-3 border-t border-stone-200 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddWordModal(false)}
-                    className="px-4 py-2 text-xs font-semibold text-stone-500 hover:text-stone-900 cursor-pointer transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!newWord.trim() || isAutofilling}
-                    className="px-6 py-2.5 bg-stone-900 hover:bg-black text-white font-semibold text-xs transition-all cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" /> Save Word
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Add Deck Modal */}
-      <AnimatePresence>
-        {showAddDeckModal && (
-          <div className="fixed inset-0 bg-stone-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ scale: 0.98, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.98, opacity: 0 }}
-              className="bg-white border border-stone-200 p-6 sm:p-8 w-full max-w-lg space-y-5 shadow-2xl"
-            >
-              <div className="flex justify-between items-start pb-3 border-b border-stone-100">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-50 text-amber-800 px-2 py-0.5 border border-amber-200/80 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    {isManualCreateMode ? "Manual Creation" : "Gemini AI Generator"}
-                  </div>
-                  <h3 className="text-lg font-bold text-stone-900">
-                    {isManualCreateMode ? "Create Blank Notebook" : "Create AI Notebook"}
-                  </h3>
-                  <p className="text-xs text-stone-500 font-serif italic mt-0.5">
-                    {isManualCreateMode 
-                      ? "Set up an empty custom notebook and add words manually." 
-                      : "Type a topic (e.g. Chess) and AI will auto-create title, description & vocabulary!"}
-                  </p>
-                </div>
-                <button 
-                  onClick={() => setShowAddDeckModal(false)} 
-                  className="p-1.5 text-stone-400 hover:text-stone-900 cursor-pointer rounded-none"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {!isManualCreateMode ? (
-                /* AI Notebook Form */
-                <form onSubmit={handleAIGenerateDeckSubmit} className="space-y-4 text-xs">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-900 mb-1.5">
-                      Topic or Subject to Learn
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        autoFocus
-                        value={deckTopicInput}
-                        onChange={(e) => setDeckTopicInput(e.target.value)}
-                        placeholder="e.g., Chess, Italian Dining, Medical Terms, Airport..."
-                        className="w-full border border-stone-300 bg-stone-50 px-3.5 py-2.5 text-stone-900 font-semibold text-xs outline-none focus:border-stone-950 focus:bg-white transition-all shadow-2xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Popular Quick Topics */}
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-stone-500">Quick Topics:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {POPULAR_TOPICS.map((topic) => (
-                        <button
-                          key={topic.value}
-                          type="button"
-                          onClick={() => setDeckTopicInput(topic.value)}
-                          className={`px-2.5 py-1 text-xs font-medium border transition-all cursor-pointer ${
-                            deckTopicInput === topic.value
-                              ? "bg-stone-900 text-white border-stone-900"
-                              : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-                          }`}
-                        >
-                          {topic.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Languages Row */}
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">Target Language</label>
-                      <select 
-                        value={newDeckTarget} 
-                        onChange={(e) => setNewDeckTarget(e.target.value)}
-                        className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-semibold outline-none focus:border-stone-950 focus:bg-white text-xs cursor-pointer"
-                      >
-                        <option value="English">English</option>
-                        <option value="Spanish">Spanish (Español)</option>
-                        <option value="French">French (Français)</option>
-                        <option value="German">German (Deutsch)</option>
-                        <option value="Italian">Italian (Italiano)</option>
-                        <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
-                        <option value="Japanese">Japanese (日本語)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">Native Language</label>
-                      <select 
-                        value={newDeckNative} 
-                        onChange={(e) => setNewDeckNative(e.target.value)}
-                        className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-semibold outline-none focus:border-stone-950 focus:bg-white text-xs cursor-pointer"
-                      >
-                        <option value="English">English</option>
-                        <option value="Spanish">Spanish (Español)</option>
-                        <option value="French">French (Français)</option>
-                        <option value="German">German (Deutsch)</option>
-                        <option value="Italian">Italian (Italiano)</option>
-                        <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
-                        <option value="Japanese">Japanese (日本語)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Words Quantity */}
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1.5">Vocabulary Items to Generate</label>
-                    <div className="flex gap-2">
-                      {[5, 8, 12, 15].map((cnt) => (
-                        <button
-                          key={cnt}
-                          type="button"
-                          onClick={() => setDeckQuantity(cnt)}
-                          className={`flex-1 py-1.5 border text-xs font-semibold transition-all cursor-pointer ${
-                            deckQuantity === cnt
-                              ? "bg-stone-900 text-white border-stone-900"
-                              : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-                          }`}
-                        >
-                          {cnt} Words
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {deckGenError && (
-                    <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                      <span>{deckGenError}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between pt-3 border-t border-stone-100">
-                    <button
-                      type="button"
-                      onClick={() => setIsManualCreateMode(true)}
-                      className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2 cursor-pointer font-medium"
-                    >
-                      Or create an empty notebook manually
-                    </button>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddDeckModal(false)}
-                        disabled={isGeneratingDeck}
-                        className="px-3.5 py-2 text-xs font-semibold text-stone-500 hover:text-stone-900 cursor-pointer disabled:opacity-40"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={!deckTopicInput.trim() || isGeneratingDeck}
-                        className="px-5 py-2.5 bg-stone-900 hover:bg-black text-white font-semibold text-xs transition-all cursor-pointer disabled:opacity-40 flex items-center gap-2 shadow-xs"
-                      >
-                        {isGeneratingDeck ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-                            Creating AI Notebook...
-                          </>
-                        ) : (
-                          <>
-                            <Wand2 className="w-4 h-4 text-amber-400" />
-                            Generate AI Notebook
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              ) : (
-                /* Blank Manual Notebook Form */
-                <form onSubmit={handleAddDeckSubmit} className="space-y-4 text-xs">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1.5">Notebook / Deck Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={newDeckName}
-                      onChange={(e) => setNewDeckName(e.target.value)}
-                      placeholder="e.g., Italian Kitchen Words"
-                      className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-semibold outline-none focus:border-stone-950 focus:bg-white transition-all text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1.5">Description</label>
-                    <input
-                      type="text"
-                      value={newDeckDesc}
-                      onChange={(e) => setNewDeckDesc(e.target.value)}
-                      placeholder="e.g., Handy words learned while cooking"
-                      className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 outline-none focus:border-stone-950 focus:bg-white transition-all text-xs font-serif italic"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1.5">Target Language</label>
-                      <select 
-                        value={newDeckTarget} 
-                        onChange={(e) => setNewDeckTarget(e.target.value)}
-                        className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-semibold outline-none focus:border-stone-950 focus:bg-white transition-all text-xs cursor-pointer"
-                      >
-                        <option value="English">English</option>
-                        <option value="Spanish">Spanish (Español)</option>
-                        <option value="French">French (Français)</option>
-                        <option value="German">German (Deutsch)</option>
-                        <option value="Italian">Italian (Italiano)</option>
-                        <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
-                        <option value="Japanese">Japanese (日本語)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1.5">Native Language</label>
-                      <select 
-                        value={newDeckNative} 
-                        onChange={(e) => setNewDeckNative(e.target.value)}
-                        className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-semibold outline-none focus:border-stone-950 focus:bg-white transition-all text-xs cursor-pointer"
-                      >
-                        <option value="English">English</option>
-                        <option value="Spanish">Spanish (Español)</option>
-                        <option value="French">French (Français)</option>
-                        <option value="German">German (Deutsch)</option>
-                        <option value="Italian">Italian (Italiano)</option>
-                        <option value="Vietnamese">Vietnamese (Tiếng Việt)</option>
-                        <option value="Japanese">Japanese (日本語)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-stone-100">
-                    <button
-                      type="button"
-                      onClick={() => setIsManualCreateMode(false)}
-                      className="text-xs text-stone-500 hover:text-stone-900 underline underline-offset-2 cursor-pointer font-medium"
-                    >
-                      ← Switch to AI Generator
-                    </button>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddDeckModal(false)}
-                        className="px-4 py-2 text-xs font-semibold text-stone-500 hover:text-stone-900 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-5 py-2.5 bg-stone-900 hover:bg-black text-white font-semibold text-xs transition-all cursor-pointer"
-                      >
-                        Create Blank Notebook
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
+      {/* Delete Notebook Confirmation Modal */}
       <ConfirmModal
         isOpen={Boolean(deckToDelete)}
         title="Delete Notebook"
@@ -1529,142 +656,6 @@ export default function DeckManager({
         }}
         onCancel={() => setDeckToDelete(null)}
       />
-
-      {/* Add Random Words Modal */}
-      <AnimatePresence>
-        {showRandomWordsModal && activeDeck && (
-          <div className="fixed inset-0 bg-stone-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
-            <motion.div 
-              initial={{ scale: 0.98, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.98, opacity: 0 }}
-              className="bg-white border border-stone-200 p-5 sm:p-7 w-full max-w-lg space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto"
-            >
-              <div className="flex justify-between items-start pb-3 border-b border-stone-100">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-50 text-amber-900 px-2.5 py-0.5 border border-amber-200 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    AI Random Words Generator
-                  </div>
-                  <h3 className="text-base sm:text-lg font-bold text-stone-900 leading-snug">
-                    Add Random Words to "{activeDeck.name}"
-                  </h3>
-                  <p className="text-xs text-stone-500 font-serif italic mt-0.5">
-                    Generate vocabulary items complete with definitions, translations, and example images.
-                  </p>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setShowRandomWordsModal(false)} 
-                  className="p-1.5 text-stone-400 hover:text-stone-900 cursor-pointer shrink-0"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleGenerateRandomWordsSubmit} className="space-y-4 text-xs">
-                {/* Deduplication Notice */}
-                <div className="p-2.5 bg-stone-50 border border-stone-200 text-stone-700 text-xs flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>
-                      <strong>Smart Deduplication:</strong> Avoids existing <strong>{activeDeck.words.length}</strong> words automatically.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Number of Words Selector */}
-                <div>
-                  <label className="block text-xs font-bold text-stone-800 mb-1.5">
-                    Number of Random Words to Add
-                  </label>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {[3, 5, 8, 10, 15].map((count) => (
-                      <button
-                        key={count}
-                        type="button"
-                        onClick={() => setRandomWordsCount(count)}
-                        className={`py-2 px-1 border text-center transition-all cursor-pointer rounded-none ${
-                          randomWordsCount === count
-                            ? "bg-stone-900 text-white border-stone-900 shadow-2xs font-bold"
-                            : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-                        }`}
-                      >
-                        <span className="block text-xs sm:text-sm font-bold leading-none">{count}</span>
-                        <span className="block text-[10px] font-medium leading-tight opacity-80 mt-1">words</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Optional Refine Topic */}
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Refine Topic / Context Focus (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={randomWordsTopicRefinement}
-                    onChange={(e) => setRandomWordsTopicRefinement(e.target.value)}
-                    placeholder={`e.g., ${activeDeck.name}, verbs, travel...`}
-                    className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-medium text-xs outline-none focus:border-stone-950 focus:bg-white transition-all"
-                  />
-                  <p className="text-[11px] text-stone-400 font-serif italic mt-1">
-                    Target: <strong>{activeDeck.targetLanguage}</strong> → Native: <strong>{activeDeck.nativeLanguage}</strong>
-                  </p>
-                </div>
-
-                {/* Error Banner */}
-                {randomWordsError && (
-                  <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                    <span>{randomWordsError}</span>
-                  </div>
-                )}
-
-                {/* Success Banner */}
-                {randomWordsSuccessMsg && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-semibold">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{randomWordsSuccessMsg}</span>
-                  </div>
-                )}
-
-                {/* Form Action Buttons */}
-                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-stone-100">
-                  <button
-                    type="button"
-                    onClick={() => setShowRandomWordsModal(false)}
-                    disabled={isGeneratingRandomWords}
-                    className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-stone-500 hover:text-stone-900 cursor-pointer disabled:opacity-40 text-center"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isGeneratingRandomWords}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs transition-all cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2 shadow-2xs text-center whitespace-nowrap"
-                  >
-                    {isGeneratingRandomWords ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-stone-900 shrink-0" />
-                        <span>Generating {randomWordsCount} Words...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 text-stone-950 fill-current shrink-0" />
-                        <span>Add {randomWordsCount} Random Words</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
-

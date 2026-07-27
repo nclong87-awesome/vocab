@@ -1,25 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { 
-  Sparkles, 
-  Flame, 
-  BookOpen, 
-  CheckCircle, 
-  GraduationCap, 
-  Plus, 
-  Compass, 
-  Globe2, 
-  ArrowRight,
-  Trash2,
-  Calendar,
-  BarChart2,
-  Brain,
-  AlertTriangle
-} from "lucide-react";
-import { Deck, UserStats, Word } from "../types";
-import QuizView from "./QuizView";
+import { Sparkles, Plus, Compass } from "lucide-react";
+import { Deck, UserStats } from "../types";
 import { getSettingFromDB, saveSettingToDB } from "../db/indexedDB";
 import { ConfirmModal } from "./ConfirmModal";
+
+import TodayFocusHero from "./dashboard/TodayFocusHero";
+import StatsGrid from "./dashboard/StatsGrid";
+import AiAnalyticsBanner from "./dashboard/AiAnalyticsBanner";
+import DeckCard from "./dashboard/DeckCard";
+import AiDeckGenerator from "./dashboard/AiDeckGenerator";
 
 interface DashboardProps {
   stats: UserStats;
@@ -99,7 +89,7 @@ export default function Dashboard({
     onFinishQuiz(score, total, correctWordIds, incorrectWordIds);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmitCustomTopic = (e: React.FormEvent) => {
     e.preventDefault();
     const topic = customTopic.trim();
     if (!topic) return;
@@ -169,207 +159,22 @@ export default function Dashboard({
         )}
       </AnimatePresence>
 
-      {/* Dynamic Today's Practice Session Module */}
-      {isQuizActive ? (
-        <div className="bg-white border border-stone-200 p-3.5 sm:p-6 md:p-10 relative" id="active-daily-quiz-container">
-          <div className="flex justify-between items-center border-b border-stone-100 pb-4 mb-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-900 text-white text-xs font-medium">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Active Session
-            </div>
-            <button 
-              onClick={() => setIsQuizActive(false)}
-              className="text-xs font-medium text-stone-500 hover:text-stone-900 transition-colors cursor-pointer"
-            >
-              Cancel Practice
-            </button>
-          </div>
-          <QuizView 
-            deck={todayPracticeDeck}
-            onFinishQuiz={handleDailyQuizFinish}
-            onGoBack={() => setIsQuizActive(false)}
-          />
-        </div>
-      ) : (
-        <div className="bg-white border border-stone-200 p-4 sm:p-8 md:p-12 relative overflow-hidden" id="hero-banner">
-          <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-            
-            {/* Left Content Column */}
-            <div className="md:col-span-8 flex flex-col justify-between space-y-6">
-              <div className="space-y-4">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-stone-100 text-stone-800 text-xs font-medium border border-stone-200">
-                  <Calendar className="w-3.5 h-3.5 text-stone-900" /> Today's Focus Session • {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
-                </div>
-                
-                {completedToday ? (
-                  <div className="space-y-4" id="daily-completed-message">
-                    <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-stone-950 leading-tight">
-                      Today's Practice <br />
-                      <span className="font-bold text-stone-900">Completed!</span>
-                    </h1>
-                    <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
-                      "Congratulations! You completed today's vocabulary memory check. Your streak is secure and your recall is sharpening. Come back tomorrow for new customized material."
-                    </p>
-                    {sessionScore && (
-                      <div className="inline-flex items-center gap-3 bg-stone-50 border border-stone-200 px-4 py-2.5">
-                        <span className="text-xs font-medium text-stone-500">Score:</span>
-                        <span className="text-sm font-bold text-stone-950 font-mono">{sessionScore.score} / {sessionScore.total} Correct</span>
-                      </div>
-                    )}
-                    <div className="pt-2">
-                      <button 
-                        onClick={() => setIsQuizActive(true)}
-                        className="px-6 py-3 border border-stone-200 hover:border-stone-900 bg-white transition-colors text-stone-900 font-bold text-xs cursor-pointer rounded-none animate-fade-in"
-                        id="btn-retake-quiz"
-                      >
-                        Retake Daily Quiz
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4" id="daily-pending-message">
-                    <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-stone-950 leading-tight">
-                      Today's Vocabulary <br />
-                      <span className="font-bold">Practice Quiz</span>
-                    </h1>
-                    <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
-                      "Challenge your memory with {todayPracticeDeck?.words.length || 0} priority words compiled from your target languages. Finish the quiz to secure your daily streak."
-                    </p>
-                    
-                    {/* Word Preview List */}
-                    <div className="pt-2">
-                      <span className="block text-xs font-medium text-stone-500 mb-3">Words in today's session:</span>
-                      <div className="flex flex-wrap gap-2 max-w-xl">
-                        {todayPracticeDeck?.words.map((word) => (
-                          <span 
-                            key={word.id} 
-                            className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-xs text-stone-800 font-semibold tracking-tight hover:border-stone-900 hover:text-stone-950 transition-all cursor-default"
-                            title={`${word.partOfSpeech}: ${word.translation}`}
-                          >
-                            {word.word}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      <button 
-                        onClick={() => setIsQuizActive(true)}
-                        className="px-8 py-4 bg-stone-900 hover:bg-black transition-all text-white font-bold text-xs flex items-center gap-3 cursor-pointer rounded-none shadow-sm hover:shadow"
-                        id="btn-start-daily-quiz"
-                      >
-                        Start Today's Quiz <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Right Streak Column */}
-            <div className="md:col-span-4 bg-stone-50 p-4 sm:p-8 border border-stone-200 flex flex-col justify-between items-center text-center relative" id="streak-panel">
-              <div className="my-auto space-y-4">
-                <div className="relative inline-block">
-                  <Flame className={`w-14 h-14 mx-auto transition-transform duration-300 hover:scale-105 ${stats.streak.count > 0 ? "text-stone-950" : "text-stone-300"}`} />
-                </div>
-                <div>
-                  <div className="text-5xl font-bold tracking-tight text-stone-950">{stats.streak.count} Day{stats.streak.count === 1 ? "" : "s"}</div>
-                  <p className="text-xs text-stone-500 mt-2.5 font-medium">Active Study Streak</p>
-                </div>
-              </div>
-              
-              <div className="w-full pt-4 border-t border-stone-200/60 flex justify-between items-center text-xs text-stone-500 font-medium">
-                <span>Completed today:</span>
-                <span className={completedToday ? "text-stone-900 font-bold" : "text-stone-400 font-medium"}>
-                  {completedToday ? "Yes ✓" : "Pending ◯"}
-                </span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* Dynamic Today's Practice Session Hero Module */}
+      <TodayFocusHero
+        isQuizActive={isQuizActive}
+        setIsQuizActive={setIsQuizActive}
+        completedToday={completedToday}
+        sessionScore={sessionScore}
+        todayPracticeDeck={todayPracticeDeck}
+        onDailyQuizFinish={handleDailyQuizFinish}
+        streakCount={stats.streak.count}
+      />
 
       {/* Stats Blocks */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4" id="stats-grid">
-        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-3 sm:gap-4">
-          <div className="p-2 sm:p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-            <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalWordsStudied}</div>
-            <div className="text-xs text-stone-500 font-medium">Words Studied</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-3 sm:gap-4">
-          <div className="p-2 sm:p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalWordsMastered}</div>
-            <div className="text-xs text-stone-500 font-semibold">Mastered</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-4">
-          <div className="p-2 sm:p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-            <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold tracking-tight text-stone-950">{stats.totalQuizzesTaken}</div>
-            <div className="text-xs text-stone-500 font-semibold">Quizzes Taken</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 sm:p-6 border border-stone-200 flex items-center gap-4">
-          <div className="w-full">
-            <div className="text-xs text-stone-500 font-semibold mb-2">Activity Calendar</div>
-            <div className="flex gap-2 justify-between">
-              {pastSevenDays.map((day, idx) => (
-                <div 
-                  key={idx} 
-                  className="flex flex-col items-center flex-1" 
-                  title={`${day.dateStr}: ${day.studied ? "Studied" : "No activity"}`}
-                >
-                  <div className={`w-2 h-2 ${day.studied ? "bg-stone-900" : "bg-stone-200"}`} />
-                  <span className="text-[10px] text-stone-500 font-bold mt-1.5">{day.dayName[0]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <StatsGrid stats={stats} pastSevenDays={pastSevenDays} />
 
       {/* AI Performance & Weak Words Banner Callout */}
-      <div 
-        onClick={() => onSelectTab("analytics")}
-        className="bg-stone-900 text-white p-5 sm:p-6 border border-stone-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-400 transition-all group shadow-2xs"
-        id="analytics-callout-banner"
-      >
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-amber-400 text-stone-950 flex items-center justify-center font-bold shrink-0">
-            <Brain className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold tracking-tight text-white group-hover:text-amber-400 transition-colors">
-                AI Analytics & Mastery Dashboard
-              </h3>
-              <span className="bg-amber-400/20 text-amber-300 text-[10px] px-2 py-0.5 border border-amber-400/30 uppercase tracking-widest font-mono">
-                AI Coach
-              </span>
-            </div>
-            <p className="text-xs text-stone-400 font-serif italic mt-0.5">
-              Analyze performance, target weak words needing practice, and view mastered terms with AI insights.
-            </p>
-          </div>
-        </div>
-
-        <button className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2 shrink-0 transition-all">
-          <span>View Analytics</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      <AiAnalyticsBanner onSelectTab={onSelectTab} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
         {/* Decks Column */}
@@ -394,212 +199,36 @@ export default function Dashboard({
                 <p className="text-xs text-stone-400 mt-2 font-serif italic">"Design custom learning lists on the right panel to begin."</p>
               </div>
             ) : (
-              decks.map((deck) => {
-                const totalWords = deck.words.length;
-                const masteredWords = deck.words.filter(w => w.learned).length;
-                const percentMastered = totalWords > 0 ? Math.round((masteredWords / totalWords) * 100) : 0;
-
-                return (
-                  <div 
-                    key={deck.id}
-                    className="group bg-white p-4 sm:p-8 border border-stone-200 hover:border-stone-900 transition-all duration-300 relative"
-                    id={`deck-card-${deck.id}`}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-2 pr-6">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="px-2.5 py-0.5 border border-stone-200 text-stone-600 bg-stone-50 text-[11px] font-semibold">
-                            {deck.isCustom ? "Custom" : "Standard"}
-                          </span>
-                          <span className="text-xs font-mono font-semibold text-stone-500 flex items-center gap-1">
-                            <Globe2 className="w-3.5 h-3.5" /> 
-                            {deck.targetLanguage} ↔ {deck.nativeLanguage}
-                          </span>
-                        </div>
-                        <h3 className="text-xl font-bold text-stone-900 group-hover:text-stone-700 transition-colors pt-1">
-                          {deck.name}
-                        </h3>
-                        <p className="text-xs text-stone-400 font-serif italic max-w-lg leading-relaxed">
-                          {deck.description}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeckToDelete({ id: deck.id, name: deck.name });
-                          }}
-                          className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-stone-100 transition-all cursor-pointer"
-                          title="Delete Deck"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-6 border-t border-stone-100">
-                      <div className="sm:col-span-5 flex items-center gap-2 text-xs font-semibold text-stone-600">
-                        <GraduationCap className="w-4 h-4 text-stone-900" />
-                        <span>{totalWords} Words</span>
-                        <span className="text-stone-300">•</span>
-                        <span className="text-stone-900">{masteredWords} mastered</span>
-                      </div>
-
-                      <div className="sm:col-span-4 flex items-center gap-3 w-full">
-                        <div className="h-[2px] bg-stone-100 flex-1 overflow-hidden">
-                          <div 
-                            className="h-full bg-stone-900 transition-all duration-500" 
-                            style={{ width: `${percentMastered}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-mono font-bold text-stone-500 w-8 text-right">
-                          {percentMastered}%
-                        </span>
-                      </div>
-
-                      <div className="sm:col-span-3 flex gap-2 justify-end">
-                        <button
-                          onClick={() => onSelectDeck(deck.id)}
-                          className="px-3.5 py-1.5 border border-stone-200 hover:border-stone-900 bg-white transition-colors text-stone-900 text-xs font-semibold cursor-pointer"
-                        >
-                          Learn
-                        </button>
-                        <button
-                          onClick={() => {
-                            onSelectDeck(deck.id);
-                            onSelectTab("quiz");
-                          }}
-                          className="px-3.5 py-1.5 bg-stone-900 hover:bg-black transition-colors text-white text-xs font-semibold cursor-pointer"
-                        >
-                          Quiz
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              decks.map((deck) => (
+                <DeckCard
+                  key={deck.id}
+                  deck={deck}
+                  onSelectDeck={onSelectDeck}
+                  onSelectTab={onSelectTab}
+                  setDeckToDelete={setDeckToDelete}
+                />
+              ))
             )}
           </div>
         </div>
 
         {/* AI Generator Column */}
         <div className="lg:col-span-5" id="dashboard-right-column">
-          <div 
-            className="bg-white border border-stone-200 p-4 sm:p-8 space-y-5 sm:space-y-8 sticky top-6"
-            id="ai-deck-builder"
-          >
-            <div className="flex items-center gap-3 pb-4 border-b border-stone-100">
-              <div className="p-2.5 bg-stone-50 text-stone-900 border border-stone-200">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-stone-950">AI Deck Generator</h3>
-                <p className="text-xs text-stone-500 font-medium mt-0.5">Let Gemini curate unique study decks</p>
-              </div>
-            </div>
-
-            {/* Language Selection */}
-            <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
-              <div>
-                <label className="block text-stone-600 mb-1.5">Target Language</label>
-                <select 
-                  value={targetLanguage} 
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  className="w-full border border-stone-200 bg-stone-50 px-3 py-2.5 font-bold text-stone-800 outline-none focus:border-stone-950 focus:bg-white transition-all cursor-pointer text-xs"
-                  id="select-target-lang"
-                >
-                  {LANGUAGES.map(lang => (
-                    <option key={lang.code} value={lang.code}>{lang.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-stone-600 mb-1.5">Native Language</label>
-                <select 
-                  value={nativeLanguage} 
-                  onChange={(e) => setNativeLanguage(e.target.value)}
-                  className="w-full border border-stone-200 bg-stone-50 px-3 py-2.5 font-bold text-stone-800 outline-none focus:border-stone-950 focus:bg-white transition-all cursor-pointer text-xs"
-                  id="select-native-lang"
-                >
-                  {LANGUAGES.map(lang => (
-                    <option key={lang.code} value={lang.code}>{lang.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Quantity */}
-            <div className="text-xs font-semibold">
-              <label className="block text-stone-600 mb-1.5">Deck Size</label>
-              <div className="flex gap-2">
-                {[5, 8, 12].map((num) => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setQuantity(num)}
-                    className={`flex-1 py-2 border text-center font-semibold transition-all text-xs cursor-pointer ${
-                      quantity === num 
-                        ? "border-stone-950 bg-stone-950 text-white" 
-                        : "border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-400 hover:text-stone-900"
-                    }`}
-                  >
-                    {num} Words
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom Topic Form */}
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="text-xs font-semibold">
-                <label className="block text-stone-600 mb-1.5">Custom Topic</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={customTopic}
-                    onChange={(e) => setCustomTopic(e.target.value)}
-                    placeholder="e.g., Medical jargon, Bakery terminology"
-                    className="w-full border border-stone-200 bg-stone-50 pl-3 pr-12 py-3 font-semibold text-stone-800 outline-none focus:border-stone-950 focus:bg-white transition-all text-xs"
-                    id="input-custom-topic"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!customTopic.trim() || isLoading}
-                    className="absolute right-1.5 top-1.5 p-2 bg-stone-900 hover:bg-black disabled:bg-stone-100 disabled:text-stone-300 text-white transition-colors cursor-pointer"
-                    id="btn-submit-topic"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            {/* Preset Topics */}
-            <div className="space-y-3">
-              <label className="block text-xs font-semibold text-stone-600">Or Select a Preset Theme</label>
-              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1" id="presets-container">
-                {PRESET_TOPICS.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handlePresetClick(preset.label)}
-                    disabled={isLoading}
-                    className="w-full text-left p-4 border border-stone-100 bg-stone-50 hover:bg-stone-100 hover:border-stone-300 transition-all flex items-start gap-4 cursor-pointer group"
-                  >
-                    <span className="text-xl bg-white p-2 border border-stone-200 shadow-none transition-transform group-hover:scale-110">{preset.emoji}</span>
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-stone-900 group-hover:text-black">
-                        {preset.label}
-                      </div>
-                      <div className="text-[10px] text-stone-400 leading-tight font-serif italic">
-                        {preset.topic}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <AiDeckGenerator
+            targetLanguage={targetLanguage}
+            setTargetLanguage={setTargetLanguage}
+            nativeLanguage={nativeLanguage}
+            setNativeLanguage={setNativeLanguage}
+            quantity={quantity}
+            setQuantity={setQuantity}
+            customTopic={customTopic}
+            setCustomTopic={setCustomTopic}
+            onSubmitCustomTopic={handleSubmitCustomTopic}
+            onPresetClick={handlePresetClick}
+            isLoading={isLoading}
+            languages={LANGUAGES}
+            presetTopics={PRESET_TOPICS}
+          />
         </div>
       </div>
 

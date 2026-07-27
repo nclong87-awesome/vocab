@@ -348,7 +348,7 @@ Ensure the words selected cover different skill levels and are practical for rea
 // 4. Auto-fill a single word
 app.post("/api/autofill-word", async (req, res) => {
   try {
-    const { word, targetLanguage, nativeLanguage, llmConfig } = req.body;
+    const { word, targetLanguage, nativeLanguage, notebookName, notebookDescription, llmConfig } = req.body;
 
     if (!word) {
       return res.status(400).json({ error: "Word is required" });
@@ -357,20 +357,24 @@ app.post("/api/autofill-word", async (req, res) => {
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
+    const notebookContextText = notebookName 
+      ? `\nNOTEBOOK CONTEXT: The term "${word}" belongs to the Vocabulary Notebook "${notebookName}"${notebookDescription ? ` (${notebookDescription})` : ""}. Tailor the definition, example sentence, and image visual description specifically to fit this notebook context.`
+      : "";
+
     const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
 Target language being learned: "${userTarget}".
-User's native language: "${userNative}".
+User's native language: "${userNative}".${notebookContextText}
 
 CRITICAL MANDATORY REQUIREMENT:
-- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}).
+- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}). Tailor it to the notebook topic if applicable.
 - "translation": Provide the direct, accurate translation of "${word}" into the user's native language (${userNative}).
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
-- "example": A realistic, high-quality example sentence in the target language (${userTarget}).
+- "example": A realistic, high-quality example sentence in the target language (${userTarget})${notebookName ? ` contextualized to ${notebookName}` : ""}.
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
-- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word]?width=800&height=600&nologo=true"`;
+- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word${notebookName ? `-in-context-of-${encodeURIComponent(notebookName.toLowerCase().replace(/[^a-z0-0]/g, '-'))}` : ""}]?width=800&height=600&nologo=true"`;
 
-    const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).`;
+    const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).${notebookName ? ` Notebook topic context: ${notebookName}.` : ""}`;
     const schemaDesc = `{
   "word": "string",
   "pronunciation": "string",
