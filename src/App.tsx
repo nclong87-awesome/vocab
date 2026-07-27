@@ -254,28 +254,31 @@ export default function App() {
 
   // Save Onboarding (Languages + LLM Config)
   const handleSaveOnboarding = (
-    languages: { nativeLanguage: string; targetLanguage: string },
+    userData: { email: string; nativeLanguage: string; targetLanguage: string },
     newConfig: LLMConfig
   ) => {
     setLlmConfig(newConfig);
     saveLLMConfigToDB(newConfig).catch(e => console.error("IndexedDB config save error:", e));
     try {
       localStorage.setItem("vocab_learner_llm_config", JSON.stringify(newConfig));
-      if (languages.nativeLanguage) {
-        localStorage.setItem("vocab_learner_native_lang", languages.nativeLanguage);
+      if (userData.email) {
+        localStorage.setItem("vocab_learner_user_email", userData.email);
       }
-      if (languages.targetLanguage) {
-        localStorage.setItem("vocab_learner_target_lang", languages.targetLanguage);
+      if (userData.nativeLanguage) {
+        localStorage.setItem("vocab_learner_native_lang", userData.nativeLanguage);
+      }
+      if (userData.targetLanguage) {
+        localStorage.setItem("vocab_learner_target_lang", userData.targetLanguage);
       }
     } catch (e) {
       console.error("Failed to save onboarding settings to localStorage", e);
     }
 
-    if (languages.targetLanguage && languages.nativeLanguage && decks.length > 0) {
+    if (userData.targetLanguage && userData.nativeLanguage && decks.length > 0) {
       const updatedDecks = decks.map(deck => ({
         ...deck,
-        targetLanguage: languages.targetLanguage,
-        nativeLanguage: languages.nativeLanguage
+        targetLanguage: userData.targetLanguage,
+        nativeLanguage: userData.nativeLanguage
       }));
       saveDecksToStorage(updatedDecks);
     }

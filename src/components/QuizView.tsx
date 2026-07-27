@@ -38,9 +38,37 @@ function generateQuizQuestions(deck: Deck): QuizQuestion[] {
   const generated: QuizQuestion[] = [];
   const allWords = deck.words;
 
+  // Helper to generate confusing sound-alike or misspelling distractors
+  const generateConfusers = (w: string) => {
+    return Array.from(new Set([
+      w.replace(/ie/gi, 'ei'),
+      w.replace(/ei/gi, 'ie'),
+      w.replace(/tion/gi, 'sion'),
+      w.replace(/sion/gi, 'tion'),
+      w.replace(/c/gi, 's'),
+      w.replace(/s/gi, 'c'),
+      w.replace(/ll/gi, 'l'),
+      w.replace(/l/gi, 'll'),
+      w.replace(/m/gi, 'n'),
+      w.replace(/n/gi, 'm'),
+      w.replace(/p/gi, 'b'),
+      w.replace(/b/gi, 'p'),
+      w.replace(/t/gi, 'd'),
+      w.replace(/d/gi, 't'),
+      w + "e",
+      w.endsWith('e') ? w.slice(0, -1) : w + "s",
+      w + "ing",
+      w.replace(/[aeiou]/i, (v) => v === 'a' ? 'e' : v === 'e' ? 'a' : v === 'i' ? 'e' : v === 'o' ? 'u' : 'o'),
+      w.replace(/[aeiou]/ig, 'a'),
+      w.replace(/[aeiou]/ig, 'e'),
+      w.replace(/[aeiou]/ig, 'i'),
+      w.replace(/[aeiou]/ig, 'o'),
+      w.replace(/[aeiou]/ig, 'u')
+    ])).filter(c => c.toLowerCase() !== w.toLowerCase() && c.length > 1);
+  };
+
   allWords.forEach((word) => {
-    const types: ('translation' | 'definition' | 'sentence' | 'listening')[] = [
-      'translation', 
+    const types: ('definition' | 'sentence' | 'listening')[] = [
       'definition', 
       'sentence',
       'listening'
@@ -52,59 +80,56 @@ function generateQuizQuestions(deck: Deck): QuizQuestion[] {
     let questionText = "";
     let hintText = word.pronunciation;
 
-    if (type === 'translation') {
-      correctAnswer = word.translation;
-      questionText = `What is the meaning of the word "${word.word}"?`;
-      const potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.translation);
-      const shuffledWrongs = potentialWrongs.sort(() => 0.5 - Math.random()).slice(0, 3);
-      options = [correctAnswer, ...shuffledWrongs].sort(() => 0.5 - Math.random());
-    } 
-    else if (type === 'definition') {
+    if (type === 'definition') {
       correctAnswer = word.word;
       questionText = `Which word matches the following definition?\n"${word.definition}"`;
-      const potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);
-      const shuffledWrongs = potentialWrongs.sort(() => 0.5 - Math.random()).slice(0, 3);
-      options = [correctAnswer, ...shuffledWrongs].sort(() => 0.5 - Math.random());
+      
+      // Sort words by length similarity to make it harder
+      let potentialWrongs = allWords
+        .filter(w => w.id !== word.id)
+        .sort((a, b) => Math.abs(a.word.length - word.word.length) - Math.abs(b.word.length - word.word.length))
+        .map(w => w.word);
+        
+      let distractors = potentialWrongs.slice(0, 6).sort(() => 0.5 - Math.random());
+      
+      // Fill with confusers if deck is too small
+      if (distractors.length < 3) {
+        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
+      }
+      
+      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
+      options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
     else if (type === 'listening') {
-      const isWordMatch = Math.random() > 0.4;
-      if (isWordMatch) {
-        correctAnswer = word.word;
-        questionText = `Listen to the audio clip and select the correct matching word:`;
-        const potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);
-        const shuffledWrongs = potentialWrongs.sort(() => 0.5 - Math.random()).slice(0, 3);
-        
-        // Add confusing sound-alike or morphological distractor variations if deck is small
-        const confusers = [
-          word.word + "s",
-          word.word + "ing",
-          word.word.slice(0, Math.max(1, word.word.length - 1)) + "ed",
-          "un" + word.word,
-          "re" + word.word
-        ];
-        for (const conf of confusers) {
-          if (shuffledWrongs.length >= 3) break;
-          if (conf !== correctAnswer && !shuffledWrongs.includes(conf)) {
-            shuffledWrongs.push(conf);
-          }
-        }
-        options = [correctAnswer, ...shuffledWrongs].sort(() => 0.5 - Math.random());
-      } else {
-        correctAnswer = word.translation;
-        questionText = `Listen carefully to the spoken word and select its correct translation:`;
-        const potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.translation);
-        const shuffledWrongs = potentialWrongs.sort(() => 0.5 - Math.random()).slice(0, 3);
-        options = [correctAnswer, ...shuffledWrongs].sort(() => 0.5 - Math.random());
-      }
+      correctAnswer = word.word;
+      questionText = `Listen to the audio clip and select the correct matching word:`;
+      
+      // Use phonetic and morphological variations to make listening harder
+      const confusers = generateConfusers(word.word).sort(() => 0.5 - Math.random());
+      const potentialWrongsFromDeck = allWords.filter(w => w.id !== word.id).map(w => w.word).sort(() => 0.5 - Math.random());
+      
+      // Mix them up, prioritizing confusers for listening questions to test phonetic differentiation
+      const mixedWrongs = [...confusers, ...potentialWrongsFromDeck];
+      const uniqueDistractors = Array.from(new Set(mixedWrongs)).filter(w => w !== correctAnswer).slice(0, 3);
+      
+      options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
     else {
       correctAnswer = word.word;
       const regex = new RegExp(`\\b${word.word}\\b`, "i");
       const hiddenSentence = word.example.replace(regex, "______");
-      questionText = `Fill in the blank for the sentence:\n"${hiddenSentence}"\n\n(${word.exampleTranslation})`;
-      const potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);
-      const shuffledWrongs = potentialWrongs.sort(() => 0.5 - Math.random()).slice(0, 3);
-      options = [correctAnswer, ...shuffledWrongs].sort(() => 0.5 - Math.random());
+      questionText = `Fill in the blank for the sentence:\n"${hiddenSentence}"`;
+      
+      let potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);
+      let distractors = potentialWrongs.sort(() => 0.5 - Math.random());
+      
+      // Fill with confusers if deck is too small
+      if (distractors.length < 3) {
+        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
+      }
+      
+      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
+      options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
 
     generated.push({
@@ -593,9 +618,6 @@ export default function QuizView({
                             {item.question.type === 'definition' && (
                               <span>Anchor <strong>{item.question.word}</strong> to its definition by creating a vivid visual story or keyword mnemonic.</span>
                             )}
-                            {item.question.type === 'translation' && (
-                              <span>Associate <strong>{item.question.word}</strong> directly with its translation <strong>"{matchingWordObj?.translation}"</strong> using image associations.</span>
-                            )}
                             {item.question.type === 'sentence' && (
                               <span>Read the full example sentence out loud 2 times with <strong>{item.question.word}</strong> inserted in context.</span>
                             )}
@@ -771,7 +793,6 @@ export default function QuizView({
         {/* Type Icon */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-[10px] font-bold tracking-widest text-stone-800 bg-stone-50 border border-stone-200 px-3 py-1 uppercase font-mono rounded-none">
-            {currentQuestion.type === 'translation' && "Meaning Quiz"}
             {currentQuestion.type === 'definition' && "Definition Match"}
             {currentQuestion.type === 'sentence' && "Context Filler"}
             {currentQuestion.type === 'spelling' && "Spelling Challenge"}

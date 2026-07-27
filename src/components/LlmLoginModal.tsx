@@ -56,7 +56,7 @@ interface LlmLoginModalProps {
   initialNativeLanguage?: string;
   initialTargetLanguage?: string;
   onSaveConfig: (config: LLMConfig) => void;
-  onSaveOnboarding?: (languages: { nativeLanguage: string; targetLanguage: string }, config: LLMConfig) => void;
+  onSaveOnboarding?: (userData: { email: string; nativeLanguage: string; targetLanguage: string }, config: LLMConfig) => void;
   onClose?: () => void;
   canDismiss?: boolean;
   defaultStep?: number;
@@ -74,6 +74,11 @@ export default function LlmLoginModal({
   defaultStep = 1
 }: LlmLoginModalProps) {
   const [step, setStep] = useState<number>(defaultStep);
+
+  // Email state
+  const [email, setEmail] = useState<string>(
+    localStorage.getItem("vocab_learner_user_email") || ""
+  );
 
   // Language state
   const [nativeLanguage, setNativeLanguage] = useState<string>(
@@ -102,7 +107,7 @@ export default function LlmLoginModal({
 
   useEffect(() => {
     if (isOpen) {
-      setStep(canDismiss ? 3 : 1);
+      setStep(canDismiss ? 2 : 1);
 
       const profiles = getSavedProvidersMap(currentConfig);
       setSavedProfiles(profiles);
@@ -244,7 +249,7 @@ export default function LlmLoginModal({
 
     if (onSaveOnboarding) {
       onSaveOnboarding(
-        { nativeLanguage: finalNativeLang, targetLanguage: finalTargetLang },
+        { email: email.trim(), nativeLanguage: finalNativeLang, targetLanguage: finalTargetLang },
         newConfig
       );
     } else {
@@ -269,14 +274,12 @@ export default function LlmLoginModal({
               <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Welcome to Vocab AI Setup
             </div>
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-              {step === 1 && "What language do you speak?"}
-              {step === 2 && "What language do you want to learn?"}
-              {step === 3 && "Connect Your AI Model Engine"}
+              {step === 1 && "Profile & Language Setup"}
+              {step === 2 && "Connect Your AI Model Engine"}
             </h2>
             <p className="text-stone-400 text-xs mt-0.5 font-serif italic leading-relaxed">
-              {step === 1 && "Select your native or primary language to customize translations and explanations."}
-              {step === 2 && "Select your target language. AI will curate personalized flashcards and pronunciation guides."}
-              {step === 3 && "Connect your LLM provider to power instant AI vocabulary generation and interactive quizzes."}
+              {step === 1 && "Provide your email and select your languages to personalize your learning experience."}
+              {step === 2 && "Connect your LLM provider to power instant AI vocabulary generation and interactive quizzes."}
             </p>
           </div>
           {canDismiss && onClose && (
@@ -302,46 +305,55 @@ export default function LlmLoginModal({
             }`}
           >
             <span className="w-4 h-4 rounded-full bg-stone-700 text-white flex items-center justify-center text-[10px] font-mono">1</span>
-            <span>Current: <strong className="font-extrabold">{finalNativeLang}</strong></span>
+            <span>Profile & Languages</span>
           </button>
 
           <span className="text-stone-300 font-bold">➔</span>
 
           <button
             type="button"
-            onClick={() => setStep(2)}
+            onClick={() => {
+              if (email.trim() && finalNativeLang && finalTargetLang) {
+                setStep(2);
+              }
+            }}
+            disabled={!email.trim() || !finalNativeLang || !finalTargetLang}
             className={`flex items-center gap-1.5 font-semibold text-xs px-2.5 py-1 transition-all cursor-pointer ${
               step === 2
                 ? "bg-stone-900 text-white shadow-xs"
+                : (!email.trim() || !finalNativeLang || !finalTargetLang)
+                ? "text-stone-400 cursor-not-allowed opacity-60"
                 : "text-stone-600 hover:text-stone-900 hover:bg-stone-200/60"
             }`}
           >
             <span className="w-4 h-4 rounded-full bg-stone-700 text-white flex items-center justify-center text-[10px] font-mono">2</span>
-            <span>Learning: <strong className="font-extrabold">{finalTargetLang}</strong></span>
-          </button>
-
-          <span className="text-stone-300 font-bold">➔</span>
-
-          <button
-            type="button"
-            onClick={() => setStep(3)}
-            className={`flex items-center gap-1.5 font-semibold text-xs px-2.5 py-1 transition-all cursor-pointer ${
-              step === 3
-                ? "bg-stone-900 text-white shadow-xs"
-                : "text-stone-600 hover:text-stone-900 hover:bg-stone-200/60"
-            }`}
-          >
-            <span className="w-4 h-4 rounded-full bg-stone-700 text-white flex items-center justify-center text-[10px] font-mono">3</span>
             <span>LLM Login</span>
           </button>
         </div>
 
-        {/* STEP 1: SELECT NATIVE LANGUAGE */}
+        {/* STEP 1: PROFILE AND LANGUAGES */}
         {step === 1 && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
+            
+            {/* Email Field */}
             <div className="space-y-3">
               <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
-                <Globe2 className="w-4 h-4 text-stone-900" /> Choose Your Primary / Native Language
+                Email Address <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full bg-stone-50 border border-stone-300 p-3 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900"
+              />
+            </div>
+
+            {/* Native Language */}
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
+                <Globe2 className="w-4 h-4 text-stone-900" /> Primary / Native Language
               </label>
 
               <div className="grid grid-cols-2 min-[480px]:grid-cols-3 sm:grid-cols-4 gap-2.5">
@@ -352,22 +364,19 @@ export default function LlmLoginModal({
                       key={lang.code}
                       type="button"
                       onClick={() => setNativeLanguage(lang.code)}
-                      className={`p-3 border text-left transition-all cursor-pointer flex items-center justify-between ${
+                      className={`p-2 border text-left transition-all cursor-pointer flex items-center justify-between ${
                         isSelected 
                           ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                           : "bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-200"
                       }`}
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="text-xl shrink-0">{lang.flag}</span>
+                        <span className="text-lg shrink-0">{lang.flag}</span>
                         <div className="truncate">
-                          <div className="font-bold text-xs">{lang.name}</div>
-                          <div className={`text-[10px] font-serif italic line-clamp-1 ${isSelected ? "text-stone-300" : "text-stone-500"}`}>
-                            {lang.nativeName}
-                          </div>
+                          <div className="font-bold text-[11px]">{lang.name}</div>
                         </div>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-white shrink-0 ml-1" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1" />}
                     </button>
                   );
                 })}
@@ -376,17 +385,14 @@ export default function LlmLoginModal({
                 <button
                   type="button"
                   onClick={() => setNativeLanguage("Custom")}
-                  className={`p-3 border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  className={`p-2 border text-left transition-all cursor-pointer flex items-center justify-between ${
                     nativeLanguage === "Custom"
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-200"
                   }`}
                 >
-                  <div>
-                    <div className="font-bold text-xs">Other Language</div>
-                    <div className="text-[10px] text-stone-400 italic">Type custom</div>
-                  </div>
-                  {nativeLanguage === "Custom" && <Check className="w-4 h-4 text-white shrink-0" />}
+                  <div className="font-bold text-[11px]">Other</div>
+                  {nativeLanguage === "Custom" && <Check className="w-3.5 h-3.5 text-white shrink-0" />}
                 </button>
               </div>
 
@@ -396,42 +402,17 @@ export default function LlmLoginModal({
                     type="text"
                     value={customNative}
                     onChange={(e) => setCustomNative(e.target.value)}
-                    placeholder="Enter your language name (e.g., Polish, Swedish, Thai...)"
-                    className="w-full bg-stone-50 border border-stone-300 p-3 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900"
+                    placeholder="Enter your language name (e.g., Polish)"
+                    className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900"
                   />
                 </div>
               )}
             </div>
 
-            <div className="pt-4 border-t border-stone-200 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="px-6 py-2.5 bg-stone-900 hover:bg-black text-white font-semibold text-xs flex items-center gap-2 cursor-pointer transition-all shadow-sm"
-              >
-                Next: Choose Target Language <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: SELECT TARGET LANGUAGE TO LEARN */}
-        {step === 2 && (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-6">
-            {/* Visual Language Pairing Banner */}
-            <div className="bg-stone-900 text-white p-4 border border-stone-800 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-stone-400 block">Language Pair Configuration</span>
-                <p className="text-sm font-bold text-white mt-0.5">
-                  Native Language: <span className="text-amber-300">{finalNativeLang}</span> ➔ Learning: <span className="text-emerald-300">{finalTargetLang}</span>
-                </p>
-              </div>
-              <BookOpen className="w-6 h-6 text-stone-400 shrink-0" />
-            </div>
-
+            {/* Target Language */}
             <div className="space-y-3">
               <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-stone-900" /> Choose Language You Want to Learn
+                <Globe className="w-4 h-4 text-stone-900" /> Language You Want to Learn
               </label>
 
               <div className="grid grid-cols-2 min-[480px]:grid-cols-3 sm:grid-cols-4 gap-2.5">
@@ -442,22 +423,19 @@ export default function LlmLoginModal({
                       key={lang.code}
                       type="button"
                       onClick={() => setTargetLanguage(lang.code)}
-                      className={`p-3 border text-left transition-all cursor-pointer flex items-center justify-between ${
+                      className={`p-2 border text-left transition-all cursor-pointer flex items-center justify-between ${
                         isSelected 
                           ? "bg-stone-900 text-white border-stone-900 shadow-sm"
                           : "bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-200"
                       }`}
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="text-xl shrink-0">{lang.flag}</span>
+                        <span className="text-lg shrink-0">{lang.flag}</span>
                         <div className="truncate">
-                          <div className="font-bold text-xs">{lang.name}</div>
-                          <div className={`text-[10px] font-serif italic line-clamp-1 ${isSelected ? "text-stone-300" : "text-stone-500"}`}>
-                            {lang.nativeName}
-                          </div>
+                          <div className="font-bold text-[11px]">{lang.name}</div>
                         </div>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-white shrink-0 ml-1" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1" />}
                     </button>
                   );
                 })}
@@ -466,17 +444,14 @@ export default function LlmLoginModal({
                 <button
                   type="button"
                   onClick={() => setTargetLanguage("Custom")}
-                  className={`p-3 border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  className={`p-2 border text-left transition-all cursor-pointer flex items-center justify-between ${
                     targetLanguage === "Custom"
                       ? "bg-stone-900 text-white border-stone-900"
                       : "bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-200"
                   }`}
                 >
-                  <div>
-                    <div className="font-bold text-xs">Other Language</div>
-                    <div className="text-[10px] text-stone-400 italic">Type custom</div>
-                  </div>
-                  {targetLanguage === "Custom" && <Check className="w-4 h-4 text-white shrink-0" />}
+                  <div className="font-bold text-[11px]">Other</div>
+                  {targetLanguage === "Custom" && <Check className="w-3.5 h-3.5 text-white shrink-0" />}
                 </button>
               </div>
 
@@ -486,26 +461,29 @@ export default function LlmLoginModal({
                     type="text"
                     value={customTarget}
                     onChange={(e) => setCustomTarget(e.target.value)}
-                    placeholder="Enter target language name (e.g., Finnish, Greek, Hindi...)"
-                    className="w-full bg-stone-50 border border-stone-300 p-3 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900"
+                    placeholder="Enter target language name (e.g., Finnish)"
+                    className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900"
                   />
                 </div>
               )}
             </div>
 
-            <div className="pt-4 border-t border-stone-200 flex justify-between items-center">
+            <div className="pt-4 border-t border-stone-200 flex justify-end">
               <button
                 type="button"
-                onClick={() => setStep(1)}
-                className="px-4 py-2.5 border border-stone-300 hover:border-stone-900 bg-stone-50 text-stone-800 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
-              >
-                <ArrowLeft className="w-4 h-4" /> Back to Native Language
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="px-6 py-2.5 bg-stone-900 hover:bg-black text-white font-semibold text-xs flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+                onClick={() => {
+                  if (email.trim() && finalNativeLang && finalTargetLang) {
+                    setStep(2);
+                  } else {
+                    alert("Please enter your email and select both languages.");
+                  }
+                }}
+                disabled={!email.trim() || !finalNativeLang || !finalTargetLang}
+                className={`px-6 py-2.5 font-semibold text-xs flex items-center gap-2 transition-all shadow-sm ${
+                  !email.trim() || !finalNativeLang || !finalTargetLang
+                    ? "bg-stone-300 text-stone-500 cursor-not-allowed"
+                    : "bg-stone-900 hover:bg-black text-white cursor-pointer"
+                }`}
               >
                 Next: Connect LLM Engine <ArrowRight className="w-4 h-4" />
               </button>
@@ -513,8 +491,8 @@ export default function LlmLoginModal({
           </div>
         )}
 
-        {/* STEP 3: LOGIN WITH LLM PROVIDER */}
-        {step === 3 && (
+        {/* STEP 2: LOGIN WITH LLM PROVIDER */}
+        {step === 2 && (
           <form onSubmit={handleCompleteSetup} className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5">
             {/* Summary Tag */}
             <div className="bg-stone-50 p-3 border border-stone-200 flex items-center justify-between text-xs">
@@ -523,7 +501,7 @@ export default function LlmLoginModal({
               </span>
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(1)}
                 className="text-[11px] font-bold text-stone-800 hover:underline cursor-pointer"
               >
                 Change Languages
@@ -729,7 +707,7 @@ export default function LlmLoginModal({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(1)}
                   className="px-4 py-2 border border-stone-300 hover:border-stone-900 bg-stone-50 text-stone-800 font-semibold text-xs flex items-center gap-1 cursor-pointer transition-all"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" /> Back
