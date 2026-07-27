@@ -58,7 +58,29 @@ export default function FlashcardDeck({
     );
   }
 
-  const words = deck.words;
+  const words = useMemo(() => {
+    if (!deck?.words) return [];
+    const list = deck.words.map((w, originalIndex) => ({ word: w, originalIndex }));
+    const getWordTimestamp = (w: Word, originalIndex: number): number => {
+      if (w.createdAt) {
+        const t = new Date(w.createdAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      const match = w.id.match(/\d{10,13}/);
+      if (match) {
+        const parsed = parseInt(match[0], 10);
+        if (!isNaN(parsed) && parsed > 1000000000) return parsed;
+      }
+      return originalIndex;
+    };
+    list.sort((a, b) => {
+      const tA = getWordTimestamp(a.word, a.originalIndex);
+      const tB = getWordTimestamp(b.word, b.originalIndex);
+      if (tA !== tB) return tB - tA;
+      return b.originalIndex - a.originalIndex;
+    });
+    return list.map(item => item.word);
+  }, [deck?.words]);
   const currentWord = words[currentIndex];
 
   if (!words || words.length === 0) {

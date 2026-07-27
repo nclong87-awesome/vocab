@@ -9,7 +9,8 @@ import {
   PanelLeft, 
   Grid, 
   List, 
-  Globe2
+  Globe2,
+  ArrowUpDown
 } from "lucide-react";
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -90,8 +91,9 @@ export default function DeckManager({
   const [regeneratingWordId, setRegeneratingWordId] = useState<string | null>(null);
   const [regeneratedSuccessWordId, setRegeneratedSuccessWordId] = useState<string | null>(null);
 
-  // UI layout and search states
+  // UI layout, sort, and search states
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "alpha" | "unlearned">("newest");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -383,17 +385,59 @@ export default function DeckManager({
     }
   };
 
-  // Filter words by search query
+  // Filter and sort words by search query and selected sort mode (defaults to newest first)
   const filteredWords = useMemo(() => {
     if (!activeDeck) return [];
-    if (!searchQuery.trim()) return activeDeck.words;
-    const q = searchQuery.toLowerCase().trim();
-    return activeDeck.words.filter(w => 
-      w.word.toLowerCase().includes(q) ||
-      w.translation.toLowerCase().includes(q) ||
-      w.definition.toLowerCase().includes(q)
-    );
-  }, [activeDeck, searchQuery]);
+    
+    // Map words with original array index for fallback ordering
+    let list = activeDeck.words.map((w, originalIndex) => ({ word: w, originalIndex }));
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(({ word: w }) => 
+        w.word.toLowerCase().includes(q) ||
+        w.translation.toLowerCase().includes(q) ||
+        w.definition.toLowerCase().includes(q)
+      );
+    }
+
+    const getWordTimestamp = (w: Word, originalIndex: number): number => {
+      if (w.createdAt) {
+        const t = new Date(w.createdAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      const match = w.id.match(/\d{10,13}/);
+      if (match) {
+        const parsed = parseInt(match[0], 10);
+        if (!isNaN(parsed) && parsed > 1000000000) return parsed;
+      }
+      return originalIndex;
+    };
+
+    list.sort((a, b) => {
+      const tA = getWordTimestamp(a.word, a.originalIndex);
+      const tB = getWordTimestamp(b.word, b.originalIndex);
+
+      if (sortBy === "newest") {
+        if (tA !== tB) return tB - tA; // Newest timestamp/created first
+        return b.originalIndex - a.originalIndex; // Later array insertion index first
+      } else if (sortBy === "oldest") {
+        if (tA !== tB) return tA - tB;
+        return a.originalIndex - b.originalIndex;
+      } else if (sortBy === "alpha") {
+        return a.word.word.localeCompare(b.word.word);
+      } else if (sortBy === "unlearned") {
+        if (a.word.learned !== b.word.learned) {
+          return a.word.learned ? 1 : -1;
+        }
+        if (tA !== tB) return tB - tA;
+        return b.originalIndex - a.originalIndex;
+      }
+      return 0;
+    });
+
+    return list.map(item => item.word);
+  }, [activeDeck, searchQuery, sortBy]);
 
   return (
     <div className="space-y-8" id="deck-manager-container">
@@ -481,7 +525,7 @@ export default function DeckManager({
                 </div>
               </div>
 
-              {/* Search & Layout View Bar */}
+              {/* Search, Sort & Layout View Bar */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-50 p-3 border border-stone-200">
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -502,29 +546,47 @@ export default function DeckManager({
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 border-l border-stone-200 pl-3">
-                  <button
-                    onClick={() => setViewMode("grid")}
-                    className={`p-2 border transition-all cursor-pointer ${
-                      viewMode === "grid" 
-                        ? "bg-stone-900 text-white border-stone-900" 
-                        : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
-                    }`}
-                    title="Grid Card View"
-                  >
-                    <Grid className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode("list")}
-                    className={`p-2 border transition-all cursor-pointer ${
-                      viewMode === "list" 
-                        ? "bg-stone-900 text-white border-stone-900" 
-                        : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
-                    }`}
-                    title="Compact Row List View"
-                  >
-                    <List className="w-3.5 h-3.5" />
-                  </button>
+                <div className="flex items-center gap-2">
+                  {/* Sort Order Selector */}
+                  <div className="flex items-center gap-1.5 bg-white border border-stone-200 px-2.5 py-1.5 shrink-0">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider hidden sm:inline">Sort:</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as "newest" | "oldest" | "alpha" | "unlearned")}
+                      className="text-xs font-bold text-stone-900 bg-transparent outline-none cursor-pointer"
+                    >
+                      <option value="newest">New Words First</option>
+                      <option value="oldest">Oldest First</option>
+                      <option value="alpha">Alphabetical (A-Z)</option>
+                      <option value="unlearned">Unlearned First</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1 border-l border-stone-200 pl-2">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 border transition-all cursor-pointer ${
+                        viewMode === "grid" 
+                          ? "bg-stone-900 text-white border-stone-900" 
+                          : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
+                      }`}
+                      title="Grid Card View"
+                    >
+                      <Grid className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 border transition-all cursor-pointer ${
+                        viewMode === "list" 
+                          ? "bg-stone-900 text-white border-stone-900" 
+                          : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
+                      }`}
+                      title="Compact Row List View"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 

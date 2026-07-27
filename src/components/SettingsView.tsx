@@ -445,7 +445,409 @@ export default function SettingsView({
         </div>
       )}
 
-      {/* Section 1: TTS AI Model & Engine Selection */}
+      {/* Section 1: AI Model Engine Multi-Provider Connections */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+        <div className="border-b border-stone-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Bot className="w-4 h-4 text-stone-800" />
+              AI Model Provider Connections & Key Storage
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Connect and store credentials for multiple LLM providers (Ollama, OpenAI, GitHub Models, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenLlmModal()}
+            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0 self-start md:self-auto"
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>Add / Edit Provider Credentials</span>
+          </button>
+        </div>
+
+        {/* Active Engine Highlight Box */}
+        <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Active AI Engine:</span>
+              <span className="text-sm font-black text-stone-900 capitalize flex items-center gap-1.5">
+                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
+                <span className="text-xs font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2 py-0.5">
+                  {llmConfig.model}
+                </span>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestActiveLLM}
+              disabled={testingLlm}
+              className="px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+            >
+              {testingLlm ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-600" />
+                  <span>Testing Active Engine...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                  <span>Test Active Connection</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key Status</span>
+              <span className="font-mono text-stone-800 font-semibold">
+                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
+              <span className="font-mono text-stone-800 font-semibold truncate block">
+                {llmConfig.baseUrl || "Default API Gateway"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Total Saved Profiles</span>
+              <span className="font-semibold text-stone-800">
+                {Object.keys(savedProvidersMap).length} Provider Credentials Stored
+              </span>
+            </div>
+          </div>
+
+          {llmTestResult && (
+            <div className={`p-2.5 text-xs font-semibold flex items-center gap-2 border ${
+              llmTestResult.success ? "bg-emerald-50 border-emerald-300 text-emerald-900" : "bg-red-50 border-red-300 text-red-900"
+            }`}>
+              {llmTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+              <span>{llmTestResult.msg}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Provider Cards Grid */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
+            Stored AI Engine Profiles ({PROVIDER_OPTIONS.length} Supported Providers)
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {PROVIDER_OPTIONS.map((p) => {
+              const isActive = llmConfig.provider === p.id;
+              const saved = savedProvidersMap[p.id];
+              const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
+
+              return (
+                <div
+                  key={p.id}
+                  className={`p-4 border flex flex-col justify-between space-y-3 transition-all ${
+                    isActive 
+                      ? "bg-stone-900 text-white border-stone-900 shadow-sm" 
+                      : isSaved 
+                      ? "bg-amber-50/40 border-amber-200 text-stone-900" 
+                      : "bg-white border-stone-200 text-stone-800"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs tracking-tight">{p.name}</span>
+                      {isActive ? (
+                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 flex items-center gap-1">
+                          <Zap className="w-2.5 h-2.5 fill-current" />
+                          ACTIVE
+                        </span>
+                      ) : isSaved ? (
+                        <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1">
+                          <BookmarkCheck className="w-2.5 h-2.5" />
+                          SAVED
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-stone-400">Not Saved</span>
+                      )}
+                    </div>
+                    <p className={`text-[11px] font-serif italic line-clamp-1 ${isActive ? "text-stone-300" : "text-stone-500"}`}>
+                      {p.tagline}
+                    </p>
+                  </div>
+
+                  <div className={`p-2 text-[11px] font-mono border space-y-0.5 ${
+                    isActive ? "bg-stone-800 border-stone-700 text-stone-200" : "bg-white/80 border-stone-200 text-stone-700"
+                  }`}>
+                    <div className="flex justify-between">
+                      <span className="opacity-60">Model:</span>
+                      <span className="font-bold">{saved ? saved.model : p.defaultModel}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="opacity-60">Key:</span>
+                      <span>
+                        {saved?.apiKey 
+                          ? `••••${saved.apiKey.slice(-4)}` 
+                          : p.requiresKey ? "None" : "Free / Local"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    {!isActive && isSaved && (
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchProvider(p.id)}
+                        className="flex-1 py-1.5 px-2 bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
+                        title="Switch to this provider profile"
+                      >
+                        <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                        <span>Switch</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenLlmModal(p.id)}
+                      className={`py-1.5 px-2.5 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                        isActive 
+                          ? "w-full bg-white text-stone-900 hover:bg-stone-100" 
+                          : isSaved 
+                          ? "bg-white border border-stone-300 text-stone-900 hover:bg-stone-100" 
+                          : "w-full bg-stone-900 hover:bg-black text-white"
+                      }`}
+                    >
+                      <Key className="w-3 h-3" />
+                      <span>{isSaved ? "Edit" : "Configure"}</span>
+                    </button>
+
+                    {isSaved && !isActive && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveProvider(p.id)}
+                        className="p-1.5 bg-white hover:bg-red-50 border border-stone-200 hover:border-red-300 text-stone-400 hover:text-red-600 transition-all cursor-pointer"
+                        title="Remove stored credentials for this provider"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Section 2: IndexedDB Database Management (Import & Export) */}
+      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Database className="w-4 h-4 text-stone-800" />
+              IndexedDB Database Backup & Restore
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Manage local browser storage, export full database backups to JSON, or restore previous backups.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold bg-stone-100 text-stone-800 px-2.5 py-1 border border-stone-200 flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-stone-600" />
+              VocabLearnerDB (v1)
+            </span>
+          </div>
+        </div>
+
+        {/* Database Action Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Export Database Card */}
+          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                <Download className="w-4 h-4 text-stone-800" />
+                <span>Export IndexedDB Database</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Download a complete JSON snapshot containing all custom vocabulary decks, word cards, study statistics, and app settings.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportDB}
+              disabled={isExporting}
+              className="w-full py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+            >
+              {isExporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting JSON...</span>
+                </>
+              ) : (
+                <>
+                  <FileJson className="w-3.5 h-3.5" />
+                  <span>Export Database JSON</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Import Database Card */}
+          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                <Upload className="w-4 h-4 text-stone-800" />
+                <span>Import IndexedDB Backup</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Restore a previously exported `.json` database file to load custom decks and study history into local browser storage.
+              </p>
+            </div>
+
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="indexeddb-file-input"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+              >
+                {isImporting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Restoring Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Select JSON File to Restore</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Cloud Sync Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div className="md:col-span-2 border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                  <Cloud className="w-4 h-4 text-stone-800" />
+                  <span>GitHub Gist Cloud Sync</span>
+                </div>
+              </div>
+              <p className="text-xs text-stone-600">
+                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices.
+                You can create a Personal Access Token (classic) with the <code className="bg-stone-200 px-1 py-0.5 rounded">gist</code> scope at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub Settings</a>.
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  GitHub Personal Access Token
+                </label>
+                <input
+                  type="password"
+                  value={gistToken}
+                  onChange={handleGistTokenChange}
+                  placeholder="ghp_..."
+                  className="w-full bg-white border border-stone-200 p-2 text-xs font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  Gist ID (Leave blank to create a new Gist)
+                </label>
+                <input
+                  type="text"
+                  value={gistId}
+                  onChange={handleGistIdChange}
+                  placeholder="Gist ID (e.g. 64abc123...)"
+                  className="w-full bg-white border border-stone-200 p-2 text-xs font-mono font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleSyncToCloud}
+                disabled={isCloudSyncing || isExporting || isImporting || !gistToken}
+                className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Backup to Cloud
+              </button>
+              <button
+                type="button"
+                onClick={handleSyncFromCloud}
+                disabled={isCloudSyncing || isExporting || isImporting || !gistToken || !gistId}
+                className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Restore from Cloud
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Alert Banner */}
+        {dbStatusMessage && (
+          <div className={`p-4 border text-xs font-medium flex items-start gap-3 transition-all ${
+            dbStatusMessage.type === "success" 
+              ? "bg-emerald-50 border-emerald-300 text-emerald-900" 
+              : dbStatusMessage.type === "error"
+              ? "bg-red-50 border-red-300 text-red-900"
+              : "bg-blue-50 border-blue-300 text-blue-900"
+          }`}>
+            {dbStatusMessage.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
+            {dbStatusMessage.type === "error" && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
+            {dbStatusMessage.type === "info" && <RefreshCw className="w-4 h-4 text-blue-600 animate-spin shrink-0 mt-0.5" />}
+            <span className="flex-1">{dbStatusMessage.text}</span>
+          </div>
+        )}
+
+        {/* Danger Zone: Reset Vocabularies & Notebooks Data */}
+        <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+                <span>Reset Vocabularies Data & Notebooks</span>
+              </div>
+              <p className="text-xs text-red-700 font-normal">
+                Wipe all custom notebooks, generated decks, and study history. Reset database to default starter notebooks or clear completely.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowResetConfirmModal(true)}
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Vocabulary Data</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Section 3: Text-to-Speech (TTS) Engine Selection */}
       <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
         <div className="border-b border-stone-100 pb-4">
           <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
@@ -835,7 +1237,7 @@ export default function SettingsView({
         </div>
       </div>
 
-      {/* Section 2: Interactive Voice Tester Studio */}
+      {/* Section 4: Interactive Voice Tester Studio */}
       <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-4">
         <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
           <div>
@@ -891,234 +1293,33 @@ export default function SettingsView({
         </div>
       </div>
 
-      {/* Section 3: Quiz Audio Preference & LLM Provider Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Quiz Auto-Play Audio Toggle */}
-        <div className="bg-white border border-stone-200 p-6 space-y-4 flex flex-col justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-stone-800" />
-              Quiz Session Audio
-            </h3>
-            <p className="text-xs text-stone-500 mt-1">
-              Automatically pronounce questions when transitioning between quiz items
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setConfig({ ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz })}
-            className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
-              config.autoPlayAudioInQuiz 
-                ? "bg-stone-900 border-stone-900 text-white" 
-                : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {config.autoPlayAudioInQuiz ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
-              <span>Auto-Play Quiz Voice: {config.autoPlayAudioInQuiz ? "Enabled" : "Disabled"}</span>
-            </div>
-            <div className={`w-3 h-3 rounded-full ${config.autoPlayAudioInQuiz ? "bg-amber-400" : "bg-stone-300"}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Section 4: AI Model Engine Multi-Provider Connections */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
-        <div className="border-b border-stone-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <Bot className="w-4 h-4 text-stone-800" />
-              AI Model Provider Connections & Key Storage
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Connect and store credentials for multiple LLM providers (Ollama, OpenAI, GitHub Models, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onOpenLlmModal()}
-            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0 self-start md:self-auto"
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span>Add / Edit Provider Credentials</span>
-          </button>
+      {/* Section 5: Quiz Audio Preference */}
+      <div className="bg-white border border-stone-200 p-6 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-stone-800" />
+            Quiz Session Audio
+          </h3>
+          <p className="text-xs text-stone-500 mt-1">
+            Automatically pronounce questions when transitioning between quiz items
+          </p>
         </div>
 
-        {/* Active Engine Highlight Box */}
-        <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Active AI Engine:</span>
-              <span className="text-sm font-black text-stone-900 capitalize flex items-center gap-1.5">
-                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
-                <span className="text-xs font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2 py-0.5">
-                  {llmConfig.model}
-                </span>
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleTestActiveLLM}
-              disabled={testingLlm}
-              className="px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
-            >
-              {testingLlm ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-600" />
-                  <span>Testing Active Engine...</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                  <span>Test Active Connection</span>
-                </>
-              )}
-            </button>
+        <button
+          type="button"
+          onClick={() => setConfig({ ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz })}
+          className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
+            config.autoPlayAudioInQuiz 
+              ? "bg-stone-900 border-stone-900 text-white" 
+              : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {config.autoPlayAudioInQuiz ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
+            <span>Auto-Play Quiz Voice: {config.autoPlayAudioInQuiz ? "Enabled" : "Disabled"}</span>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key Status</span>
-              <span className="font-mono text-stone-800 font-semibold">
-                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
-              <span className="font-mono text-stone-800 font-semibold truncate block">
-                {llmConfig.baseUrl || "Default API Gateway"}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Total Saved Profiles</span>
-              <span className="font-semibold text-stone-800">
-                {Object.keys(savedProvidersMap).length} Provider Credentials Stored
-              </span>
-            </div>
-          </div>
-
-          {llmTestResult && (
-            <div className={`p-2.5 text-xs font-semibold flex items-center gap-2 border ${
-              llmTestResult.success ? "bg-emerald-50 border-emerald-300 text-emerald-900" : "bg-red-50 border-red-300 text-red-900"
-            }`}>
-              {llmTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
-              <span>{llmTestResult.msg}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Provider Cards Grid */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-            Stored AI Engine Profiles ({PROVIDER_OPTIONS.length} Supported Providers)
-          </h4>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {PROVIDER_OPTIONS.map((p) => {
-              const isActive = llmConfig.provider === p.id;
-              const saved = savedProvidersMap[p.id];
-              const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
-
-              return (
-                <div
-                  key={p.id}
-                  className={`p-4 border flex flex-col justify-between space-y-3 transition-all ${
-                    isActive 
-                      ? "bg-stone-900 text-white border-stone-900 shadow-sm" 
-                      : isSaved 
-                      ? "bg-amber-50/40 border-amber-200 text-stone-900" 
-                      : "bg-white border-stone-200 text-stone-800"
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs tracking-tight">{p.name}</span>
-                      {isActive ? (
-                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 flex items-center gap-1">
-                          <Zap className="w-2.5 h-2.5 fill-current" />
-                          ACTIVE
-                        </span>
-                      ) : isSaved ? (
-                        <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1">
-                          <BookmarkCheck className="w-2.5 h-2.5" />
-                          SAVED
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-medium text-stone-400">Not Saved</span>
-                      )}
-                    </div>
-                    <p className={`text-[11px] font-serif italic line-clamp-1 ${isActive ? "text-stone-300" : "text-stone-500"}`}>
-                      {p.tagline}
-                    </p>
-                  </div>
-
-                  <div className={`p-2 text-[11px] font-mono border space-y-0.5 ${
-                    isActive ? "bg-stone-800 border-stone-700 text-stone-200" : "bg-white/80 border-stone-200 text-stone-700"
-                  }`}>
-                    <div className="flex justify-between">
-                      <span className="opacity-60">Model:</span>
-                      <span className="font-bold">{saved ? saved.model : p.defaultModel}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="opacity-60">Key:</span>
-                      <span>
-                        {saved?.apiKey 
-                          ? `••••${saved.apiKey.slice(-4)}` 
-                          : p.requiresKey ? "None" : "Free / Local"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 pt-1">
-                    {!isActive && isSaved && (
-                      <button
-                        type="button"
-                        onClick={() => handleSwitchProvider(p.id)}
-                        className="flex-1 py-1.5 px-2 bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
-                        title="Switch to this provider profile"
-                      >
-                        <Zap className="w-3 h-3 text-amber-400 fill-current" />
-                        <span>Switch</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => onOpenLlmModal(p.id)}
-                      className={`py-1.5 px-2.5 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                        isActive 
-                          ? "w-full bg-white text-stone-900 hover:bg-stone-100" 
-                          : isSaved 
-                          ? "bg-white border border-stone-300 text-stone-900 hover:bg-stone-100" 
-                          : "w-full bg-stone-900 hover:bg-black text-white"
-                      }`}
-                    >
-                      <Key className="w-3 h-3" />
-                      <span>{isSaved ? "Edit" : "Configure"}</span>
-                    </button>
-
-                    {isSaved && !isActive && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveProvider(p.id)}
-                        className="p-1.5 bg-white hover:bg-red-50 border border-stone-200 hover:border-red-300 text-stone-400 hover:text-red-600 transition-all cursor-pointer"
-                        title="Remove stored credentials for this provider"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+          <div className={`w-3 h-3 rounded-full ${config.autoPlayAudioInQuiz ? "bg-amber-400" : "bg-stone-300"}`} />
+        </button>
       </div>
 
       {/* Section 4: IndexedDB Database Management (Import & Export) */}
