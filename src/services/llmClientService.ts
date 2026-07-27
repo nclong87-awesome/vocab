@@ -766,6 +766,82 @@ CRITICAL MANDATORY REQUIREMENT:
   }
 }
 
+// 3.5. Generate Random Words for Notebook (Deduplicated)
+export async function generateRandomWordsService(params: {
+  topic: string;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  count?: number;
+  existingWords?: string[];
+  llmConfig?: LLMConfig;
+}): Promise<{ words: any[] }> {
+  const { topic, targetLanguage, nativeLanguage, count = 5, existingWords = [], llmConfig } = params;
+  const userNative = nativeLanguage || "English";
+  const userTarget = targetLanguage || "Spanish";
+
+  const avoidText = Array.isArray(existingWords) && existingWords.length > 0
+    ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the notebook:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
+    : "";
+
+  const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the notebook topic "${topic || "Vocabulary"}".
+The user's native language is "${userNative}".${avoidText}
+
+CRITICAL INSTRUCTIONS:
+- Every word generated MUST BE UNIQUE and NOT present in the existing notebook list above.
+- "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
+- "translation": Direct translation into the user's native language (${userNative}).
+- "example": Realistic example sentence in target language (${userTarget}).
+- "exampleTranslation": Translation of example sentence into user's native language (${userNative}).
+- "imageUrl": Generate a vivid, specific example image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word-or-action]?width=800&height=600&nologo=true"`;
+
+  const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of new unique vocabulary words.`;
+  const schemaDesc = `{
+  "words": [
+    {
+      "word": "string (target word in ${userTarget})",
+      "pronunciation": "string (IPA format)",
+      "partOfSpeech": "string",
+      "definition": "string (definition written STRICTLY in ${userTarget})",
+      "translation": "string (direct translation in ${userNative})",
+      "example": "string (sentence in ${userTarget})",
+      "exampleTranslation": "string (sentence translation in ${userNative})",
+      "imageUrl": "string (pollinations AI image URL)"
+    }
+  ]
+}`;
+
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
+  try {
+    const res = await fetch("/api/generate-random-words", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, existingWords, llmConfig })
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 405 || res.status === 404) {
+      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      return JSON.parse(text);
+    }
+
+    const errData = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errData.error || `Server Error ${res.status}`);
+  } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+}
+
 // 4. Analyze Performance with AI Service
 export interface PerformanceAnalysisRequest {
   stats: any;

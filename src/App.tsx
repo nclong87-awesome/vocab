@@ -332,7 +332,7 @@ export default function App() {
         throw new Error(generatedData?.error || "Unable to generate vocabulary for this topic. Please try again or check your LLM configuration.");
       }
 
-      // Transform raw words to include system learning status
+      // Transform raw words to include system learning status and example image
       const mappedWords: Word[] = (generatedData.words || []).map((w: any, idx: number) => ({
         id: `ai-word-${Date.now()}-${idx}`,
         word: w.word,
@@ -342,6 +342,7 @@ export default function App() {
         translation: w.translation,
         example: w.example,
         exampleTranslation: w.exampleTranslation,
+        imageUrl: w.imageUrl || `https://image.pollinations.ai/prompt/${encodeURIComponent(w.word || topic)}?width=800&height=600&nologo=true`,
         learned: false,
         starred: false,
         createdAt: new Date().toISOString(),
@@ -380,8 +381,10 @@ export default function App() {
       let modifiedDeck: Deck | null = null;
       const updatedDecks = prevDecks.map(deck => {
         if (deck.id === deckId) {
+          const imageUrl = wordData.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(wordData.word)}?width=800&height=600&nologo=true`;
           const newWordItem: Word = {
             ...wordData,
+            imageUrl,
             id: `manual-word-${Date.now()}`,
             learned: false,
             starred: false,
@@ -397,6 +400,41 @@ export default function App() {
 
       if (modifiedDeck) {
         saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB add word save error:", e));
+      }
+      return updatedDecks;
+    });
+  }, []);
+
+  // Add multiple custom or generated words to a deck in batch
+  const handleAddBatchWords = useCallback((
+    deckId: string, 
+    wordsData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">[]
+  ) => {
+    setDecks(prevDecks => {
+      let modifiedDeck: Deck | null = null;
+      const updatedDecks = prevDecks.map(deck => {
+        if (deck.id === deckId) {
+          const newWordItems: Word[] = wordsData.map((w, idx) => {
+            const imageUrl = w.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(w.word)}?width=800&height=600&nologo=true`;
+            return {
+              ...w,
+              imageUrl,
+              id: `random-word-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+              learned: false,
+              starred: false,
+              createdAt: new Date().toISOString(),
+              lastReviewed: null,
+              strength: 0
+            };
+          });
+          modifiedDeck = { ...deck, words: [...deck.words, ...newWordItems] };
+          return modifiedDeck;
+        }
+        return deck;
+      });
+
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB add batch words save error:", e));
       }
       return updatedDecks;
     });
@@ -742,6 +780,7 @@ export default function App() {
                 ttsConfig={ttsConfig}
                 onSelectDeck={setSelectedDeckId}
                 onAddCustomWord={handleAddCustomWord}
+                onAddBatchWords={handleAddBatchWords}
                 onDeleteWord={handleDeleteWord}
                 onDeleteDeck={handleDeleteDeck}
                 onToggleStar={handleToggleStar}

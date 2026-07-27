@@ -282,7 +282,7 @@ export default function FlashcardDeck({
                             >
                               {currentWord.imageUrl && (
                                 <div className="mb-3 border border-stone-200">
-                                  <img src={currentWord.imageUrl} alt={currentWord.word} className="w-full h-32 md:h-40 object-cover" />
+                                  <img src={currentWord.imageUrl} alt={currentWord.word} referrerPolicy="no-referrer" className="w-full h-32 md:h-40 object-cover" />
                                 </div>
                               )}
                               <span className="text-xs font-semibold text-stone-500 font-mono">Example Usage</span>

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
-import { autofillWordService } from "../services/llmClientService";
+import { autofillWordService, generateRandomWordsService } from "../services/llmClientService";
 import { ConfirmModal } from "./ConfirmModal";
 
 interface DeckManagerProps {
@@ -37,6 +37,7 @@ interface DeckManagerProps {
   ttsConfig?: TTSConfig;
   onSelectDeck: (deckId: string) => void;
   onAddCustomWord: (deckId: string, wordData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">) => void;
+  onAddBatchWords?: (deckId: string, wordsData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">[]) => void;
   onDeleteWord: (deckId: string, wordId: string) => void;
   onDeleteDeck?: (deckId: string) => void;
   onToggleStar: (wordId: string) => void;
@@ -52,6 +53,7 @@ export default function DeckManager({
   ttsConfig = DEFAULT_TTS_CONFIG,
   onSelectDeck,
   onAddCustomWord,
+  onAddBatchWords,
   onDeleteWord,
   onDeleteDeck,
   onToggleStar,
@@ -65,7 +67,15 @@ export default function DeckManager({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showAddWordModal, setShowAddWordModal] = useState(false);
   const [showAddDeckModal, setShowAddDeckModal] = useState(false);
+  const [showRandomWordsModal, setShowRandomWordsModal] = useState(false);
   const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Random Words Generator State
+  const [randomWordsCount, setRandomWordsCount] = useState<number>(5);
+  const [randomWordsTopicRefinement, setRandomWordsTopicRefinement] = useState("");
+  const [isGeneratingRandomWords, setIsGeneratingRandomWords] = useState(false);
+  const [randomWordsError, setRandomWordsError] = useState("");
+  const [randomWordsSuccessMsg, setRandomWordsSuccessMsg] = useState("");
 
   // New Word Form State
   const [newWord, setNewWord] = useState("");
@@ -161,7 +171,7 @@ export default function DeckManager({
       setNewTranslation(data.translation || "");
       setNewExample(data.example || "");
       setNewExampleTranslation(data.exampleTranslation || "");
-      setNewImageUrl(data.imageUrl || "");
+      setNewImageUrl(data.imageUrl || `https://image.pollinations.ai/prompt/${encodeURIComponent(wordToFill)}?width=800&height=600&nologo=true`);
     } catch (err: any) {
       console.error(err);
       setAutofillError(err.message || "Autofill failed. Check internet/secrets.");
@@ -188,7 +198,7 @@ export default function DeckManager({
       translation: newTranslation.trim(),
       example: newExample.trim() || "No example provided.",
       exampleTranslation: newExampleTranslation.trim() || "No translation provided.",
-      imageUrl: newImageUrl.trim() || undefined
+      imageUrl: newImageUrl.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(newWord.trim())}?width=800&height=600&nologo=true`
     });
 
     // Reset Form
@@ -255,6 +265,76 @@ export default function DeckManager({
     }
   };
 
+  const handleGenerateRandomWordsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeDeck) return;
+
+    setIsGeneratingRandomWords(true);
+    setRandomWordsError("");
+    setRandomWordsSuccessMsg("");
+
+    try {
+      const existingWordStrings = activeDeck.words.map(w => w.word.trim().toLowerCase());
+      const topicToUse = randomWordsTopicRefinement.trim() || activeDeck.name;
+
+      const result = await generateRandomWordsService({
+        topic: topicToUse,
+        targetLanguage: activeDeck.targetLanguage,
+        nativeLanguage: activeDeck.nativeLanguage,
+        count: randomWordsCount,
+        existingWords: existingWordStrings,
+        llmConfig
+      });
+
+      const rawWords: any[] = result?.words || [];
+      
+      // Deduplicate words against existing notebook list
+      const existingSet = new Set(existingWordStrings);
+      const uniqueNewWords = rawWords.filter((w: any) => {
+        if (!w || !w.word) return false;
+        const normalized = w.word.trim().toLowerCase();
+        if (existingSet.has(normalized)) return false;
+        existingSet.add(normalized);
+        return true;
+      });
+
+      if (uniqueNewWords.length === 0) {
+        setRandomWordsError("The generated words were all already in this notebook! Try refining the topic or choosing a different focus.");
+        setIsGeneratingRandomWords(false);
+        return;
+      }
+
+      const mappedWords = uniqueNewWords.map((w: any) => ({
+        word: w.word.trim(),
+        pronunciation: w.pronunciation?.trim() || "/.../",
+        partOfSpeech: w.partOfSpeech || "noun",
+        definition: w.definition?.trim() || "No definition provided.",
+        translation: w.translation?.trim() || "No translation provided.",
+        example: w.example?.trim() || "No example sentence provided.",
+        exampleTranslation: w.exampleTranslation?.trim() || "No example translation provided.",
+        imageUrl: w.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(w.word.trim())}?width=800&height=600&nologo=true`
+      }));
+
+      if (onAddBatchWords) {
+        onAddBatchWords(activeDeck.id, mappedWords);
+      } else {
+        mappedWords.forEach(w => onAddCustomWord(activeDeck.id, w));
+      }
+
+      setRandomWordsSuccessMsg(`Successfully added ${mappedWords.length} new words to "${activeDeck.name}"!`);
+      setTimeout(() => {
+        setShowRandomWordsModal(false);
+        setRandomWordsSuccessMsg("");
+        setRandomWordsTopicRefinement("");
+      }, 1400);
+    } catch (err: any) {
+      console.error(err);
+      setRandomWordsError(err.message || "Failed to generate random words. Please try again.");
+    } finally {
+      setIsGeneratingRandomWords(false);
+    }
+  };
+
   const speakWord = (text: string) => {
     const langCode = activeDeck?.targetLanguage === "English" ? "en-US" : "es-ES";
     speakTextService(text, ttsConfig, llmConfig, langCode);
@@ -272,20 +352,39 @@ export default function DeckManager({
           <p className="text-xs text-stone-400 font-serif italic mt-0.5">Organize vocabulary items, manage manual logs, and invoke AI dictionaries.</p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full no-scrollbar shrink-0 py-0.5">
           <button
+            type="button"
             onClick={() => setShowAddDeckModal(true)}
-            className="px-4 py-2 border border-stone-200 hover:border-stone-950 bg-stone-50 text-stone-800 text-xs font-semibold transition-all cursor-pointer"
+            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 border border-stone-200 hover:border-stone-950 bg-stone-50 text-stone-800 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
           >
             Create Notebook
           </button>
           {activeDeck && (
-            <button
-              onClick={() => setShowAddWordModal(true)}
-              className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold transition-all cursor-pointer"
-            >
-              Add Word
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setRandomWordsTopicRefinement(activeDeck.name);
+                  setRandomWordsError("");
+                  setRandomWordsSuccessMsg("");
+                  setShowRandomWordsModal(true);
+                }}
+                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 border border-amber-300 hover:border-amber-500 bg-amber-50 text-amber-900 text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
+                title="Generate N random non-duplicate words into this notebook using AI"
+              >
+                <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600 shrink-0" />
+                <span>+ Random Words</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddWordModal(true)}
+                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-stone-900 hover:bg-black text-white text-[11px] sm:text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
+              >
+                <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <span>Add Word</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -584,7 +683,7 @@ export default function DeckManager({
                         {/* Context Example Box */}
                         {word.imageUrl && (
                           <div className="bg-stone-50 border border-stone-200 p-1">
-                            <img src={word.imageUrl} alt={word.word} className="w-full h-24 object-cover" />
+                            <img src={word.imageUrl} alt={word.word} referrerPolicy="no-referrer" className="w-full h-28 object-cover" />
                           </div>
                         )}
                         {word.example && (
@@ -646,8 +745,8 @@ export default function DeckManager({
                           "{word.definition}"
                         </p>
                         {word.imageUrl && (
-                          <div className="bg-stone-50 border border-stone-200 p-1">
-                            <img src={word.imageUrl} alt={word.word} className="w-full h-24 object-cover" />
+                          <div className="bg-stone-50 border border-stone-200 p-1 my-1">
+                            <img src={word.imageUrl} alt={word.word} referrerPolicy="no-referrer" className="w-full h-24 sm:w-32 sm:h-20 object-cover" />
                           </div>
                         )}
                         {word.example && (
@@ -1289,6 +1388,140 @@ export default function DeckManager({
         }}
         onCancel={() => setDeckToDelete(null)}
       />
+
+      {/* Add Random Words Modal */}
+      <AnimatePresence>
+        {showRandomWordsModal && activeDeck && (
+          <div className="fixed inset-0 bg-stone-950/40 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4">
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.98, opacity: 0 }}
+              className="bg-white border border-stone-200 p-5 sm:p-7 w-full max-w-lg space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-start pb-3 border-b border-stone-100">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-50 text-amber-900 px-2.5 py-0.5 border border-amber-200 mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    AI Random Words Generator
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-stone-900 leading-snug">
+                    Add Random Words to "{activeDeck.name}"
+                  </h3>
+                  <p className="text-xs text-stone-500 font-serif italic mt-0.5">
+                    Generate vocabulary items complete with definitions, translations, and example images.
+                  </p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowRandomWordsModal(false)} 
+                  className="p-1.5 text-stone-400 hover:text-stone-900 cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleGenerateRandomWordsSubmit} className="space-y-4 text-xs">
+                {/* Deduplication Notice */}
+                <div className="p-2.5 bg-stone-50 border border-stone-200 text-stone-700 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      <strong>Smart Deduplication:</strong> Avoids existing <strong>{activeDeck.words.length}</strong> words automatically.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Number of Words Selector */}
+                <div>
+                  <label className="block text-xs font-bold text-stone-800 mb-1.5">
+                    Number of Random Words to Add
+                  </label>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[3, 5, 8, 10, 15].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setRandomWordsCount(count)}
+                        className={`py-2 px-1 border text-center transition-all cursor-pointer rounded-none ${
+                          randomWordsCount === count
+                            ? "bg-stone-900 text-white border-stone-900 shadow-2xs font-bold"
+                            : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+                        }`}
+                      >
+                        <span className="block text-xs sm:text-sm font-bold leading-none">{count}</span>
+                        <span className="block text-[10px] font-medium leading-tight opacity-80 mt-1">words</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Optional Refine Topic */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Refine Topic / Context Focus (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={randomWordsTopicRefinement}
+                    onChange={(e) => setRandomWordsTopicRefinement(e.target.value)}
+                    placeholder={`e.g., ${activeDeck.name}, verbs, travel...`}
+                    className="w-full border border-stone-200 bg-stone-50 px-3 py-2 text-stone-900 font-medium text-xs outline-none focus:border-stone-950 focus:bg-white transition-all"
+                  />
+                  <p className="text-[11px] text-stone-400 font-serif italic mt-1">
+                    Target: <strong>{activeDeck.targetLanguage}</strong> → Native: <strong>{activeDeck.nativeLanguage}</strong>
+                  </p>
+                </div>
+
+                {/* Error Banner */}
+                {randomWordsError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>{randomWordsError}</span>
+                  </div>
+                )}
+
+                {/* Success Banner */}
+                {randomWordsSuccessMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 font-semibold">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{randomWordsSuccessMsg}</span>
+                  </div>
+                )}
+
+                {/* Form Action Buttons */}
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-3 border-t border-stone-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowRandomWordsModal(false)}
+                    disabled={isGeneratingRandomWords}
+                    className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-stone-500 hover:text-stone-900 cursor-pointer disabled:opacity-40 text-center"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isGeneratingRandomWords}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs transition-all cursor-pointer disabled:opacity-40 flex items-center justify-center gap-2 shadow-2xs text-center whitespace-nowrap"
+                  >
+                    {isGeneratingRandomWords ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-stone-900 shrink-0" />
+                        <span>Generating {randomWordsCount} Words...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-stone-950 fill-current shrink-0" />
+                        <span>Add {randomWordsCount} Random Words</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -393,6 +393,56 @@ CRITICAL MANDATORY REQUIREMENT:
   }
 });
 
+// 4.5. Generate random words for notebook (deduplicated against existing)
+app.post("/api/generate-random-words", async (req, res) => {
+  try {
+    const { topic, targetLanguage, nativeLanguage, count = 5, existingWords = [], llmConfig } = req.body;
+
+    const userNative = nativeLanguage || "English";
+    const userTarget = targetLanguage || "Spanish";
+
+    const avoidText = Array.isArray(existingWords) && existingWords.length > 0
+      ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the notebook:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
+      : "";
+
+    const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the notebook topic "${topic || "Vocabulary"}".
+The user's native language is "${userNative}".${avoidText}
+
+CRITICAL INSTRUCTIONS:
+- Every word generated MUST BE UNIQUE and NOT present in the existing notebook list above.
+- "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
+- "translation": Direct translation into the user's native language (${userNative}).
+- "example": Realistic example sentence in target language (${userTarget}).
+- "exampleTranslation": Translation of example sentence into user's native language (${userNative}).
+- "imageUrl": Generate a vivid, specific example image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word-or-action]?width=800&height=600&nologo=true"`;
+
+    const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of new unique vocabulary words.`;
+    const schemaDesc = `{
+  "words": [
+    {
+      "word": "string (target word in ${userTarget})",
+      "pronunciation": "string (IPA format)",
+      "partOfSpeech": "string",
+      "definition": "string (definition written STRICTLY in ${userTarget})",
+      "translation": "string (direct translation in ${userNative})",
+      "example": "string (sentence in ${userTarget})",
+      "exampleTranslation": "string (sentence translation in ${userNative})",
+      "imageUrl": "string (pollinations AI image URL)"
+    }
+  ]
+}`;
+
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error generating random words:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
 // 5. Text-to-Speech API
 app.post("/api/tts", async (req, res) => {
   try {
