@@ -97,6 +97,35 @@ export default function SettingsView({
 
     try {
       setIsCloudSyncing(true);
+      setDbStatusMessage({ type: "info", text: "Checking remote version..." });
+      
+      let remoteWarning = "";
+      if (gistId) {
+        try {
+          const remoteData = await syncFromGist(gistToken, gistId);
+          if (remoteData && remoteData.exportedAt) {
+            const remoteDate = new Date(remoteData.exportedAt).toLocaleString();
+            const remoteDecks = remoteData.stores?.decks?.length || 0;
+            const remoteWords = remoteData.stores?.decks?.reduce((acc: number, deck: any) => acc + (deck.words?.length || 0), 0) || 0;
+            
+            const localData = await exportIndexedDBDatabase();
+            const localDecks = localData.stores.decks.length;
+            const localWords = localData.stores.decks.reduce((acc, deck) => acc + deck.words.length, 0);
+            
+            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteDecks} decks, ${remoteWords} words\n\nLocal Database:\n- ${localDecks} decks, ${localWords} words\n\nAre you sure you want to overwrite the remote backup?`;
+          }
+        } catch (e) {
+          console.warn("Could not fetch remote backup for comparison", e);
+        }
+      }
+      
+      const confirmMsg = remoteWarning || "Are you sure you want to backup your database to GitHub Gist? This will overwrite the existing backup if a Gist ID is provided.";
+      if (!window.confirm(confirmMsg)) {
+        setIsCloudSyncing(false);
+        setDbStatusMessage(null);
+        return;
+      }
+
       setDbStatusMessage({ type: "info", text: "Generating backup and syncing to GitHub Gist..." });
       
       const dbData = await exportIndexedDBDatabase();
@@ -128,6 +157,29 @@ export default function SettingsView({
       setDbStatusMessage({ type: "info", text: "Downloading backup from GitHub Gist..." });
       
       const data = await syncFromGist(gistToken, gistId);
+      
+      if (data && data.exportedAt) {
+        const remoteDate = new Date(data.exportedAt).toLocaleString();
+        const remoteDecks = data.stores?.decks?.length || 0;
+        const remoteWords = data.stores?.decks?.reduce((acc: number, deck: any) => acc + (deck.words?.length || 0), 0) || 0;
+        
+        const localData = await exportIndexedDBDatabase();
+        const localDecks = localData.stores.decks.length;
+        const localWords = localData.stores.decks.reduce((acc, deck) => acc + deck.words.length, 0);
+        
+        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteDecks} decks, ${remoteWords} words\n\nLocal Database:\n- ${localDecks} decks, ${localWords} words\n\nAre you sure you want to overwrite your local database with this remote backup?`;
+        if (!window.confirm(confirmMsg)) {
+          setIsCloudSyncing(false);
+          setDbStatusMessage(null);
+          return;
+        }
+      } else {
+        if (!window.confirm("Are you sure you want to restore from GitHub Gist? This will overwrite your local database.")) {
+          setIsCloudSyncing(false);
+          setDbStatusMessage(null);
+          return;
+        }
+      }
       
       setDbStatusMessage({ type: "info", text: "Restoring database..." });
       await importIndexedDBDatabase(data);
