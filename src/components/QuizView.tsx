@@ -32,6 +32,22 @@ interface QuizViewProps {
   llmConfig?: LLMConfig;
 }
 
+// Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English)
+function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
+  if (!text) return true;
+  // Check for Vietnamese diacritics
+  const vietnameseRegex = /[àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỷỹỵ]/i;
+  if (vietnameseRegex.test(text)) return true;
+  
+  // Check for CJK characters if target language is English/European
+  const cjkRegex = /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF\u4E00-\u9FAF]/;
+  if ((targetLanguage === "English" || targetLanguage === "Spanish" || targetLanguage === "French" || targetLanguage === "German") && cjkRegex.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
 // Helper function to generate questions for a deck
 function generateQuizQuestions(deck: Deck): QuizQuestion[] {
   if (!deck || deck.words.length < 2) return [];
@@ -73,7 +89,12 @@ function generateQuizQuestions(deck: Deck): QuizQuestion[] {
       'sentence',
       'listening'
     ];
-    const type = types[Math.floor(Math.random() * types.length)];
+    let type = types[Math.floor(Math.random() * types.length)];
+
+    // If definition is in user's native language or missing, fallback to target-language sentence or listening
+    if (type === 'definition' && containsNonTargetLanguage(word.definition, deck.targetLanguage)) {
+      type = word.example ? 'sentence' : 'listening';
+    }
 
     let options: string[] = [];
     let correctAnswer = "";
@@ -117,7 +138,7 @@ function generateQuizQuestions(deck: Deck): QuizQuestion[] {
     else {
       correctAnswer = word.word;
       const regex = new RegExp(`\\b${word.word}\\b`, "i");
-      const hiddenSentence = word.example.replace(regex, "______");
+      const hiddenSentence = word.example ? word.example.replace(regex, "______") : `Please spell and match: ${word.word}`;
       questionText = `Fill in the blank for the sentence:\n"${hiddenSentence}"`;
       
       let potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);

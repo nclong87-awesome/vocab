@@ -638,17 +638,17 @@ export async function generateDeckService(params: {
 
   const prompt = `Generate a high-quality list of ${quantity} vocabulary words/expressions on the topic: "${topic}".
 The target language that the user wants to learn is "${userTarget}".
-The user's native language for definitions and explanations is "${userNative}".
+The user's native language for translations is "${userNative}".
 
 CRITICAL INSTRUCTIONS:
-- "definition": Write clear, easy-to-understand definitions of each target word in the user's NATIVE language (${userNative}).
+- "definition": Write clear, easy-to-understand definitions/explanations of each target word STRICTLY in the TARGET language (${userTarget}) for target language learning immersion. Do NOT write definitions in the native language (${userNative}).
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Example sentence in target language (${userTarget}).
 - "exampleTranslation": Translation of the example sentence into the user's native language (${userNative}).
 - "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word-or-topic]?width=800&height=600&nologo=true"
 Ensure the words selected cover different skill levels and are practical for real conversation.`;
 
-  const systemInstruction = `You are an expert language teacher specializing in creating vocabulary material for ${userNative} native speakers learning ${userTarget}.`;
+  const systemInstruction = `You are an expert language teacher specializing in creating vocabulary material for learners of ${userTarget}.`;
   const schemaDesc = `{
   "name": "Creative deck title",
   "description": "Short description in ${userNative}",
@@ -657,7 +657,7 @@ Ensure the words selected cover different skill levels and are practical for rea
       "word": "string (target word in ${userTarget})",
       "pronunciation": "string (IPA format)",
       "partOfSpeech": "string",
-      "definition": "string (definition written in ${userNative})",
+      "definition": "string (definition written STRICTLY in ${userTarget})",
       "translation": "string (direct translation in ${userNative})",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
@@ -714,7 +714,7 @@ Target language being learned: "${userTarget}".
 User's native language: "${userNative}".
 
 CRITICAL MANDATORY REQUIREMENT:
-- "definition": You MUST write the definition/explanation in the user's native language (${userNative}) so the learner clearly understands it.
+- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}).
 - "translation": Provide the direct, accurate translation of "${word}" into the user's native language (${userNative}).
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
@@ -722,12 +722,12 @@ CRITICAL MANDATORY REQUIREMENT:
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
 - "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word]?width=800&height=600&nologo=true"`;
 
-  const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions and translations in the user's native language (${userNative}).`;
+  const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).`;
   const schemaDesc = `{
   "word": "string",
   "pronunciation": "string",
   "partOfSpeech": "string",
-  "definition": "string (definition in ${userNative})",
+  "definition": "string (definition written STRICTLY in ${userTarget})",
   "translation": "string (translation in ${userNative})",
   "example": "string (example in ${userTarget})",
   "exampleTranslation": "string (example translation in ${userNative})",
