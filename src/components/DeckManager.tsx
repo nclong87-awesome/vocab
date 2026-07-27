@@ -23,7 +23,8 @@ import {
   PanelLeftClose,
   PanelLeft,
   Maximize2,
-  Minimize2
+  Minimize2,
+  RefreshCw
 } from "lucide-react";
 import { Deck, Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -38,6 +39,7 @@ interface DeckManagerProps {
   onSelectDeck: (deckId: string) => void;
   onAddCustomWord: (deckId: string, wordData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">) => void;
   onAddBatchWords?: (deckId: string, wordsData: Omit<Word, "id" | "learned" | "starred" | "createdAt" | "lastReviewed" | "strength">[]) => void;
+  onUpdateWord?: (deckId: string, wordId: string, updatedFields: Partial<Word>) => void;
   onDeleteWord: (deckId: string, wordId: string) => void;
   onDeleteDeck?: (deckId: string) => void;
   onToggleStar: (wordId: string) => void;
@@ -54,6 +56,7 @@ export default function DeckManager({
   onSelectDeck,
   onAddCustomWord,
   onAddBatchWords,
+  onUpdateWord,
   onDeleteWord,
   onDeleteDeck,
   onToggleStar,
@@ -76,6 +79,70 @@ export default function DeckManager({
   const [isGeneratingRandomWords, setIsGeneratingRandomWords] = useState(false);
   const [randomWordsError, setRandomWordsError] = useState("");
   const [randomWordsSuccessMsg, setRandomWordsSuccessMsg] = useState("");
+
+  // Word Re-generation State
+  const [regeneratingWordId, setRegeneratingWordId] = useState<string | null>(null);
+  const [regeneratedSuccessWordId, setRegeneratedSuccessWordId] = useState<string | null>(null);
+  const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
+
+  const handleImageError = (wordId: string) => {
+    setBrokenImageIds(prev => new Set(prev).add(wordId));
+  };
+
+  const handleRegenerateWord = async (word: Word) => {
+    if (!activeDeck || !onUpdateWord) return;
+    setRegeneratingWordId(word.id);
+    setRegeneratedSuccessWordId(null);
+
+    try {
+      const result = await autofillWordService({
+        word: word.word,
+        targetLanguage: activeDeck.targetLanguage,
+        nativeLanguage: activeDeck.nativeLanguage,
+        llmConfig
+      });
+
+      const newImageUrl = result.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(word.word)}?width=800&height=600&nologo=true&seed=${Date.now()}`;
+
+      onUpdateWord(activeDeck.id, word.id, {
+        pronunciation: result.pronunciation?.trim() || word.pronunciation,
+        partOfSpeech: result.partOfSpeech || word.partOfSpeech,
+        definition: result.definition?.trim() || word.definition,
+        translation: result.translation?.trim() || word.translation,
+        example: result.example?.trim() || word.example,
+        exampleTranslation: result.exampleTranslation?.trim() || word.exampleTranslation,
+        imageUrl: newImageUrl
+      });
+
+      setBrokenImageIds(prev => {
+        const next = new Set(prev);
+        next.delete(word.id);
+        return next;
+      });
+
+      setRegeneratedSuccessWordId(word.id);
+      setTimeout(() => {
+        setRegeneratedSuccessWordId(null);
+      }, 2500);
+    } catch (err) {
+      console.error("Failed to re-generate AI details for word:", err);
+      const freshImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(word.word)}?width=800&height=600&nologo=true&seed=${Date.now()}`;
+      onUpdateWord(activeDeck.id, word.id, {
+        imageUrl: freshImage
+      });
+      setBrokenImageIds(prev => {
+        const next = new Set(prev);
+        next.delete(word.id);
+        return next;
+      });
+      setRegeneratedSuccessWordId(word.id);
+      setTimeout(() => {
+        setRegeneratedSuccessWordId(null);
+      }, 2500);
+    } finally {
+      setRegeneratingWordId(null);
+    }
+  };
 
   // New Word Form State
   const [newWord, setNewWord] = useState("");
@@ -635,6 +702,15 @@ export default function DeckManager({
                             </button>
                             <button
                               type="button"
+                              onClick={() => handleRegenerateWord(word)}
+                              disabled={regeneratingWordId === word.id}
+                              className="p-1.5 text-stone-500 hover:text-amber-600 hover:bg-white transition-all cursor-pointer disabled:opacity-50"
+                              title="Re-generate definition, translation & image with AI"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => onToggleStar(word.id)}
                               className={`p-1.5 transition-all cursor-pointer ${
                                 word.starred ? "text-amber-500 fill-current bg-white shadow-2xs" : "text-stone-300 hover:text-stone-600"
@@ -664,6 +740,14 @@ export default function DeckManager({
                           </div>
                         </div>
 
+                        {/* Success message badge after regeneration */}
+                        {regeneratedSuccessWordId === word.id && (
+                          <div className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span>AI details & image updated!</span>
+                          </div>
+                        )}
+
                         {/* Meaning Highlight Block */}
                         <div className="bg-amber-50/80 border border-amber-200/90 p-2.5 space-y-0.5">
                           <span className="text-[10px] font-mono font-bold uppercase text-amber-800 tracking-wider block">Meaning</span>
@@ -680,12 +764,41 @@ export default function DeckManager({
                           </div>
                         )}
 
-                        {/* Context Example Box */}
-                        {word.imageUrl && (
-                          <div className="bg-stone-50 border border-stone-200 p-1">
-                            <img src={word.imageUrl} alt={word.word} referrerPolicy="no-referrer" className="w-full h-28 object-cover" />
+                        {/* Context Example & Image Box */}
+                        {brokenImageIds.has(word.id) ? (
+                          <div className="bg-stone-50 border border-dashed border-stone-300 p-3 text-center space-y-1.5">
+                            <p className="text-[11px] text-stone-500 font-medium">Image preview broken or unavailable</p>
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerateWord(word)}
+                              disabled={regeneratingWordId === word.id}
+                              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${regeneratingWordId === word.id ? "animate-spin" : ""}`} />
+                              <span>Re-generate Image</span>
+                            </button>
                           </div>
-                        )}
+                        ) : word.imageUrl ? (
+                          <div className="bg-stone-50 border border-stone-200 p-1 relative group/img">
+                            <img 
+                              src={word.imageUrl} 
+                              alt={word.word} 
+                              referrerPolicy="no-referrer" 
+                              onError={() => handleImageError(word.id)}
+                              className="w-full h-28 object-cover" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerateWord(word)}
+                              disabled={regeneratingWordId === word.id}
+                              className="absolute top-2 right-2 bg-stone-900/80 hover:bg-black text-white text-[10px] font-medium px-2 py-1 flex items-center gap-1 backdrop-blur-xs transition-all opacity-80 group-hover/img:opacity-100 cursor-pointer"
+                              title="Re-generate image using AI"
+                            >
+                              <RefreshCw className={`w-3 h-3 ${regeneratingWordId === word.id ? "animate-spin text-amber-400" : ""}`} />
+                              <span>Re-generate Image</span>
+                            </button>
+                          </div>
+                        ) : null}
                         {word.example && (
                           <div className="bg-stone-50 border border-stone-200 p-2.5 space-y-1 text-xs">
                             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context</span>
@@ -744,11 +857,30 @@ export default function DeckManager({
                         <p className="text-stone-600 font-serif italic line-clamp-2">
                           "{word.definition}"
                         </p>
-                        {word.imageUrl && (
-                          <div className="bg-stone-50 border border-stone-200 p-1 my-1">
-                            <img src={word.imageUrl} alt={word.word} referrerPolicy="no-referrer" className="w-full h-24 sm:w-32 sm:h-20 object-cover" />
+                        {brokenImageIds.has(word.id) ? (
+                          <div className="bg-stone-50 border border-dashed border-stone-300 p-1.5 my-1 text-center flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-stone-500 font-medium">Image unavailable</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRegenerateWord(word)}
+                              disabled={regeneratingWordId === word.id}
+                              className="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-[9px] inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className={`w-2.5 h-2.5 ${regeneratingWordId === word.id ? "animate-spin" : ""}`} />
+                              <span>Re-generate</span>
+                            </button>
                           </div>
-                        )}
+                        ) : word.imageUrl ? (
+                          <div className="bg-stone-50 border border-stone-200 p-1 my-1 relative group/listimg">
+                            <img 
+                              src={word.imageUrl} 
+                              alt={word.word} 
+                              referrerPolicy="no-referrer" 
+                              onError={() => handleImageError(word.id)}
+                              className="w-full h-24 sm:w-32 sm:h-20 object-cover" 
+                            />
+                          </div>
+                        ) : null}
                         {word.example && (
                           <p className="text-[11px] text-stone-400 font-mono line-clamp-1">
                             Context: {word.example}
@@ -772,6 +904,15 @@ export default function DeckManager({
                             title="Listen Pronunciation"
                           >
                             <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRegenerateWord(word)}
+                            disabled={regeneratingWordId === word.id}
+                            className="p-1.5 border border-stone-200 text-stone-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-all cursor-pointer disabled:opacity-50"
+                            title="Re-generate definition & image with AI"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
                           </button>
                           <button
                             type="button"

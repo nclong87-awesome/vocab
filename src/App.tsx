@@ -459,6 +459,31 @@ export default function App() {
     });
   }, []);
 
+  // Update fields of an existing word
+  const handleUpdateWord = useCallback((deckId: string, wordId: string, updatedFields: Partial<Word>) => {
+    setDecks(prevDecks => {
+      let modifiedDeck: Deck | null = null;
+      const updatedDecks = prevDecks.map(deck => {
+        if (deck.id === deckId) {
+          const updatedWords = deck.words.map(w => {
+            if (w.id === wordId) {
+              return { ...w, ...updatedFields };
+            }
+            return w;
+          });
+          modifiedDeck = { ...deck, words: updatedWords };
+          return modifiedDeck;
+        }
+        return deck;
+      });
+
+      if (modifiedDeck) {
+        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB update word save error:", e));
+      }
+      return updatedDecks;
+    });
+  }, []);
+
   // Create an empty custom notebook
   const handleAddCustomDeck = useCallback((
     name: string, 
@@ -781,6 +806,7 @@ export default function App() {
                 onSelectDeck={setSelectedDeckId}
                 onAddCustomWord={handleAddCustomWord}
                 onAddBatchWords={handleAddBatchWords}
+                onUpdateWord={handleUpdateWord}
                 onDeleteWord={handleDeleteWord}
                 onDeleteDeck={handleDeleteDeck}
                 onToggleStar={handleToggleStar}
