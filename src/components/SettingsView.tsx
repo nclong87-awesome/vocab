@@ -217,7 +217,7 @@ export default function SettingsView({
     setTestingLlm(true);
     setLlmTestResult(null);
     try {
-      const data = await testLlmConnection(llmConfig);
+      const data = await testLlmConnection(config);
       if (data.success) {
         setLlmTestResult({ success: true, msg: "Active model test passed! Responded successfully." });
       } else {

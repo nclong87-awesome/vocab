@@ -29,7 +29,7 @@ function cleanJsonResponse(rawText: string): string {
   return cleaned;
 }
 
-const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash", "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"];
 
 // Sanitize model names for provider
 function sanitizeModel(provider: string, model?: string): string {
@@ -39,6 +39,82 @@ function sanitizeModel(provider: string, model?: string): string {
     }
   }
   return model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
+}
+
+// Parse server-side LLM error
+function parseServerError(err: any, provider: string = "gemini"): {
+  statusCode: number;
+  errorType: string;
+  userMessage: string;
+  isRetryable: boolean;
+} {
+  const originalMessage = err?.message || (typeof err === "string" ? err : JSON.stringify(err || {}));
+  const lowerMsg = originalMessage.toLowerCase();
+  const provUpper = provider.toUpperCase();
+
+  let statusCode = err?.statusCode || err?.status || err?.code || 0;
+
+  try {
+    const jsonMatch = originalMessage.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsedJson = JSON.parse(jsonMatch[0]);
+      const errObj = parsedJson.error || parsedJson;
+      if (errObj.code && typeof errObj.code === "number") statusCode = errObj.code;
+    }
+  } catch {}
+
+  if (statusCode === 401 || lowerMsg.includes("unauthenticated") || lowerMsg.includes("api_key_invalid") || lowerMsg.includes("invalid api key") || lowerMsg.includes("unregistered callers")) {
+    return {
+      statusCode: 401,
+      errorType: "INVALID_KEY",
+      userMessage: `Invalid ${provUpper} API Key (401): The provided API key is invalid or unrecognized. Please check your API key in settings.`,
+      isRetryable: false
+    };
+  }
+
+  if (statusCode === 403 || lowerMsg.includes("permission_denied") || lowerMsg.includes("permission denied") || lowerMsg.includes("api_key_service_blocked")) {
+    return {
+      statusCode: 403,
+      errorType: "PERMISSION_DENIED",
+      userMessage: `Access Forbidden (403): Your ${provUpper} API key lacks access permissions or Gemini is restricted in your region/project.`,
+      isRetryable: false
+    };
+  }
+
+  if (statusCode === 429 || lowerMsg.includes("resource_exhausted") || lowerMsg.includes("quota exceeded") || lowerMsg.includes("too many requests")) {
+    return {
+      statusCode: 429,
+      errorType: "RATE_LIMIT",
+      userMessage: `Rate Limit Exceeded (429): ${provUpper} API quota or rate limit reached.`,
+      isRetryable: true
+    };
+  }
+
+  if (statusCode === 404 || lowerMsg.includes("not_found") || lowerMsg.includes("model not found")) {
+    return {
+      statusCode: 404,
+      errorType: "NOT_FOUND",
+      userMessage: `Model Not Found (404): The requested ${provUpper} model is unavailable or endpoint path is invalid.`,
+      isRetryable: false
+    };
+  }
+
+  if (statusCode >= 500 || lowerMsg.includes("internal server error") || lowerMsg.includes("service unavailable") || lowerMsg.includes("overloaded")) {
+    const code = statusCode || 503;
+    return {
+      statusCode: code,
+      errorType: "SERVER_ERROR",
+      userMessage: `${provUpper} Server Error (${code}): Google/Provider AI servers are temporarily busy or undergoing maintenance.`,
+      isRetryable: true
+    };
+  }
+
+  return {
+    statusCode: statusCode || 400,
+    errorType: "UNKNOWN",
+    userMessage: `${provUpper} Error: ${originalMessage || "Failed to communicate with LLM provider."}`,
+    isRetryable: statusCode >= 500 || statusCode === 429
+  };
 }
 
 // Call LLM based on provider
@@ -74,38 +150,39 @@ async function callLLM(
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
-    const targetModel = model || "gemini-2.5-flash";
-    try {
-      const response = await ai.models.generateContent({
-        model: targetModel,
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
+    const primaryModel = model || "gemini-2.5-flash";
+    const fallbackModels = ["gemini-2.5-flash", "gemini-2.0-flash"].filter(m => m !== primaryModel);
 
-      if (!response.text) {
-        throw new Error("Empty response received from Gemini model.");
-      }
-      return cleanJsonResponse(response.text);
-    } catch (err: any) {
-      console.warn(`Gemini generation failed on model ${targetModel}, retrying with gemini-2.0-flash...`, err?.message);
-      if (targetModel !== "gemini-2.0-flash") {
-        const fallbackRes = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const activeModel = attempt === 1 ? primaryModel : (fallbackModels[0] || "gemini-2.0-flash");
+      try {
+        const response = await ai.models.generateContent({
+          model: activeModel,
           contents: prompt,
           config: {
             systemInstruction,
             responseMimeType: "application/json"
           }
         });
-        if (fallbackRes.text) {
-          return cleanJsonResponse(fallbackRes.text);
+
+        if (!response.text) {
+          throw new Error("Empty response received from Gemini model.");
+        }
+        return cleanJsonResponse(response.text);
+      } catch (err: any) {
+        lastError = err;
+        const parsed = parseServerError(err, "gemini");
+        if (!parsed.isRetryable && parsed.statusCode !== 404) {
+          throw err;
+        }
+        console.warn(`[Gemini Server Retry ${attempt}/3] Model ${activeModel} failed: ${err?.message}`);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
       }
-      throw err;
     }
+    throw lastError;
   } 
 
   if (provider === "anthropic") {
@@ -203,7 +280,15 @@ app.post("/api/test-llm", async (req, res) => {
     res.json({ success: true, response: text });
   } catch (error: any) {
     console.error("LLM Test Error:", error);
-    res.status(400).json({ success: false, error: error.message || "Failed to connect to LLM provider" });
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 400;
+    res.status(code).json({
+      success: false,
+      error: parsed.userMessage,
+      statusCode: parsed.statusCode,
+      errorType: parsed.errorType,
+      isRetryable: parsed.isRetryable
+    });
   }
 });
 
@@ -254,7 +339,9 @@ Ensure the words selected cover different skill levels and are practical for rea
     res.json(result);
   } catch (error: any) {
     console.error("Error generating deck:", error);
-    res.status(500).json({ error: error.message || "Failed to generate vocabulary deck" });
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
   }
 });
 
@@ -300,7 +387,9 @@ CRITICAL MANDATORY REQUIREMENT:
     res.json(result);
   } catch (error: any) {
     console.error("Error autofilling word:", error);
-    res.status(500).json({ error: error.message || "Failed to auto-fill word details" });
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
   }
 });
 
@@ -313,7 +402,7 @@ app.post("/api/tts", async (req, res) => {
       return res.status(400).json({ error: "Text is required for TTS generation" });
     }
 
-    const effectiveApiKey = apiKey || llmConfig?.apiKey || (engine === "gemini" ? process.env.GEMINI_API_KEY : "");
+    const effectiveApiKey = apiKey || (llmConfig?.provider === engine ? llmConfig?.apiKey : undefined) || (engine === "gemini" ? process.env.GEMINI_API_KEY : "");
 
     if (engine === "gemini") {
       const keyToUse = effectiveApiKey || process.env.GEMINI_API_KEY;

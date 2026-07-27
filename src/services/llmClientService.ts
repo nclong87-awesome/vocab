@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMConfig } from "../types";
-import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 // Clean raw JSON strings
 export function cleanJsonResponse(rawText: string): string {
@@ -13,10 +12,22 @@ export function cleanJsonResponse(rawText: string): string {
   return cleaned;
 }
 
-const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"];
+const VALID_GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-3.6-flash",
+  "gemini-3.6-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-2.5-flash-preview-tts",
+  "gemini-3.1-flash-tts-preview"
+];
 
 // Sanitize model names for provider
-function sanitizeModel(provider: string, model?: string): string {
+export function sanitizeModel(provider: string, model?: string): string {
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
       return "gemini-2.5-flash";
@@ -25,7 +36,301 @@ function sanitizeModel(provider: string, model?: string): string {
   return model || (provider === "gemini" ? "gemini-2.5-flash" : "gpt-5.4-mini");
 }
 
-// Client-side direct LLM API invocation
+export type LLMErrorType =
+  | 'INVALID_KEY'
+  | 'PERMISSION_DENIED'
+  | 'RATE_LIMIT'
+  | 'NOT_FOUND'
+  | 'SERVER_ERROR'
+  | 'NETWORK_ERROR'
+  | 'INVALID_RESPONSE'
+  | 'UNKNOWN';
+
+export interface ParsedLlmError {
+  statusCode: number;
+  errorType: LLMErrorType;
+  userMessage: string;
+  originalMessage: string;
+  isRetryable: boolean;
+  provider: string;
+}
+
+export class LLMConnectionError extends Error {
+  statusCode: number;
+  errorType: LLMErrorType;
+  userMessage: string;
+  isRetryable: boolean;
+  provider: string;
+
+  constructor(parsed: ParsedLlmError) {
+    super(parsed.userMessage);
+    this.name = "LLMConnectionError";
+    this.statusCode = parsed.statusCode;
+    this.errorType = parsed.errorType;
+    this.userMessage = parsed.userMessage;
+    this.isRetryable = parsed.isRetryable;
+    this.provider = parsed.provider;
+  }
+}
+
+/**
+  Parse raw errors from Gemini API or other LLM providers into structured errors
+  with status codes, retry flags, and user-friendly messages.
+ */
+export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmError {
+  const originalMessage =
+    err?.userMessage ||
+    err?.message ||
+    (typeof err === "string" ? err : JSON.stringify(err || {}));
+
+  const provUpper = provider.toUpperCase();
+
+  // Extract HTTP status code if present
+  let statusCode =
+    err?.statusCode ||
+    err?.status ||
+    err?.response?.status ||
+    err?.code ||
+    0;
+
+  if (typeof statusCode !== "number" || isNaN(statusCode)) {
+    statusCode = 0;
+  }
+
+  // Attempt to parse nested JSON error objects from GoogleGenAI SDK error strings
+  let lowerMsg = originalMessage.toLowerCase();
+  let jsonCode: number | null = null;
+  let jsonStatusStr: string = "";
+
+  try {
+    const jsonMatch = originalMessage.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsedJson = JSON.parse(jsonMatch[0]);
+      const errObj = parsedJson.error || parsedJson;
+      if (errObj.code && typeof errObj.code === "number") {
+        jsonCode = errObj.code;
+      }
+      if (errObj.status && typeof errObj.status === "string") {
+        jsonStatusStr = errObj.status;
+      }
+      if (errObj.message && typeof errObj.message === "string") {
+        lowerMsg = (lowerMsg + " " + errObj.message.toLowerCase()).trim();
+      }
+    }
+  } catch {
+    // Ignore JSON parse errors for non-JSON strings
+  }
+
+  if (!statusCode && jsonCode) {
+    statusCode = jsonCode;
+  }
+
+  // 1. Invalid API Key / Unauthorized (401)
+  if (
+    statusCode === 401 ||
+    jsonStatusStr === "UNAUTHENTICATED" ||
+    lowerMsg.includes("unauthenticated") ||
+    lowerMsg.includes("api_key_invalid") ||
+    lowerMsg.includes("api key not valid") ||
+    lowerMsg.includes("invalid api key") ||
+    lowerMsg.includes("invalid authentication credentials") ||
+    lowerMsg.includes("unregistered callers")
+  ) {
+    return {
+      statusCode: 401,
+      errorType: "INVALID_KEY",
+      userMessage: `Invalid ${provUpper} API Key (401): The provided API key is invalid or unrecognized. Please check your API key in LLM Settings.`,
+      originalMessage,
+      isRetryable: false,
+      provider
+    };
+  }
+
+  // 2. Permission Denied / Access Forbidden (403)
+  if (
+    statusCode === 403 ||
+    jsonStatusStr === "PERMISSION_DENIED" ||
+    lowerMsg.includes("permission_denied") ||
+    lowerMsg.includes("permission denied") ||
+    lowerMsg.includes("access forbidden") ||
+    lowerMsg.includes("api_key_service_blocked") ||
+    lowerMsg.includes("caller does not have permission") ||
+    lowerMsg.includes("method doesn't allow unregistered callers")
+  ) {
+    return {
+      statusCode: 403,
+      errorType: "PERMISSION_DENIED",
+      userMessage: `Access Forbidden (403): Your ${provUpper} API key lacks access permissions or Gemini is restricted in your region/project.`,
+      originalMessage,
+      isRetryable: false,
+      provider
+    };
+  }
+
+  // 3. Rate Limit / Quota Exceeded (429)
+  if (
+    statusCode === 429 ||
+    jsonStatusStr === "RESOURCE_EXHAUSTED" ||
+    lowerMsg.includes("resource_exhausted") ||
+    lowerMsg.includes("quota exceeded") ||
+    lowerMsg.includes("too many requests") ||
+    lowerMsg.includes("rate limit")
+  ) {
+    return {
+      statusCode: 429,
+      errorType: "RATE_LIMIT",
+      userMessage: `Rate Limit Exceeded (429): ${provUpper} API quota or rate limit reached. Retrying automatically...`,
+      originalMessage,
+      isRetryable: true,
+      provider
+    };
+  }
+
+  // 4. Model Not Found (404)
+  if (
+    statusCode === 404 ||
+    jsonStatusStr === "NOT_FOUND" ||
+    lowerMsg.includes("not_found") ||
+    lowerMsg.includes("model not found") ||
+    lowerMsg.includes("publishermodel")
+  ) {
+    return {
+      statusCode: 404,
+      errorType: "NOT_FOUND",
+      userMessage: `Model Not Found (404): The requested ${provUpper} model is unavailable or endpoint path is invalid. Retrying with fallback model...`,
+      originalMessage,
+      isRetryable: false,
+      provider
+    };
+  }
+
+  // 5. Server Error / Overloaded (500, 502, 503, 504)
+  if (
+    statusCode >= 500 ||
+    jsonStatusStr === "INTERNAL" ||
+    jsonStatusStr === "UNAVAILABLE" ||
+    lowerMsg.includes("internal server error") ||
+    lowerMsg.includes("service unavailable") ||
+    lowerMsg.includes("overloaded") ||
+    lowerMsg.includes("bad gateway")
+  ) {
+    const code = statusCode || 503;
+    return {
+      statusCode: code,
+      errorType: "SERVER_ERROR",
+      userMessage: `${provUpper} Server Error (${code}): Google/Provider AI servers are temporarily busy or undergoing maintenance. Retrying...`,
+      originalMessage,
+      isRetryable: true,
+      provider
+    };
+  }
+
+  // 6. Network / CORS / Fetch Error
+  if (
+    err?.name === "TypeError" ||
+    lowerMsg.includes("failed to fetch") ||
+    lowerMsg.includes("networkerror") ||
+    lowerMsg.includes("cors") ||
+    lowerMsg.includes("econnreset") ||
+    lowerMsg.includes("etimedout")
+  ) {
+    return {
+      statusCode: 0,
+      errorType: "NETWORK_ERROR",
+      userMessage: `Network Connection Error: Unable to reach ${provUpper} API servers from the browser. Please verify your internet connection.`,
+      originalMessage,
+      isRetryable: true,
+      provider
+    };
+  }
+
+  // 7. Invalid or Empty Response
+  if (lowerMsg.includes("empty response") || lowerMsg.includes("json")) {
+    return {
+      statusCode: 422,
+      errorType: "INVALID_RESPONSE",
+      userMessage: `Invalid Response Error: Received empty or unparseable payload from ${provUpper}.`,
+      originalMessage,
+      isRetryable: true,
+      provider
+    };
+  }
+
+  // Default fallback error
+  return {
+    statusCode: statusCode || 400,
+    errorType: "UNKNOWN",
+    userMessage: `${provUpper} Connection Error: ${originalMessage || "Failed to communicate with LLM model."}`,
+    originalMessage,
+    isRetryable: statusCode >= 500 || statusCode === 429,
+    provider
+  };
+}
+
+/**
+  Execute an async operation with exponential backoff retry logic for transient errors.
+ */
+export async function callWithRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  options: {
+    maxRetries?: number;
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+    backoffFactor?: number;
+    provider?: string;
+    onRetry?: (attempt: number, delayMs: number, error: ParsedLlmError) => void;
+  } = {}
+): Promise<T> {
+  const maxRetries = options.maxRetries ?? 3;
+  const initialDelayMs = options.initialDelayMs ?? 1000;
+  const maxDelayMs = options.maxDelayMs ?? 4000;
+  const backoffFactor = options.backoffFactor ?? 2;
+  const provider = options.provider || "gemini";
+
+  let lastParsedError: ParsedLlmError | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (err: any) {
+      const parsed = parseLlmError(err, provider);
+      lastParsedError = parsed;
+
+      // Do NOT retry non-retryable errors (e.g. 401 Invalid Key, 403 Forbidden)
+      if (!parsed.isRetryable || attempt >= maxRetries) {
+        throw new LLMConnectionError(parsed);
+      }
+
+      const delayMs = Math.min(
+        maxDelayMs,
+        initialDelayMs * Math.pow(backoffFactor, attempt - 1) + Math.floor(Math.random() * 200)
+      );
+
+      console.warn(
+        `[${provider.toUpperCase()} Retry ${attempt}/${maxRetries}] ${parsed.userMessage} (Waiting ${delayMs}ms)`
+      );
+
+      if (options.onRetry) {
+        options.onRetry(attempt, delayMs, parsed);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw new LLMConnectionError(
+    lastParsedError || {
+      statusCode: 500,
+      errorType: "UNKNOWN",
+      userMessage: `Failed after ${maxRetries} retry attempts`,
+      originalMessage: "Max retries reached",
+      isRetryable: false,
+      provider
+    }
+  );
+}
+
+// Client-side direct LLM API invocation with retry logic and model fallback
 export async function callLLMClientSide(
   prompt: string, 
   systemInstruction: string, 
@@ -39,68 +344,113 @@ export async function callLLMClientSide(
 
   const requiresKey = provider !== "ollama" && provider !== "custom" && provider !== "gemini";
   if (requiresKey && !apiKey) {
-    throw new Error(`API Key is required for ${provider.toUpperCase()}. Please enter a valid API key in LLM settings.`);
+    throw new LLMConnectionError({
+      statusCode: 401,
+      errorType: "INVALID_KEY",
+      userMessage: `API Key is required for ${provider.toUpperCase()}. Please enter a valid API key in LLM settings.`,
+      originalMessage: "Missing API key",
+      isRetryable: false,
+      provider
+    });
   }
 
-  const effectiveApiKey = apiKey || "local-token";
+  const effectiveApiKey = apiKey || "";
 
+  // Gemini API client-side handling
   if (provider === "gemini") {
-    try {
-      const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
-      const response = await ai.models.generateContent({
-        model: model || "gemini-3.6-flash",
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
+    if (!effectiveApiKey) {
+      throw new LLMConnectionError({
+        statusCode: 401,
+        errorType: "INVALID_KEY",
+        userMessage: "Gemini API Key is missing. Please enter your API key in LLM settings to use Gemini in the browser.",
+        originalMessage: "Missing Gemini API key",
+        isRetryable: false,
+        provider: "gemini"
       });
-
-      if (!response.text) {
-        throw new Error("Empty response received from Gemini API.");
-      }
-      return cleanJsonResponse(response.text);
-    } catch (err: any) {
-      if (err.name === "TypeError" || err.message?.includes("Failed to fetch")) {
-        throw new Error("Gemini API Network Error: Unable to reach Google Gemini API from browser.");
-      }
-      throw err;
     }
+
+    const primaryModel = model || "gemini-2.5-flash";
+    const fallbackModels = ["gemini-2.5-flash", "gemini-2.0-flash"].filter(m => m !== primaryModel);
+
+    return callWithRetry(
+      async (attempt) => {
+        const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
+        let activeModel = primaryModel;
+
+        if (attempt > 1 && fallbackModels.length > 0) {
+          activeModel = fallbackModels[(attempt - 2) % fallbackModels.length];
+          console.warn(`[Gemini Fallback] Retrying with model ${activeModel}`);
+        }
+
+        try {
+          const response = await ai.models.generateContent({
+            model: activeModel,
+            contents: prompt,
+            config: {
+              systemInstruction,
+              responseMimeType: "application/json"
+            }
+          });
+
+          if (!response.text) {
+            throw new Error("Empty response received from Gemini API.");
+          }
+          return cleanJsonResponse(response.text);
+        } catch (err: any) {
+          const parsed = parseLlmError(err, "gemini");
+          // If primary model returns 404 or NOT_FOUND, fallback immediately to default model
+          if ((parsed.statusCode === 404 || parsed.errorType === "NOT_FOUND") && activeModel === primaryModel && fallbackModels.length > 0) {
+            console.warn(`[Gemini Model Fallback] Model ${primaryModel} not found (404), trying ${fallbackModels[0]}`);
+            const fallbackRes = await ai.models.generateContent({
+              model: fallbackModels[0],
+              contents: prompt,
+              config: {
+                systemInstruction,
+                responseMimeType: "application/json"
+              }
+            });
+            if (fallbackRes.text) {
+              return cleanJsonResponse(fallbackRes.text);
+            }
+          }
+          throw err;
+        }
+      },
+      { maxRetries: 3, provider: "gemini" }
+    );
   }
 
   if (provider === "anthropic") {
     const endpoint = (baseUrl || "https://api.anthropic.com") + "/v1/messages";
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "x-api-key": effectiveApiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model: model || "claude-3-5-haiku-20241022",
-          max_tokens: 2048,
-          system: systemInstruction + "\nOutput MUST be strictly valid raw JSON complying with schema:\n" + schemaDescription,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
+    return callWithRetry(
+      async () => {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "x-api-key": effectiveApiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            model: model || "claude-3-5-haiku-20241022",
+            max_tokens: 2048,
+            system: systemInstruction + "\nOutput MUST be strictly valid raw JSON complying with schema:\n" + schemaDescription,
+            messages: [{ role: "user", content: prompt }]
+          })
+        });
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`Anthropic Error (${res.status}): ${errText}`);
-      }
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          throw new Error(`Anthropic Error (${res.status}): ${errText}`);
+        }
 
-      const data: any = await res.json();
-      const contentText = data.content?.[0]?.text || "";
-      return cleanJsonResponse(contentText);
-    } catch (err: any) {
-      if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
-        throw new Error(`Anthropic CORS/Network Error: Direct browser call to Anthropic blocked. Ensure API key is valid.`);
-      }
-      throw err;
-    }
+        const data: any = await res.json();
+        const contentText = data.content?.[0]?.text || "";
+        return cleanJsonResponse(contentText);
+      },
+      { maxRetries: 3, provider: "anthropic" }
+    );
   }
 
   // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom
@@ -135,51 +485,56 @@ export async function callLLMClientSide(
     reqBody.response_format = { type: "json_object" };
   }
 
-  try {
-    const res = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(reqBody)
-    });
+  return callWithRetry(
+    async () => {
+      const res = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(reqBody)
+      });
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
-    }
-
-    const data: any = await res.json();
-    const text = data.choices?.[0]?.message?.content || "";
-    return cleanJsonResponse(text);
-  } catch (err: any) {
-    if (err.name === "TypeError" || err.message?.includes("Failed to fetch") || err.message?.includes("CORS")) {
-      const isLocalHost = targetUrl.includes("localhost") || targetUrl.includes("127.0.0.1");
-
-      if (isLocalHost) {
-        throw new Error(
-          `Local Network / CORS Error: Cannot connect to local LLM endpoint (${targetUrl}). ` +
-          `Ensure local service is running.`
-        );
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
       }
 
-      throw new Error(
-        `Browser Connection / CORS Error: ${provider.toUpperCase()} endpoint (${targetUrl}) blocked direct browser requests. ` +
-        `Direct browser calls were blocked by CORS policy or the endpoint is unreachable.`
-      );
-    }
-    throw err;
-  }
+      const data: any = await res.json();
+      const text = data.choices?.[0]?.message?.content || "";
+      return cleanJsonResponse(text);
+    },
+    { maxRetries: 3, provider }
+  );
 }
 
 // Helper to check if running in a pure static client host (e.g. GitHub Pages)
 function isStaticHost(): boolean {
   if (typeof window === "undefined") return false;
   const host = window.location.hostname;
-  return host.endsWith("github.io") || host.endsWith("netlify.app") || host.endsWith("vercel.app") || window.location.protocol === "file:";
+  return (
+    host.endsWith("github.io") ||
+    host.endsWith("netlify.app") ||
+    host.endsWith("vercel.app") ||
+    window.location.protocol === "file:"
+  );
 }
 
-// 1. Test LLM Connection
-export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success: boolean; response?: string; error?: string }> {
-  // If running on static host (GitHub Pages), skip backend /api call directly
+export interface ConnectionTestResult {
+  success: boolean;
+  response?: string;
+  error?: string;
+  statusCode?: number;
+  errorType?: LLMErrorType;
+  isRetryable?: boolean;
+  provider?: string;
+  modelUsed?: string;
+}
+
+// 1. Test LLM Connection with status codes and detailed feedback
+export async function testLlmConnection(llmConfig: LLMConfig): Promise<ConnectionTestResult> {
+  const provider = llmConfig?.provider || "gemini";
+  const modelUsed = sanitizeModel(provider, llmConfig?.model);
+
+  // Static host (GitHub Pages, Vercel) direct client test
   if (isStaticHost()) {
     try {
       const text = await callLLMClientSide(
@@ -188,9 +543,18 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success
         "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
         llmConfig
       );
-      return { success: true, response: text };
+      return { success: true, response: text, provider, modelUsed };
     } catch (clientErr: any) {
-      return { success: false, error: clientErr.message || "Failed to connect to LLM provider" };
+      const parsed = parseLlmError(clientErr, provider);
+      return {
+        success: false,
+        error: parsed.userMessage,
+        statusCode: parsed.statusCode,
+        errorType: parsed.errorType,
+        isRetryable: parsed.isRetryable,
+        provider,
+        modelUsed
+      };
     }
   }
 
@@ -203,7 +567,12 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success
 
     if (response.ok) {
       const data = await response.json();
-      return data;
+      return {
+        success: true,
+        response: data.response,
+        provider,
+        modelUsed
+      };
     }
 
     if (response.status === 405 || response.status === 404) {
@@ -213,17 +582,26 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success
         "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
         llmConfig
       );
-      return { success: true, response: text };
+      return { success: true, response: text, provider, modelUsed };
     }
 
     const errData = await response.json().catch(() => null);
     if (errData && errData.error) {
-      return { success: false, error: errData.error };
+      return {
+        success: false,
+        error: errData.error,
+        statusCode: errData.statusCode || response.status,
+        errorType: errData.errorType || "SERVER_ERROR",
+        isRetryable: errData.isRetryable ?? false,
+        provider,
+        modelUsed
+      };
     }
   } catch (err: any) {
-    // Fallback to client-side
+    console.warn("Backend /api/test-llm network failure, falling back to client-side test:", err);
   }
 
+  // Fallback to client-side testing
   try {
     const text = await callLLMClientSide(
       "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
@@ -231,9 +609,18 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<{ success
       "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
       llmConfig
     );
-    return { success: true, response: text };
+    return { success: true, response: text, provider, modelUsed };
   } catch (clientErr: any) {
-    return { success: false, error: clientErr.message || "Failed to connect to LLM provider" };
+    const parsed = parseLlmError(clientErr, provider);
+    return {
+      success: false,
+      error: parsed.userMessage,
+      statusCode: parsed.statusCode,
+      errorType: parsed.errorType,
+      isRetryable: parsed.isRetryable,
+      provider,
+      modelUsed
+    };
   }
 }
 
