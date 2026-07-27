@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Plus, Compass } from "lucide-react";
-import { Deck, LLMConfig, LLMProvider, UserStats } from "../types";
+import { LLMConfig, LLMProvider, UserStats, Word } from "../types";
 import { getSettingFromDB, saveSettingToDB } from "../db/indexedDB";
 
 import TodayFocusHero from "./dashboard/TodayFocusHero";
@@ -10,12 +10,10 @@ import AiAnalyticsBanner from "./dashboard/AiAnalyticsBanner";
 
 interface DashboardProps {
   stats: UserStats;
-  decks: Deck[];
-  todayPracticeDeck: Deck;
-  onSelectDeck: (deckId: string) => void;
+  words: Word[];
+  todayPracticeWords: Word[];
   onSelectTab: (tab: "learn" | "quiz" | "decks" | "analytics") => void;
-  onGenerateDeck?: (topic: string, targetLanguage: string, nativeLanguage: string, quantity: number) => Promise<void>;
-  onDeleteDeck: (deckId: string) => void;
+  onGenerateWords?: (topic: string, targetLanguage: string, nativeLanguage: string, quantity: number) => Promise<void>;
   isLoading: boolean;
   loadingMessage: string;
   onFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
@@ -28,11 +26,9 @@ interface DashboardProps {
 
 export default function Dashboard({
   stats,
-  decks,
-  todayPracticeDeck,
-  onSelectDeck,
+  words,
+  todayPracticeWords,
   onSelectTab,
-  onDeleteDeck,
   isLoading,
   loadingMessage,
   onFinishQuiz,
@@ -129,13 +125,9 @@ export default function Dashboard({
         setIsQuizActive={setIsQuizActive}
         completedToday={completedToday}
         sessionScore={sessionScore}
-        todayPracticeDeck={todayPracticeDeck}
+        todayPracticeWords={todayPracticeWords}
         onDailyQuizFinish={handleDailyQuizFinish}
         streakCount={stats.streak.count}
-        onResumeDeckQuiz={(deckId) => {
-          onSelectDeck(deckId);
-          onSelectTab("quiz");
-        }}
       />
 
       {/* Stats Blocks */}

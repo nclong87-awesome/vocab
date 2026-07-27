@@ -134,14 +134,12 @@ export default function SettingsView({
           const remoteData = await syncFromGist(gistToken, gistId);
           if (remoteData && remoteData.exportedAt) {
             const remoteDate = new Date(remoteData.exportedAt).toLocaleString();
-            const remoteDecks = remoteData.stores?.decks?.length || 0;
-            const remoteWords = remoteData.stores?.decks?.reduce((acc: number, deck: any) => acc + (deck.words?.length || 0), 0) || 0;
+            const remoteWordCount = remoteData.stores?.words?.length || 0;
             
             const localData = await exportIndexedDBDatabase();
-            const localDecks = localData.stores.decks.length;
-            const localWords = localData.stores.decks.reduce((acc, deck) => acc + deck.words.length, 0);
+            const localWordCount = localData.stores.words.length;
             
-            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteDecks} decks, ${remoteWords} words\n\nLocal Database:\n- ${localDecks} decks, ${localWords} words\n\nAre you sure you want to overwrite the remote backup?`;
+            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n\nLocal Database:\n- ${localWordCount} words\n\nAre you sure you want to overwrite the remote backup?`;
           }
         } catch (e) {
           console.warn("Could not fetch remote backup for comparison", e);
@@ -189,14 +187,12 @@ export default function SettingsView({
       
       if (data && data.exportedAt) {
         const remoteDate = new Date(data.exportedAt).toLocaleString();
-        const remoteDecks = data.stores?.decks?.length || 0;
-        const remoteWords = data.stores?.decks?.reduce((acc: number, deck: any) => acc + (deck.words?.length || 0), 0) || 0;
+        const remoteWordCount = data.stores?.words?.length || 0;
         
         const localData = await exportIndexedDBDatabase();
-        const localDecks = localData.stores.decks.length;
-        const localWords = localData.stores.decks.reduce((acc, deck) => acc + deck.words.length, 0);
+        const localWordCount = localData.stores.words.length;
         
-        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteDecks} decks, ${remoteWords} words\n\nLocal Database:\n- ${localDecks} decks, ${localWords} words\n\nAre you sure you want to overwrite your local database with this remote backup?`;
+        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n\nLocal Database:\n- ${localWordCount} words\n\nAre you sure you want to overwrite your local database with this remote backup?`;
         if (!window.confirm(confirmMsg)) {
           setIsCloudSyncing(false);
           setDbStatusMessage(null);
@@ -324,10 +320,10 @@ export default function SettingsView({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      const deckCount = dbData.stores.decks ? dbData.stores.decks.length : 0;
+      const wordCount = dbData.stores.words ? dbData.stores.words.length : 0;
       setDbStatusMessage({
         type: "success",
-        text: `Export successful! Database backup downloaded (${deckCount} decks, version ${dbData.version}).`
+        text: `Export successful! Database backup downloaded (${wordCount} words, version ${dbData.version}).`
       });
     } catch (err: any) {
       console.error("Export IndexedDB failed:", err);
@@ -363,7 +359,7 @@ export default function SettingsView({
 
         setDbStatusMessage({
           type: "success",
-          text: `IndexedDB restored successfully! Loaded ${result.recordCounts.decks} decks into local storage.`
+          text: `IndexedDB restored successfully! Loaded ${result.recordCounts.words} words into local storage.`
         });
       } catch (err: any) {
         console.error("Import IndexedDB failed:", err);
@@ -402,8 +398,8 @@ export default function SettingsView({
         await resetIndexedDBDatabase();
       } else {
         // Clear all decks completely
-        const { clearAllDecksFromDB } = await import("../db/indexedDB");
-        await clearAllDecksFromDB();
+        const { clearAllWordsFromDB } = await import("../db/indexedDB");
+        await clearAllWordsFromDB();
       }
 
       // Clear any cached localStorage backups

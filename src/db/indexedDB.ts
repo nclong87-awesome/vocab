@@ -1,18 +1,18 @@
-import { Deck, UserStats, LLMConfig, TTSConfig } from "../types";
-import { DEFAULT_DECKS } from "../defaultDecks";
+import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
+import { DEFAULT_WORDS } from "../defaultWords";
 
 const DB_NAME = "VocabLearnerDB";
 const DB_VERSION = 1;
 
 interface DBStores {
-  decks: "decks";
+  words: "words";
   stats: "stats";
   config: "config";
   settings: "settings";
 }
 
 const STORES: DBStores = {
-  decks: "decks",
+  words: "words",
   stats: "stats",
   config: "config",
   settings: "settings"
@@ -29,8 +29,8 @@ function openDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
 
-      if (!db.objectStoreNames.contains(STORES.decks)) {
-        db.createObjectStore(STORES.decks, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.words)) {
+        db.createObjectStore(STORES.words, { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains(STORES.stats)) {
         db.createObjectStore(STORES.stats, { keyPath: "id" });
@@ -91,19 +91,19 @@ async function performTx<T>(
   });
 }
 
-// Load all decks from IndexedDB (with fallback/migration from localStorage or DEFAULT_DECKS)
-export async function getAllDecksFromDB(): Promise<Deck[]> {
+// Load all words from IndexedDB (with fallback/migration from localStorage or DEFAULT_WORDS)
+export async function getAllWordsFromDB(): Promise<Word[]> {
   try {
     const isInitialized = (await getSettingFromDB("db_initialized")) === "true" || localStorage.getItem("vocab_learner_db_initialized") === "true";
 
     const db = await openDB();
     return new Promise((resolve) => {
-      const tx = db.transaction(STORES.decks, "readonly");
-      const store = tx.objectStore(STORES.decks);
+      const tx = db.transaction(STORES.words, "readonly");
+      const store = tx.objectStore(STORES.words);
       const req = store.getAll();
 
       req.onsuccess = async () => {
-        const result = req.result as Deck[];
+        const result = req.result as Word[];
         if (result && result.length > 0) {
           if (!isInitialized) {
             await saveSettingToDB("db_initialized", "true");
@@ -111,19 +111,21 @@ export async function getAllDecksFromDB(): Promise<Deck[]> {
           }
           resolve(result);
         } else if (isInitialized) {
-          // User initialized DB previously and explicitly cleared or deleted all decks
+          // User initialized DB previously and explicitly cleared all words
           resolve([]);
         } else {
-          // Check localStorage for migration
+          // Check localStorage for migration (legacy deck-based data)
           const legacyDecks = localStorage.getItem("vocab_learner_decks");
           if (legacyDecks) {
             try {
               const parsed = JSON.parse(legacyDecks);
               if (Array.isArray(parsed) && parsed.length > 0) {
-                await saveAllDecksToDB(parsed);
+                // Extract words from legacy deck structure
+                const allWords: Word[] = parsed.flatMap((d: any) => d.words || []);
+                await saveAllWordsToDB(allWords);
                 await saveSettingToDB("db_initialized", "true");
                 localStorage.setItem("vocab_learner_db_initialized", "true");
-                resolve(parsed);
+                resolve(allWords);
                 return;
               }
             } catch (e) {
@@ -131,38 +133,38 @@ export async function getAllDecksFromDB(): Promise<Deck[]> {
             }
           }
           // Default fallback on fresh install
-          await saveAllDecksToDB(DEFAULT_DECKS);
+          await saveAllWordsToDB(DEFAULT_WORDS);
           await saveSettingToDB("db_initialized", "true");
           localStorage.setItem("vocab_learner_db_initialized", "true");
-          resolve(DEFAULT_DECKS);
+          resolve(DEFAULT_WORDS);
         }
       };
 
       req.onerror = () => {
-        console.error("Failed reading decks from IndexedDB:", req.error);
-        resolve(isInitialized ? [] : DEFAULT_DECKS);
+        console.error("Failed reading words from IndexedDB:", req.error);
+        resolve(isInitialized ? [] : DEFAULT_WORDS);
       };
     });
   } catch (err) {
     console.error("IndexedDB unavailable, falling back:", err);
     const isInitialized = localStorage.getItem("vocab_learner_db_initialized") === "true";
-    return isInitialized ? [] : DEFAULT_DECKS;
+    return isInitialized ? [] : DEFAULT_WORDS;
   }
 }
 
-// Save all decks into IndexedDB
-export async function saveAllDecksToDB(decks: Deck[]): Promise<void> {
+// Save all words into IndexedDB
+export async function saveAllWordsToDB(words: Word[]): Promise<void> {
   try {
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORES.decks, "readwrite");
-      const store = tx.objectStore(STORES.decks);
+      const tx = db.transaction(STORES.words, "readwrite");
+      const store = tx.objectStore(STORES.words);
 
       // Clear existing & rewrite
       const clearReq = store.clear();
       clearReq.onsuccess = () => {
-        for (const deck of decks) {
-          store.put(deck);
+        for (const word of words) {
+          store.put(word);
         }
       };
 
@@ -175,39 +177,39 @@ export async function saveAllDecksToDB(decks: Deck[]): Promise<void> {
       localStorage.setItem("vocab_learner_db_initialized", "true");
     } catch (e) {}
   } catch (err) {
-    console.error("Error saving decks to IndexedDB:", err);
+    console.error("Error saving words to IndexedDB:", err);
   }
 }
 
-// Save or update a single deck efficiently without clearing entire store
-export async function saveSingleDeckToDB(deck: Deck): Promise<void> {
+// Save or update a single word efficiently
+export async function saveWordToDB(word: Word): Promise<void> {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORES.decks, "readwrite");
-      const store = tx.objectStore(STORES.decks);
-      store.put(deck);
+      const tx = db.transaction(STORES.words, "readwrite");
+      const store = tx.objectStore(STORES.words);
+      store.put(word);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
-    console.error("Error saving single deck to IndexedDB:", err);
+    console.error("Error saving word to IndexedDB:", err);
   }
 }
 
-// Remove a single deck from IndexedDB
-export async function deleteDeckFromDB(deckId: string): Promise<void> {
+// Remove a single word from IndexedDB
+export async function deleteWordFromDB(wordId: string): Promise<void> {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORES.decks, "readwrite");
-      const store = tx.objectStore(STORES.decks);
-      store.delete(deckId);
+      const tx = db.transaction(STORES.words, "readwrite");
+      const store = tx.objectStore(STORES.words);
+      store.delete(wordId);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
-    console.error("Error deleting deck from IndexedDB:", err);
+    console.error("Error deleting word from IndexedDB:", err);
   }
 }
 
@@ -404,7 +406,7 @@ export interface IndexedDBExportData {
   dbName: string;
   exportedAt: string;
   stores: {
-    decks: Deck[];
+    words: Word[];
     stats: any[];
     config: any[];
     settings: any[];
@@ -425,7 +427,7 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
     });
   };
 
-  const decks = await getStoreData<Deck>("decks");
+  const words = await getStoreData<Word>("words");
   const stats = await getStoreData<any>("stats");
   const config = await getStoreData<any>("config");
   const settings = await getStoreData<any>("settings");
@@ -435,7 +437,7 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
     dbName: DB_NAME,
     exportedAt: new Date().toISOString(),
     stores: {
-      decks,
+      words,
       stats,
       config,
       settings
@@ -447,26 +449,26 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
 export async function importIndexedDBDatabase(data: any): Promise<{
   success: boolean;
   message: string;
-  recordCounts: { decks: number; stats: number; config: number; settings: number };
+  recordCounts: { words: number; stats: number; config: number; settings: number };
 }> {
   if (!data || typeof data !== "object" || !data.stores) {
     throw new Error("Invalid backup file. Missing 'stores' object.");
   }
 
   const { stores } = data;
-  if (!stores.decks || !Array.isArray(stores.decks)) {
-    throw new Error("Invalid backup file: 'decks' array is required.");
+  if (!stores.words || !Array.isArray(stores.words)) {
+    throw new Error("Invalid backup file: 'words' array is required.");
   }
 
   const db = await openDB();
 
-  // Clear and populate decks
+  // Clear and populate words
   await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORES.decks, "readwrite");
-    const store = tx.objectStore(STORES.decks);
+    const tx = db.transaction(STORES.words, "readwrite");
+    const store = tx.objectStore(STORES.words);
     const clearReq = store.clear();
     clearReq.onsuccess = () => {
-      for (const item of stores.decks) {
+      for (const item of stores.words) {
         store.put(item);
       }
     };
@@ -526,7 +528,7 @@ export async function importIndexedDBDatabase(data: any): Promise<{
     success: true,
     message: "Database restored successfully!",
     recordCounts: {
-      decks: stores.decks ? stores.decks.length : 0,
+      words: stores.words ? stores.words.length : 0,
       stats: stores.stats ? stores.stats.length : 0,
       config: stores.config ? stores.config.length : 0,
       settings: stores.settings ? stores.settings.length : 0
@@ -539,7 +541,7 @@ export async function resetIndexedDBDatabase(): Promise<void> {
   const db = await openDB();
   
   // Clear all stores
-  const storeNames: (keyof DBStores)[] = ["decks", "stats", "config", "settings"];
+  const storeNames: (keyof DBStores)[] = ["words", "stats", "config", "settings"];
   for (const name of storeNames) {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORES[name], "readwrite");
@@ -551,7 +553,7 @@ export async function resetIndexedDBDatabase(): Promise<void> {
   }
 
   // Restore defaults
-  await saveAllDecksToDB(DEFAULT_DECKS);
+  await saveAllWordsToDB(DEFAULT_WORDS);
   await saveSettingToDB("db_initialized", "true");
   try {
     localStorage.setItem("vocab_learner_db_initialized", "true");
@@ -560,12 +562,12 @@ export async function resetIndexedDBDatabase(): Promise<void> {
   } catch (e) {}
 }
 
-// Clear all decks completely without restoring default decks
-export async function clearAllDecksFromDB(): Promise<void> {
+// Clear all words completely without restoring defaults
+export async function clearAllWordsFromDB(): Promise<void> {
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORES.decks, "readwrite");
-    const store = tx.objectStore(STORES.decks);
+    const tx = db.transaction(STORES.words, "readwrite");
+    const store = tx.objectStore(STORES.words);
     const clearReq = store.clear();
     clearReq.onsuccess = () => resolve();
     clearReq.onerror = () => reject(clearReq.error);
@@ -579,5 +581,5 @@ export async function clearAllDecksFromDB(): Promise<void> {
   } catch (e) {}
 }
 
-export const clearAllNotebooksFromDB = clearAllDecksFromDB;
+export const clearAllNotebooksFromDB = clearAllWordsFromDB;
 

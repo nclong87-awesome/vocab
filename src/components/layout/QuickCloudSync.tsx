@@ -72,13 +72,13 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       // Fetch remote data from Gist
       const remoteData = await syncFromGist(token, gistId);
 
-      // Compare local vs remote decks and stats
-      const localDecksStr = JSON.stringify(localData.stores?.decks || []);
-      const remoteDecksStr = JSON.stringify(remoteData.stores?.decks || []);
+      // Compare local vs remote words and stats
+      const localWordsStr = JSON.stringify(localData.stores?.words || []);
+      const remoteWordsStr = JSON.stringify(remoteData.stores?.words || []);
       const localStatsStr = JSON.stringify(localData.stores?.stats || []);
       const remoteStatsStr = JSON.stringify(remoteData.stores?.stats || []);
 
-      const isIdentical = (localDecksStr === remoteDecksStr) && (localStatsStr === remoteStatsStr);
+      const isIdentical = (localWordsStr === remoteWordsStr) && (localStatsStr === remoteStatsStr);
 
       if (isIdentical) {
         showToast("success", "In Sync: Local database matches cloud backup!");

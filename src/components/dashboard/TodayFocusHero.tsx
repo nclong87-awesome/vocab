@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Calendar, ArrowRight, Flame, Sparkles, Play, Trash2 } from "lucide-react";
-import { Deck } from "../../types";
+import { Word } from "../../types";
 import QuizView from "../QuizView";
 
 interface SavedQuizSession {
-  deckId: string;
-  deckName: string;
   questions: any[];
   currentQuestionIdx: number;
   score: number;
@@ -18,10 +16,9 @@ interface TodayFocusHeroProps {
   setIsQuizActive: (active: boolean) => void;
   completedToday: boolean;
   sessionScore: { score: number; total: number } | null;
-  todayPracticeDeck: Deck;
+  todayPracticeWords: Word[];
   onDailyQuizFinish: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   streakCount: number;
-  onResumeDeckQuiz?: (deckId: string) => void;
 }
 
 export default function TodayFocusHero({
@@ -29,10 +26,9 @@ export default function TodayFocusHero({
   setIsQuizActive,
   completedToday,
   sessionScore,
-  todayPracticeDeck,
+  todayPracticeWords,
   onDailyQuizFinish,
   streakCount,
-  onResumeDeckQuiz
 }: TodayFocusHeroProps) {
   const [activeSession, setActiveSession] = useState<SavedQuizSession | null>(null);
 
@@ -81,7 +77,7 @@ export default function TodayFocusHero({
           </button>
         </div>
         <QuizView 
-          deck={todayPracticeDeck}
+          words={todayPracticeWords}
           onFinishQuiz={onDailyQuizFinish}
           onGoBack={() => setIsQuizActive(false)}
         />
@@ -91,11 +87,7 @@ export default function TodayFocusHero({
 
   const handleResumeSession = () => {
     if (!activeSession) return;
-    if (activeSession.deckId === todayPracticeDeck.id || activeSession.deckId === "today-practice") {
-      setIsQuizActive(true);
-    } else if (onResumeDeckQuiz) {
-      onResumeDeckQuiz(activeSession.deckId);
-    }
+    setIsQuizActive(true);
   };
 
   const handleDiscardSession = () => {
@@ -114,7 +106,7 @@ export default function TodayFocusHero({
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-950">In-Progress Quiz Session</span>
             </div>
             <h3 className="text-base font-bold text-stone-950">
-              Resume "{activeSession.deckName}" Quiz
+              Resume Quiz Session
             </h3>
             <p className="text-xs text-stone-600 font-serif italic">
               Question {activeSession.currentQuestionIdx + 1} of {activeSession.questions.length} • Score so far: {activeSession.score}
@@ -182,14 +174,14 @@ export default function TodayFocusHero({
                     <span className="font-bold">Practice Quiz</span>
                   </h1>
                   <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
-                    "Challenge your memory with {todayPracticeDeck?.words.length || 0} priority words compiled from your target languages. Finish the quiz to secure your daily streak."
+                    "Challenge your memory with {todayPracticeWords?.length || 0} priority words compiled from your target languages. Finish the quiz to secure your daily streak."
                   </p>
                   
                   {/* Word Preview List */}
                   <div className="pt-2">
                     <span className="block text-xs font-medium text-stone-500 mb-3">Words in today's session:</span>
                     <div className="flex flex-wrap gap-2 max-w-xl">
-                      {todayPracticeDeck?.words.map((word) => (
+                      {todayPracticeWords?.map((word) => (
                         <span 
                           key={word.id} 
                           className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-xs text-stone-800 font-semibold tracking-tight hover:border-stone-900 hover:text-stone-950 transition-all cursor-default"

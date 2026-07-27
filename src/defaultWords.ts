@@ -1,4 +1,4 @@
-import { Word, Deck } from "./types";
+import { Word } from "./types";
 
 export const DEFAULT_WORDS: Word[] = [
   {
@@ -162,16 +162,3 @@ export const DEFAULT_WORDS: Word[] = [
     strength: 0
   }
 ];
-
-export const DEFAULT_DECKS: Deck[] = [
-  {
-    id: "main-vocab-deck",
-    name: "Vocabulary List",
-    description: "Main vocabulary word list.",
-    targetLanguage: "English",
-    nativeLanguage: "Spanish",
-    isCustom: true,
-    words: DEFAULT_WORDS
-  }
-];
-

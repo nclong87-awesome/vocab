@@ -5,21 +5,19 @@ import { Word } from "../../types";
 interface WordCardProps {
   key?: React.Key;
   word: Word;
-  activeDeckId: string;
   speakWord: (text: string) => void;
   handleRegenerateWord: (word: Word) => void;
   regeneratingWordId: string | null;
   regeneratedSuccessWordId: string | null;
   onToggleStar: (wordId: string) => void;
   onToggleLearned: (wordId: string) => void;
-  onDeleteWord: (deckId: string, wordId: string) => void;
+  onDeleteWord: (wordId: string) => void;
   brokenImageIds: Set<string>;
   handleImageError: (wordId: string) => void;
 }
 
 export default function WordCard({
   word,
-  activeDeckId,
   speakWord,
   handleRegenerateWord,
   regeneratingWordId,
@@ -92,7 +90,7 @@ export default function WordCard({
             </button>
             <button
               type="button"
-              onClick={() => onDeleteWord(activeDeckId, word.id)}
+              onClick={() => onDeleteWord(word.id)}
               className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-white transition-all cursor-pointer"
               title="Delete Entry"
             >

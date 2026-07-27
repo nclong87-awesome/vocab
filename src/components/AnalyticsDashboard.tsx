@@ -6,7 +6,6 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Search, 
-  Filter, 
   Star, 
   BookOpen, 
   Zap, 
@@ -14,7 +13,7 @@ import {
   RefreshCw,
   Layers
 } from "lucide-react";
-import { Word, Deck, UserStats, LLMConfig, TTSConfig } from "../types";
+import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { analyzePerformanceService, PerformanceAnalysisResult } from "../services/llmClientService";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 
@@ -23,18 +22,18 @@ import AnalyticsCharts from "./analytics/AnalyticsCharts";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
 
 interface AnalyticsDashboardProps {
-  decks: Deck[];
+  words: Word[];
   stats: UserStats;
   llmConfig?: LLMConfig;
   ttsConfig?: TTSConfig;
   onStartPracticeWeakWords: (weakWords: Word[]) => void;
-  onToggleLearnedWord: (deckId: string, wordId: string) => void;
+  onToggleLearnedWord: (wordId: string) => void;
   onToggleStarWord: (wordId: string) => void;
   onNavigateToView: (view: 'dashboard' | 'learn' | 'quiz' | 'manage' | 'analytics' | 'settings') => void;
 }
 
 export default function AnalyticsDashboard({
-  decks,
+  words,
   stats,
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
@@ -50,48 +49,32 @@ export default function AnalyticsDashboard({
   // Filter & Search states for Words breakdown
   const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'all' | 'starred'>('improving');
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDeckId, setSelectedDeckId] = useState<string>("all");
   const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('strength-asc');
 
   // TTS audio state
   const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
 
-  // Flatten all words with their parent deck context
-  const allWordsWithDeck = useMemo(() => {
-    const list: { word: Word; deckId: string; deckName: string }[] = [];
-    decks.forEach(deck => {
-      deck.words.forEach(w => {
-        list.push({
-          word: w,
-          deckId: deck.id,
-          deckName: deck.name
-        });
-      });
-    });
-    return list;
-  }, [decks]);
-
-  const totalWordsCount = allWordsWithDeck.length;
+  const totalWordsCount = words.length;
 
   // Mastered words: learned === true OR strength >= 3
   const masteredWords = useMemo(() => {
-    return allWordsWithDeck.filter(item => item.word.learned || item.word.strength >= 3);
-  }, [allWordsWithDeck]);
+    return words.filter(w => w.learned || w.strength >= 3);
+  }, [words]);
 
   // Words needing improvement: !learned AND strength < 3
   const improvingWords = useMemo(() => {
-    return allWordsWithDeck.filter(item => !item.word.learned && item.word.strength < 3);
-  }, [allWordsWithDeck]);
+    return words.filter(w => !w.learned && w.strength < 3);
+  }, [words]);
 
   const starredWords = useMemo(() => {
-    return allWordsWithDeck.filter(item => item.word.starred);
-  }, [allWordsWithDeck]);
+    return words.filter(w => w.starred);
+  }, [words]);
 
   // Familiarity strength levels distribution
   const strengthDistribution = useMemo(() => {
     const counts = [0, 0, 0, 0, 0]; // Index 0 to 4
-    allWordsWithDeck.forEach(item => {
-      const s = Math.min(4, Math.max(0, item.word.strength ?? 0));
+    words.forEach(w => {
+      const s = Math.min(4, Math.max(0, w.strength ?? 0));
       counts[s]++;
     });
     return [
@@ -101,24 +84,7 @@ export default function AnalyticsDashboard({
       { level: "Level 3", label: "Familiar", count: counts[3], color: "#10b981" },
       { level: "Level 4", label: "Mastered", count: counts[4], color: "#059669" }
     ];
-  }, [allWordsWithDeck]);
-
-  // Deck Performance Breakdown Data for Charts
-  const deckPerformanceData = useMemo(() => {
-    return decks.map(deck => {
-      const total = deck.words.length;
-      const mastered = deck.words.filter(w => w.learned || w.strength >= 3).length;
-      const percent = total > 0 ? Math.round((mastered / total) * 100) : 0;
-      return {
-        name: deck.name.length > 15 ? deck.name.substring(0, 15) + "..." : deck.name,
-        fullName: deck.name,
-        total,
-        mastered,
-        improving: total - mastered,
-        masteryPercent: percent
-      };
-    });
-  }, [decks]);
+  }, [words]);
 
   // Calculate overall accuracy rate
   const accuracyRate = useMemo(() => {
@@ -133,18 +99,12 @@ export default function AnalyticsDashboard({
     setIsAnalyzing(true);
     setAnalysisError(null);
     try {
-      const decksSummary = decks.map(d => ({
-        name: d.name,
-        totalWords: d.words.length,
-        masteredCount: d.words.filter(w => w.learned || w.strength >= 3).length
-      }));
-
       const result = await analyzePerformanceService({
         stats,
         totalWords: totalWordsCount,
-        masteredWords: masteredWords.map(i => i.word),
-        improvingWords: improvingWords.map(i => i.word),
-        decksSummary,
+        masteredWords,
+        improvingWords,
+        decksSummary: [],
         llmConfig
       });
 
@@ -170,9 +130,9 @@ export default function AnalyticsDashboard({
     );
   };
 
-  // Filtered Words List according to active tab, search, deck, and sorting
+  // Filtered Words List according to active tab, search, and sorting
   const filteredWords = useMemo(() => {
-    let source = allWordsWithDeck;
+    let source = words;
 
     if (activeTab === 'improving') {
       source = improvingWords;
@@ -182,39 +142,35 @@ export default function AnalyticsDashboard({
       source = starredWords;
     }
 
-    if (selectedDeckId !== "all") {
-      source = source.filter(i => i.deckId === selectedDeckId);
-    }
-
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      source = source.filter(i => 
-        i.word.word.toLowerCase().includes(q) ||
-        i.word.definition.toLowerCase().includes(q) ||
-        i.word.translation.toLowerCase().includes(q) ||
-        (i.word.partOfSpeech && i.word.partOfSpeech.toLowerCase().includes(q))
+      source = source.filter(w => 
+        w.word.toLowerCase().includes(q) ||
+        w.definition.toLowerCase().includes(q) ||
+        w.translation.toLowerCase().includes(q) ||
+        (w.partOfSpeech && w.partOfSpeech.toLowerCase().includes(q))
       );
     }
 
     // Sort
     return [...source].sort((a, b) => {
       if (sortBy === 'strength-asc') {
-        return (a.word.strength ?? 0) - (b.word.strength ?? 0);
+        return (a.strength ?? 0) - (b.strength ?? 0);
       }
       if (sortBy === 'strength-desc') {
-        return (b.word.strength ?? 0) - (a.word.strength ?? 0);
+        return (b.strength ?? 0) - (a.strength ?? 0);
       }
       if (sortBy === 'alpha') {
-        return a.word.word.localeCompare(b.word.word);
+        return a.word.localeCompare(b.word);
       }
       if (sortBy === 'recent') {
-        const dateA = a.word.lastReviewed ? new Date(a.word.lastReviewed).getTime() : 0;
-        const dateB = b.word.lastReviewed ? new Date(b.word.lastReviewed).getTime() : 0;
+        const dateA = a.lastReviewed ? new Date(a.lastReviewed).getTime() : 0;
+        const dateB = b.lastReviewed ? new Date(b.lastReviewed).getTime() : 0;
         return dateB - dateA;
       }
       return 0;
     });
-  }, [allWordsWithDeck, improvingWords, masteredWords, starredWords, activeTab, selectedDeckId, searchQuery, sortBy]);
+  }, [words, improvingWords, masteredWords, starredWords, activeTab, searchQuery, sortBy]);
 
   // Overall Mastery Percentage
   const overallMasteryPercent = totalWordsCount > 0 
@@ -239,7 +195,7 @@ export default function AnalyticsDashboard({
         <div className="flex flex-wrap items-center gap-3">
           {improvingWords.length > 0 && (
             <button
-              onClick={() => onStartPracticeWeakWords(improvingWords.map(i => i.word))}
+              onClick={() => onStartPracticeWeakWords(improvingWords)}
               className="px-5 py-3 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-xs"
               title="Launch a practice quiz focused on words needing improvement"
             >
@@ -276,7 +232,7 @@ export default function AnalyticsDashboard({
             <BookOpen className="w-4 h-4 text-stone-400" />
           </div>
           <div className="text-3xl font-bold text-stone-950 tracking-tight">{totalWordsCount}</div>
-          <p className="text-[11px] text-stone-500 font-serif italic">Across {decks.length} vocabulary decks</p>
+          <p className="text-[11px] text-stone-500 font-serif italic">Total vocabulary words</p>
         </div>
 
         <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2 border-l-4 border-l-emerald-600">
@@ -335,7 +291,6 @@ export default function AnalyticsDashboard({
       {/* Visual Analytics Charts Section */}
       <AnalyticsCharts 
         strengthDistribution={strengthDistribution} 
-        deckPerformanceData={deckPerformanceData} 
       />
 
       {/* DETAILED WORDS ANALYSIS & MANAGEMENT SECTION */}
@@ -406,7 +361,7 @@ export default function AnalyticsDashboard({
 
           {activeTab === 'improving' && improvingWords.length > 0 && (
             <button
-              onClick={() => onStartPracticeWeakWords(improvingWords.map(i => i.word))}
+              onClick={() => onStartPracticeWeakWords(improvingWords)}
               className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shrink-0 transition-all"
             >
               <Zap className="w-3.5 h-3.5 fill-current" />
@@ -415,8 +370,8 @@ export default function AnalyticsDashboard({
           )}
         </div>
 
-        {/* Search, Filter & Sorting Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Search & Sorting Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative">
             <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -437,22 +392,6 @@ export default function AnalyticsDashboard({
           </div>
 
           <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-stone-500 shrink-0" />
-            <select
-              value={selectedDeckId}
-              onChange={(e) => setSelectedDeckId(e.target.value)}
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 text-xs text-stone-900 outline-none focus:border-stone-900 rounded-none cursor-pointer"
-            >
-              <option value="all">All Decks ({decks.length})</option>
-              {decks.map(deck => (
-                <option key={deck.id} value={deck.id}>
-                  {deck.name} ({deck.words.length} words)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
             <span className="text-stone-500 text-xs font-semibold shrink-0">Sort:</span>
             <select
               value={sortBy}
@@ -470,10 +409,10 @@ export default function AnalyticsDashboard({
         {/* Word Cards Grid */}
         {filteredWords.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="filtered-words-grid">
-            {filteredWords.map((item) => (
+            {filteredWords.map((word) => (
               <WordAnalyticsCard
-                key={`${item.deckId}-${item.word.id}`}
-                wordItem={item}
+                key={word.id}
+                word={word}
                 speakingWordId={speakingWordId}
                 onSpeakWord={handleSpeakWord}
                 onToggleStarWord={onToggleStarWord}

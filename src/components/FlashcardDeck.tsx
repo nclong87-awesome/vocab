@@ -15,11 +15,11 @@ import {
   List,
   Layers
 } from "lucide-react";
-import { Word, Deck, TTSConfig, LLMConfig } from "../types";
+import { Word, TTSConfig, LLMConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 
 interface FlashcardDeckProps {
-  deck: Deck | null;
+  words: Word[];
   onToggleStar: (wordId: string) => void;
   onToggleLearned: (wordId: string) => void;
   onGoBack: () => void;
@@ -29,7 +29,7 @@ interface FlashcardDeckProps {
 }
 
 export default function FlashcardDeck({
-  deck,
+  words,
   onToggleStar,
   onToggleLearned,
   onGoBack,
@@ -42,25 +42,9 @@ export default function FlashcardDeck({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
 
-  if (!deck) {
-    return (
-      <div className="bg-white p-12 rounded-none border border-stone-200 text-center space-y-6 max-w-md mx-auto" id="no-deck-selected">
-        <Layers className="w-16 h-16 text-stone-300 mx-auto" />
-        <h3 className="text-sm font-bold text-stone-900">No vocabulary list loaded</h3>
-        <p className="text-xs text-stone-400 font-serif italic">"Please add some words to begin."</p>
-        <button 
-          onClick={onGoBack}
-          className="px-6 py-3 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer rounded-none"
-        >
-          Go to Dashboard
-        </button>
-      </div>
-    );
-  }
-
-  const words = useMemo(() => {
-    if (!deck?.words) return [];
-    const list = deck.words.map((w, originalIndex) => ({ word: w, originalIndex }));
+  const sortedWords = useMemo(() => {
+    if (!words || words.length === 0) return [];
+    const list = words.map((w, originalIndex) => ({ word: w, originalIndex }));
     const getWordTimestamp = (w: Word, originalIndex: number): number => {
       if (w.createdAt) {
         const t = new Date(w.createdAt).getTime();
@@ -80,10 +64,10 @@ export default function FlashcardDeck({
       return b.originalIndex - a.originalIndex;
     });
     return list.map(item => item.word);
-  }, [deck?.words]);
-  const currentWord = words[currentIndex];
+  }, [words]);
+  const currentWord = sortedWords[currentIndex];
 
-  if (!words || words.length === 0) {
+  if (!sortedWords || sortedWords.length === 0) {
     return (
       <div className="text-center py-16 space-y-4 max-w-md mx-auto">
         <h2 className="text-xl font-bold text-stone-900 font-serif">Vocabulary list is empty</h2>
@@ -102,7 +86,7 @@ export default function FlashcardDeck({
 
   const handleNext = () => {
     setIsFlipped(false);
-    if (currentIndex < words.length - 1) {
+    if (currentIndex < sortedWords.length - 1) {
       setCurrentIndex(prev => prev + 1);
     }
   };
@@ -134,7 +118,7 @@ export default function FlashcardDeck({
       Chinese: "zh-CN"
     };
 
-    const code = deck ? (langMap[deck.targetLanguage] || "en-US") : "en-US";
+    const code = "en-US";
 
     speakTextService(
       text,
@@ -146,10 +130,10 @@ export default function FlashcardDeck({
     );
   };
 
-  const percentage = Math.round(((currentIndex + 1) / words.length) * 100);
+  const percentage = Math.round(((currentIndex + 1) / sortedWords.length) * 100);
 
   // Statistics for completion screen
-  const masteredCount = useMemo(() => words.filter(w => w.learned).length, [words]);
+  const masteredCount = useMemo(() => sortedWords.filter(w => w.learned).length, [sortedWords]);
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto" id="flashcard-deck-view">
@@ -162,8 +146,8 @@ export default function FlashcardDeck({
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
           </button>
-          <h2 className="text-2xl font-bold tracking-tight text-stone-900">{deck.name}</h2>
-          <p className="text-xs text-stone-500 mt-1 font-serif italic">"{deck.description}"</p>
+          <h2 className="text-2xl font-bold tracking-tight text-stone-900">Vocabulary</h2>
+          <p className="text-xs text-stone-500 mt-1 font-serif italic">{sortedWords.length} words</p>
         </div>
 
         {/* Mode Toggle Button */}
@@ -196,7 +180,7 @@ export default function FlashcardDeck({
           {/* Progress Tracker */}
           <div className="bg-white px-6 py-4 border border-stone-200 flex items-center justify-between gap-4">
             <span className="text-xs font-semibold text-stone-500 font-mono">
-              Word {currentIndex + 1} of {words.length}
+              Word {currentIndex + 1} of {sortedWords.length}
             </span>
             <div className="flex-1 h-[2px] bg-stone-100 overflow-hidden">
               <div 
@@ -364,7 +348,7 @@ export default function FlashcardDeck({
               <ArrowLeft className="w-4 h-4" /> Previous
             </button>
 
-            {currentIndex < words.length - 1 ? (
+            {currentIndex < sortedWords.length - 1 ? (
               <button
                 onClick={handleNext}
                 className="px-6 py-3 bg-stone-900 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
@@ -385,7 +369,7 @@ export default function FlashcardDeck({
         /* List Mode View */
         <div className="bg-white border border-stone-200 overflow-hidden" id="deck-list-view">
           <div className="divide-y divide-stone-100">
-            {words.map((w, idx) => (
+            {sortedWords.map((w, idx) => (
               <div 
                 key={w.id} 
                 className="p-3.5 sm:p-6 hover:bg-stone-50/50 transition-all flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6"

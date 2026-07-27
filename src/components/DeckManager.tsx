@@ -5,43 +5,32 @@ import {
   Search, 
   Sparkles, 
   Wand2, 
-  Trash2, 
-  PanelLeft, 
   Grid, 
   List, 
   Globe2,
-  ArrowUpDown,
-  Settings
+  ArrowUpDown
 } from "lucide-react";
-import { Deck, Word, LLMConfig, TTSConfig } from "../types";
+import { Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { autofillWordService, generateRandomWordsService } from "../services/llmClientService";
-import { ConfirmModal } from "./ConfirmModal";
 
 import WordCard from "./deckManager/WordCard";
 import WordRow from "./deckManager/WordRow";
 import AddWordModal from "./deckManager/AddWordModal";
 import RandomWordsModal from "./deckManager/RandomWordsModal";
-import EditDeckModal from "./deckManager/EditDeckModal";
 
 interface DeckManagerProps {
-  decks: Deck[];
-  selectedDeckId: string | null;
-  onSelectDeck: (deckId: string) => void;
+  words: Word[];
   onAddWord: (
-    deckId: string, 
     word: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
       createdAt?: string;
       lastReviewed?: string | null;
     }
   ) => void;
-  onDeleteWord: (deckId: string, wordId: string) => void;
+  onDeleteWord: (wordId: string) => void;
   onToggleStar: (wordId: string) => void;
   onToggleLearned: (wordId: string) => void;
-  onCreateDeck: (deck: Omit<Deck, "id">) => void;
-  onDeleteDeck?: (deckId: string) => void;
-  onUpdateDeckWords?: (deckId: string, updatedWords: Word[]) => void;
-  onUpdateDeckDetails?: (deckId: string, updates: { name: string; description: string; targetLanguage: string; nativeLanguage: string }) => void;
+  onUpdateWords?: (updatedWords: Word[]) => void;
   llmConfig?: LLMConfig;
   ttsConfig?: TTSConfig;
   targetLanguage?: string;
@@ -49,17 +38,12 @@ interface DeckManagerProps {
 }
 
 export default function DeckManager({
-  decks,
-  selectedDeckId,
-  onSelectDeck,
+  words,
   onAddWord,
   onDeleteWord,
   onToggleStar,
   onToggleLearned,
-  onCreateDeck,
-  onDeleteDeck,
-  onUpdateDeckWords,
-  onUpdateDeckDetails,
+  onUpdateWords,
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
   targetLanguage = "English",
@@ -67,9 +51,7 @@ export default function DeckManager({
 }: DeckManagerProps) {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCreateDeckModalOpen, setIsCreateDeckModalOpen] = useState(false);
   const [isRandomWordsModalOpen, setIsRandomWordsModalOpen] = useState(false);
-  const [isEditDeckModalOpen, setIsEditDeckModalOpen] = useState(false);
 
   // Form input states for adding a single word
   const [wordInput, setWordInput] = useState("");
@@ -81,28 +63,6 @@ export default function DeckManager({
   const [exampleTranslationInput, setExampleTranslationInput] = useState("");
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [autofilling, setAutofilling] = useState(false);
-
-  // Form input states for creating a whole notebook/deck
-  const [newDeckName, setNewDeckName] = useState("");
-  const [newDeckDesc, setNewDeckDesc] = useState("");
-  const [newDeckTargetLang, setNewDeckTargetLang] = useState(targetLanguage);
-  const [newDeckNativeLang, setNewDeckNativeLang] = useState(nativeLanguage);
-  const [isAiGeneratingDeck, setIsAiGeneratingDeck] = useState(false);
-
-  useEffect(() => {
-    setNewDeckTargetLang(targetLanguage);
-  }, [targetLanguage]);
-
-  useEffect(() => {
-    setNewDeckNativeLang(nativeLanguage);
-  }, [nativeLanguage]);
-
-  // Reset languages when opening the create modal
-  const handleOpenCreateModal = () => {
-    setNewDeckTargetLang(targetLanguage);
-    setNewDeckNativeLang(nativeLanguage);
-    setIsCreateDeckModalOpen(true);
-  };
 
   // Form input states for generating N random words
   const [randomCount, setRandomCount] = useState(5);
@@ -117,8 +77,6 @@ export default function DeckManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "alpha" | "unlearned">("newest");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [deckToDelete, setDeckToDelete] = useState<{ id: string; name: string } | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
 
   // Handle image load errors gracefully
@@ -130,37 +88,28 @@ export default function DeckManager({
     });
   };
 
-  const activeDeck = useMemo(() => {
-    if (!selectedDeckId) return decks[0] || null;
-    return decks.find((d) => d.id === selectedDeckId) || decks[0] || null;
-  }, [selectedDeckId, decks]);
-
-  const activeDeckId = activeDeck?.id || "";
-
   // Speak word TTS
   const speakWord = (text: string) => {
-    const customLang = activeDeck ? activeDeck.targetLanguage : "en-US";
-    speakTextService(text, ttsConfig, llmConfig, customLang);
+    speakTextService(text, ttsConfig, llmConfig, targetLanguage);
   };
 
   // Re-generate details for an existing word using AI
   const handleRegenerateWord = async (word: Word) => {
-    if (!activeDeck) return;
     setRegeneratingWordId(word.id);
     setRegeneratedSuccessWordId(null);
 
     try {
       const details = await autofillWordService({
         word: word.word,
-        targetLanguage: activeDeck.targetLanguage,
-        nativeLanguage: activeDeck.nativeLanguage,
-        deckName: activeDeck.name,
-        deckDescription: activeDeck.description,
+        targetLanguage,
+        nativeLanguage,
+        deckName: "",
+        deckDescription: "",
         llmConfig
       });
 
-      if (onUpdateDeckWords) {
-        const updatedWords = activeDeck.words.map(w => {
+      if (onUpdateWords) {
+        const updatedWords = words.map(w => {
           if (w.id === word.id) {
             return {
               ...w,
@@ -176,7 +125,7 @@ export default function DeckManager({
           return w;
         });
 
-        onUpdateDeckWords(activeDeck.id, updatedWords);
+        onUpdateWords(updatedWords);
         
         // Remove from broken images set if new image generated
         if (details.imageUrl) {
@@ -200,15 +149,15 @@ export default function DeckManager({
 
   // AI Auto-Fill for the Add Word form
   const handleAiAutofill = async () => {
-    if (!wordInput.trim() || !activeDeck) return;
+    if (!wordInput.trim()) return;
     setAutofilling(true);
     try {
       const details = await autofillWordService({
         word: wordInput.trim(),
-        targetLanguage: activeDeck.targetLanguage,
-        nativeLanguage: activeDeck.nativeLanguage,
-        deckName: activeDeck.name,
-        deckDescription: activeDeck.description,
+        targetLanguage,
+        nativeLanguage,
+        deckName: "",
+        deckDescription: "",
         llmConfig
       });
 
@@ -229,14 +178,13 @@ export default function DeckManager({
 
   // AI Suggest Unlearned Word for Add Word form
   const handleAiSuggestRelatedWord = async () => {
-    if (!activeDeck) return;
     setAutofilling(true);
     try {
-      const existingWords = activeDeck.words.map(w => w.word);
+      const existingWords = words.map(w => w.word);
       const res = await generateRandomWordsService({
-        topic: activeDeck.name + " " + (activeDeck.description || ""),
-        targetLanguage: activeDeck.targetLanguage,
-        nativeLanguage: activeDeck.nativeLanguage,
+        topic: "vocabulary",
+        targetLanguage,
+        nativeLanguage,
         count: 5,
         existingWords,
         llmConfig
@@ -265,9 +213,9 @@ export default function DeckManager({
   // Handle Add Word Form Submit
   const handleAddWordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!wordInput.trim() || !translationInput.trim() || !activeDeckId) return;
+    if (!wordInput.trim() || !translationInput.trim()) return;
 
-    onAddWord(activeDeckId, {
+    onAddWord({
       word: wordInput.trim(),
       translation: translationInput.trim(),
       definition: definitionInput.trim(),
@@ -291,89 +239,17 @@ export default function DeckManager({
     setIsModalOpen(false);
   };
 
-  // Handle Create Deck Form Submit
-  const handleCreateDeckSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDeckName.trim()) return;
-
-    onCreateDeck({
-      name: newDeckName.trim(),
-      description: newDeckDesc.trim() || "Custom user deck",
-      targetLanguage: newDeckTargetLang,
-      nativeLanguage: newDeckNativeLang,
-      words: [],
-      isCustom: true
-    });
-
-    setNewDeckName("");
-    setNewDeckDesc("");
-    setIsCreateDeckModalOpen(false);
-  };
-
-  // Generate whole new deck with AI
-  const handleAiGenerateWholeDeck = async () => {
-    if (!newDeckName.trim()) return;
-    setIsAiGeneratingDeck(true);
-    try {
-      const res = await generateRandomWordsService({
-        topic: newDeckName.trim(),
-        targetLanguage: newDeckTargetLang,
-        nativeLanguage: newDeckNativeLang,
-        count: 8,
-        llmConfig
-      });
-
-      const generatedList = res.words || [];
-
-      const wordsWithIds: Word[] = generatedList.map((item: any, idx: number) => ({
-        id: `gen-${Date.now()}-${idx}`,
-        word: item.word,
-        translation: item.translation,
-        definition: item.definition,
-        partOfSpeech: item.partOfSpeech || "noun",
-        pronunciation: item.pronunciation,
-        example: item.example,
-        exampleTranslation: item.exampleTranslation,
-        imageUrl: item.imageUrl,
-        starred: false,
-        learned: false,
-        strength: 0,
-        createdAt: new Date().toISOString(),
-        lastReviewed: null
-      }));
-
-      onCreateDeck({
-        name: newDeckName.trim(),
-        description: newDeckDesc.trim() || `AI generated deck on ${newDeckName.trim()}`,
-        targetLanguage: newDeckTargetLang,
-        nativeLanguage: newDeckNativeLang,
-        words: wordsWithIds,
-        isCustom: true
-      });
-
-      setNewDeckName("");
-      setNewDeckDesc("");
-      setIsCreateDeckModalOpen(false);
-    } catch (err) {
-      console.error("AI Deck Generation failed:", err);
-      alert("Unable to generate deck. Please verify your LLM Key.");
-    } finally {
-      setIsAiGeneratingDeck(false);
-    }
-  };
-
-  // Generate N Random Words into existing deck
+  // Generate N Random Words
   const handleGenerateRandomWordsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeDeck) return;
 
     setIsGeneratingRandomWords(true);
     try {
-      const existingWords = activeDeck.words.map(w => w.word);
+      const existingWords = words.map(w => w.word);
       const res = await generateRandomWordsService({
-        topic: (randomWordsTopic.trim() || activeDeck.name) + " " + activeDeck.description,
-        targetLanguage: activeDeck.targetLanguage,
-        nativeLanguage: activeDeck.nativeLanguage,
+        topic: randomWordsTopic.trim() || "vocabulary",
+        targetLanguage,
+        nativeLanguage,
         count: randomCount + 2,
         existingWords,
         llmConfig
@@ -384,7 +260,7 @@ export default function DeckManager({
       const newUniqueWords = generatedList.filter((item: any) => !existingWords.includes(item.word)).slice(0, randomCount);
 
       newUniqueWords.forEach((item: any) => {
-        onAddWord(activeDeck.id, {
+        onAddWord({
           word: item.word,
           translation: item.translation,
           definition: item.definition,
@@ -409,10 +285,8 @@ export default function DeckManager({
 
   // Filter and sort words by search query and selected sort mode (defaults to newest first)
   const filteredWords = useMemo(() => {
-    if (!activeDeck) return [];
-    
     // Map words with original array index for fallback ordering
-    let list = activeDeck.words.map((w, originalIndex) => ({ word: w, originalIndex }));
+    let list = words.map((w, originalIndex) => ({ word: w, originalIndex }));
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -459,71 +333,36 @@ export default function DeckManager({
     });
 
     return list.map(item => item.word);
-  }, [activeDeck, searchQuery, sortBy]);
+  }, [words, searchQuery, sortBy]);
 
   return (
     <div className="space-y-8" id="deck-manager-container">
-      {/* Top Banner Header */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-2xs">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 bg-stone-900 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest">
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Deck Manager</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">Vocabulary Collections & Words</h1>
-          <p className="text-xs text-stone-500 font-serif italic max-w-xl">
-            "Manage custom vocabulary decks, auto-fill definitions with Gemini AI, and track term mastery."
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-3 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-xs"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Deck</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Container (No sidebar) */}
-      <div className="space-y-6">
-        {activeDeck ? (
-          <div className="bg-white border border-stone-200 p-6 space-y-6 shadow-2xs">
+      <div className="space-y-4">
+        <div className="bg-white border border-stone-200 p-4 space-y-6 shadow-2xs">
             {/* Active List Title & Quick Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-5">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-500">
                   <Globe2 className="w-3.5 h-3.5 text-stone-900" />
-                  <span>{activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}</span>
+                  <span>{targetLanguage} ↔ {nativeLanguage}</span>
                   <span className="text-stone-300">•</span>
-                  <span className="text-stone-900">{activeDeck.words.length} terms</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditDeckModalOpen(true)}
-                    className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 px-2 py-0.5 font-bold flex items-center gap-1 cursor-pointer transition-all ml-1.5"
-                    title="Edit Languages"
-                  >
-                    <Settings className="w-3 h-3 text-stone-700" />
-                    <span>Edit Languages</span>
-                  </button>
+                  <span className="text-stone-900">{words.length} terms</span>
                 </div>
                 <h2 className="text-xl font-bold text-stone-950">Vocabulary List</h2>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setIsRandomWordsModalOpen(true)}
-                  className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer border border-amber-500 transition-all shadow-2xs"
+                  className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer border border-amber-500 transition-all shadow-2xs"
                   title="Generate random non-duplicate words with AI"
                 >
                   <Wand2 className="w-3.5 h-3.5" />
-                  <span>AI Random Words</span>
+                  <span>Random Words</span>
                 </button>
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="px-3.5 py-2 bg-stone-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
+                  className="px-3.5 py-2 bg-stone-900 hover:bg-black text-white font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Word</span>
@@ -604,7 +443,6 @@ export default function DeckManager({
                       <WordCard
                         key={word.id}
                         word={word}
-                        activeDeckId={activeDeckId}
                         speakWord={speakWord}
                         handleRegenerateWord={handleRegenerateWord}
                         regeneratingWordId={regeneratingWordId}
@@ -623,7 +461,6 @@ export default function DeckManager({
                       <WordRow
                         key={word.id}
                         word={word}
-                        activeDeckId={activeDeckId}
                         speakWord={speakWord}
                         handleRegenerateWord={handleRegenerateWord}
                         regeneratingWordId={regeneratingWordId}
@@ -646,12 +483,7 @@ export default function DeckManager({
                 </div>
               )}
             </div>
-          ) : (
-            <div className="p-12 text-center bg-white border border-stone-200 text-stone-500">
-              Your vocabulary list is not loaded yet.
-            </div>
-          )}
-        </div>
+          </div>
 
       {/* Add Word Modal */}
       <AddWordModal
@@ -674,7 +506,8 @@ export default function DeckManager({
         imageUrlInput={imageUrlInput}
         setImageUrlInput={setImageUrlInput}
         autofilling={autofilling}
-        activeDeck={activeDeck}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
         handleAiAutofill={handleAiAutofill}
         handleAiSuggestRelatedWord={handleAiSuggestRelatedWord}
         handleAddWordSubmit={handleAddWordSubmit}
@@ -689,37 +522,10 @@ export default function DeckManager({
         randomWordsTopic={randomWordsTopic}
         setRandomWordsTopic={setRandomWordsTopic}
         isGeneratingRandomWords={isGeneratingRandomWords}
-        activeDeck={activeDeck}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
         handleGenerateRandomWordsSubmit={handleGenerateRandomWordsSubmit}
       />
-
-      {/* Delete Deck Confirmation Modal */}
-      <ConfirmModal
-        isOpen={Boolean(deckToDelete)}
-        title="Delete Deck"
-        message={`Are you sure you want to delete "${deckToDelete?.name}"? All words inside this deck will be deleted.`}
-        onConfirm={() => {
-          if (deckToDelete && onDeleteDeck) {
-            onDeleteDeck(deckToDelete.id);
-            setDeckToDelete(null);
-          }
-        }}
-        onCancel={() => setDeckToDelete(null)}
-      />
-
-      {/* Edit Deck Details & Languages Modal */}
-      {activeDeck && (
-        <EditDeckModal
-          isOpen={isEditDeckModalOpen}
-          onClose={() => setIsEditDeckModalOpen(false)}
-          deck={activeDeck}
-          onUpdateDeckDetails={(deckId, updates) => {
-            if (onUpdateDeckDetails) {
-              onUpdateDeckDetails(deckId, updates);
-            }
-          }}
-        />
-      )}
     </div>
   );
 }

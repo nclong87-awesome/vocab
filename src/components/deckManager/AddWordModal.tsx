@@ -1,6 +1,5 @@
 import React from "react";
 import { Sparkles, Wand2, X, BookOpen, Layers } from "lucide-react";
-import { Word } from "../../types";
 
 interface AddWordModalProps {
   isModalOpen: boolean;
@@ -22,7 +21,8 @@ interface AddWordModalProps {
   imageUrlInput: string;
   setImageUrlInput: (val: string) => void;
   autofilling: boolean;
-  activeDeck: { name: string; description?: string; targetLanguage: string; nativeLanguage: string } | null;
+  targetLanguage: string;
+  nativeLanguage: string;
   handleAiAutofill: () => void;
   handleAiSuggestRelatedWord: () => void;
   handleAddWordSubmit: (e: React.FormEvent) => void;
@@ -48,7 +48,8 @@ export default function AddWordModal({
   imageUrlInput,
   setImageUrlInput,
   autofilling,
-  activeDeck,
+  targetLanguage,
+  nativeLanguage,
   handleAiAutofill,
   handleAiSuggestRelatedWord,
   handleAddWordSubmit
@@ -74,40 +75,30 @@ export default function AddWordModal({
           </button>
         </div>
 
-        {/* Deck Context Banner */}
-        {activeDeck && (
-          <div className="bg-stone-100 border border-stone-300 p-3.5 space-y-1.5 rounded-none shadow-2xs">
-            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-stone-600">
-              <span className="flex items-center gap-1.5 font-mono text-stone-800">
-                <BookOpen className="w-3.5 h-3.5 text-amber-600" />
-                Target Deck Context
-              </span>
-              <span className="bg-amber-400 text-stone-950 px-2 py-0.5 font-bold text-[10px]">
-                {activeDeck.targetLanguage} ↔ {activeDeck.nativeLanguage}
-              </span>
-            </div>
-            <div className="text-sm font-black text-stone-950 font-serif">
-              {activeDeck.name}
-            </div>
-            {activeDeck.description && (
-              <p className="text-xs text-stone-600 font-serif italic line-clamp-2">
-                "{activeDeck.description}"
-              </p>
-            )}
-            {autofilling && (
-              <div className="mt-2 pt-2 border-t border-stone-200 flex items-center gap-2 text-[11px] font-bold text-amber-700 animate-pulse">
-                <Sparkles className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                <span>AI is generating definitions & visual image tailored specifically for "{activeDeck.name}"...</span>
-              </div>
-            )}
+        {/* Language Context Banner */}
+        <div className="bg-stone-100 border border-stone-300 p-3.5 space-y-1.5 rounded-none shadow-2xs">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-stone-600">
+            <span className="flex items-center gap-1.5 font-mono text-stone-800">
+              <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+              Language Context
+            </span>
+            <span className="bg-amber-400 text-stone-950 px-2 py-0.5 font-bold text-[10px]">
+              {targetLanguage} ↔ {nativeLanguage}
+            </span>
           </div>
-        )}
+          {autofilling && (
+            <div className="mt-2 pt-2 border-t border-stone-200 flex items-center gap-2 text-[11px] font-bold text-amber-700 animate-pulse">
+              <Sparkles className="w-3.5 h-3.5 animate-spin text-amber-600" />
+              <span>AI is generating definitions & visual image...</span>
+            </div>
+          )}
+        </div>
 
         <form onSubmit={handleAddWordSubmit} className="space-y-4 text-xs font-semibold">
           {/* Target Word Input */}
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="text-stone-800">Word or Expression ({activeDeck?.targetLanguage}) *</label>
+              <label className="text-stone-800">Word or Expression ({targetLanguage}) *</label>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -161,7 +152,7 @@ export default function AddWordModal({
           {/* Translation & Part of Speech */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-stone-800">Meaning / Translation ({activeDeck?.nativeLanguage}) *</label>
+              <label className="text-stone-800">Meaning / Translation ({nativeLanguage}) *</label>
               <input 
                 type="text" 
                 required

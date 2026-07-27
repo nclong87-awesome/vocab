@@ -1,16 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
-import { Deck, Word, UserStats, LLMConfig, TTSConfig, LLMProvider } from "./types";
-import { DEFAULT_DECKS } from "./defaultDecks";
+import { Word, UserStats, LLMConfig, TTSConfig, LLMProvider } from "./types";
+import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider } from "./utils/llmHelpers";
 import { generateDeckService } from "./services/llmClientService";
 import { 
-  getAllDecksFromDB, 
-  saveAllDecksToDB, 
-  saveSingleDeckToDB,
-  deleteDeckFromDB,
+  getAllWordsFromDB, 
+  saveAllWordsToDB, 
+  saveWordToDB,
+  deleteWordFromDB,
   getStatsFromDB, 
   saveStatsToDB, 
   getLLMConfigFromDB, 
@@ -32,8 +32,7 @@ import AppHeader from "./components/layout/AppHeader";
 import AppFooter from "./components/layout/AppFooter";
 
 export default function App() {
-  const [decks, setDecks] = useState<Deck[]>([]);
-  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
+  const [words, setWords] = useState<Word[]>([]);
   const [currentView, setCurrentView] = useState<"dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings">("dashboard");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
@@ -68,44 +67,6 @@ export default function App() {
     } catch (e) {
       console.error("Failed to save language preferences to localStorage", e);
     }
-
-    if (applyToDecks && decks.length > 0) {
-      setDecks(prev => {
-        const updated = prev.map(d => ({
-          ...d,
-          targetLanguage: targetLang,
-          nativeLanguage: nativeLang
-        }));
-        saveAllDecksToDB(updated).catch(e => console.error("IndexedDB batch language update error:", e));
-        return updated;
-      });
-    }
-  }, [decks]);
-
-  const handleUpdateDeckDetails = useCallback((
-    deckId: string, 
-    updates: { name: string; description: string; targetLanguage: string; nativeLanguage: string }
-  ) => {
-    setDecks(prev => {
-      let modifiedDeck: Deck | null = null;
-      const updated = prev.map(d => {
-        if (d.id === deckId) {
-          modifiedDeck = {
-            ...d,
-            name: updates.name,
-            description: updates.description,
-            targetLanguage: updates.targetLanguage,
-            nativeLanguage: updates.nativeLanguage
-          };
-          return modifiedDeck;
-        }
-        return d;
-      });
-      if (modifiedDeck) {
-        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB save deck details error:", e));
-      }
-      return updated;
-    });
   }, []);
 
   const [stats, setStats] = useState<UserStats>({
@@ -121,8 +82,8 @@ export default function App() {
   // Initialize and load from IndexedDB on mount
   const reloadAllDataFromDB = async () => {
     try {
-      const loadedDecks = await getAllDecksFromDB();
-      setDecks(loadedDecks);
+      const loadedWords = await getAllWordsFromDB();
+      setWords(loadedWords);
 
       const loadedStats = await getStatsFromDB({
         totalWordsStudied: 0,
@@ -175,7 +136,7 @@ export default function App() {
       setTtsConfig(loadedTTS);
     } catch (e) {
       console.error("IndexedDB load error:", e);
-      setDecks(DEFAULT_DECKS);
+      setWords(DEFAULT_WORDS);
     } finally {
       setIsDataLoaded(true);
     }
@@ -196,70 +157,49 @@ export default function App() {
     saveTTSConfigToDB(newConfig).catch(e => console.error("IndexedDB TTS save error:", e));
   };
 
-  // Save decks to IndexedDB when changed
-  const saveDecksToStorage = useCallback((updatedDecks: Deck[]) => {
-    setDecks(updatedDecks);
-    saveAllDecksToDB(updatedDecks).catch(e => console.error("IndexedDB deck save error:", e));
+  // Save words to IndexedDB when changed
+  const saveWordsToStorage = useCallback((updatedWords: Word[]) => {
+    setWords(updatedWords);
+    saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB word save error:", e));
   }, []);
 
   // Word interactions (starred state)
   const handleToggleStar = useCallback((wordId: string) => {
-    setDecks(prevDecks => {
-      let modifiedDeck: Deck | null = null;
-      const updatedDecks = prevDecks.map(deck => {
-        const wordIdx = deck.words.findIndex(w => w.id === wordId);
-        if (wordIdx !== -1) {
-          const updatedWords = [...deck.words];
-          updatedWords[wordIdx] = { 
-            ...updatedWords[wordIdx], 
-            starred: !updatedWords[wordIdx].starred 
-          };
-          modifiedDeck = { ...deck, words: updatedWords };
-          return modifiedDeck;
+    setWords(prevWords => {
+      const updatedWords = prevWords.map(w => {
+        if (w.id === wordId) {
+          const updated = { ...w, starred: !w.starred };
+          saveWordToDB(updated).catch(e => console.error("IndexedDB star save error:", e));
+          return updated;
         }
-        return deck;
+        return w;
       });
-
-      if (modifiedDeck) {
-        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB star save error:", e));
-      }
-      return updatedDecks;
+      return updatedWords;
     });
   }, []);
 
   // Word mastery interaction
   const handleToggleLearned = useCallback((wordId: string) => {
-    setDecks(prevDecks => {
-      let modifiedDeck: Deck | null = null;
-      const updatedDecks = prevDecks.map(deck => {
-        const wordIdx = deck.words.findIndex(w => w.id === wordId);
-        if (wordIdx !== -1) {
-          const updatedWords = [...deck.words];
-          const isNowMastered = !updatedWords[wordIdx].learned;
-          updatedWords[wordIdx] = { 
-            ...updatedWords[wordIdx], 
+    setWords(prevWords => {
+      const updatedWords = prevWords.map(w => {
+        if (w.id === wordId) {
+          const isNowMastered = !w.learned;
+          const updated = {
+            ...w,
             learned: isNowMastered,
             lastReviewed: new Date().toISOString(),
             strength: isNowMastered ? 4 : 0
           };
-          modifiedDeck = { ...deck, words: updatedWords };
-          return modifiedDeck;
+          saveWordToDB(updated).catch(e => console.error("IndexedDB learned save error:", e));
+          return updated;
         }
-        return deck;
+        return w;
       });
-
-      if (modifiedDeck) {
-        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB learned save error:", e));
-      }
 
       setStats(prevStats => {
         const updatedStreak = calculateNewStreak(prevStats.streak);
-        const totalMasteredCount = updatedDecks.reduce((acc, d) => 
-          acc + d.words.filter(w => w.learned).length, 0
-        );
-        const totalStudiedCount = updatedDecks.reduce((acc, d) => 
-          acc + d.words.filter(w => w.lastReviewed !== null).length, 0
-        );
+        const totalMasteredCount = updatedWords.filter(w => w.learned).length;
+        const totalStudiedCount = updatedWords.filter(w => w.lastReviewed !== null).length;
         const newStats = {
           ...prevStats,
           totalWordsMastered: totalMasteredCount,
@@ -270,7 +210,7 @@ export default function App() {
         return newStats;
       });
 
-      return updatedDecks;
+      return updatedWords;
     });
   }, []);
 
@@ -338,19 +278,15 @@ export default function App() {
       console.error("Failed to save onboarding settings to localStorage", e);
     }
 
-    if (userData.targetLanguage && userData.nativeLanguage && decks.length > 0) {
-      const updatedDecks = decks.map(deck => ({
-        ...deck,
-        targetLanguage: userData.targetLanguage,
-        nativeLanguage: userData.nativeLanguage
-      }));
-      saveDecksToStorage(updatedDecks);
+    if (userData.targetLanguage && userData.nativeLanguage) {
+      setTargetLanguage(userData.targetLanguage);
+      setNativeLanguage(userData.nativeLanguage);
     }
 
     setIsLlmModalOpen(false);
   };
 
-  // Handle AI deck generation
+  // Handle AI word generation
   const handleGenerateDeck = async (
     topic: string, 
     targetLanguage: string, 
@@ -402,19 +338,9 @@ export default function App() {
         strength: 0
       }));
 
-      const newDeck: Deck = {
-        id: `custom-${Date.now()}`,
-        name: generatedData.name || topic,
-        description: generatedData.description || `Generated by ${llmConfig.provider === "gemini" ? "Gemini 3.6-Flash" : llmConfig.model}.`,
-        words: mappedWords,
-        isCustom: true,
-        targetLanguage,
-        nativeLanguage
-      };
-
-      const finalDecks = [newDeck, ...decks];
-      saveDecksToStorage(finalDecks);
-      setSelectedDeckId(newDeck.id);
+      // Add generated words to the flat list
+      const finalWords = [...mappedWords, ...words];
+      saveWordsToStorage(finalWords);
       setCurrentView("learn");
     } catch (e: any) {
       console.error(e);
@@ -426,126 +352,51 @@ export default function App() {
 
   // Add custom manual word
   const handleAddCustomWord = useCallback((
-    deckId: string, 
     wordData: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
       createdAt?: string;
       lastReviewed?: string | null;
     }
   ) => {
-    setDecks(prevDecks => {
-      let modifiedDeck: Deck | null = null;
-      const updatedDecks = prevDecks.map(deck => {
-        if (deck.id === deckId) {
-          const imageUrl = wordData.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(wordData.word)}?width=800&height=600&nologo=true`;
-          const newWordItem: Word = {
-            ...wordData,
-            imageUrl,
-            id: `manual-word-${Date.now()}`,
-            learned: false,
-            starred: wordData.starred || false,
-            createdAt: new Date().toISOString(),
-            lastReviewed: null,
-            strength: 0
-          };
-          modifiedDeck = { ...deck, words: [...deck.words, newWordItem] };
-          return modifiedDeck;
-        }
-        return deck;
-      });
-
-      if (modifiedDeck) {
-        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB add word save error:", e));
-      }
-      return updatedDecks;
+    const imageUrl = wordData.imageUrl?.trim() || `https://image.pollinations.ai/prompt/${encodeURIComponent(wordData.word)}?width=800&height=600&nologo=true`;
+    const newWord: Word = {
+      ...wordData,
+      imageUrl,
+      id: `manual-word-${Date.now()}`,
+      learned: false,
+      starred: wordData.starred || false,
+      createdAt: new Date().toISOString(),
+      lastReviewed: null,
+      strength: 0
+    };
+    setWords(prev => {
+      const updated = [newWord, ...prev];
+      saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add word save error:", e));
+      return updated;
     });
   }, []);
 
   // Delete individual word
-  const handleDeleteWord = useCallback((deckId: string, wordId: string) => {
-    setDecks(prevDecks => {
-      let modifiedDeck: Deck | null = null;
-      const updatedDecks = prevDecks.map(deck => {
-        if (deck.id === deckId) {
-          modifiedDeck = { ...deck, words: deck.words.filter(w => w.id !== wordId) };
-          return modifiedDeck;
-        }
-        return deck;
-      });
-
-      if (modifiedDeck) {
-        saveSingleDeckToDB(modifiedDeck).catch(e => console.error("IndexedDB delete word save error:", e));
-      }
-      return updatedDecks;
-    });
+  const handleDeleteWord = useCallback((wordId: string) => {
+    setWords(prev => prev.filter(w => w.id !== wordId));
+    deleteWordFromDB(wordId).catch(e => console.error("IndexedDB delete word save error:", e));
   }, []);
 
-  // Update whole list of words inside a deck
-  const handleUpdateDeckWords = useCallback((deckId: string, updatedWords: Word[]) => {
-    setDecks(prevDecks => {
-      const updatedDecks = prevDecks.map(deck => {
-        if (deck.id === deckId) {
-          const mod = { ...deck, words: updatedWords };
-          saveSingleDeckToDB(mod).catch(e => console.error("IndexedDB update deck words error:", e));
-          return mod;
-        }
-        return deck;
-      });
-      return updatedDecks;
-    });
+  // Update words list
+  const handleUpdateWords = useCallback((updatedWords: Word[]) => {
+    setWords(updatedWords);
+    saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB update words error:", e));
   }, []);
 
-  // Create an empty custom notebook
-  const handleCreateDeck = useCallback((deckData: Omit<Deck, "id">) => {
-    const newDeck: Deck = {
-      ...deckData,
-      id: `custom-${Date.now()}`
-    };
-    setDecks(prevDecks => {
-      const updated = [newDeck, ...prevDecks];
-      saveAllDecksToDB(updated).catch(e => console.error("IndexedDB create deck save error:", e));
-      return updated;
-    });
-    setSelectedDeckId(newDeck.id);
-  }, []);
-
-  // Handle deck deletion
-  const handleDeleteDeck = useCallback((deckId: string) => {
-    setDecks(prevDecks => prevDecks.filter(d => d.id !== deckId));
-    deleteDeckFromDB(deckId).catch(e => console.error("IndexedDB delete deck error:", e));
-    setSelectedDeckId(prev => prev === deckId ? null : prev);
-  }, []);
-
-  // Memoize Today's Practice Deck so object reference remains stable across renders
-  const todayPracticeDeck = useMemo((): Deck => {
-    // Gather all unique words from active decks
-    const allUniqueWordsMap = new Map<string, Word>();
-    
-    decks.forEach(d => {
-      d.words.forEach(w => {
-        allUniqueWordsMap.set(w.word.toLowerCase(), w);
-      });
-    });
-
-    const allWords = Array.from(allUniqueWordsMap.values());
-
-    const starred = allWords.filter(w => w.starred);
-    const unlearned = allWords.filter(w => !w.learned && !w.starred);
-    const weak = allWords.filter(w => w.learned && w.strength < 3 && !w.starred);
-    const rest = allWords.filter(w => !starred.includes(w) && !unlearned.includes(w) && !weak.includes(w));
+  // Memoize Today's Practice words
+  const todayPracticeWords = useMemo((): Word[] => {
+    const starred = words.filter(w => w.starred);
+    const unlearned = words.filter(w => !w.learned && !w.starred);
+    const weak = words.filter(w => w.learned && w.strength < 3 && !w.starred);
+    const rest = words.filter(w => !starred.includes(w) && !unlearned.includes(w) && !weak.includes(w));
 
     const orderedWords = [...starred, ...unlearned, ...weak, ...rest];
-    const todayWords = orderedWords.slice(0, 10);
-
-    return {
-      id: "today-practice",
-      name: "Today's Practice",
-      description: "Daily memory reinforcement session curated based on active decks.",
-      words: todayWords,
-      isCustom: false,
-      targetLanguage: "English",
-      nativeLanguage: "Spanish"
-    };
-  }, [decks]);
+    return orderedWords.slice(0, 10);
+  }, [words]);
 
   // Quiz completion handler
   const handleFinishQuiz = useCallback((
@@ -554,47 +405,39 @@ export default function App() {
     correctWordIds?: string[], 
     incorrectWordIds?: string[]
   ) => {
-    setDecks(prevDecks => {
-      let updatedDecks = [...prevDecks];
+    setWords(prevWords => {
+      let updatedWords = [...prevWords];
       if (correctWordIds || incorrectWordIds) {
-        updatedDecks = updatedDecks.map(deck => {
-          const updatedWords = deck.words.map(word => {
-            const originalId = word.id;
-            const virtualId = `today-${word.id}`;
-            
-            if (correctWordIds?.includes(originalId) || correctWordIds?.includes(virtualId)) {
-              const newStrength = Math.min(4, word.strength + 1);
-              return {
-                ...word,
-                strength: newStrength,
-                learned: newStrength >= 3 ? true : word.learned,
-                lastReviewed: new Date().toISOString()
-              };
-            }
-            if (incorrectWordIds?.includes(originalId) || incorrectWordIds?.includes(virtualId)) {
-              const newStrength = Math.max(0, word.strength - 1);
-              return {
-                ...word,
-                strength: newStrength,
-                lastReviewed: new Date().toISOString()
-              };
-            }
-            return word;
-          });
-          return { ...deck, words: updatedWords };
+        updatedWords = updatedWords.map(word => {
+          const originalId = word.id;
+          const virtualId = `today-${word.id}`;
+          
+          if (correctWordIds?.includes(originalId) || correctWordIds?.includes(virtualId)) {
+            const newStrength = Math.min(4, word.strength + 1);
+            return {
+              ...word,
+              strength: newStrength,
+              learned: newStrength >= 3 ? true : word.learned,
+              lastReviewed: new Date().toISOString()
+            };
+          }
+          if (incorrectWordIds?.includes(originalId) || incorrectWordIds?.includes(virtualId)) {
+            const newStrength = Math.max(0, word.strength - 1);
+            return {
+              ...word,
+              strength: newStrength,
+              lastReviewed: new Date().toISOString()
+            };
+          }
+          return word;
         });
-        saveAllDecksToDB(updatedDecks).catch(e => console.error("IndexedDB quiz decks save error:", e));
+        saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB quiz words save error:", e));
       }
 
       setStats(prevStats => {
         const updatedStreak = calculateNewStreak(prevStats.streak);
-        const totalMasteredCount = updatedDecks.reduce((acc, d) => 
-          acc + d.words.filter(w => w.learned).length, 0
-        );
-
-        const totalStudiedCount = updatedDecks.reduce((acc, d) => 
-          acc + d.words.filter(w => w.lastReviewed !== null).length, 0
-        );
+        const totalMasteredCount = updatedWords.filter(w => w.learned).length;
+        const totalStudiedCount = updatedWords.filter(w => w.lastReviewed !== null).length;
 
         const newStats = {
           ...prevStats,
@@ -608,13 +451,9 @@ export default function App() {
         return newStats;
       });
 
-      return updatedDecks;
+      return updatedWords;
     });
   }, []);
-
-  const activeDeck = useMemo(() => {
-    return decks.find(d => d.id === selectedDeckId) || null;
-  }, [decks, selectedDeckId]);
 
   return (
     <div className="min-h-screen bg-stone-50/40 text-stone-900 flex flex-col antialiased border-0 sm:border-[12px] md:border-[18px] border-stone-100/70">
@@ -623,7 +462,6 @@ export default function App() {
       <AppHeader
         currentView={currentView}
         setCurrentView={setCurrentView}
-        setSelectedDeckId={setSelectedDeckId}
         setIsLlmModalOpen={setIsLlmModalOpen}
         llmConfig={llmConfig}
         stats={stats}
@@ -648,19 +486,14 @@ export default function App() {
             {currentView === "dashboard" && (
               <Dashboard 
                 stats={stats}
-                decks={decks}
-                todayPracticeDeck={todayPracticeDeck}
-                onSelectDeck={(deckId) => {
-                  setSelectedDeckId(deckId);
-                  setCurrentView("learn");
-                }}
+                words={words}
+                todayPracticeWords={todayPracticeWords}
                 onSelectTab={(tab) => {
                   if (tab === "decks") setCurrentView("manage");
                   if (tab === "quiz") setCurrentView("quiz");
                   if (tab === "analytics") setCurrentView("analytics");
                 }}
-                onGenerateDeck={handleGenerateDeck}
-                onDeleteDeck={handleDeleteDeck}
+                onGenerateWords={handleGenerateDeck}
                 isLoading={isLoading}
                 loadingMessage={loadingMessage}
                 onFinishQuiz={handleFinishQuiz}
@@ -674,13 +507,10 @@ export default function App() {
 
             {currentView === "learn" && (
               <FlashcardDeck 
-                deck={activeDeck}
+                words={words}
                 onToggleStar={handleToggleStar}
                 onToggleLearned={handleToggleLearned}
-                onGoBack={() => {
-                  setCurrentView("dashboard");
-                  setSelectedDeckId(null);
-                }}
+                onGoBack={() => setCurrentView("dashboard")}
                 onStartQuiz={() => setCurrentView("quiz")}
                 ttsConfig={ttsConfig}
                 llmConfig={llmConfig}
@@ -689,13 +519,10 @@ export default function App() {
 
             {currentView === "quiz" && (
               <QuizView 
-                deck={activeDeck}
+                words={words}
                 onFinishQuiz={handleFinishQuiz}
                 onToggleStar={handleToggleStar}
-                onGoBack={() => {
-                  setCurrentView("dashboard");
-                  setSelectedDeckId(null);
-                }}
+                onGoBack={() => setCurrentView("dashboard")}
                 ttsConfig={ttsConfig}
                 llmConfig={llmConfig}
               />
@@ -703,19 +530,14 @@ export default function App() {
 
             {currentView === "manage" && (
               <DeckManager 
-                decks={decks}
-                selectedDeckId={selectedDeckId}
+                words={words}
                 llmConfig={llmConfig}
                 ttsConfig={ttsConfig}
-                onSelectDeck={setSelectedDeckId}
                 onAddWord={handleAddCustomWord}
                 onDeleteWord={handleDeleteWord}
                 onToggleStar={handleToggleStar}
                 onToggleLearned={handleToggleLearned}
-                onCreateDeck={handleCreateDeck}
-                onDeleteDeck={handleDeleteDeck}
-                onUpdateDeckWords={handleUpdateDeckWords}
-                onUpdateDeckDetails={handleUpdateDeckDetails}
+                onUpdateWords={handleUpdateWords}
                 targetLanguage={targetLanguage}
                 nativeLanguage={nativeLanguage}
               />
@@ -723,33 +545,16 @@ export default function App() {
 
             {currentView === "analytics" && (
               <AnalyticsDashboard 
-                decks={decks}
+                words={words}
                 stats={stats}
                 llmConfig={llmConfig}
                 ttsConfig={ttsConfig}
                 onStartPracticeWeakWords={(weakWords) => {
-                  const practiceDeck: Deck = {
-                    id: "weak-words-practice",
-                    name: "Weak Words Practice Quiz",
-                    description: "Targeted practice session focused exclusively on words needing improvement.",
-                    words: weakWords,
-                    isCustom: false,
-                    targetLanguage: targetLanguage,
-                    nativeLanguage: nativeLanguage
-                  };
-                  setSelectedDeckId("weak-words-practice");
-                  setDecks(prev => {
-                    const filtered = prev.filter(d => d.id !== "weak-words-practice");
-                    return [practiceDeck, ...filtered];
-                  });
                   setCurrentView("quiz");
                 }}
-                onToggleLearnedWord={(deckId, wordId) => handleToggleLearned(wordId)}
+                onToggleLearnedWord={(wordId) => handleToggleLearned(wordId)}
                 onToggleStarWord={(wordId) => handleToggleStar(wordId)}
-                onNavigateToView={(view) => {
-                  setCurrentView(view);
-                  if (view === 'dashboard') setSelectedDeckId(null);
-                }}
+                onNavigateToView={(view) => setCurrentView(view)}
               />
             )}
 

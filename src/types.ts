@@ -48,12 +48,12 @@ export interface LLMConfig {
 export interface Word {
   id: string;
   word: string;
-  pronunciation: string;
+  pronunciation: string | undefined;
   partOfSpeech: string;
   definition: string;
   translation: string;
-  example: string;
-  exampleTranslation: string;
+  example: string | undefined;
+  exampleTranslation: string | undefined;
   learned: boolean;
   starred: boolean;
   createdAt: string;
@@ -62,15 +62,7 @@ export interface Word {
   imageUrl?: string;
 }
 
-export interface Deck {
-  id: string;
-  name: string;
-  description: string;
-  words: Word[];
-  isCustom: boolean;
-  targetLanguage: string;
-  nativeLanguage: string;
-}
+
 
 export interface QuizQuestion {
   id: string;

@@ -20,11 +20,11 @@ import {
   BookOpen,
   Layers
 } from "lucide-react";
-import { Word, Deck, QuizQuestion, TTSConfig, LLMConfig } from "../types";
+import { Word, QuizQuestion, TTSConfig, LLMConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 
 interface QuizViewProps {
-  deck: Deck | null;
+  words: Word[];
   onFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   onToggleStar?: (wordId: string) => void;
   onGoBack: () => void;
@@ -48,11 +48,11 @@ function containsNonTargetLanguage(text: string, targetLanguage?: string): boole
   return false;
 }
 
-// Helper function to generate questions for a deck
-function generateQuizQuestions(deck: Deck): QuizQuestion[] {
-  if (!deck || deck.words.length < 2) return [];
+// Helper function to generate questions from words
+function generateQuizQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
+  if (!wordList || wordList.length < 2) return [];
   const generated: QuizQuestion[] = [];
-  const allWords = deck.words;
+  const allWords = wordList;
 
   // Helper to generate confusing sound-alike or misspelling distractors
   const generateConfusers = (w: string) => {
@@ -92,7 +92,7 @@ function generateQuizQuestions(deck: Deck): QuizQuestion[] {
     let type = types[Math.floor(Math.random() * types.length)];
 
     // If definition is in user's native language or missing, fallback to target-language sentence or listening
-    if (type === 'definition' && containsNonTargetLanguage(word.definition, deck.targetLanguage)) {
+    if (type === 'definition' && containsNonTargetLanguage(word.definition, targetLanguage)) {
       type = word.example ? 'sentence' : 'listening';
     }
 
@@ -169,7 +169,7 @@ function generateQuizQuestions(deck: Deck): QuizQuestion[] {
 }
 
 export default function QuizView({
-  deck,
+  words,
   onFinishQuiz,
   onToggleStar,
   onGoBack,
@@ -217,20 +217,10 @@ export default function QuizView({
       .replace(/\n\n/g, ". ")
       .replace(/\n/g, ", ");
 
-    const targetLang = deck?.targetLanguage;
+    const targetLang = undefined;
     let langCode = "en-US";
     if (customLang) {
       langCode = customLang;
-    } else if (targetLang === "Spanish") {
-      langCode = "es-ES";
-    } else if (targetLang === "French") {
-      langCode = "fr-FR";
-    } else if (targetLang === "German") {
-      langCode = "de-DE";
-    } else if (targetLang === "Japanese") {
-      langCode = "ja-JP";
-    } else if (targetLang === "Chinese") {
-      langCode = "zh-CN";
     }
 
     speakTextService(
@@ -243,9 +233,9 @@ export default function QuizView({
     );
   };
 
-  // Generate or restore the quiz when deck is available
+  // Generate or restore the quiz when words are available
   useEffect(() => {
-    if (!deck || deck.words.length < 2) return;
+    if (!words || words.length < 2) return;
 
     let restored = false;
     try {
@@ -254,7 +244,6 @@ export default function QuizView({
         const parsed = JSON.parse(raw);
         if (
           parsed &&
-          parsed.deckId === deck.id &&
           Array.isArray(parsed.questions) &&
           parsed.questions.length > 0 &&
           typeof parsed.currentQuestionIdx === "number" &&
@@ -276,7 +265,7 @@ export default function QuizView({
     }
 
     if (!restored) {
-      const generated = generateQuizQuestions(deck);
+      const generated = generateQuizQuestions(words);
       setQuestions(generated);
       setCurrentQuestionIdx(0);
       setSelectedAnswer(null);
@@ -286,15 +275,13 @@ export default function QuizView({
       setShowSummary(false);
       setWrongAnswersList([]);
     }
-  }, [deck]);
+  }, [words]);
 
   // Auto-save active quiz session to localStorage on question/score progress
   useEffect(() => {
-    if (deck && questions.length > 0 && !showSummary) {
+    if (words && words.length > 0 && questions.length > 0 && !showSummary) {
       try {
         const session = {
-          deckId: deck.id,
-          deckName: deck.name,
           questions,
           currentQuestionIdx,
           score,
@@ -306,13 +293,13 @@ export default function QuizView({
         console.error("Failed to auto-save active quiz session", e);
       }
     }
-  }, [deck, questions, currentQuestionIdx, score, wrongAnswersList, showSummary]);
+  }, [words, questions, currentQuestionIdx, score, wrongAnswersList, showSummary]);
 
   // Start fresh handler
   const handleStartFresh = () => {
     localStorage.removeItem("vocab_learner_active_quiz_session");
-    if (deck) {
-      const generated = generateQuizQuestions(deck);
+    if (words && words.length >= 2) {
+      const generated = generateQuizQuestions(words);
       setQuestions(generated);
       setCurrentQuestionIdx(0);
       setScore(0);
@@ -344,8 +331,8 @@ export default function QuizView({
     }
   }, [currentQuestionIdx, autoPlayAudio, showSummary, questions]);
 
-  if (!deck || deck.words.length < 2 || questions.length === 0) {
-    if (deck && deck.words.length >= 2 && questions.length === 0) {
+  if (!words || words.length < 2 || questions.length === 0) {
+    if (words && words.length >= 2 && questions.length === 0) {
       return (
         <div className="bg-white p-12 border border-stone-200 text-center space-y-6 max-w-md mx-auto rounded-none">
           <div className="w-8 h-8 border-2 border-stone-900 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -463,14 +450,14 @@ export default function QuizView({
 
   // Handler to star all missed words
   const handleStarAllMissed = () => {
-    if (!onToggleStar || !deck) return;
+    if (!onToggleStar || !words) return;
     const missedWordIds = wrongAnswersList
       .map(item => item.question?.wordId)
       .filter(Boolean) as string[];
 
     let starredCount = 0;
     missedWordIds.forEach(id => {
-      const wordObj = deck.words.find(w => w.id === id);
+      const wordObj = words.find(w => w.id === id);
       if (wordObj && !wordObj.starred) {
         onToggleStar(id);
         starredCount++;
@@ -490,7 +477,7 @@ export default function QuizView({
     speakText(wordText);
   };
 
-  if (showSummary && deck) {
+  if (showSummary && words) {
     const successRate = Math.round((score / questions.length) * 100);
     const perfectScore = score === questions.length;
 
@@ -515,7 +502,7 @@ export default function QuizView({
             <div className="space-y-1">
               <h2 className="text-2xl font-bold tracking-tight text-stone-900">Quiz Completed</h2>
               <p className="text-xs text-stone-500 font-serif italic max-w-md mx-auto">
-                "Performance analysis for deck: {deck.name}. Study performance and learning strategies below."
+                "Performance analysis complete. Study performance and learning strategies below."
               </p>
             </div>
           </div>
@@ -671,7 +658,7 @@ export default function QuizView({
 
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                   {wrongAnswersList.map((item, idx) => {
-                    const matchingWordObj = deck.words.find(w => w.id === item.question?.wordId);
+                    const matchingWordObj = words.find(w => w.id === item.question?.wordId);
                     const isStarred = matchingWordObj?.starred;
 
                     return (
@@ -770,8 +757,8 @@ export default function QuizView({
                 </button>
                 <button
                   onClick={() => {
-                    if (deck && deck.words.length >= 2) {
-                      const generated = generateQuizQuestions(deck);
+                    if (words && words.length >= 2) {
+                      const generated = generateQuizQuestions(words);
                       setQuestions(generated);
                       setCurrentQuestionIdx(0);
                       setSelectedAnswer(null);
@@ -790,8 +777,8 @@ export default function QuizView({
             ) : (
               <button
                 onClick={() => {
-                  if (deck && deck.words.length >= 2) {
-                    const generated = generateQuizQuestions(deck);
+                  if (words && words.length >= 2) {
+                    const generated = generateQuizQuestions(words);
                     setQuestions(generated);
                     setCurrentQuestionIdx(0);
                     setSelectedAnswer(null);
@@ -821,7 +808,7 @@ export default function QuizView({
   }
 
   const isLastQuestion = currentQuestionIdx === questions.length - 1;
-  const wordDetails = deck?.words?.find(w => w.id === currentQuestion?.wordId);
+  const wordDetails = words?.find(w => w.id === currentQuestion?.wordId);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 scroll-mt-16 sm:scroll-mt-20" id="quiz-question-view" ref={questionHeaderRef}>
@@ -855,7 +842,7 @@ export default function QuizView({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
           <div>
             <h3 className="text-lg sm:text-xl font-bold tracking-tight text-stone-900">
-              {deck.name.toLowerCase().includes("practice") ? deck.name : `${deck.name} Practice`}
+              Vocabulary Practice
             </h3>
             <p className="text-[10px] text-stone-500 uppercase font-bold tracking-widest mt-0.5">
               Score: {score}/{currentQuestionIdx}

@@ -4,25 +4,20 @@ import { Word } from "../../types";
 
 interface WordAnalyticsCardProps {
   key?: React.Key;
-  wordItem: {
-    word: Word;
-    deckId: string;
-    deckName: string;
-  };
+  word: Word;
   speakingWordId: string | null;
   onSpeakWord: (wordText: string, wordId: string) => void;
   onToggleStarWord: (wordId: string) => void;
-  onToggleLearnedWord: (deckId: string, wordId: string) => void;
+  onToggleLearnedWord: (wordId: string) => void;
 }
 
 export default function WordAnalyticsCard({
-  wordItem,
+  word,
   speakingWordId,
   onSpeakWord,
   onToggleStarWord,
   onToggleLearnedWord
 }: WordAnalyticsCardProps) {
-  const { word, deckId, deckName } = wordItem;
   const isMastered = word.learned || word.strength >= 3;
   const strengthLevel = word.strength ?? 0;
 
@@ -36,9 +31,6 @@ export default function WordAnalyticsCard({
       <div className="space-y-1.5">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <span className="text-[9px] font-bold uppercase tracking-widest text-stone-500 block">
-              {deckName}
-            </span>
             <h4 className="text-base font-bold text-stone-950 font-serif">{word.word}</h4>
           </div>
 
@@ -121,7 +113,7 @@ export default function WordAnalyticsCard({
 
         {/* Toggle Mastered Button */}
         <button
-          onClick={() => onToggleLearnedWord(deckId, word.id)}
+          onClick={() => onToggleLearnedWord(word.id)}
           className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border transition-all cursor-pointer ${
             isMastered 
               ? "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100" 

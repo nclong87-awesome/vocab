@@ -8,7 +8,6 @@ import QuickCloudSync from "./QuickCloudSync";
 interface AppHeaderProps {
   currentView: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings";
   setCurrentView: (view: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings") => void;
-  setSelectedDeckId: (deckId: string | null) => void;
   setIsLlmModalOpen: (open: boolean) => void;
   llmConfig: LLMConfig;
   stats: UserStats;
@@ -16,14 +15,13 @@ interface AppHeaderProps {
   onOpenLlmModal: (providerId?: LLMProvider) => void;
   targetLanguage?: string;
   nativeLanguage?: string;
-  onSelectLanguages?: (targetLang: string, nativeLang: string, applyToDecks?: boolean) => void;
+  onSelectLanguages?: (targetLang: string, nativeLang: string) => void;
   onReloadData?: () => Promise<void>;
 }
 
 export default function AppHeader({
   currentView,
   setCurrentView,
-  setSelectedDeckId,
   setIsLlmModalOpen,
   llmConfig,
   stats,
@@ -44,7 +42,6 @@ export default function AppHeader({
           <div 
             onClick={() => {
               setCurrentView("dashboard");
-              setSelectedDeckId(null);
             }} 
             className="flex items-center gap-1 sm:gap-2 cursor-pointer group shrink-0"
             id="brand-logo"
@@ -89,7 +86,6 @@ export default function AppHeader({
             <button
               onClick={() => {
                 setCurrentView("dashboard");
-                setSelectedDeckId(null);
               }}
               className={`transition-colors cursor-pointer ${
                 currentView === "dashboard" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"

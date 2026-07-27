@@ -1,0 +1,18 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^npx tsc --noEmit 2>&1 \\| head -80$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    },
+    // Enable this to run default formatter on save (e.g. Prettier or VS Code built-in)
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    // This setting tells VS Code to run specific code actions, including ESLint fixes, on save
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    // (Optional) Ensure ESLint is enabled
+    "eslint.enable": true
+}
