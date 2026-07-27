@@ -62,26 +62,26 @@ export default function QuickLanguageSwitcher({
   const nativeFlag = getLanguageFlag(currentNative);
 
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef} id="quick-lang-switcher">
+    <div className="relative inline-block text-left shrink-0" ref={dropdownRef} id="quick-lang-switcher">
       
       {/* Header Button Badge */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-3 sm:py-1.5 border text-[11px] sm:text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
           isOpen
             ? "bg-stone-900 text-white border-stone-950 ring-2 ring-stone-900/20"
             : "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-900"
         }`}
         title="Quick Language Switcher (Target & Native Language)"
       >
-        <Globe className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+        <Globe className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-600 shrink-0" />
         
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           {/* Mobile view: flags only */}
-          <span className="sm:hidden font-bold flex items-center gap-1">
+          <span className="sm:hidden font-bold flex items-center gap-0.5">
             <span>{targetFlag}</span>
-            <ArrowRight className="w-2.5 h-2.5 opacity-50" />
+            <ArrowRight className="w-2 h-2 opacity-50" />
             <span>{nativeFlag}</span>
           </span>
 
@@ -91,7 +91,7 @@ export default function QuickLanguageSwitcher({
           <span className="hidden sm:inline text-stone-500 font-normal">{nativeFlag} {currentNative}</span>
         </div>
 
-        <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-60 transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {/* Toast Feedback */}

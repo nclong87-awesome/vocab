@@ -23,6 +23,16 @@ interface QuickAiSwitcherProps {
   compact?: boolean;
 }
 
+function getShortProviderName(name: string): string {
+  if (name.includes("Gemini")) return "Gemini";
+  if (name.includes("GitHub")) return "GitHub";
+  if (name.includes("Custom")) return "Custom";
+  if (name.includes("Ollama")) return "Ollama";
+  if (name.includes("OpenAI")) return "OpenAI";
+  if (name.includes("9Flare")) return "9Flare";
+  return name.split(" ")[0];
+}
+
 export default function QuickAiSwitcher({
   llmConfig,
   onSwitchProvider,
@@ -77,13 +87,13 @@ export default function QuickAiSwitcher({
   const isConnected = llmConfig.isLoggedIn || !activeProviderMeta.requiresKey;
 
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef} id="quick-ai-switcher">
+    <div className="relative inline-block text-left shrink-0" ref={dropdownRef} id="quick-ai-switcher">
       
       {/* Active AI Engine Badge / Quick Switcher Button */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-medium tracking-normal transition-all cursor-pointer shadow-2xs shrink-0 ${
+        className={`flex items-center gap-1 sm:gap-2 px-1.5 py-1 sm:px-3 sm:py-1.5 border text-[11px] sm:text-xs font-medium tracking-normal transition-all cursor-pointer shadow-2xs shrink-0 ${
           isOpen
             ? "bg-stone-900 text-white border-stone-950 ring-2 ring-stone-900/20"
             : "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-900"
@@ -96,9 +106,13 @@ export default function QuickAiSwitcher({
             isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
           }`} 
         />
-        <Zap className={`w-3.5 h-3.5 shrink-0 ${isOpen ? "text-amber-400 fill-current" : "text-stone-700"}`} />
+        <Zap className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${isOpen ? "text-amber-400 fill-current" : "text-stone-700"}`} />
         
-        <span className="font-bold">
+        <span className="font-bold sm:hidden truncate max-w-[60px]">
+          {getShortProviderName(activeProviderMeta.name)}
+        </span>
+        
+        <span className="font-bold hidden sm:inline">
           {activeProviderMeta.name}
         </span>
         
@@ -106,7 +120,7 @@ export default function QuickAiSwitcher({
           ({llmConfig.model})
         </span>
 
-        <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform duration-200 ${isOpen ? "rotate-180 text-amber-400" : ""}`} />
+        <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-60 transition-transform duration-200 shrink-0 ${isOpen ? "rotate-180 text-amber-400" : ""}`} />
       </button>
 
       {/* Floating Toast Notification */}

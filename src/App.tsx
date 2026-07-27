@@ -632,6 +632,7 @@ export default function App() {
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
         onSelectLanguages={handleSelectLanguages}
+        onReloadData={reloadAllDataFromDB}
       />
 
       {/* Main Viewport Container */}

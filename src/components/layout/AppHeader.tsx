@@ -3,6 +3,7 @@ import { Sliders } from "lucide-react";
 import { LLMConfig, LLMProvider, UserStats } from "../../types";
 import QuickAiSwitcher from "./QuickAiSwitcher";
 import QuickLanguageSwitcher from "./QuickLanguageSwitcher";
+import QuickCloudSync from "./QuickCloudSync";
 
 interface AppHeaderProps {
   currentView: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings";
@@ -16,6 +17,7 @@ interface AppHeaderProps {
   targetLanguage?: string;
   nativeLanguage?: string;
   onSelectLanguages?: (targetLang: string, nativeLang: string, applyToDecks?: boolean) => void;
+  onReloadData?: () => Promise<void>;
 }
 
 export default function AppHeader({
@@ -29,37 +31,38 @@ export default function AppHeader({
   onOpenLlmModal,
   targetLanguage = "English",
   nativeLanguage = "Spanish",
-  onSelectLanguages
+  onSelectLanguages,
+  onReloadData
 }: AppHeaderProps) {
   return (
-    <header className="bg-white border-b border-stone-200 py-3.5 px-3.5 sm:py-5 sm:px-8 sticky top-0 z-40" id="main-header">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-6">
+    <header className="bg-white border-b border-stone-200 py-2.5 px-2.5 sm:py-5 sm:px-8 sticky top-0 z-40" id="main-header">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 sm:gap-6">
         
-        {/* Top Header Row: Logo & Quick AI / Language Switchers */}
-        <div className="flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
+        {/* Top Header Row: Logo & Quick AI / Language / Cloud Sync Switchers */}
+        <div className="flex items-center justify-between gap-1 sm:gap-4 flex-nowrap min-w-0">
           {/* Logo / Title */}
           <div 
             onClick={() => {
               setCurrentView("dashboard");
               setSelectedDeckId(null);
             }} 
-            className="flex items-center gap-2 sm:gap-3 cursor-pointer group shrink-0"
+            className="flex items-center gap-1.5 sm:gap-3 cursor-pointer group shrink-0"
             id="brand-logo"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-stone-900 text-white flex items-center justify-center font-black text-base sm:text-lg tracking-tight transition-transform duration-300 group-hover:scale-105 shrink-0">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 bg-stone-900 text-white flex items-center justify-center font-black text-sm sm:text-lg tracking-tight transition-transform duration-300 group-hover:scale-105 shrink-0">
               V
             </div>
             <div>
-              <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-1 sm:gap-1.5">
+              <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-0.5 sm:gap-1.5">
                 Vocab
-                <span className="text-[8px] sm:text-[9px] border border-stone-900 text-stone-900 font-semibold px-1 py-0.2 sm:px-1.5 sm:py-0.5 rounded-none tracking-normal">Pro</span>
+                <span className="text-[7px] sm:text-[9px] border border-stone-900 text-stone-900 font-semibold px-0.5 py-0 sm:px-1.5 sm:py-0.5 rounded-none tracking-normal">Pro</span>
               </h1>
               <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden xs:block">Clean Learning Coach</p>
             </div>
           </div>
 
-          {/* Quick Language & AI Switchers */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Quick Language, AI & Cloud Sync Switchers */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0 min-w-0">
             {onSelectLanguages && (
               <QuickLanguageSwitcher
                 targetLanguage={targetLanguage}
@@ -72,6 +75,11 @@ export default function AppHeader({
               llmConfig={llmConfig}
               onSwitchProvider={onSwitchProvider}
               onOpenLlmModal={onOpenLlmModal}
+            />
+
+            <QuickCloudSync 
+              onReloadData={onReloadData}
+              onOpenSettings={() => setCurrentView("settings")}
             />
           </div>
         </div>
