@@ -1,6 +1,7 @@
 import React from "react";
-import { Volume2, Star, Check } from "lucide-react";
+import { Volume2, Star, Check, RefreshCw } from "lucide-react";
 import { Word } from "../../types";
+import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
 
 interface WordAnalyticsCardProps {
   key?: React.Key;
@@ -20,18 +21,28 @@ export default function WordAnalyticsCard({
 }: WordAnalyticsCardProps) {
   const isMastered = word.learned || word.strength >= 3;
   const strengthLevel = word.strength ?? 0;
+  const daysSinceReview = getDaysSinceLastReview(word);
+  const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 3);
 
   return (
     <div 
       className={`bg-stone-50 border p-4 space-y-3 relative flex flex-col justify-between transition-all hover:border-stone-400 ${
-        isMastered ? "border-emerald-200 hover:border-emerald-400" : "border-rose-200 hover:border-rose-400"
+        isMemoryDecayed ? "border-orange-300 hover:border-orange-500 bg-orange-50/20" : isMastered ? "border-emerald-200 hover:border-emerald-400" : "border-rose-200 hover:border-rose-400"
       }`}
     >
       {/* Top Word Header */}
       <div className="space-y-1.5">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h4 className="text-base font-bold text-stone-950 font-serif">{word.word}</h4>
+            <h4 className="text-base font-bold text-stone-950 font-serif flex items-center gap-2">
+              {word.word}
+              {isMemoryDecayed && (
+                <span className="text-[9px] font-bold text-orange-800 bg-orange-100 border border-orange-200 px-1.5 py-0.5 rounded-none font-mono flex items-center gap-0.5" title={`Last reviewed ${daysSinceReview} day(s) ago. Refresher recommended!`}>
+                  <RefreshCw className="w-2.5 h-2.5 text-orange-600" />
+                  {daysSinceReview > 0 ? `${daysSinceReview}d ago` : "Refresher"}
+                </span>
+              )}
+            </h4>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">

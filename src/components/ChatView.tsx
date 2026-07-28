@@ -17,6 +17,7 @@ interface ChatViewProps {
   onAddWord: (word?: string) => void;
   onGenerateByTopic: () => void;
   onStartQuiz: () => void;
+  onFixGrammar: () => void;
   onSelectDefinition?: (word: string, senseIndex: number, translation: string) => void;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
@@ -49,6 +50,16 @@ function FormattedMessage({ text }: { text: string }) {
                 {parseInlineMarkdown(numberedMatch[2])}
               </li>
             </ol>
+          );
+        }
+
+        // Handle Blockquotes
+        if (line.trim().startsWith("> ")) {
+          const content = line.trim().substring(2);
+          return (
+            <blockquote key={i} className="border-l-4 border-amber-400 bg-amber-50/70 pl-3 py-2 pr-2 my-2 text-stone-900 font-semibold rounded-r-lg shadow-2xs">
+              {parseInlineMarkdown(content)}
+            </blockquote>
           );
         }
 
@@ -124,26 +135,45 @@ export default function ChatView({
   onAddWord,
   onGenerateByTopic,
   onStartQuiz,
+  onFixGrammar,
   onSelectDefinition,
   ttsConfig,
   llmConfig,
   words
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages change and auto-speak audioWord or quizSpeechText if present on latest assistant message
+  const showToast = (msgText: string) => {
+    setToast(msgText);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Scroll to bottom helper
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    }, 50);
+    // Secondary safety trigger in case of layout shifts or image/card rendering
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    }, 250);
+  };
+
+  // Scroll to bottom when messages or typing status change and auto-speak audioWord or quizSpeechText if present
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToBottom("smooth");
 
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       const textToPlay = lastMsg.audioWord || lastMsg.quizSpeechText;
       if (lastMsg.role === "assistant" && textToPlay && (ttsConfig.autoPlayAudioInQuiz ?? true)) {
-        const timer = setTimeout(() => {
+        const audioTimer = setTimeout(() => {
           speakText(textToPlay, ttsConfig, llmConfig, getLanguageCode(targetLanguage));
         }, 350);
-        return () => clearTimeout(timer);
+        return () => clearTimeout(audioTimer);
       }
     }
   }, [messages, isTyping, ttsConfig, llmConfig, targetLanguage]);
@@ -154,6 +184,7 @@ export default function ChatView({
     const txt = inputText.trim();
     setInputText("");
     onSendMessage(txt);
+    scrollToBottom("smooth");
   };
 
   const handleSpeak = (textToSpeak: string) => {
@@ -166,13 +197,29 @@ export default function ChatView({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-92px)] sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-300 overflow-hidden shadow-none" id="chat-container">
+    <div className="flex flex-col h-[calc(100dvh-92px)] sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-300 overflow-hidden shadow-none relative" id="chat-container">
       
+      {/* Toast Notification Banner */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-amber-300 border border-amber-400/40 px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 pointer-events-none"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>{toast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Chat Messages Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-message-body" id="chat-messages-body">
         <AnimatePresence initial={false}>
-          {messages.map((msg) => {
+          {messages.map((msg, idx) => {
             const isUser = msg.role === "user";
+            const isLatestMessage = idx === messages.length - 1;
             
             const parsedQuizOptions: { label: string; action: string; payload: any }[] = [];
             if (!isUser) {
@@ -192,13 +239,68 @@ export default function ChatView({
               }
             }
 
-            const effectiveActions = parsedQuizOptions.length >= 2 && parsedQuizOptions.length <= 5
-              ? parsedQuizOptions
-              : (msg.suggestedActions || []);
+            let actionsList: { label: string; action: string; payload?: any }[] = [];
+
+            if (!isUser) {
+              const hasQuizOptions = parsedQuizOptions.length >= 2 && parsedQuizOptions.length <= 5;
+              
+              if (hasQuizOptions) {
+                actionsList = [...parsedQuizOptions];
+              } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
+                actionsList = [...msg.suggestedActions];
+              }
+
+              // On the latest message, if no quiz options are present, detect if AI asks to move on to the next question
+              if (isLatestMessage && !hasQuizOptions) {
+                const content = msg.content;
+                const hasNextAction = actionsList.some(a => 
+                  a.label.toLowerCase().includes("question") || 
+                  a.label.toLowerCase().includes("move on") || 
+                  a.label.toLowerCase().includes("continue to") || 
+                  a.label.toLowerCase().includes("next question")
+                );
+
+                if (!hasNextAction) {
+                  const questionMatch = content.match(/(?:move\s+on\s+to|continue\s+to|proceed\s+to|shall\s+we\s+(?:move\s+on\s+to|try|start|go\s+to)?)\s*\*{0,2}(Question\s*\d+|the\s+next\s+question)\*{0,2}/i)
+                    || content.match(/move\s+on\s+to\s+\*{0,2}(Question\s*\d+)\*{0,2}/i)
+                    || content.match(/shall\s+we\s+move\s+on\s+to\s+\*{0,2}(Question\s*\d+)\*{0,2}/i);
+
+                  if (questionMatch) {
+                    const qStr = questionMatch[1] ? questionMatch[1].replace(/\*/g, "").trim() : "";
+                    const labelText = qStr ? `Move on to ${qStr}` : "Move on to next question";
+                    actionsList.push({
+                      label: labelText,
+                      action: "send_message",
+                      payload: { message: labelText }
+                    });
+                  } else if (
+                    content.toLowerCase().includes("move on to") || 
+                    content.toLowerCase().includes("shall we move on") || 
+                    content.toLowerCase().includes("next question") ||
+                    content.toLowerCase().includes("ready for the next")
+                  ) {
+                    actionsList.push({
+                      label: "Move on to next question",
+                      action: "send_message",
+                      payload: { message: "Move on to next question" }
+                    });
+                  }
+                }
+              }
+
+              // Filter actions if this is NOT the latest message in the thread:
+              // Hide interactive navigation actions ("send_message", "quiz_answer", "start_quiz") on old messages
+              if (!isLatestMessage) {
+                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition");
+              }
+            }
+
+            const effectiveActions = actionsList;
 
             return (
               <motion.div
                 key={msg.id}
+                ref={isLatestMessage ? latestMessageRef : null}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
@@ -220,6 +322,32 @@ export default function ChatView({
                     ) : (
                       <>
                         <FormattedMessage text={msg.content} />
+
+                        {/* Fixed sentence copy card */}
+                        {msg.fixedSentence && (
+                          <div className="mt-3 p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block font-mono">
+                                Polished Sentence:
+                              </span>
+                              <p className="text-xs sm:text-sm font-semibold text-stone-900 break-words mt-0.5">
+                                "{msg.fixedSentence}"
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(msg.fixedSentence!);
+                                showToast("📋 Copied fixed sentence to clipboard!");
+                              }}
+                              className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
+                              title="Copy fixed sentence to clipboard"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Copy</span>
+                            </button>
+                          </div>
+                        )}
 
                         {/* Image for visual picture questions */}
                         {msg.imageUrl && (
@@ -267,35 +395,58 @@ export default function ChatView({
                   {/* AI Suggested Actions Render */}
                   {!isUser && effectiveActions && effectiveActions.length > 0 && (
                     <div className="flex flex-col gap-1.5 pt-1">
-                      {effectiveActions.map((act, aIdx) => (
-                        <button
-                          key={aIdx}
-                          onClick={() => {
-                            if (act.action === "add_word" && act.payload?.word) {
-                              onClearHistory();
-                              onAddWord(act.payload.word);
-                            } else if (act.action === "start_quiz") {
-                              onStartQuiz();
-                            } else if (act.action === "quiz_answer" && act.payload?.answer) {
-                              onSendMessage(act.payload.answer);
-                            } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
-                              onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
-                            } else if (act.action === "common_phrases") {
-                              onClearHistory();
-                              onSendMessage(`What are some common idioms and phrases in ${targetLanguage}?`);
-                            } else if (act.action === "send_message" && act.payload?.message) {
-                              onSendMessage(act.payload.message);
-                            }
-                          }}
-                          className="flex items-center justify-between text-left text-xs bg-white hover:bg-stone-50 border border-stone-200 rounded-xl py-2 px-3.5 font-bold text-stone-900 transition-all duration-200 hover:scale-[1.01] hover:border-stone-300 shadow-sm cursor-pointer group"
-                        >
-                          <span className="flex items-center gap-2">
-                            <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                            {act.label}
-                          </span>
-                          <ChevronRight className="w-3.5 h-3.5 text-stone-400 group-hover:translate-x-0.5 transition-transform" />
-                        </button>
-                      ))}
+                      {effectiveActions.map((act, aIdx) => {
+                        const isNextQ = act.label.toLowerCase().includes("question") || 
+                          act.label.toLowerCase().includes("move on") || 
+                          act.label.toLowerCase().includes("continue to") ||
+                          act.label.toLowerCase().includes("next");
+
+                        return (
+                          <button
+                            key={aIdx}
+                            onClick={() => {
+                              if (act.action === "copy_text" || act.action === "copy_sentence") {
+                                const textToCopy = act.payload?.text || msg.fixedSentence || "";
+                                if (textToCopy) {
+                                  navigator.clipboard.writeText(textToCopy);
+                                  showToast("📋 Copied fixed sentence to clipboard!");
+                                }
+                              } else if (act.action === "fix_another") {
+                                onFixGrammar();
+                              } else if (act.action === "add_word" && act.payload?.word) {
+                                onAddWord(act.payload.word);
+                              } else if (act.action === "start_quiz") {
+                                onStartQuiz();
+                              } else if (act.action === "quiz_answer" && act.payload?.answer) {
+                                onSendMessage(act.payload.answer);
+                              } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
+                                onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
+                              } else if (act.action === "common_phrases") {
+                                onClearHistory();
+                                onSendMessage(`What are some common idioms and phrases in ${targetLanguage}?`);
+                              } else if (act.action === "send_message" && act.payload?.message) {
+                                onSendMessage(act.payload.message);
+                              }
+                              scrollToBottom("smooth");
+                            }}
+                            className={`flex items-center justify-between text-left text-xs rounded-xl py-2 px-3.5 font-bold transition-all duration-200 hover:scale-[1.01] shadow-2xs cursor-pointer group ${
+                              isNextQ
+                                ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900"
+                                : "bg-white hover:bg-stone-50 border border-stone-200 text-stone-900 hover:border-stone-300"
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              {isNextQ ? (
+                                <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                              )}
+                              {act.label}
+                            </span>
+                            <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform ${isNextQ ? "text-stone-300" : "text-stone-400"}`} />
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -326,7 +477,10 @@ export default function ChatView({
         <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider shrink-0 mr-1 select-none">Quick:</span>
         
         <button
-          onClick={onClearHistory}
+          onClick={() => {
+            onClearHistory();
+            scrollToBottom("smooth");
+          }}
           className="flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0"
           title="Start a fresh chat conversation"
           id="start-new-chat-btn"
@@ -336,7 +490,23 @@ export default function ChatView({
         </button>
 
         <button
-          onClick={onStartQuiz}
+          onClick={() => {
+            onFixGrammar();
+            scrollToBottom("smooth");
+          }}
+          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
+          title="Fix grammar & spelling, improve clarity and readability"
+          id="quick-fix-grammar-btn"
+        >
+          <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
+          <span>Fix Grammar & Polish</span>
+        </button>
+
+        <button
+          onClick={() => {
+            onStartQuiz();
+            scrollToBottom("smooth");
+          }}
           className="flex items-center gap-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-sm transition-all hover:scale-102 cursor-pointer shrink-0"
         >
           <Brain className="w-3.5 h-3.5" />
@@ -344,7 +514,10 @@ export default function ChatView({
         </button>
 
         <button
-          onClick={onGenerateByTopic}
+          onClick={() => {
+            onGenerateByTopic();
+            scrollToBottom("smooth");
+          }}
           className="flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
         >
           <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -352,7 +525,10 @@ export default function ChatView({
         </button>
 
         <button
-          onClick={() => onAddWord()}
+          onClick={() => {
+            onAddWord();
+            scrollToBottom("smooth");
+          }}
           className="flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
         >
           <Plus className="w-3.5 h-3.5 text-stone-600" />
@@ -363,6 +539,7 @@ export default function ChatView({
           onClick={() => {
             onClearHistory();
             onSendMessage(`What are the top 5 most common useful phrases in ${targetLanguage}?`);
+            scrollToBottom("smooth");
           }}
           className="flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold py-1.5 px-3 rounded-full transition-all cursor-pointer shrink-0"
         >

@@ -5,7 +5,7 @@ import { Word, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from 
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider } from "./utils/llmHelpers";
-import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService } from "./services/llmClientService";
+import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService } from "./services/llmClientService";
 import { generateQuizQuestions } from "./utils/quizGenerator";
 import { QuizQuestion } from "./types";
 import { 
@@ -21,6 +21,7 @@ import {
   saveTTSConfigToDB
 } from "./db/indexedDB";
 import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
+import { recalculateWordsMemoryDecay, getDaysSinceLastReview } from "./utils/spacedRepetition";
 
 import Dashboard from "./components/Dashboard";
 import ChatView from "./components/ChatView";
@@ -103,8 +104,8 @@ export default function App() {
 
   const [isTyping, setIsTyping] = useState(false);
 
-  // Conversational state for prompting word addition
-  const [conversationalState, setConversationalState] = useState<"none" | "adding_word" | "generating_topic_subject" | "generating_topic_count">("none");
+  // Conversational state for prompting word addition & grammar fixing
+  const [conversationalState, setConversationalState] = useState<"none" | "adding_word" | "generating_topic_subject" | "generating_topic_count" | "fixing_grammar">("none");
   const [pendingTopicSubject, setPendingTopicSubject] = useState<string>("");
 
   // Pending word senses for multi-definition disambiguation
@@ -160,7 +161,8 @@ export default function App() {
         words: quizWords,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig,
+        stats
       });
 
       const firstQ = generatedQuestions[0];
@@ -382,6 +384,12 @@ export default function App() {
       setConversationalState("none");
       const count = parseInt(text.trim(), 10) || 5;
       await handleConversationalGenerateWords(pendingTopicSubject, count);
+      return;
+    }
+
+    if (conversationalState === "fixing_grammar") {
+      setConversationalState("none");
+      await handleConversationalFixGrammar(text.trim());
       return;
     }
 
@@ -783,6 +791,119 @@ export default function App() {
     }
   };
 
+  // Trigger Fix Grammar & Polish flow from Chat Quick Actions
+  const handlePromptFixGrammar = () => {
+    setActiveQuiz(null);
+    setPendingWordSenses(null);
+    setConversationalState("fixing_grammar");
+    const promptMsg: ChatMessage = {
+      id: `fix-grammar-prompt-${Date.now()}`,
+      role: "assistant",
+      content: `✍️ **Fix Grammar & Polish Sentence**\n\nEnter or paste any sentence below in **${targetLanguage}** (or **${nativeLanguage}**).\n\nI will fix grammar & spelling, improve clarity and readability, suggest natural word choices, and identify candidate vocabulary to add to your collection!`,
+      timestamp: new Date().toISOString()
+    };
+    setChatMessages([promptMsg]);
+  };
+
+  const handleConversationalFixGrammar = async (userText: string) => {
+    setIsTyping(true);
+    const statusMsgId = `fix-grammar-status-${Date.now()}`;
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: statusMsgId,
+        role: "assistant",
+        content: `✍️ *Analyzing sentence, fixing grammar, and identifying candidate vocabulary...*`,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
+    try {
+      const res = await fixGrammarService({
+        userText,
+        targetLanguage,
+        nativeLanguage,
+        llmConfig
+      });
+
+      const fixedSentence = res.fixedSentence || userText;
+      const explanation = res.explanation || "";
+      const candidates = res.vocabularyCandidates || [];
+
+      // Construct suggested actions
+      const actions: any[] = [];
+
+      // 1. Copy fixed sentence to clipboard
+      actions.push({
+        label: "📋 Copy Fixed Sentence",
+        action: "copy_text",
+        payload: { text: fixedSentence }
+      });
+
+      // 2. Add vocabulary candidate words to collection
+      if (candidates && candidates.length > 0) {
+        candidates.forEach(cand => {
+          if (cand.word) {
+            actions.push({
+              label: `➕ Add "${cand.word}" to collection (${cand.reason || "Candidate vocabulary"})`,
+              action: "add_word",
+              payload: { word: cand.word }
+            });
+          }
+        });
+      }
+
+      // 3. Fix another sentence
+      actions.push({
+        label: "✍️ Fix Another Sentence",
+        action: "fix_another"
+      });
+
+      let contentMarkdown = `### ✨ Polished Sentence:\n> **"${fixedSentence}"**\n\n`;
+      if (explanation) {
+        contentMarkdown += `${explanation}\n\n`;
+      }
+
+      if (candidates && candidates.length > 0) {
+        contentMarkdown += `---\n### 📚 Recommended Vocabulary Candidates:\n`;
+        candidates.forEach(c => {
+          contentMarkdown += `- **${c.word}**: *${c.reason}*\n`;
+        });
+      }
+
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-grammar-res-${Date.now()}`,
+            role: "assistant",
+            content: contentMarkdown.trim(),
+            timestamp: new Date().toISOString(),
+            fixedSentence: fixedSentence,
+            suggestedActions: actions
+          }
+        ];
+      });
+    } catch (err: any) {
+      console.error("Fix Grammar Error:", err);
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-grammar-err-${Date.now()}`,
+            role: "assistant",
+            content: `⚠️ **Failed to analyze sentence:** ${err.message || "Unknown error"}. Please check your AI configuration in Settings.`,
+            timestamp: new Date().toISOString()
+          }
+        ];
+      });
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   const handleClearChatHistory = () => {
     setActiveQuiz(null);
     setConversationalState("none");
@@ -804,7 +925,13 @@ export default function App() {
   const reloadAllDataFromDB = async () => {
     try {
       const loadedWords = await getAllWordsFromDB();
-      setWords(loadedWords);
+      
+      // Recalculate word strength based on spaced repetition memory decay (e.g. max strength words not reviewed in days)
+      const { updatedWords, decayedCount } = recalculateWordsMemoryDecay(loadedWords);
+      setWords(updatedWords);
+      if (decayedCount > 0) {
+        saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB memory decay save error:", e));
+      }
 
       const loadedStats = await getStatsFromDB({
         totalWordsStudied: 0,
@@ -902,8 +1029,9 @@ export default function App() {
 
   // Word mastery interaction
   const handleToggleLearned = useCallback((wordId: string) => {
+    let updatedWordsList: Word[] = [];
     setWords(prevWords => {
-      const updatedWords = prevWords.map(w => {
+      updatedWordsList = prevWords.map(w => {
         if (w.id === wordId) {
           const isNowMastered = !w.learned;
           const updated = {
@@ -917,22 +1045,21 @@ export default function App() {
         }
         return w;
       });
+      return updatedWordsList;
+    });
 
-      setStats(prevStats => {
-        const updatedStreak = calculateNewStreak(prevStats.streak);
-        const totalMasteredCount = updatedWords.filter(w => w.learned).length;
-        const totalStudiedCount = updatedWords.filter(w => w.lastReviewed !== null).length;
-        const newStats = {
-          ...prevStats,
-          totalWordsMastered: totalMasteredCount,
-          totalWordsStudied: totalStudiedCount,
-          streak: updatedStreak
-        };
-        saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
-        return newStats;
-      });
-
-      return updatedWords;
+    setStats(prevStats => {
+      const updatedStreak = calculateNewStreak(prevStats.streak);
+      const totalMasteredCount = updatedWordsList.filter(w => w.learned).length;
+      const totalStudiedCount = updatedWordsList.filter(w => w.lastReviewed !== null).length;
+      const newStats = {
+        ...prevStats,
+        totalWordsMastered: totalMasteredCount,
+        totalWordsStudied: totalStudiedCount,
+        streak: updatedStreak
+      };
+      saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
+      return newStats;
     });
   }, []);
 
@@ -1043,14 +1170,22 @@ export default function App() {
     saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB update words error:", e));
   }, []);
 
-  // Memoize Today's Practice words
+  // Memoize Today's Practice words (prioritizing starred, decayed/overdue, unlearned, and weak words)
   const todayPracticeWords = useMemo((): Word[] => {
     const starred = words.filter(w => w.starred);
-    const unlearned = words.filter(w => !w.learned && !w.starred);
-    const weak = words.filter(w => w.learned && w.strength < 3 && !w.starred);
-    const rest = words.filter(w => !starred.includes(w) && !unlearned.includes(w) && !weak.includes(w));
+    
+    // Decayed / Needing Refresher words: Words with lastReviewed >= 5 days ago or decayed strength < 3
+    const memoryDecayWords = words.filter(w => {
+      if (starred.includes(w)) return false;
+      const days = getDaysSinceLastReview(w);
+      return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+    });
 
-    const orderedWords = [...starred, ...unlearned, ...weak, ...rest];
+    const unlearned = words.filter(w => !w.learned && !w.starred && !memoryDecayWords.includes(w));
+    const weak = words.filter(w => w.strength < 3 && !starred.includes(w) && !memoryDecayWords.includes(w) && !unlearned.includes(w));
+    const rest = words.filter(w => !starred.includes(w) && !memoryDecayWords.includes(w) && !unlearned.includes(w) && !weak.includes(w));
+
+    const orderedWords = [...starred, ...memoryDecayWords, ...unlearned, ...weak, ...rest];
     return orderedWords.slice(0, 10);
   }, [words]);
 
@@ -1061,6 +1196,7 @@ export default function App() {
     correctWordIds?: string[], 
     incorrectWordIds?: string[]
   ) => {
+    let updatedWordsList: Word[] = [];
     setWords(prevWords => {
       let updatedWords = [...prevWords];
       if (correctWordIds || incorrectWordIds) {
@@ -1089,25 +1225,25 @@ export default function App() {
         });
         saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB quiz words save error:", e));
       }
-
-      setStats(prevStats => {
-        const updatedStreak = calculateNewStreak(prevStats.streak);
-        const totalMasteredCount = updatedWords.filter(w => w.learned).length;
-        const totalStudiedCount = updatedWords.filter(w => w.lastReviewed !== null).length;
-
-        const newStats = {
-          ...prevStats,
-          totalQuizzesTaken: prevStats.totalQuizzesTaken + 1,
-          totalCorrectAnswers: prevStats.totalCorrectAnswers + score,
-          totalWordsMastered: totalMasteredCount > 0 ? totalMasteredCount : prevStats.totalWordsMastered,
-          totalWordsStudied: totalStudiedCount > 0 ? totalStudiedCount : prevStats.totalWordsStudied,
-          streak: updatedStreak
-        };
-        saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
-        return newStats;
-      });
-
+      updatedWordsList = updatedWords;
       return updatedWords;
+    });
+
+    setStats(prevStats => {
+      const updatedStreak = calculateNewStreak(prevStats.streak);
+      const totalMasteredCount = updatedWordsList.filter(w => w.learned).length;
+      const totalStudiedCount = updatedWordsList.filter(w => w.lastReviewed !== null).length;
+
+      const newStats = {
+        ...prevStats,
+        totalQuizzesTaken: prevStats.totalQuizzesTaken + 1,
+        totalCorrectAnswers: prevStats.totalCorrectAnswers + score,
+        totalWordsMastered: totalMasteredCount > 0 ? totalMasteredCount : prevStats.totalWordsMastered,
+        totalWordsStudied: totalStudiedCount > 0 ? totalStudiedCount : prevStats.totalWordsStudied,
+        streak: updatedStreak
+      };
+      saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
+      return newStats;
     });
   }, []);
 
@@ -1207,6 +1343,7 @@ export default function App() {
                     onAddWord={handleConversationalAddWordOrPrompt}
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
                     onStartQuiz={startChatQuiz}
+                    onFixGrammar={handlePromptFixGrammar}
                     onSelectDefinition={handleSelectDefinition}
                     onClearHistory={handleClearChatHistory}
                     targetLanguage={targetLanguage}
@@ -1214,6 +1351,33 @@ export default function App() {
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}
+                  />
+                )}
+
+                {currentView === "learn" && (
+                  <FlashcardsView
+                    words={words}
+                    targetLanguage={targetLanguage}
+                    onToggleStar={handleToggleStar}
+                    onToggleLearned={handleToggleLearned}
+                    onGoBack={() => handleSetView("dashboard")}
+                    onStartQuiz={startChatQuiz}
+                    ttsConfig={ttsConfig}
+                    llmConfig={llmConfig}
+                  />
+                )}
+
+                {currentView === "quiz" && (
+                  <QuizView
+                    words={todayPracticeWords.length > 0 ? todayPracticeWords : words}
+                    targetLanguage={targetLanguage}
+                    nativeLanguage={nativeLanguage}
+                    stats={stats}
+                    onFinishQuiz={handleFinishQuiz}
+                    onToggleStar={handleToggleStar}
+                    onGoBack={() => handleSetView("dashboard")}
+                    ttsConfig={ttsConfig}
+                    llmConfig={llmConfig}
                   />
                 )}
               </motion.div>

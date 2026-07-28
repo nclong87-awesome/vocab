@@ -20,7 +20,7 @@ import {
   BookOpen,
   Layers
 } from "lucide-react";
-import { Word, QuizQuestion, TTSConfig, LLMConfig } from "../types";
+import { Word, QuizQuestion, TTSConfig, LLMConfig, UserStats } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { generateQuizQuestions, containsNonTargetLanguage, getImageSearchTerm } from "../utils/quizGenerator";
 import { generateAiQuizQuestionsService } from "../services/llmClientService";
@@ -28,6 +28,8 @@ import { generateAiQuizQuestionsService } from "../services/llmClientService";
 interface QuizViewProps {
   words: Word[];
   targetLanguage?: string;
+  nativeLanguage?: string;
+  stats?: UserStats;
   onFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   onToggleStar?: (wordId: string) => void;
   onGoBack: () => void;
@@ -91,6 +93,8 @@ function QuizImage({ src, alt, word }: { src: string; alt: string; word: string 
 export default function QuizView({
   words,
   targetLanguage = "English",
+  nativeLanguage = "Vietnamese",
+  stats,
   onFinishQuiz,
   onToggleStar,
   onGoBack,
@@ -109,6 +113,16 @@ export default function QuizView({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [starFeedback, setStarFeedback] = useState<string | null>(null);
   const questionHeaderRef = useRef<HTMLDivElement>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+
+  // Auto scroll to feedback result when answered
+  useEffect(() => {
+    if (isAnswered && feedbackRef.current) {
+      setTimeout(() => {
+        feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 50);
+    }
+  }, [isAnswered]);
 
   // Sync autoPlayAudio with parent ttsConfig updates
   useEffect(() => {
@@ -179,7 +193,9 @@ export default function QuizView({
         const aiQuestions = await generateAiQuizQuestionsService({
           words: targetWords,
           targetLanguage,
-          llmConfig
+          nativeLanguage,
+          llmConfig,
+          stats
         });
         if (aiQuestions && aiQuestions.length > 0) {
           setQuestions(aiQuestions);
@@ -836,13 +852,21 @@ export default function QuizView({
       >
         {/* Type Icon */}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[10px] font-bold tracking-widest text-stone-800 bg-stone-50 border border-stone-200 px-3 py-1 uppercase font-mono rounded-none">
-            {currentQuestion.type === 'definition' && "Definition Match"}
-            {currentQuestion.type === 'sentence' && "Context Filler"}
-            {currentQuestion.type === 'spelling' && "Spelling Challenge"}
-            {currentQuestion.type === 'listening' && "Listening Skill"}
-            {currentQuestion.type === 'picture' && "Visual Picture Match"}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold tracking-widest text-stone-800 bg-stone-50 border border-stone-200 px-3 py-1 uppercase font-mono rounded-none">
+              {currentQuestion.type === 'definition' && "Definition Match"}
+              {currentQuestion.type === 'sentence' && "Context Filler"}
+              {currentQuestion.type === 'spelling' && "Spelling Challenge"}
+              {currentQuestion.type === 'listening' && "Listening Skill"}
+              {currentQuestion.type === 'picture' && "Visual Picture Match"}
+            </span>
+            {llmConfig?.isLoggedIn && (
+              <span className="text-[10px] font-bold tracking-wider text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 uppercase font-mono flex items-center gap-1 rounded-none" title="AI calibrated using your study stats & word strength">
+                <Sparkles className="w-3 h-3 text-amber-600 shrink-0" />
+                Stats-Adapted AI
+              </span>
+            )}
+          </div>
           {currentQuestion.hint && (
             <div className="text-xs text-stone-500 font-mono italic">
               Pronunciation: {currentQuestion.hint}
@@ -1005,6 +1029,7 @@ export default function QuizView({
         <AnimatePresence>
           {isAnswered && (
             <motion.div 
+              ref={feedbackRef}
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               className="p-5 rounded-none flex items-start gap-4 border bg-stone-50 border-stone-200 text-stone-800 justify-between"

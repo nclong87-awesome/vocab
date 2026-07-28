@@ -16,6 +16,7 @@ import {
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { analyzePerformanceService, PerformanceAnalysisResult } from "../services/llmClientService";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
+import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 
 import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
@@ -46,7 +47,7 @@ export default function AnalyticsDashboard({
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // Filter & Search states for Words breakdown
-  const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'all' | 'starred'>('improving');
+  const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'decayed' | 'all' | 'starred'>('improving');
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('strength-asc');
 
@@ -63,6 +64,14 @@ export default function AnalyticsDashboard({
   // Words needing improvement: !learned AND strength < 3
   const improvingWords = useMemo(() => {
     return words.filter(w => !w.learned && w.strength < 3);
+  }, [words]);
+
+  // Words needing memory refresher (decayed or overdue >= 5 days)
+  const decayedWords = useMemo(() => {
+    return words.filter(w => {
+      const days = getDaysSinceLastReview(w);
+      return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+    });
   }, [words]);
 
   const starredWords = useMemo(() => {
@@ -122,6 +131,8 @@ export default function AnalyticsDashboard({
       source = improvingWords;
     } else if (activeTab === 'mastered') {
       source = masteredWords;
+    } else if (activeTab === 'decayed') {
+      source = decayedWords;
     } else if (activeTab === 'starred') {
       source = starredWords;
     }
@@ -286,6 +297,22 @@ export default function AnalyticsDashboard({
               <span>Mastered Words</span>
               <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'mastered' ? "bg-emerald-900 text-white" : "bg-stone-200 text-stone-800"}`}>
                 {masteredWords.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('decayed')}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'decayed'
+                  ? "bg-orange-600 text-white shadow-xs"
+                  : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+              }`}
+              title="Words that had high strength but haven't been reviewed in a while and need memory refresher practice"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Memory Refresher</span>
+              <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'decayed' ? "bg-orange-800 text-white" : "bg-stone-200 text-stone-800"}`}>
+                {decayedWords.length}
               </span>
             </button>
 

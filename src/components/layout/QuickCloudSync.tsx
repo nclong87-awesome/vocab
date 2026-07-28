@@ -3,13 +3,11 @@ import {
   Cloud, 
   RefreshCw, 
   CheckCircle2, 
-  AlertTriangle, 
-  Upload, 
-  Download,
-  ArrowUpRight
+  AlertTriangle
 } from "lucide-react";
 import { exportIndexedDBDatabase, importIndexedDBDatabase } from "../../db/indexedDB";
 import { syncToGist, syncFromGist } from "../../services/githubGistService";
+import { autoMergeLocalAndRemote, MergeResult } from "../../utils/cloudSyncMerge";
 import CloudSyncConfirmModal from "./CloudSyncConfirmModal";
 import CloudSyncConfigModal from "./CloudSyncConfigModal";
 
@@ -35,6 +33,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     localData: any;
     remoteData: any;
   } | null>(null);
+  const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
 
   const showToast = (type: "success" | "error" | "info", text: string, duration = 3500) => {
     setSyncToast({ type, text });
@@ -60,7 +59,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       const localData = await exportIndexedDBDatabase();
 
       if (!gistId) {
-        // Token exists but no Gist ID yet -> Upload initial local database to cloud or prompt
+        // Token exists but no Gist ID yet -> Upload initial local database to cloud
         showToast("info", "No Gist ID found. Uploading initial cloud backup...");
         const jsonString = JSON.stringify(localData);
         const newGistId = await syncToGist(token, jsonString);
@@ -72,23 +71,32 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       // Fetch remote data from Gist
       const remoteData = await syncFromGist(token, gistId);
 
-      // Compare local vs remote words, stats, config, and settings
-      const localWordsStr = JSON.stringify(localData.stores?.words || []);
-      const remoteWordsStr = JSON.stringify(remoteData.stores?.words || []);
-      const localStatsStr = JSON.stringify(localData.stores?.stats || []);
-      const remoteStatsStr = JSON.stringify(remoteData.stores?.stats || []);
-      const localConfigStr = JSON.stringify(localData.stores?.config || []);
-      const remoteConfigStr = JSON.stringify(remoteData.stores?.config || []);
-      const localSettingsStr = JSON.stringify(localData.stores?.settings || []);
-      const remoteSettingsStr = JSON.stringify(remoteData.stores?.settings || []);
+      const localWords = localData.stores?.words || [];
+      const remoteWords = remoteData.stores?.words || [];
 
-      const isIdentical = (localWordsStr === remoteWordsStr) && (localStatsStr === remoteStatsStr) && (localConfigStr === remoteConfigStr) && (localSettingsStr === remoteSettingsStr);
+      if (localWords.length === 0 && remoteWords.length > 0) {
+        // Local database is empty, remote has backup -> Automatically restore from cloud without conflict popup
+        showToast("info", "Local database is empty. Restoring from cloud backup...");
+        await importIndexedDBDatabase(remoteData);
+        if (onReloadData) {
+          await onReloadData();
+        }
+        showToast("success", "Local database restored from cloud backup!");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+        return;
+      }
 
-      if (isIdentical) {
+      // Perform Auto-Merge calculation
+      const calculatedMerge = autoMergeLocalAndRemote(localData, remoteData);
+
+      if (!calculatedMerge.hasChanges) {
         showToast("success", "In Sync: Local database matches cloud backup!");
       } else {
-        // Differences found -> Show confirmation modal with choices
+        // Real changes/differences detected -> Show auto-merge confirmation modal with diff details
         setComparisonData({ localData, remoteData });
+        setMergeResult(calculatedMerge);
         setShowConfirmModal(true);
         setSyncToast(null);
       }
@@ -100,7 +108,49 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     }
   };
 
-  // Choice A: Sync Local to Cloud
+  // Primary Action: Confirm & Apply Auto-Merge
+  const handleConfirmMerge = async () => {
+    if (!mergeResult?.mergedData) return;
+
+    const token = localStorage.getItem("github_gist_token") || "";
+    const gistId = localStorage.getItem("github_gist_id") || "";
+
+    if (!token) {
+      setShowConfirmModal(false);
+      setShowConfigModal(true);
+      return;
+    }
+
+    try {
+      setIsSyncing(true);
+      showToast("info", "Applying auto-merged changes to local & cloud...");
+
+      // 1. Save merged data to local IndexedDB
+      await importIndexedDBDatabase(mergeResult.mergedData);
+
+      // 2. Save merged data to GitHub Gist
+      const jsonString = JSON.stringify(mergeResult.mergedData);
+      const newGistId = await syncToGist(token, jsonString, gistId);
+      if (!gistId && newGistId) {
+        localStorage.setItem("github_gist_id", newGistId);
+      }
+
+      // 3. Reload UI state
+      if (onReloadData) {
+        await onReloadData();
+      }
+
+      setShowConfirmModal(false);
+      showToast("success", "🎉 Auto-Merge Success! Local & Cloud fully synchronized.");
+    } catch (error: any) {
+      console.error("Failed to apply auto-merge:", error);
+      showToast("error", `Merge failed: ${error.message || "Error saving merged backup"}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Manual Option A: Sync Local to Cloud Only
   const handleSyncLocalToCloud = async () => {
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
@@ -122,7 +172,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       }
 
       setShowConfirmModal(false);
-      showToast("success", "Cloud backup updated successfully with local changes!");
+      showToast("success", "Cloud backup overwritten with local database!");
     } catch (error: any) {
       console.error("Failed to sync local to cloud:", error);
       showToast("error", `Upload failed: ${error.message || "Error syncing to Gist"}`);
@@ -131,7 +181,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     }
   };
 
-  // Choice B: Overwrite Local from Cloud
+  // Manual Option B: Overwrite Local from Cloud Only
   const handleOverwriteLocalFromCloud = async () => {
     if (!comparisonData?.remoteData) return;
 
@@ -216,12 +266,14 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         </div>
       )}
 
-      {/* Sync Conflict Confirmation Modal */}
+      {/* Sync Conflict Confirmation Modal with Auto-Merge */}
       <CloudSyncConfirmModal
         isOpen={showConfirmModal}
         localData={comparisonData?.localData}
         remoteData={comparisonData?.remoteData}
+        mergeResult={mergeResult}
         isSyncing={isSyncing}
+        onConfirmMerge={handleConfirmMerge}
         onSyncLocalToCloud={handleSyncLocalToCloud}
         onOverwriteLocalFromCloud={handleOverwriteLocalFromCloud}
         onCancel={() => setShowConfirmModal(false)}

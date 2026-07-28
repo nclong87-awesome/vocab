@@ -100,4 +100,5 @@ export interface ChatMessage {
   audioWord?: string;
   imageUrl?: string;
   quizSpeechText?: string;
+  fixedSentence?: string;
 }

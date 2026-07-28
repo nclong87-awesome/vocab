@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import { LLMConfig, Word, QuizQuestion } from "../types";
+import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
 import { generateQuizQuestions, generateConfusers } from "../utils/quizGenerator";
+import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 
 // Clean raw JSON strings
 export function cleanJsonResponse(rawText: string): string {
@@ -835,6 +836,90 @@ CRITICAL INSTRUCTIONS:
   }
 }
 
+// 3.8. Fix Grammar & Polish Sentence
+export interface FixGrammarRequest {
+  userText: string;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  llmConfig?: LLMConfig;
+}
+
+export interface FixGrammarResult {
+  fixedSentence: string;
+  explanation: string;
+  vocabularyCandidates: {
+    word: string;
+    reason: string;
+  }[];
+}
+
+export async function fixGrammarService(params: FixGrammarRequest): Promise<FixGrammarResult> {
+  const { userText, targetLanguage, nativeLanguage, llmConfig } = params;
+  const userTarget = targetLanguage || "English";
+  const userNative = nativeLanguage || "Vietnamese";
+
+  const prompt = `Analyze and fix grammar, spelling, clarity, and vocabulary in the following user text:
+"${userText}"
+
+Target language being learned: "${userTarget}".
+User's native language: "${userNative}".
+
+CRITICAL INSTRUCTIONS:
+1. "fixedSentence": Rewrite the user's sentence to fix all grammar, spelling, punctuation, clarity, and readability issues. Improve phrasing and suggest better, natural word choices when helpful. Keep the tone natural and casual.
+2. "explanation": Provide a friendly, casual, encouraging breakdown of:
+   - What corrections were made (grammar, spelling, punctuation)
+   - Why those changes make the sentence sound more natural and fluent
+   - Alternative casual ways to express the same idea
+3. "vocabularyCandidates": Identify 1 to 4 valuable candidate vocabulary words, expressions, or idioms from EITHER the user's input or the fixed sentence that are worth learning in "${userTarget}".
+   For each candidate, provide:
+   - "word": string (the target language word or expression)
+   - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
+`;
+
+  const systemInstruction = `You are a friendly, natural AI Language Coach. Fix grammar & spelling with a casual tone and suggest candidate vocabulary words for the user's collection. Output strictly raw valid JSON matching the schema.`;
+  const schemaDesc = `{
+  "fixedSentence": "string",
+  "explanation": "string (markdown formatted casual explanation)",
+  "vocabularyCandidates": [
+    {
+      "word": "string (target word in ${userTarget})",
+      "reason": "string (short reason)"
+    }
+  ]
+}`;
+
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
+  try {
+    const res = await fetch("/api/fix-grammar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userText, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 405 || res.status === 404) {
+      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      return JSON.parse(text);
+    }
+
+    const errData = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errData.error || `Server Error ${res.status}`);
+  } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+}
+
 // 4. Analyze Performance with AI Service
 export interface PerformanceAnalysisRequest {
   stats: any;
@@ -963,16 +1048,18 @@ CRITICAL INSTRUCTIONS:
 - Answer questions about grammar, translation, and pronunciation.
 - If you explain, introduce, or define a vocabulary word that the user might want to study, always suggest adding it to their collection using the "add_word" action.
 - If the user indicates they want to take a test, quiz, practice, or study their flashcards, suggest starting a quiz using the "start_quiz" action.
+- If you ask or offer the user to move on to the next question or topic (e.g., "Shall we move on to Question 4?"), you MUST include a "send_message" action in suggestedActions with label "Move on to Question X" or "Continue to Next Question".
 - You MUST respond with a valid JSON object matching the schema below.`;
 
   const schemaDesc = `{
   "text": "string (the main conversation response in markdown format. Keep it beautifully styled, use bolding, bullet points, etc. where helpful)",
   "suggestedActions": [
     {
-      "label": "string (compelling action text, e.g. 'Add \"serendipity\" to collection' or 'Start Vocab Quiz')",
-      "action": "string (one of: 'add_word', 'start_quiz')",
+      "label": "string (compelling action text, e.g. 'Add \"serendipity\" to collection', 'Move on to Question 4', or 'Start Vocab Quiz')",
+      "action": "string (one of: 'add_word', 'start_quiz', 'send_message')",
       "payload": {
-        "word": "string (required only if action is 'add_word')"
+        "word": "string (required only if action is 'add_word')",
+        "message": "string (required only if action is 'send_message')"
       }
     }
   ]
@@ -1015,12 +1102,13 @@ export interface QuizGenerationRequest {
   targetLanguage?: string;
   nativeLanguage?: string;
   llmConfig?: LLMConfig;
+  stats?: UserStats;
 }
 
 export async function generateAiQuizQuestionsService(
   params: QuizGenerationRequest
 ): Promise<QuizQuestion[]> {
-  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, stats } = params;
 
   if (!words || words.length === 0) {
     return [];
@@ -1032,17 +1120,41 @@ export async function generateAiQuizQuestionsService(
     return fallbackQuestions;
   }
 
-  const wordDataSummary = words.map(w => ({
-    id: w.id,
-    word: w.word,
-    partOfSpeech: w.partOfSpeech,
-    definition: w.definition,
-    translation: w.translation,
-    example: w.example || ""
-  }));
+  const wordDataSummary = words.map(w => {
+    const daysSinceReview = getDaysSinceLastReview(w);
+    return {
+      id: w.id,
+      word: w.word,
+      partOfSpeech: w.partOfSpeech,
+      definition: w.definition,
+      translation: w.translation,
+      example: w.example || "",
+      // Useful stats per word for targeted learning & memory decay:
+      strength: w.strength ?? 0, // 0 (weakest/newest) to 4 (mastered)
+      learned: Boolean(w.learned),
+      starred: Boolean(w.starred),
+      daysSinceLastReview: daysSinceReview,
+      lastReviewed: w.lastReviewed ? `${daysSinceReview} day(s) ago` : "Never reviewed",
+      memoryStatus: daysSinceReview >= 5 ? "Needs Refresher (Memory Decay / Overdue)" : w.strength >= 3 ? "Mastered / Strong" : "Learning / Developing"
+    };
+  });
+
+  const accuracyPercent = stats && stats.totalQuizzesTaken > 0
+    ? `${Math.round((stats.totalCorrectAnswers / Math.max(1, stats.totalQuizzesTaken * 5)) * 100)}%`
+    : stats && stats.totalCorrectAnswers > 0
+    ? `${stats.totalCorrectAnswers} total correct answers`
+    : "New learner";
+
+  const usefulStatsSummary = stats ? {
+    activeStreakDays: stats.streak?.count || 0,
+    totalWordsMastered: stats.totalWordsMastered || 0,
+    totalWordsStudied: stats.totalWordsStudied || 0,
+    totalQuizzesTaken: stats.totalQuizzesTaken || 0,
+    accuracyTrend: accuracyPercent
+  } : null;
 
   const systemInstruction = `You are a world-class AI Language Pedagogy Engine specializing in ${targetLanguage} assessment.
-Your goal is to generate a JSON array of high-quality, challenging quiz questions for the given vocabulary words.
+Your goal is to generate a JSON array of high-quality, targeted quiz questions for the given vocabulary words based on the student's mastery stats.
 
 STRICT GENERATION RULES & RESTRICTIONS:
 1. Target-Language Immersion Restrictions:
@@ -1052,13 +1164,19 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
    - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
    - Never put the same option twice.
-3. Question Types (mix across questions):
+3. Adaptive Difficulty & Spaced Repetition Personalization:
+   - Use each word's mastery stats (strength 0-4, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
+     * Memory Decay / Overdue Words (daysSinceLastReview >= 5, or recalculated strength): The student may have forgotten this word since it hasn't been reviewed in a while. Generate targeted context fill-in-the-blank or usage questions with challenging distractors to test active memory recall.
+     * Weak / New Words (strength 0-1, never reviewed): Generate foundational questions (e.g. direct definition matching or simple supportive sentences) with helpful hints to reinforce basic recall.
+     * Starred / Priority Words: Focus on practical usage and clear context sentences to solidify active vocabulary.
+     * High Strength / Recently Reviewed Words (strength 3-4): Challenge the learner with nuanced context or subtle distractor choices to ensure long-term mastery.
+4. Question Types (mix across questions):
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
    - 'picture': "Which word matches the visual concept shown below?" (options contain target language words)
 
-4. Output Schema:
+5. Output Schema:
 Return ONLY a valid JSON array of objects matching this schema:
 [
   {
@@ -1074,7 +1192,10 @@ Return ONLY a valid JSON array of objects matching this schema:
   }
 ]`;
 
-  const prompt = `Generate 1 quiz question for each of these vocabulary words:\n${JSON.stringify(wordDataSummary, null, 2)}`;
+  const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats:\n\n` +
+    (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
+    `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
+
   const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageUrl.`;
 
   try {
@@ -1085,7 +1206,7 @@ Return ONLY a valid JSON array of objects matching this schema:
       const res = await fetch("/api/generate-quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words, targetLanguage, nativeLanguage, llmConfig })
+        body: JSON.stringify({ words, stats, targetLanguage, nativeLanguage, llmConfig })
       });
       if (res.ok) {
         const data = await res.json();
