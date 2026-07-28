@@ -4,47 +4,103 @@ import { DEFAULT_WORDS } from "../defaultWords";
 const DB_NAME = "VocabLearnerDB";
 const DB_VERSION = 1;
 
-interface DBStores {
-  words: "words";
-  stats: "stats";
-  config: "config";
-  settings: "settings";
-}
-
-const STORES: DBStores = {
+const STORES = {
   words: "words",
   stats: "stats",
   config: "config",
   settings: "settings"
-};
+} as const;
+
+type StoreName = keyof typeof STORES;
+
+const ALL_STORES: StoreName[] = ["words", "stats", "config", "settings"];
+
+/** Keys of records kept inside the shared `config` / `settings` stores. */
+const KEYS = {
+  stats: "user_stats",
+  llmConfig: "llm_config",
+  ttsConfig: "tts_config",
+  initialized: "db_initialized"
+} as const;
+
+const LEGACY_KEYS = {
+  initialized: "vocab_learner_db_initialized",
+  decks: "vocab_learner_decks",
+  decksBackup: "vocab_learner_decks_backup",
+  stats: "vocab_learner_stats",
+  llmConfig: "vocab_learner_llm_config",
+  ttsConfig: "vocab_learner_tts_config"
+} as const;
+
+/* -------------------------------------------------------------------------- */
+/* localStorage (never throws: private mode / quota / disabled storage)        */
+/* -------------------------------------------------------------------------- */
+
+function lsGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function lsSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+function lsRemove(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function parseJSON<T>(raw: string | null, label: string): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    console.error(`Failed parsing legacy ${label} from localStorage:`, err);
+    return null;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Connection                                                                 */
+/* -------------------------------------------------------------------------- */
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 function openDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
 
-  dbPromise = new Promise((resolve, reject) => {
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-
-      if (!db.objectStoreNames.contains(STORES.words)) {
-        db.createObjectStore(STORES.words, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(STORES.stats)) {
-        db.createObjectStore(STORES.stats, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(STORES.config)) {
-        db.createObjectStore(STORES.config, { keyPath: "id" });
-      }
-      if (!db.objectStoreNames.contains(STORES.settings)) {
-        db.createObjectStore(STORES.settings, { keyPath: "key" });
-      }
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORES.words)) db.createObjectStore(STORES.words, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.stats)) db.createObjectStore(STORES.stats, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.config)) db.createObjectStore(STORES.config, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORES.settings)) db.createObjectStore(STORES.settings, { keyPath: "key" });
     };
 
     request.onsuccess = () => {
-      resolve(request.result);
+      const db = request.result;
+      // Let another tab upgrade the schema instead of blocking it forever.
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      db.onclose = () => {
+        dbPromise = null;
+      };
+      resolve(db);
     };
 
     request.onerror = () => {
@@ -57,541 +113,402 @@ function openDB(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-// Generic transaction helper
-async function performTx<T>(
-  storeName: keyof DBStores,
-  mode: IDBTransactionMode,
-  callback: (store: IDBObjectStore) => IDBRequest<T> | void
-): Promise<T> {
-  const db = await openDB();
+/* -------------------------------------------------------------------------- */
+/* Transaction primitives                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** Resolves when the whole transaction commits, so writes are durable. */
+function txDone(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORES[storeName], mode);
-    const store = tx.objectStore(STORES[storeName]);
-
-    let req: IDBRequest<T> | undefined;
-    try {
-      const result = callback(store);
-      if (result) req = result;
-    } catch (err) {
-      reject(err);
-      return;
-    }
-
-    tx.oncomplete = () => {
-      if (req) {
-        resolve(req.result);
-      } else {
-        resolve(undefined as unknown as T);
-      }
-    };
-
-    tx.onerror = () => {
-      reject(tx.error);
-    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
 }
 
-// Load all words from IndexedDB (with fallback/migration from localStorage or DEFAULT_WORDS)
+/**
+ * Runs `work` inside a single transaction over `stores` and waits for the commit.
+ * One transaction per logical operation keeps the number of round trips minimal.
+ */
+async function withStores<T>(
+  stores: StoreName[],
+  mode: IDBTransactionMode,
+  work: (tx: IDBTransaction) => T | Promise<T>
+): Promise<T> {
+  const db = await openDB();
+  const names = stores.filter((name) => db.objectStoreNames.contains(STORES[name])).map((name) => STORES[name]);
+  if (names.length === 0) return undefined as T;
+
+  const tx = db.transaction(names.length === 1 ? names[0] : names, mode);
+  const done = txDone(tx);
+  // Keep `done` handled even if `work` throws, so it never becomes an unhandled rejection.
+  done.catch(() => undefined);
+
+  const result = await work(tx);
+  await done;
+  return result;
+}
+
+function readAll<T>(tx: IDBTransaction, store: StoreName): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    const req = tx.objectStore(STORES[store]).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as T[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function readOne<T>(tx: IDBTransaction, store: StoreName, key: IDBValidKey): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const req = tx.objectStore(STORES[store]).get(key);
+    req.onsuccess = () => resolve(req.result as T | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Queues clear + puts without awaiting each request; IndexedDB preserves order. */
+function replaceAll(tx: IDBTransaction, store: StoreName, items: readonly unknown[]): void {
+  const objectStore = tx.objectStore(STORES[store]);
+  objectStore.clear();
+  for (let i = 0; i < items.length; i++) objectStore.put(items[i]);
+}
+
+/** Reads a single-record store entry of the shape `{ id, data }`. */
+async function readRecordData<T>(store: StoreName, key: string): Promise<T | null> {
+  const record = await withStores([store], "readonly", (tx) => readOne<{ data?: T }>(tx, store, key));
+  return record?.data ?? null;
+}
+
+/** Writes a single-record store entry of the shape `{ id, data, updatedAt }`. */
+function writeRecordData(store: StoreName, key: string, data: unknown): Promise<void> {
+  return withStores([store], "readwrite", (tx) => {
+    tx.objectStore(STORES[store]).put({ id: key, data, updatedAt: new Date().toISOString() });
+  });
+}
+
+/** Marks the DB as initialized in both IndexedDB and localStorage. */
+async function markInitialized(): Promise<void> {
+  await saveSettingToDB(KEYS.initialized, "true");
+  lsSet(LEGACY_KEYS.initialized, "true");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Words                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Extracts words out of the legacy `{ words: Word[] }[]` deck structure. */
+function migrateLegacyDecks(): Word[] | null {
+  const decks = parseJSON<{ words?: Word[] }[]>(lsGet(LEGACY_KEYS.decks), "decks");
+  if (!Array.isArray(decks) || decks.length === 0) return null;
+  const words = decks.flatMap((deck) => deck.words ?? []);
+  return words.length > 0 ? words : null;
+}
+
+/**
+ * Loads all words, falling back to a legacy localStorage migration and then to
+ * DEFAULT_WORDS on a fresh install. An initialized-but-empty DB stays empty.
+ */
 export async function getAllWordsFromDB(): Promise<Word[]> {
+  let initialized = lsGet(LEGACY_KEYS.initialized) === "true";
+
   try {
-    const isInitialized = (await getSettingFromDB("db_initialized")) === "true" || localStorage.getItem("vocab_learner_db_initialized") === "true";
+    // Words + the initialized flag live in different stores: read both in one transaction.
+    // Requests are queued together (not awaited one by one) so the tx cannot auto-commit early.
+    const [words, flag] = await withStores(["words", "settings"], "readonly", (tx) =>
+      Promise.all([readAll<Word>(tx, "words"), readOne<{ value?: string }>(tx, "settings", KEYS.initialized)])
+    );
 
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORES.words, "readonly");
-      const store = tx.objectStore(STORES.words);
-      const req = store.getAll();
+    initialized = initialized || flag?.value === "true";
 
-      req.onsuccess = async () => {
-        const result = req.result as Word[];
-        if (result && result.length > 0) {
-          if (!isInitialized) {
-            await saveSettingToDB("db_initialized", "true");
-            localStorage.setItem("vocab_learner_db_initialized", "true");
-          }
-          resolve(result);
-        } else if (isInitialized) {
-          // User initialized DB previously and explicitly cleared all words
-          resolve([]);
-        } else {
-          // Check localStorage for migration (legacy deck-based data)
-          const legacyDecks = localStorage.getItem("vocab_learner_decks");
-          if (legacyDecks) {
-            try {
-              const parsed = JSON.parse(legacyDecks);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                // Extract words from legacy deck structure
-                const allWords: Word[] = parsed.flatMap((d: any) => d.words || []);
-                await saveAllWordsToDB(allWords);
-                await saveSettingToDB("db_initialized", "true");
-                localStorage.setItem("vocab_learner_db_initialized", "true");
-                resolve(allWords);
-                return;
-              }
-            } catch (e) {
-              console.error("Failed parsing legacy decks from localStorage:", e);
-            }
-          }
-          // Default fallback on fresh install
-          await saveAllWordsToDB(DEFAULT_WORDS);
-          await saveSettingToDB("db_initialized", "true");
-          localStorage.setItem("vocab_learner_db_initialized", "true");
-          resolve(DEFAULT_WORDS);
-        }
-      };
+    if (words.length > 0) {
+      if (!initialized) await markInitialized();
+      return words;
+    }
 
-      req.onerror = () => {
-        console.error("Failed reading words from IndexedDB:", req.error);
-        resolve(isInitialized ? [] : DEFAULT_WORDS);
-      };
-    });
+    // Previously initialized and intentionally emptied by the user.
+    if (initialized) return [];
+
+    const migrated = migrateLegacyDecks() ?? DEFAULT_WORDS;
+    await saveAllWordsToDB(migrated);
+    return migrated;
   } catch (err) {
     console.error("IndexedDB unavailable, falling back:", err);
-    const isInitialized = localStorage.getItem("vocab_learner_db_initialized") === "true";
-    return isInitialized ? [] : DEFAULT_WORDS;
+    return initialized ? [] : DEFAULT_WORDS;
   }
 }
 
-// Save all words into IndexedDB
+// Replace the whole word collection in a single transaction
 export async function saveAllWordsToDB(words: Word[]): Promise<void> {
   try {
-    const db = await openDB();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORES.words, "readwrite");
-      const store = tx.objectStore(STORES.words);
-
-      // Clear existing & rewrite
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => {
-        for (const word of words) {
-          store.put(word);
-        }
-      };
-
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-
-    await saveSettingToDB("db_initialized", "true");
-    try {
-      localStorage.setItem("vocab_learner_db_initialized", "true");
-    } catch (e) {}
+    await withStores(["words"], "readwrite", (tx) => replaceAll(tx, "words", words));
+    await markInitialized();
   } catch (err) {
     console.error("Error saving words to IndexedDB:", err);
   }
 }
 
-// Save or update a single word efficiently
+// Save or update a single word
 export async function saveWordToDB(word: Word): Promise<void> {
   try {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORES.words, "readwrite");
-      const store = tx.objectStore(STORES.words);
-      store.put(word);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+    await withStores(["words"], "readwrite", (tx) => {
+      tx.objectStore(STORES.words).put(word);
     });
   } catch (err) {
     console.error("Error saving word to IndexedDB:", err);
   }
 }
 
+// Save or update several words in one transaction
+export async function saveWordsToDB(words: readonly Word[]): Promise<void> {
+  if (words.length === 0) return;
+  try {
+    await withStores(["words"], "readwrite", (tx) => {
+      const store = tx.objectStore(STORES.words);
+      for (let i = 0; i < words.length; i++) store.put(words[i]);
+    });
+  } catch (err) {
+    console.error("Error saving words to IndexedDB:", err);
+  }
+}
+
 // Remove a single word from IndexedDB
 export async function deleteWordFromDB(wordId: string): Promise<void> {
   try {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORES.words, "readwrite");
-      const store = tx.objectStore(STORES.words);
-      store.delete(wordId);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+    await withStores(["words"], "readwrite", (tx) => {
+      tx.objectStore(STORES.words).delete(wordId);
     });
   } catch (err) {
     console.error("Error deleting word from IndexedDB:", err);
   }
 }
 
-// Load stats from IndexedDB
+/* -------------------------------------------------------------------------- */
+/* Stats                                                                      */
+/* -------------------------------------------------------------------------- */
+
+// Load stats, migrating from localStorage the first time
 export async function getStatsFromDB(defaultStats: UserStats): Promise<UserStats> {
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORES.stats, "readonly");
-      const store = tx.objectStore(STORES.stats);
-      const req = store.get("user_stats");
+    const stored = await readRecordData<UserStats>("stats", KEYS.stats);
+    if (stored) return stored;
 
-      req.onsuccess = async () => {
-        if (req.result && req.result.data) {
-          resolve(req.result.data as UserStats);
-        } else {
-          // Check localStorage migration
-          const legacyStats = localStorage.getItem("vocab_learner_stats");
-          if (legacyStats) {
-            try {
-              const parsed = JSON.parse(legacyStats);
-              await saveStatsToDB(parsed);
-              resolve(parsed);
-              return;
-            } catch (e) {
-              console.error("Error parsing legacy stats:", e);
-            }
-          }
-          await saveStatsToDB(defaultStats);
-          resolve(defaultStats);
-        }
-      };
-
-      req.onerror = () => resolve(defaultStats);
-    });
+    const legacy = parseJSON<UserStats>(lsGet(LEGACY_KEYS.stats), "stats");
+    const stats = legacy ?? defaultStats;
+    await saveStatsToDB(stats);
+    return stats;
   } catch (err) {
     console.error("IndexedDB error reading stats:", err);
     return defaultStats;
   }
 }
 
-// Save stats to IndexedDB
 export async function saveStatsToDB(stats: UserStats): Promise<void> {
   try {
-    await performTx("stats", "readwrite", (store) => {
-      store.put({ id: "user_stats", data: stats, updatedAt: new Date().toISOString() });
-    });
+    await writeRecordData("stats", KEYS.stats, stats);
   } catch (err) {
     console.error("Error saving stats to IndexedDB:", err);
   }
 }
 
-// Load LLM Config from IndexedDB
+/* -------------------------------------------------------------------------- */
+/* LLM config                                                                 */
+/* -------------------------------------------------------------------------- */
+
 export async function getLLMConfigFromDB(defaultConfig: LLMConfig): Promise<LLMConfig> {
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORES.config, "readonly");
-      const store = tx.objectStore(STORES.config);
-      const req = store.get("llm_config");
+    const stored = await readRecordData<LLMConfig>("config", KEYS.llmConfig);
+    if (stored) return stored;
 
-      req.onsuccess = async () => {
-        if (req.result && req.result.data) {
-          resolve(req.result.data as LLMConfig);
-        } else {
-          // Check legacy localStorage migration
-          const legacyConfig = localStorage.getItem("vocab_learner_llm_config");
-          if (legacyConfig) {
-            try {
-              const parsed = JSON.parse(legacyConfig);
-              await saveLLMConfigToDB(parsed);
-              resolve(parsed);
-              return;
-            } catch (e) {
-              console.error("Error parsing legacy config:", e);
-            }
-          }
-          resolve(defaultConfig);
-        }
-      };
-
-      req.onerror = () => resolve(defaultConfig);
-    });
+    const legacy = parseJSON<LLMConfig>(lsGet(LEGACY_KEYS.llmConfig), "llm config");
+    if (legacy) {
+      await saveLLMConfigToDB(legacy);
+      return legacy;
+    }
+    return defaultConfig;
   } catch (err) {
     console.error("Error loading LLM config from IndexedDB:", err);
     return defaultConfig;
   }
 }
 
-// Save LLM Config to IndexedDB
 export async function saveLLMConfigToDB(config: LLMConfig): Promise<void> {
   try {
-    await performTx("config", "readwrite", (store) => {
-      store.put({ id: "llm_config", data: config, updatedAt: new Date().toISOString() });
-    });
+    await writeRecordData("config", KEYS.llmConfig, config);
   } catch (err) {
     console.error("Error saving LLM config to IndexedDB:", err);
   }
 }
 
-// Load TTS Config from IndexedDB
+/* -------------------------------------------------------------------------- */
+/* TTS config                                                                 */
+/* -------------------------------------------------------------------------- */
+
 export async function getTTSConfigFromDB(defaultConfig: TTSConfig): Promise<TTSConfig> {
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORES.config, "readonly");
-      const store = tx.objectStore(STORES.config);
-      const req = store.get("tts_config");
+    const stored = await readRecordData<Partial<TTSConfig>>("config", KEYS.ttsConfig);
+    if (stored) return { ...defaultConfig, ...stored };
 
-      req.onsuccess = async () => {
-        if (req.result && req.result.data) {
-          resolve({ ...defaultConfig, ...req.result.data });
-        } else {
-          const legacy = localStorage.getItem("vocab_learner_tts_config");
-          if (legacy) {
-            try {
-              const parsed = JSON.parse(legacy);
-              const merged = { ...defaultConfig, ...parsed };
-              await saveTTSConfigToDB(merged);
-              resolve(merged);
-              return;
-            } catch (e) {
-              console.error("Error parsing legacy tts config:", e);
-            }
-          }
-          resolve(defaultConfig);
-        }
-      };
-
-      req.onerror = () => resolve(defaultConfig);
-    });
+    const legacy = parseJSON<Partial<TTSConfig>>(lsGet(LEGACY_KEYS.ttsConfig), "tts config");
+    if (legacy) {
+      const merged = { ...defaultConfig, ...legacy };
+      await saveTTSConfigToDB(merged);
+      return merged;
+    }
+    return defaultConfig;
   } catch (err) {
     console.error("Error loading TTS config from IndexedDB:", err);
     return defaultConfig;
   }
 }
 
-// Save TTS Config to IndexedDB
 export async function saveTTSConfigToDB(config: TTSConfig): Promise<void> {
   try {
-    await performTx("config", "readwrite", (store) => {
-      store.put({ id: "tts_config", data: config, updatedAt: new Date().toISOString() });
-    });
-    localStorage.setItem("vocab_learner_tts_config", JSON.stringify(config));
+    await writeRecordData("config", KEYS.ttsConfig, config);
+    lsSet(LEGACY_KEYS.ttsConfig, JSON.stringify(config));
   } catch (err) {
     console.error("Error saving TTS config to IndexedDB:", err);
   }
 }
 
-// Generic settings get/set for IndexedDB
+/* -------------------------------------------------------------------------- */
+/* Generic settings                                                           */
+/* -------------------------------------------------------------------------- */
+
 export async function getSettingFromDB(key: string): Promise<string | null> {
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORES.settings, "readonly");
-      const store = tx.objectStore(STORES.settings);
-      const req = store.get(key);
+    const record = await withStores(["settings"], "readonly", (tx) =>
+      readOne<{ value?: string }>(tx, "settings", key)
+    );
+    if (record?.value !== undefined) return record.value;
 
-      req.onsuccess = () => {
-        if (req.result && req.result.value !== undefined) {
-          resolve(req.result.value);
-        } else {
-          // Check localStorage
-          const legacyVal = localStorage.getItem(key);
-          if (legacyVal) {
-            saveSettingToDB(key, legacyVal);
-            resolve(legacyVal);
-          } else {
-            resolve(null);
-          }
-        }
-      };
-
-      req.onerror = () => resolve(null);
-    });
-  } catch (err) {
+    const legacy = lsGet(key);
+    if (legacy !== null) {
+      // Backfill without blocking the caller.
+      void saveSettingToDB(key, legacy);
+      return legacy;
+    }
+    return null;
+  } catch {
     return null;
   }
 }
 
 export async function saveSettingToDB(key: string, value: string): Promise<void> {
   try {
-    await performTx("settings", "readwrite", (store) => {
-      store.put({ key, value, updatedAt: new Date().toISOString() });
+    await withStores(["settings"], "readwrite", (tx) => {
+      tx.objectStore(STORES.settings).put({ key, value, updatedAt: new Date().toISOString() });
     });
   } catch (err) {
     console.error("Error saving setting to IndexedDB:", err);
   }
 }
 
-// Full Database Export Data Interface
+/* -------------------------------------------------------------------------- */
+/* Backup / restore / reset                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Envelope used by the `stats` and `config` stores. */
+export interface StoredRecord<T> {
+  id: string;
+  data: T;
+  updatedAt?: string;
+}
+
+/** Envelope used by the `settings` store. */
+export interface StoredSetting {
+  key: string;
+  value: string;
+  updatedAt?: string;
+}
+
 export interface IndexedDBExportData {
   version: number;
   dbName: string;
   exportedAt: string;
   stores: {
     words: Word[];
-    stats: any[];
-    config: any[];
-    settings: any[];
+    stats: StoredRecord<UserStats>[];
+    config: StoredRecord<LLMConfig | TTSConfig>[];
+    settings: StoredSetting[];
   };
 }
 
-// Export full IndexedDB database as a JSON object
+// Export the full database as a JSON object (one snapshot-consistent transaction)
 export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
-  const db = await openDB();
+  const [words, stats, config, settings] = await withStores(ALL_STORES, "readonly", (tx) =>
+    Promise.all([
+      readAll<Word>(tx, "words"),
+      readAll<StoredRecord<UserStats>>(tx, "stats"),
+      readAll<StoredRecord<LLMConfig | TTSConfig>>(tx, "config"),
+      readAll<StoredSetting>(tx, "settings")
+    ])
+  );
 
-  const getStoreData = <T>(storeName: keyof DBStores): Promise<T[]> => {
-    return new Promise((resolve, reject) => {
-      if (!db.objectStoreNames.contains(STORES[storeName])) {
-        resolve([]);
-        return;
-      }
-      const tx = db.transaction(STORES[storeName], "readonly");
-      const store = tx.objectStore(STORES[storeName]);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result as T[]);
-      req.onerror = () => reject(req.error);
-    });
-  };
-
-  const words = await getStoreData<Word>("words");
-  const stats = await getStoreData<any>("stats");
-  const config = await getStoreData<any>("config");
-  const settings = await getStoreData<any>("settings");
+  const stores = { words, stats, config, settings };
 
   return {
     version: DB_VERSION,
     dbName: DB_NAME,
     exportedAt: new Date().toISOString(),
-    stores: {
-      words,
-      stats,
-      config,
-      settings
-    }
+    stores
   };
 }
 
-// Import full IndexedDB database from a JSON object
-export async function importIndexedDBDatabase(data: any): Promise<{
+export interface ImportResult {
   success: boolean;
   message: string;
-  recordCounts: { words: number; stats: number; config: number; settings: number };
-}> {
-  if (!data || typeof data !== "object" || !data.stores) {
+  recordCounts: Record<StoreName, number>;
+}
+
+/**
+ * Restores the database from a backup object. All stores are rewritten inside a
+ * single transaction, so a failure mid-way rolls everything back.
+ */
+export async function importIndexedDBDatabase(data: unknown): Promise<ImportResult> {
+  const stores = (data as { stores?: Partial<Record<StoreName, unknown[]>> } | null)?.stores;
+  if (!stores || typeof stores !== "object") {
     throw new Error("Invalid backup file. Missing 'stores' object.");
   }
-
-  const { stores } = data;
-  if (!stores.words || !Array.isArray(stores.words)) {
+  if (!Array.isArray(stores.words)) {
     throw new Error("Invalid backup file: 'words' array is required.");
   }
 
-  const db = await openDB();
+  const payload = ALL_STORES.map((name) => ({
+    name,
+    items: Array.isArray(stores[name]) ? (stores[name] as unknown[]) : null
+  }));
 
-  // Clear and populate words
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORES.words, "readwrite");
-    const store = tx.objectStore(STORES.words);
-    const clearReq = store.clear();
-    clearReq.onsuccess = () => {
-      for (const item of stores.words) {
-        store.put(item);
-      }
-    };
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+  await withStores(ALL_STORES, "readwrite", (tx) => {
+    for (const { name, items } of payload) {
+      if (items) replaceAll(tx, name, items);
+    }
   });
 
-  // Clear and populate stats
-  if (Array.isArray(stores.stats)) {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORES.stats, "readwrite");
-      const store = tx.objectStore(STORES.stats);
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => {
-        for (const item of stores.stats) {
-          store.put(item);
-        }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
+  const recordCounts = payload.reduce((acc, { name, items }) => {
+    acc[name] = items?.length ?? 0;
+    return acc;
+  }, {} as Record<StoreName, number>);
 
-  // Clear and populate config
-  if (Array.isArray(stores.config)) {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORES.config, "readwrite");
-      const store = tx.objectStore(STORES.config);
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => {
-        for (const item of stores.config) {
-          store.put(item);
-        }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  // Clear and populate settings
-  if (Array.isArray(stores.settings)) {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORES.settings, "readwrite");
-      const store = tx.objectStore(STORES.settings);
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => {
-        for (const item of stores.settings) {
-          store.put(item);
-        }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  }
-
-  return {
-    success: true,
-    message: "Database restored successfully!",
-    recordCounts: {
-      words: stores.words ? stores.words.length : 0,
-      stats: stores.stats ? stores.stats.length : 0,
-      config: stores.config ? stores.config.length : 0,
-      settings: stores.settings ? stores.settings.length : 0
-    }
-  };
+  return { success: true, message: "Database restored successfully!", recordCounts };
 }
 
-// Reset IndexedDB to default state
-export async function resetIndexedDBDatabase(): Promise<void> {
-  const db = await openDB();
-  
-  // Clear all stores
-  const storeNames: (keyof DBStores)[] = ["words", "stats", "config", "settings"];
-  for (const name of storeNames) {
-    await new Promise<void>((resolve, reject) => {
-      if (!db.objectStoreNames.contains(STORES[name])) {
-        resolve();
-        return;
-      }
-      const tx = db.transaction(STORES[name], "readwrite");
-      const store = tx.objectStore(STORES[name]);
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => resolve();
-      clearReq.onerror = () => reject(clearReq.error);
-    });
-  }
+/** Clears the given stores in one transaction and re-flags the DB as initialized. */
+async function clearStores(stores: StoreName[]): Promise<void> {
+  await withStores(stores, "readwrite", (tx) => {
+    for (const name of stores) tx.objectStore(STORES[name]).clear();
+  });
 
-  await saveSettingToDB("db_initialized", "true");
-  try {
-    localStorage.setItem("vocab_learner_db_initialized", "true");
-    localStorage.removeItem("vocab_learner_decks");
-    localStorage.removeItem("vocab_learner_decks_backup");
-  } catch (e) {}
+  await markInitialized();
+  lsRemove(LEGACY_KEYS.decks);
+  lsRemove(LEGACY_KEYS.decksBackup);
 }
 
-// Clear all words completely without restoring defaults
-export async function clearAllWordsAndStatsFromDB(): Promise<void> {
-  const db = await openDB();
-  const storeNames: (keyof DBStores)[] = ["words", "stats"];
-  for (const name of storeNames) {
-    await new Promise<void>((resolve, reject) => {
-      // check if the store exists before attempting to clear it
-      if (!db.objectStoreNames.contains(STORES[name])) {
-        resolve();
-        return;
-      }
-      const tx = db.transaction(STORES[name], "readwrite");
-      const store = tx.objectStore(STORES[name]);
-      const clearReq = store.clear();
-      clearReq.onsuccess = () => resolve();
-      clearReq.onerror = () => reject(clearReq.error);
-    });
-  }
+// Wipe every store (words, stats, config, settings) without restoring defaults
+export function resetIndexedDBDatabase(): Promise<void> {
+  return clearStores(ALL_STORES);
+}
 
-  await saveSettingToDB("db_initialized", "true");
-  try {
-    localStorage.setItem("vocab_learner_db_initialized", "true");
-    localStorage.removeItem("vocab_learner_decks");
-    localStorage.removeItem("vocab_learner_decks_backup");
-  } catch (e) {}
+// Wipe words and stats only, keeping config and settings intact
+export function clearAllWordsAndStatsFromDB(): Promise<void> {
+  return clearStores(["words", "stats"]);
 }
 

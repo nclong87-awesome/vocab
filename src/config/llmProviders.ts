@@ -19,7 +19,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "OpenAI",
     tagline: "GPT series models",
     defaultModel: "gpt-5.4-mini",
-    models: ["gpt-5.4-mini", "gpt-4o-mini", "gpt-4.1-mini"],
+    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini"],
     defaultBaseUrl: "https://api.openai.com/v1",
     requiresKey: true
   },
@@ -28,7 +28,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "GitHub Models",
     tagline: "Inference API via GitHub Personal Access Token",
     defaultModel: "openai/gpt-4o",
-    models: ["openai/gpt-4o", "openai/gpt-4.1", "cohere/cohere-command-a"],
+    models: ["cohere/cohere-command-a", "openai/gpt-4o", "openai/gpt-4.1"],
     defaultBaseUrl: "https://models.github.ai/inference/",
     requiresKey: true
   },
@@ -37,7 +37,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "Google Gemini",
     tagline: "Fast & highly structured intelligence",
     defaultModel: "gemini-3.6-flash",
-    models: ["gemini-3.6-flash", "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite"],
+    models: ["gemini-3.5-flash-lite",  "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"],
     tts_models: ["gemini-2.5-flash-preview-tts","gemini-3.1-flash-tts-preview"],
 
     requiresKey: false
@@ -46,8 +46,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "9flare",
     name: "9Flare",
     tagline: "High performance API gateway",
-    defaultModel: "pro/minimax-m2.5",
-    models: ["pro/minimax-m2.5", "pro/claude-haiku-4-5", "pro/glm-5"],
+    defaultModel: "pro/claude-haiku-4-5",
+    models: ["pro/minimax-m2.5", "pro/claude-haiku-4-5", "pro/glm-5", ],
     defaultBaseUrl: "https://9flare.com/api/v1",
     requiresKey: true
   },
