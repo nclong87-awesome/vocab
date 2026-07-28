@@ -2,7 +2,13 @@ import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { DEFAULT_WORDS } from "../defaultWords";
 
 const DB_NAME = "VocabLearnerDB";
-const DB_VERSION = 1;
+
+/**
+ * Recorded in backup files for provenance. The live connection does NOT open at
+ * this version: `connect()` attaches to whatever version exists and bumps it
+ * only when a store is missing, so older databases get repaired in place.
+ */
+const DB_SCHEMA_VERSION = 1;
 
 const STORES = {
   words: "words",
@@ -74,40 +80,86 @@ function parseJSON<T>(raw: string | null, label: string): T | null {
 /* Connection                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/** Key path used by each store. */
+const STORE_KEY_PATHS: Record<StoreName, string> = {
+  words: "id",
+  stats: "id",
+  config: "id",
+  settings: "key"
+};
+
+function createMissingStores(db: IDBDatabase): void {
+  for (const name of ALL_STORES) {
+    if (!db.objectStoreNames.contains(STORES[name])) {
+      db.createObjectStore(STORES[name], { keyPath: STORE_KEY_PATHS[name] });
+    }
+  }
+}
+
+function findMissingStores(db: IDBDatabase): StoreName[] {
+  return ALL_STORES.filter((name) => !db.objectStoreNames.contains(STORES[name]));
+}
+
+/**
+ * Opens the database. Omit `version` to attach to whatever version exists
+ * (and create it at v1 if it does not exist yet).
+ */
+function requestOpen(version?: number): Promise<IDBDatabase> {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = version === undefined ? indexedDB.open(DB_NAME) : indexedDB.open(DB_NAME, version);
+    request.onupgradeneeded = () => createMissingStores(request.result);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    request.onblocked = () =>
+      reject(new Error("IndexedDB upgrade is blocked by another open tab. Close other tabs and reload."));
+  });
+}
+
 let dbPromise: Promise<IDBDatabase> | null = null;
+
+/**
+ * Connects and guarantees the schema is complete.
+ *
+ * A database created by an older build can sit at version 1 with only some of
+ * the stores. Opening at a fixed DB_VERSION would never fire `onupgradeneeded`
+ * for it, so every `objectStore()` call on a missing store throws NotFoundError.
+ * Instead we attach to the current version, and if anything is missing we
+ * re-open one version higher to create it.
+ */
+async function connect(): Promise<IDBDatabase> {
+  let db = await requestOpen();
+
+  if (findMissingStores(db).length > 0) {
+    const nextVersion = db.version + 1;
+    db.close();
+    db = await requestOpen(nextVersion);
+
+    const stillMissing = findMissingStores(db);
+    if (stillMissing.length > 0) {
+      db.close();
+      throw new Error(`IndexedDB schema upgrade failed; missing stores: ${stillMissing.join(", ")}`);
+    }
+  }
+
+  // Release the connection so another tab can upgrade instead of blocking it.
+  db.onversionchange = () => {
+    db.close();
+    dbPromise = null;
+  };
+  db.onclose = () => {
+    dbPromise = null;
+  };
+
+  return db;
+}
 
 function openDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
 
-  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORES.words)) db.createObjectStore(STORES.words, { keyPath: "id" });
-      if (!db.objectStoreNames.contains(STORES.stats)) db.createObjectStore(STORES.stats, { keyPath: "id" });
-      if (!db.objectStoreNames.contains(STORES.config)) db.createObjectStore(STORES.config, { keyPath: "id" });
-      if (!db.objectStoreNames.contains(STORES.settings)) db.createObjectStore(STORES.settings, { keyPath: "key" });
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      // Let another tab upgrade the schema instead of blocking it forever.
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-      db.onclose = () => {
-        dbPromise = null;
-      };
-      resolve(db);
-    };
-
-    request.onerror = () => {
-      console.error("IndexedDB open failed:", request.error);
-      dbPromise = null;
-      reject(request.error);
-    };
+  dbPromise = connect().catch((err) => {
+    console.error("IndexedDB open failed:", err);
+    dbPromise = null; // allow a later retry
+    throw err;
   });
 
   return dbPromise;
@@ -136,8 +188,10 @@ async function withStores<T>(
   work: (tx: IDBTransaction) => T | Promise<T>
 ): Promise<T> {
   const db = await openDB();
-  const names = stores.filter((name) => db.objectStoreNames.contains(STORES[name])).map((name) => STORES[name]);
-  if (names.length === 0) return undefined as T;
+  // `openDB` guarantees every store exists, so no filtering is needed here.
+  // Filtering would silently drop a store from the tx while the callback still
+  // asks for it by name, turning a schema problem into a NotFoundError.
+  const names = stores.map((name) => STORES[name]);
 
   const tx = db.transaction(names.length === 1 ? names[0] : names, mode);
   const done = txDone(tx);
@@ -231,7 +285,10 @@ export async function getAllWordsFromDB(): Promise<Word[]> {
     await saveAllWordsToDB(migrated);
     return migrated;
   } catch (err) {
-    console.error("IndexedDB unavailable, falling back:", err);
+    // Reads failed entirely (storage blocked, corrupt DB, upgrade blocked by
+    // another tab). Serve something usable rather than an empty app, but make
+    // the cause visible instead of looking like a fresh install.
+    console.error("Could not read words from IndexedDB; serving in-memory fallback:", err);
     return initialized ? [] : DEFAULT_WORDS;
   }
 }
@@ -446,7 +503,7 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
   const stores = { words, stats, config, settings };
 
   return {
-    version: DB_VERSION,
+    version: DB_SCHEMA_VERSION,
     dbName: DB_NAME,
     exportedAt: new Date().toISOString(),
     stores

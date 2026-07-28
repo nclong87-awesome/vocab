@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.APP_PORT || 3000;
+const PORT = process.env.APP_PORT ? parseInt(process.env.APP_PORT, 10) : 3000;
 
 app.use(express.json());
 
@@ -513,7 +513,7 @@ app.post("/api/tts", async (req, res) => {
 
       if (part && part.inlineData) {
         const mimeType = part.inlineData.mimeType || "audio/mp3";
-        const base64Data = part.inlineData.data;
+        const base64Data = part.inlineData.data || "";
 
         // If Gemini returned raw PCM / L16 audio, wrap with standard WAV header so browsers decode and play natively
         if (mimeType.includes("l16") || mimeType.includes("pcm") || mimeType.includes("raw") || (!mimeType.includes("mp3") && !mimeType.includes("wav"))) {
