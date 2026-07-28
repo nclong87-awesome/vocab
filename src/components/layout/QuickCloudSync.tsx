@@ -72,13 +72,17 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       // Fetch remote data from Gist
       const remoteData = await syncFromGist(token, gistId);
 
-      // Compare local vs remote words and stats
+      // Compare local vs remote words, stats, config, and settings
       const localWordsStr = JSON.stringify(localData.stores?.words || []);
       const remoteWordsStr = JSON.stringify(remoteData.stores?.words || []);
       const localStatsStr = JSON.stringify(localData.stores?.stats || []);
       const remoteStatsStr = JSON.stringify(remoteData.stores?.stats || []);
+      const localConfigStr = JSON.stringify(localData.stores?.config || []);
+      const remoteConfigStr = JSON.stringify(remoteData.stores?.config || []);
+      const localSettingsStr = JSON.stringify(localData.stores?.settings || []);
+      const remoteSettingsStr = JSON.stringify(remoteData.stores?.settings || []);
 
-      const isIdentical = (localWordsStr === remoteWordsStr) && (localStatsStr === remoteStatsStr);
+      const isIdentical = (localWordsStr === remoteWordsStr) && (localStatsStr === remoteStatsStr) && (localConfigStr === remoteConfigStr) && (localSettingsStr === remoteSettingsStr);
 
       if (isIdentical) {
         showToast("success", "In Sync: Local database matches cloud backup!");

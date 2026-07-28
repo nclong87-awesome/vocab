@@ -34,11 +34,13 @@ export default function CloudSyncConfirmModal({
   if (!isOpen || !localData || !remoteData) return null;
 
   const localWordsCount = localData.stores?.words?.length || 0;
+  const localStats = localData.stores?.stats?.[0]?.data;
   const localDate = localData.exportedAt 
     ? new Date(localData.exportedAt).toLocaleString() 
     : "Just now";
 
   const remoteWordsCount = remoteData.stores?.words?.length || 0;
+  const remoteStats = remoteData.stores?.stats?.[0]?.data;
   const remoteDate = remoteData.exportedAt 
     ? new Date(remoteData.exportedAt).toLocaleString() 
     : "Unknown date";
@@ -110,6 +112,24 @@ export default function CloudSyncConfirmModal({
                   <strong className="font-bold text-stone-950">{localWordsCount}</strong>
                 </div>
 
+                {localStats && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5" /> Quizzes Taken:
+                    </span>
+                    <strong className="font-bold text-stone-950">{localStats.totalQuizzesTaken || 0}</strong>
+                  </div>
+                )}
+
+                {localStats && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5" /> Streak:
+                    </span>
+                    <strong className="font-bold text-stone-950">{localStats.streak?.count || 0} days</strong>
+                  </div>
+                )}
+
                 <div className="flex items-start justify-between gap-1 pt-1 border-t border-stone-200 text-[11px]">
                   <span className="text-stone-400 flex items-center gap-1">
                     <Calendar className="w-3 h-3" /> Updated:
@@ -140,6 +160,24 @@ export default function CloudSyncConfirmModal({
                   </span>
                   <strong className="font-bold text-stone-950">{remoteWordsCount}</strong>
                 </div>
+
+                {remoteStats && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5" /> Quizzes Taken:
+                    </span>
+                    <strong className="font-bold text-stone-950">{remoteStats.totalQuizzesTaken || 0}</strong>
+                  </div>
+                )}
+
+                {remoteStats && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5" /> Streak:
+                    </span>
+                    <strong className="font-bold text-stone-950">{remoteStats.streak?.count || 0} days</strong>
+                  </div>
+                )}
 
                 <div className="flex items-start justify-between gap-1 pt-1 border-t border-blue-200 text-[11px]">
                   <span className="text-stone-400 flex items-center gap-1">

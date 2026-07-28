@@ -544,6 +544,10 @@ export async function resetIndexedDBDatabase(): Promise<void> {
   const storeNames: (keyof DBStores)[] = ["words", "stats", "config", "settings"];
   for (const name of storeNames) {
     await new Promise<void>((resolve, reject) => {
+      if (!db.objectStoreNames.contains(STORES[name])) {
+        resolve();
+        return;
+      }
       const tx = db.transaction(STORES[name], "readwrite");
       const store = tx.objectStore(STORES[name]);
       const clearReq = store.clear();
@@ -552,8 +556,6 @@ export async function resetIndexedDBDatabase(): Promise<void> {
     });
   }
 
-  // Restore defaults
-  await saveAllWordsToDB(DEFAULT_WORDS);
   await saveSettingToDB("db_initialized", "true");
   try {
     localStorage.setItem("vocab_learner_db_initialized", "true");
@@ -563,20 +565,23 @@ export async function resetIndexedDBDatabase(): Promise<void> {
 }
 
 // Clear all words completely without restoring defaults
-export async function clearAllWordsFromDB(): Promise<void> {
+export async function clearAllWordsAndStatsFromDB(): Promise<void> {
   const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    // check if the store exists before attempting to clear it
-    if (!db.objectStoreNames.contains(STORES.words)) {
-      resolve();
-      return;
-    }
-    const tx = db.transaction(STORES.words, "readwrite");
-    const store = tx.objectStore(STORES.words);
-    const clearReq = store.clear();
-    clearReq.onsuccess = () => resolve();
-    clearReq.onerror = () => reject(clearReq.error);
-  });
+  const storeNames: (keyof DBStores)[] = ["words", "stats"];
+  for (const name of storeNames) {
+    await new Promise<void>((resolve, reject) => {
+      // check if the store exists before attempting to clear it
+      if (!db.objectStoreNames.contains(STORES[name])) {
+        resolve();
+        return;
+      }
+      const tx = db.transaction(STORES[name], "readwrite");
+      const store = tx.objectStore(STORES[name]);
+      const clearReq = store.clear();
+      clearReq.onsuccess = () => resolve();
+      clearReq.onerror = () => reject(clearReq.error);
+    });
+  }
 
   await saveSettingToDB("db_initialized", "true");
   try {
@@ -585,6 +590,4 @@ export async function clearAllWordsFromDB(): Promise<void> {
     localStorage.removeItem("vocab_learner_decks_backup");
   } catch (e) {}
 }
-
-export const clearAllNotebooksFromDB = clearAllWordsFromDB;
 

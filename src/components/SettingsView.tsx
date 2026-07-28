@@ -135,11 +135,13 @@ export default function SettingsView({
           if (remoteData && remoteData.exportedAt) {
             const remoteDate = new Date(remoteData.exportedAt).toLocaleString();
             const remoteWordCount = remoteData.stores?.words?.length || 0;
+            const remoteStatsData = remoteData.stores?.stats?.[0]?.data;
             
             const localData = await exportIndexedDBDatabase();
             const localWordCount = localData.stores.words.length;
+            const localStatsData = localData.stores.stats?.[0]?.data;
             
-            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n\nLocal Database:\n- ${localWordCount} words\n\nAre you sure you want to overwrite the remote backup?`;
+            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n- ${remoteStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${remoteStatsData?.streak?.count || 0} day streak\n\nLocal Database:\n- ${localWordCount} words\n- ${localStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${localStatsData?.streak?.count || 0} day streak\n\nAre you sure you want to overwrite the remote backup?`;
           }
         } catch (e) {
           console.warn("Could not fetch remote backup for comparison", e);
@@ -188,11 +190,13 @@ export default function SettingsView({
       if (data && data.exportedAt) {
         const remoteDate = new Date(data.exportedAt).toLocaleString();
         const remoteWordCount = data.stores?.words?.length || 0;
+        const remoteStatsData = data.stores?.stats?.[0]?.data;
         
         const localData = await exportIndexedDBDatabase();
         const localWordCount = localData.stores.words.length;
+        const localStatsData = localData.stores.stats?.[0]?.data;
         
-        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n\nLocal Database:\n- ${localWordCount} words\n\nAre you sure you want to overwrite your local database with this remote backup?`;
+        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n- ${remoteStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${remoteStatsData?.streak?.count || 0} day streak\n\nLocal Database:\n- ${localWordCount} words\n- ${localStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${localStatsData?.streak?.count || 0} day streak\n\nAre you sure you want to overwrite your local database with this remote backup?`;
         if (!window.confirm(confirmMsg)) {
           setIsCloudSyncing(false);
           setDbStatusMessage(null);
@@ -395,11 +399,12 @@ export default function SettingsView({
       setDbStatusMessage({ type: "info", text: "Resetting vocabulary database..." });
 
       if (resetMode === "defaults") {
-        await resetIndexedDBDatabase();
+        // Clear all words and stats
+        const { clearAllWordsAndStatsFromDB } = await import("../db/indexedDB");
+        await clearAllWordsAndStatsFromDB();
       } else {
-        // Clear all words completely
-        const { clearAllWordsFromDB } = await import("../db/indexedDB");
-        await clearAllWordsFromDB();
+        // Clear everything from the database
+        await resetIndexedDBDatabase();
       }
 
       // Clear any cached localStorage backups
@@ -417,8 +422,8 @@ export default function SettingsView({
       setDbStatusMessage({
         type: "success",
         text: resetMode === "defaults" 
-          ? "Successfully reset vocabulary data to default starter words." 
-          : "Successfully cleared all vocabulary data."
+          ? "Successfully cleared all vocabulary data and stats."
+          : "Successfully cleared all data (words, stats, config, and settings)."
       });
       setShowResetConfirmModal(false);
     } catch (err: any) {
@@ -1484,9 +1489,9 @@ export default function SettingsView({
                     className="mt-0.5 accent-stone-900"
                   />
                   <div>
-                    <span className="font-bold block text-xs">Restore Default Starter Words</span>
+                    <span className="font-bold block text-xs">Reset all vocabulary and stats</span>
                     <span className="text-[11px] text-stone-500 font-normal">
-                      Replaces custom data with original starter words (Spanish, French, Food, Tech).
+                      Resets all vocabulary and stats.
                     </span>
                   </div>
                 </label>
@@ -1502,9 +1507,9 @@ export default function SettingsView({
                     className="mt-0.5 accent-red-600"
                   />
                   <div>
-                    <span className="font-bold block text-xs text-red-900">Completely Clear All Words</span>
+                    <span className="font-bold block text-xs text-red-900">Full Factory Reset</span>
                     <span className="text-[11px] text-stone-500 font-normal">
-                      Removes all words and leaves your collection completely blank.
+                      Clears all words, stats, config, and settings. Leaves everything completely blank.
                     </span>
                   </div>
                 </label>
