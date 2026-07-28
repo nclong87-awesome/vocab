@@ -53,7 +53,7 @@ interface SettingsViewProps {
   onReloadData?: () => Promise<void>;
   targetLanguage?: string;
   nativeLanguage?: string;
-  onSelectLanguages?: (targetLang: string, nativeLang: string, applyToDecks?: boolean) => void;
+  onSelectLanguages?: (targetLang: string, nativeLang: string) => void;
 }
 
 export default function SettingsView({
@@ -86,10 +86,10 @@ export default function SettingsView({
     setSelectedNativeLang(nativeLanguage);
   }, [nativeLanguage]);
 
-  const handleSaveLanguagePreferences = (applyToDecks: boolean = false) => {
+  const handleSaveLanguagePreferences = () => {
     if (onSelectLanguages) {
-      onSelectLanguages(selectedTargetLang, selectedNativeLang, applyToDecks);
-      setLangSaveSuccess(applyToDecks ? "Default languages updated and applied to all decks!" : "Global default language preferences updated!");
+      onSelectLanguages(selectedTargetLang, selectedNativeLang);
+      setLangSaveSuccess("Global default language preferences updated!");
       setTimeout(() => setLangSaveSuccess(null), 3000);
     }
   };
@@ -242,7 +242,7 @@ export default function SettingsView({
     setTestingLlm(true);
     setLlmTestResult(null);
     try {
-      const data = await testLlmConnection(config);
+      const data = await testLlmConnection(llmConfig);
       if (data.success) {
         setLlmTestResult({ success: true, msg: "Active model test passed! Responded successfully." });
       } else {
@@ -392,19 +392,19 @@ export default function SettingsView({
   const handleConfirmReset = async () => {
     try {
       setIsResetting(true);
-      setDbStatusMessage({ type: "info", text: "Resetting vocabulary decks database..." });
+      setDbStatusMessage({ type: "info", text: "Resetting vocabulary database..." });
 
       if (resetMode === "defaults") {
         await resetIndexedDBDatabase();
       } else {
-        // Clear all decks completely
+        // Clear all words completely
         const { clearAllWordsFromDB } = await import("../db/indexedDB");
         await clearAllWordsFromDB();
       }
 
       // Clear any cached localStorage backups
       try {
-        localStorage.removeItem("vocab_learner_decks_backup");
+        localStorage.removeItem("vocab_learner_words_backup");
         localStorage.removeItem("vocab_learner_stats_backup");
       } catch (e) {
         // ignore storage quota errors
@@ -417,8 +417,8 @@ export default function SettingsView({
       setDbStatusMessage({
         type: "success",
         text: resetMode === "defaults" 
-          ? "Successfully reset vocabulary data to default starter decks." 
-          : "Successfully cleared all decks and vocabulary data."
+          ? "Successfully reset vocabulary data to default starter words." 
+          : "Successfully cleared all vocabulary data."
       });
       setShowResetConfirmModal(false);
     } catch (err: any) {
@@ -433,9 +433,9 @@ export default function SettingsView({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8" id="settings-view">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6" id="settings-view">
       {/* Header Banner */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-2">
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-stone-900 text-white">
@@ -471,7 +471,7 @@ export default function SettingsView({
       )}
 
       {/* Language & Translation Preferences Card */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
@@ -550,16 +550,7 @@ export default function SettingsView({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => handleSaveLanguagePreferences(true)}
-              className="px-3.5 py-2 border border-stone-300 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold transition-all cursor-pointer"
-              title="Batch update all existing deck target and native languages to these selections"
-            >
-              Apply to All Existing Decks
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSaveLanguagePreferences(false)}
+              onClick={handleSaveLanguagePreferences}
               className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             >
               <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -570,7 +561,7 @@ export default function SettingsView({
       </div>
 
       {/* Section 1: AI Model Engine Multi-Provider Connections */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="border-b border-stone-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
@@ -594,23 +585,27 @@ export default function SettingsView({
 
         {/* Active Engine Highlight Box */}
         <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Active AI Engine:</span>
-              <span className="text-sm font-black text-stone-900 capitalize flex items-center gap-1.5">
-                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
-                <span className="text-xs font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2 py-0.5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-stone-200 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">Active AI Engine:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 pl-4 sm:pl-0">
+                <span className="text-sm font-black text-stone-900 capitalize">
+                  {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
+                </span>
+                <span className="text-xs font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2 py-0.5 rounded-none max-w-[200px] sm:max-w-xs truncate">
                   {llmConfig.model}
                 </span>
-              </span>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={handleTestActiveLLM}
               disabled={testingLlm}
-              className="px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              className="w-full sm:w-auto justify-center px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
             >
               {testingLlm ? (
                 <>
@@ -716,7 +711,7 @@ export default function SettingsView({
                       <span>
                         {saved?.apiKey 
                           ? `••••${saved.apiKey.slice(-4)}` 
-                          : p.requiresKey ? "None" : "Free / Local"}
+                          : p.id === "ollama" ? "Default Key" : p.requiresKey ? "None" : "Free / Local"}
                       </span>
                     </div>
                   </div>
@@ -768,7 +763,7 @@ export default function SettingsView({
       </div>
 
       {/* Section 2: IndexedDB Database Management (Import & Export) */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
@@ -797,7 +792,7 @@ export default function SettingsView({
                 <span>Export IndexedDB Database</span>
               </div>
               <p className="text-xs text-stone-600">
-                Download a complete JSON snapshot containing all custom vocabulary decks, word cards, study statistics, and app settings.
+                Download a complete JSON snapshot containing all custom vocabulary words, study statistics, and app settings.
               </p>
             </div>
 
@@ -829,7 +824,7 @@ export default function SettingsView({
                 <span>Import IndexedDB Backup</span>
               </div>
               <p className="text-xs text-stone-600">
-                Restore a previously exported `.json` database file to load custom decks and study history into local browser storage.
+                Restore a previously exported `.json` database file to load custom words and study history into local browser storage.
               </p>
             </div>
 
@@ -946,16 +941,16 @@ export default function SettingsView({
           </div>
         )}
 
-        {/* Danger Zone: Reset Vocabularies & Decks Data */}
+        {/* Danger Zone: Reset Vocabularies & Words Data */}
         <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
                 <AlertTriangle className="w-4 h-4 text-red-600" />
-                <span>Reset Vocabularies Data & Decks</span>
+                <span>Reset Vocabulary Collection</span>
               </div>
               <p className="text-xs text-red-700 font-normal">
-                Wipe all custom decks, generated decks, and study history. Reset database to default starter decks or clear completely.
+                Wipe all custom vocabulary words and study history. Reset database to default starter words or clear completely.
               </p>
             </div>
 
@@ -972,7 +967,7 @@ export default function SettingsView({
       </div>
 
       {/* Section 3: Text-to-Speech (TTS) Engine Selection */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-6">
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="border-b border-stone-100 pb-4">
           <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
             <Cpu className="w-4 h-4 text-stone-700" />
@@ -1362,7 +1357,7 @@ export default function SettingsView({
       </div>
 
       {/* Section 4: Interactive Voice Tester Studio */}
-      <div className="bg-white border border-stone-200 p-6 sm:p-8 space-y-4">
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4">
         <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
@@ -1418,7 +1413,7 @@ export default function SettingsView({
       </div>
 
       {/* Section 5: Quiz Audio Preference */}
-      <div className="bg-white border border-stone-200 p-6 space-y-4">
+      <div className="bg-white border border-stone-200 p-4 space-y-4">
         <div>
           <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
             <Volume2 className="w-4 h-4 text-stone-800" />
@@ -1472,7 +1467,7 @@ export default function SettingsView({
                 Are you sure you want to reset your vocabulary data?
               </p>
               <p>
-                This will delete custom decks, AI-generated decks, and saved study statistics stored in browser IndexedDB.
+                This will delete custom words, and saved study statistics stored in browser IndexedDB.
               </p>
 
               <div className="space-y-2 pt-2">
@@ -1489,9 +1484,9 @@ export default function SettingsView({
                     className="mt-0.5 accent-stone-900"
                   />
                   <div>
-                    <span className="font-bold block text-xs">Restore Default Starter Decks</span>
+                    <span className="font-bold block text-xs">Restore Default Starter Words</span>
                     <span className="text-[11px] text-stone-500 font-normal">
-                      Replaces custom data with original starter decks (Spanish, French, Food, Tech).
+                      Replaces custom data with original starter words (Spanish, French, Food, Tech).
                     </span>
                   </div>
                 </label>
@@ -1507,9 +1502,9 @@ export default function SettingsView({
                     className="mt-0.5 accent-red-600"
                   />
                   <div>
-                    <span className="font-bold block text-xs text-red-900">Completely Clear All Decks</span>
+                    <span className="font-bold block text-xs text-red-900">Completely Clear All Words</span>
                     <span className="text-[11px] text-stone-500 font-normal">
-                      Removes all decks and leaves your deck workshop completely blank.
+                      Removes all words and leaves your collection completely blank.
                     </span>
                   </div>
                 </label>
@@ -1553,7 +1548,7 @@ export default function SettingsView({
         <div>
           <h4 className="font-bold text-base">Save Voice & Audio Preferences</h4>
           <p className="text-xs text-stone-300 mt-0.5">
-            Applies chosen speech synthesis engine across practice quizzes, flashcards, and deck collection
+            Applies chosen speech synthesis engine across practice quizzes, flashcards, and word collection
           </p>
         </div>
 

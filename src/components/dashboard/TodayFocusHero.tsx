@@ -19,6 +19,7 @@ interface TodayFocusHeroProps {
   todayPracticeWords: Word[];
   onDailyQuizFinish: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   streakCount: number;
+  targetLanguage?: string;
 }
 
 export default function TodayFocusHero({
@@ -29,6 +30,7 @@ export default function TodayFocusHero({
   todayPracticeWords,
   onDailyQuizFinish,
   streakCount,
+  targetLanguage,
 }: TodayFocusHeroProps) {
   const [activeSession, setActiveSession] = useState<SavedQuizSession | null>(null);
 
@@ -78,6 +80,7 @@ export default function TodayFocusHero({
         </div>
         <QuizView 
           words={todayPracticeWords}
+          targetLanguage={targetLanguage}
           onFinishQuiz={onDailyQuizFinish}
           onGoBack={() => setIsQuizActive(false)}
         />

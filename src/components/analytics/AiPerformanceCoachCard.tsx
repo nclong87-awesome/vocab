@@ -130,7 +130,7 @@ export default function AiPerformanceCoachCard({
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-stone-200">
             {aiReport.recommendedFocusTopics && aiReport.recommendedFocusTopics.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-stone-700 text-[11px] uppercase tracking-wider">AI Suggested Decks:</span>
+                <span className="font-bold text-stone-700 text-[11px] uppercase tracking-wider">AI Suggested Topics:</span>
                 {aiReport.recommendedFocusTopics.map((topic, idx) => (
                   <span key={idx} className="bg-amber-100 text-amber-900 border border-amber-300 font-semibold px-2.5 py-1 text-[11px]">
                     {topic}

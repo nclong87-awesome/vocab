@@ -18,8 +18,6 @@ interface AddWordModalProps {
   setExampleInput: (val: string) => void;
   exampleTranslationInput: string;
   setExampleTranslationInput: (val: string) => void;
-  imageUrlInput: string;
-  setImageUrlInput: (val: string) => void;
   autofilling: boolean;
   targetLanguage: string;
   nativeLanguage: string;
@@ -45,8 +43,6 @@ export default function AddWordModal({
   setExampleInput,
   exampleTranslationInput,
   setExampleTranslationInput,
-  imageUrlInput,
-  setImageUrlInput,
   autofilling,
   targetLanguage,
   nativeLanguage,
@@ -105,7 +101,7 @@ export default function AddWordModal({
                   onClick={handleAiSuggestRelatedWord}
                   disabled={autofilling}
                   className="px-2 py-1 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all"
-                  title="AI will pick an unlearned, contextual word for this deck"
+                  title="AI will suggest a vocabulary word for you"
                 >
                   <Wand2 className={`w-3 h-3 text-stone-700 ${autofilling ? "animate-spin" : ""}`} />
                   <span>Suggest Word</span>
@@ -178,28 +174,16 @@ export default function AddWordModal({
             </div>
           </div>
 
-          {/* Pronunciation & Image URL */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-stone-800">IPA / Phonetic Pronunciation</label>
-              <input 
-                type="text" 
-                value={pronunciationInput}
-                onChange={(e) => setPronunciationInput(e.target.value)}
-                placeholder="e.g., yoo-BIK-wih-tuss"
-                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-900"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-stone-800">Image Visual URL (Optional)</label>
-              <input 
-                type="text" 
-                value={imageUrlInput}
-                onChange={(e) => setImageUrlInput(e.target.value)}
-                placeholder="https://..."
-                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-900 outline-none focus:border-stone-900"
-              />
-            </div>
+          {/* Pronunciation */}
+          <div className="space-y-1">
+            <label className="text-stone-800">IPA / Phonetic Pronunciation</label>
+            <input 
+              type="text" 
+              value={pronunciationInput}
+              onChange={(e) => setPronunciationInput(e.target.value)}
+              placeholder="e.g., yoo-BIK-wih-tuss"
+              className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-900"
+            />
           </div>
 
           {/* Definition */}

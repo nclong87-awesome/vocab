@@ -5,7 +5,7 @@ import { SUPPORTED_LANGUAGES, getLanguageFlag } from "../../config/languages";
 interface QuickLanguageSwitcherProps {
   targetLanguage: string;
   nativeLanguage: string;
-  onSelectLanguages: (targetLang: string, nativeLang: string, applyToDecks?: boolean) => void;
+  onSelectLanguages: (targetLang: string, nativeLang: string) => void;
 }
 
 export default function QuickLanguageSwitcher({
@@ -184,18 +184,7 @@ export default function QuickLanguageSwitcher({
 
             {/* Footer note */}
             <div className="p-2.5 bg-stone-50 border-t border-stone-200 text-[11px] text-stone-500 flex items-center justify-between flex-wrap gap-1">
-              <span>Updates AI deck generation</span>
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectLanguages(currentTarget, currentNative, true);
-                  setToastMessage("Applied to all existing decks!");
-                  setTimeout(() => setToastMessage(null), 2500);
-                }}
-                className="text-stone-900 font-bold hover:underline cursor-pointer ml-auto"
-              >
-                Apply to All Decks
-              </button>
+              <span>Updates AI tutor and coach settings</span>
             </div>
 
           </div>

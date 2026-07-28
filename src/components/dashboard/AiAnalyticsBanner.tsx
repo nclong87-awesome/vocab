@@ -2,7 +2,7 @@ import React from "react";
 import { Brain, ArrowRight } from "lucide-react";
 
 interface AiAnalyticsBannerProps {
-  onSelectTab: (tab: "learn" | "quiz" | "decks" | "analytics") => void;
+  onSelectTab: (tab: "learn" | "quiz" | "collection" | "analytics") => void;
 }
 
 export default function AiAnalyticsBanner({ onSelectTab }: AiAnalyticsBannerProps) {

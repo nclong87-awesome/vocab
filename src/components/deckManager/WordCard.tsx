@@ -64,7 +64,7 @@ export default function WordCard({
               onClick={() => handleRegenerateWord(word)}
               disabled={regeneratingWordId === word.id}
               className="p-1.5 text-stone-500 hover:text-amber-600 hover:bg-white transition-all cursor-pointer disabled:opacity-50"
-              title="Re-generate definition, translation & image with AI"
+              title="Re-generate definition & translation with AI"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
             </button>
@@ -103,7 +103,7 @@ export default function WordCard({
         {regeneratedSuccessWordId === word.id && (
           <div className="p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
             <CheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
-            <span>AI details & image updated!</span>
+            <span>AI details updated!</span>
           </div>
         )}
 
@@ -123,41 +123,6 @@ export default function WordCard({
           </div>
         )}
 
-        {/* Context Example & Image Box */}
-        {brokenImageIds.has(word.id) ? (
-          <div className="bg-stone-50 border border-dashed border-stone-300 p-3 text-center space-y-1.5">
-            <p className="text-[11px] text-stone-500 font-medium">Image preview broken or unavailable</p>
-            <button
-              type="button"
-              onClick={() => handleRegenerateWord(word)}
-              disabled={regeneratingWordId === word.id}
-              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-[10px] inline-flex items-center gap-1 cursor-pointer transition-all"
-            >
-              <RefreshCw className={`w-3 h-3 ${regeneratingWordId === word.id ? "animate-spin" : ""}`} />
-              <span>Re-generate Image</span>
-            </button>
-          </div>
-        ) : word.imageUrl ? (
-          <div className="bg-stone-50 border border-stone-200 p-1 relative group/img">
-            <img 
-              src={word.imageUrl} 
-              alt={word.word} 
-              referrerPolicy="no-referrer" 
-              onError={() => handleImageError(word.id)}
-              className="w-full h-28 object-cover" 
-            />
-            <button
-              type="button"
-              onClick={() => handleRegenerateWord(word)}
-              disabled={regeneratingWordId === word.id}
-              className="absolute top-2 right-2 bg-stone-900/80 hover:bg-black text-white text-[10px] font-medium px-2 py-1 flex items-center gap-1 backdrop-blur-xs transition-all opacity-80 group-hover/img:opacity-100 cursor-pointer"
-              title="Re-generate image using AI"
-            >
-              <RefreshCw className={`w-3 h-3 ${regeneratingWordId === word.id ? "animate-spin text-amber-400" : ""}`} />
-              <span>Re-generate Image</span>
-            </button>
-          </div>
-        ) : null}
         {word.example && (
           <div className="bg-stone-50 border border-stone-200 p-2.5 space-y-1 text-xs">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context</span>

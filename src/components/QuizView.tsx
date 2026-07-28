@@ -21,10 +21,13 @@ import {
   Layers
 } from "lucide-react";
 import { Word, QuizQuestion, TTSConfig, LLMConfig } from "../types";
-import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
+import { speakText as speakTextService, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
+import { generateQuizQuestions, containsNonTargetLanguage, getImageSearchTerm } from "../utils/quizGenerator";
+import { generateAiQuizQuestionsService } from "../services/llmClientService";
 
 interface QuizViewProps {
   words: Word[];
+  targetLanguage?: string;
   onFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   onToggleStar?: (wordId: string) => void;
   onGoBack: () => void;
@@ -32,144 +35,62 @@ interface QuizViewProps {
   llmConfig?: LLMConfig;
 }
 
-// Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English)
-function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
-  if (!text) return true;
-  // Check for Vietnamese diacritics
-  const vietnameseRegex = /[àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỷỹỵ]/i;
-  if (vietnameseRegex.test(text)) return true;
-  
-  // Check for CJK characters if target language is English/European
-  const cjkRegex = /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF\u4E00-\u9FAF]/;
-  if ((targetLanguage === "English" || targetLanguage === "Spanish" || targetLanguage === "French" || targetLanguage === "German") && cjkRegex.test(text)) {
-    return true;
-  }
+// Sub-component to manage quiz images with loaders, smooth loads and error fallbacks
+function QuizImage({ src, alt, word }: { src: string; alt: string; word: string }) {
+  const [imgSrc, setImgSrc] = useState(src);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-  return false;
-}
+  useEffect(() => {
+    setImgSrc(src);
+    setLoading(true);
+    setFailed(false);
+  }, [src]);
 
-// Helper function to generate questions from words
-function generateQuizQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
-  if (!wordList || wordList.length < 2) return [];
-  const generated: QuizQuestion[] = [];
-  const allWords = wordList;
-
-  // Helper to generate confusing sound-alike or misspelling distractors
-  const generateConfusers = (w: string) => {
-    return Array.from(new Set([
-      w.replace(/ie/gi, 'ei'),
-      w.replace(/ei/gi, 'ie'),
-      w.replace(/tion/gi, 'sion'),
-      w.replace(/sion/gi, 'tion'),
-      w.replace(/c/gi, 's'),
-      w.replace(/s/gi, 'c'),
-      w.replace(/ll/gi, 'l'),
-      w.replace(/l/gi, 'll'),
-      w.replace(/m/gi, 'n'),
-      w.replace(/n/gi, 'm'),
-      w.replace(/p/gi, 'b'),
-      w.replace(/b/gi, 'p'),
-      w.replace(/t/gi, 'd'),
-      w.replace(/d/gi, 't'),
-      w + "e",
-      w.endsWith('e') ? w.slice(0, -1) : w + "s",
-      w + "ing",
-      w.replace(/[aeiou]/i, (v) => v === 'a' ? 'e' : v === 'e' ? 'a' : v === 'i' ? 'e' : v === 'o' ? 'u' : 'o'),
-      w.replace(/[aeiou]/ig, 'a'),
-      w.replace(/[aeiou]/ig, 'e'),
-      w.replace(/[aeiou]/ig, 'i'),
-      w.replace(/[aeiou]/ig, 'o'),
-      w.replace(/[aeiou]/ig, 'u')
-    ])).filter(c => c.toLowerCase() !== w.toLowerCase() && c.length > 1);
-  };
-
-  allWords.forEach((word) => {
-    const types: ('definition' | 'sentence' | 'listening')[] = [
-      'definition', 
-      'sentence',
-      'listening'
-    ];
-    let type = types[Math.floor(Math.random() * types.length)];
-
-    // If definition is in user's native language or missing, fallback to target-language sentence or listening
-    if (type === 'definition' && containsNonTargetLanguage(word.definition, targetLanguage)) {
-      type = word.example ? 'sentence' : 'listening';
-    }
-
-    let options: string[] = [];
-    let correctAnswer = "";
-    let questionText = "";
-    let hintText = word.pronunciation;
-
-    if (type === 'definition') {
-      correctAnswer = word.word;
-      questionText = `Which word matches the following definition?\n"${word.definition}"`;
+  return (
+    <div className="relative w-full h-full flex items-center justify-center bg-stone-50">
+      {loading && !failed && (
+        <div className="absolute inset-0 flex items-center justify-center bg-stone-100 animate-pulse">
+          <div className="flex flex-col items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
+            <span className="text-[10px] font-bold text-stone-400 tracking-wider font-mono">LOADING IMAGE...</span>
+          </div>
+        </div>
+      )}
       
-      // Sort words by length similarity to make it harder
-      let potentialWrongs = allWords
-        .filter(w => w.id !== word.id)
-        .sort((a, b) => Math.abs(a.word.length - word.word.length) - Math.abs(b.word.length - word.word.length))
-        .map(w => w.word);
-        
-      let distractors = potentialWrongs.slice(0, 6).sort(() => 0.5 - Math.random());
-      
-      // Fill with confusers if deck is too small
-      if (distractors.length < 3) {
-        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
-      }
-      
-      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
-      options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
-    }
-    else if (type === 'listening') {
-      correctAnswer = word.word;
-      questionText = `Listen to the audio clip and select the correct matching word:`;
-      
-      // Use phonetic and morphological variations to make listening harder
-      const confusers = generateConfusers(word.word).sort(() => 0.5 - Math.random());
-      const potentialWrongsFromDeck = allWords.filter(w => w.id !== word.id).map(w => w.word).sort(() => 0.5 - Math.random());
-      
-      // Mix them up, prioritizing confusers for listening questions to test phonetic differentiation
-      const mixedWrongs = [...confusers, ...potentialWrongsFromDeck];
-      const uniqueDistractors = Array.from(new Set(mixedWrongs)).filter(w => w !== correctAnswer).slice(0, 3);
-      
-      options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
-    }
-    else {
-      correctAnswer = word.word;
-      const regex = new RegExp(`\\b${word.word}\\b`, "i");
-      const hiddenSentence = word.example ? word.example.replace(regex, "______") : `Please spell and match: ${word.word}`;
-      questionText = `Fill in the blank for the sentence:\n"${hiddenSentence}"`;
-      
-      let potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);
-      let distractors = potentialWrongs.sort(() => 0.5 - Math.random());
-      
-      // Fill with confusers if deck is too small
-      if (distractors.length < 3) {
-        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
-      }
-      
-      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
-      options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
-    }
-
-    generated.push({
-      id: `q-${word.id}`,
-      wordId: word.id,
-      word: word.word,
-      type,
-      question: questionText,
-      options,
-      correctAnswer,
-      hint: hintText
-    });
-  });
-
-  return generated.sort(() => 0.5 - Math.random());
+      {!failed ? (
+        <img
+          src={imgSrc}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoading(false)}
+          onError={() => {
+            setImgSrc(`https://picsum.photos/seed/${encodeURIComponent(word)}/500/400`);
+            setFailed(true);
+          }}
+          className={`w-full h-full object-cover transition-transform duration-500 hover:scale-105 ${
+            loading ? "opacity-0" : "opacity-100"
+          }`}
+        />
+      ) : (
+        <img
+          src={`https://picsum.photos/seed/${encodeURIComponent(word)}/500/400`}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoading(false)}
+          onError={() => {
+            setLoading(false);
+          }}
+          className="w-full h-full object-cover"
+        />
+      )}
+    </div>
+  );
 }
 
 export default function QuizView({
   words,
+  targetLanguage = "English",
   onFinishQuiz,
   onToggleStar,
   onGoBack,
@@ -184,10 +105,17 @@ export default function QuizView({
   const [score, setScore] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [wrongAnswersList, setWrongAnswersList] = useState<{ question: QuizQuestion; wrongPicked: string }[]>([]);
-  const [autoPlayAudio, setAutoPlayAudio] = useState(ttsConfig?.autoPlayAudioInQuiz ?? false);
+  const [autoPlayAudio, setAutoPlayAudio] = useState(ttsConfig?.autoPlayAudioInQuiz ?? true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [starFeedback, setStarFeedback] = useState<string | null>(null);
   const questionHeaderRef = useRef<HTMLDivElement>(null);
+
+  // Sync autoPlayAudio with parent ttsConfig updates
+  useEffect(() => {
+    if (ttsConfig?.autoPlayAudioInQuiz !== undefined) {
+      setAutoPlayAudio(ttsConfig.autoPlayAudioInQuiz);
+    }
+  }, [ttsConfig?.autoPlayAudioInQuiz]);
 
   // Auto scroll to header of new question on mobile/desktop when switching questions
   useEffect(() => {
@@ -217,11 +145,7 @@ export default function QuizView({
       .replace(/\n\n/g, ". ")
       .replace(/\n/g, ", ");
 
-    const targetLang = undefined;
-    let langCode = "en-US";
-    if (customLang) {
-      langCode = customLang;
-    }
+    const langCode = customLang || getLanguageCode(targetLanguage);
 
     speakTextService(
       cleanText,
@@ -231,6 +155,39 @@ export default function QuizView({
       () => setIsSpeaking(true),
       () => setIsSpeaking(false)
     );
+  };
+
+  // Helper to initialize or re-generate quiz session with AI or rule-based fallback
+  const createNewQuizSession = async (customWords?: Word[]) => {
+    const targetWords = customWords || words;
+    if (!targetWords || targetWords.length < 2) return;
+
+    // Fast local rule-based generation first for immediate UI responsiveness
+    const instantQuestions = generateQuizQuestions(targetWords, targetLanguage);
+    setQuestions(instantQuestions);
+    setCurrentQuestionIdx(0);
+    setSelectedAnswer(null);
+    setTypedAnswer("");
+    setIsAnswered(false);
+    setScore(0);
+    setShowSummary(false);
+    setWrongAnswersList([]);
+
+    // If AI is configured, enhance questions using the AI service asynchronously
+    if (llmConfig?.isLoggedIn) {
+      try {
+        const aiQuestions = await generateAiQuizQuestionsService({
+          words: targetWords,
+          targetLanguage,
+          llmConfig
+        });
+        if (aiQuestions && aiQuestions.length > 0) {
+          setQuestions(aiQuestions);
+        }
+      } catch (e) {
+        console.warn("AI quiz generation failed, using rule-based fallback:", e);
+      }
+    }
   };
 
   // Generate or restore the quiz when words are available
@@ -265,15 +222,7 @@ export default function QuizView({
     }
 
     if (!restored) {
-      const generated = generateQuizQuestions(words);
-      setQuestions(generated);
-      setCurrentQuestionIdx(0);
-      setSelectedAnswer(null);
-      setTypedAnswer("");
-      setIsAnswered(false);
-      setScore(0);
-      setShowSummary(false);
-      setWrongAnswersList([]);
+      createNewQuizSession();
     }
   }, [words]);
 
@@ -298,28 +247,23 @@ export default function QuizView({
   // Start fresh handler
   const handleStartFresh = () => {
     localStorage.removeItem("vocab_learner_active_quiz_session");
-    if (words && words.length >= 2) {
-      const generated = generateQuizQuestions(words);
-      setQuestions(generated);
-      setCurrentQuestionIdx(0);
-      setScore(0);
-      setWrongAnswersList([]);
-      setSelectedAnswer(null);
-      setTypedAnswer("");
-      setIsAnswered(false);
-      setShowSummary(false);
-    }
+    createNewQuizSession();
   };
 
   // Auto-read question or spoken word when switching questions
   useEffect(() => {
-    if (questions.length > 0 && currentQuestionIdx < questions.length && !showSummary) {
+    if (questions.length > 0 && currentQuestionIdx < questions.length && !showSummary && !isAnswered) {
       const currQ = questions[currentQuestionIdx];
       if (currQ) {
         if (currQ.type === 'listening') {
           const timer = setTimeout(() => {
             speakText(currQ.word);
           }, 350);
+          return () => clearTimeout(timer);
+        } else if (currQ.type === 'spelling' && autoPlayAudio) {
+          const timer = setTimeout(() => {
+            speakText(currQ.word);
+          }, 300);
           return () => clearTimeout(timer);
         } else if (autoPlayAudio) {
           const timer = setTimeout(() => {
@@ -329,7 +273,7 @@ export default function QuizView({
         }
       }
     }
-  }, [currentQuestionIdx, autoPlayAudio, showSummary, questions]);
+  }, [currentQuestionIdx, autoPlayAudio, showSummary, questions, isAnswered]);
 
   if (!words || words.length < 2 || questions.length === 0) {
     if (words && words.length >= 2 && questions.length === 0) {
@@ -735,6 +679,9 @@ export default function QuizView({
                             {item.question.type === 'listening' && (
                               <span>Listen to <strong>{item.question.word}</strong> repeatedly using the audio button and repeat the pronunciation aloud until comfortable.</span>
                             )}
+                            {item.question.type === 'picture' && (
+                              <span>Associate the visual image directly with <strong>{item.question.word}</strong> to build intuitive, visual pathways to the target vocabulary.</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -756,19 +703,7 @@ export default function QuizView({
                   <Target className="w-4 h-4" /> Retry Missed Questions ({wrongAnswersList.length})
                 </button>
                 <button
-                  onClick={() => {
-                    if (words && words.length >= 2) {
-                      const generated = generateQuizQuestions(words);
-                      setQuestions(generated);
-                      setCurrentQuestionIdx(0);
-                      setSelectedAnswer(null);
-                      setTypedAnswer("");
-                      setIsAnswered(false);
-                      setScore(0);
-                      setShowSummary(false);
-                      setWrongAnswersList([]);
-                    }
-                  }}
+                  onClick={() => createNewQuizSession()}
                   className="flex-1 py-3 border border-stone-300 hover:border-stone-900 bg-stone-50 text-stone-800 font-bold text-xs uppercase tracking-widest rounded-none transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <RotateCcw className="w-4 h-4" /> Full Quiz Retake
@@ -776,19 +711,7 @@ export default function QuizView({
               </>
             ) : (
               <button
-                onClick={() => {
-                  if (words && words.length >= 2) {
-                    const generated = generateQuizQuestions(words);
-                    setQuestions(generated);
-                    setCurrentQuestionIdx(0);
-                    setSelectedAnswer(null);
-                    setTypedAnswer("");
-                    setIsAnswered(false);
-                    setScore(0);
-                    setShowSummary(false);
-                    setWrongAnswersList([]);
-                  }
-                }}
+                onClick={() => createNewQuizSession()}
                 className="flex-1 py-3 border border-stone-200 hover:border-stone-900 bg-stone-50 text-stone-800 font-bold text-xs uppercase tracking-widest rounded-none transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" /> Retake Practice Quiz
@@ -918,6 +841,7 @@ export default function QuizView({
             {currentQuestion.type === 'sentence' && "Context Filler"}
             {currentQuestion.type === 'spelling' && "Spelling Challenge"}
             {currentQuestion.type === 'listening' && "Listening Skill"}
+            {currentQuestion.type === 'picture' && "Visual Picture Match"}
           </span>
           {currentQuestion.hint && (
             <div className="text-xs text-stone-500 font-mono italic">
@@ -939,6 +863,17 @@ export default function QuizView({
             <Volume2 className="w-4 h-4 text-stone-900" />
           </button>
         </div>
+
+        {/* Dedicated Picture Question Image */}
+        {currentQuestion.type === 'picture' && currentQuestion.imageUrl && (
+          <div className="relative w-full max-w-md mx-auto aspect-video sm:aspect-[4/3] bg-stone-100 border border-stone-200 overflow-hidden group shadow-2xs">
+            <QuizImage 
+              src={currentQuestion.imageUrl} 
+              alt="Visual clue" 
+              word={currentQuestion.word}
+            />
+          </div>
+        )}
 
         {/* Dedicated Listening Audio Card */}
         {currentQuestion.type === 'listening' && (
@@ -1083,7 +1018,9 @@ export default function QuizView({
                     <div className="space-y-1">
                       <h5 className="font-bold text-[10px] uppercase tracking-widest text-stone-900">Correct Response</h5>
                       <p className="text-xs text-stone-500 font-serif italic mt-1">
-                        "{wordDetails?.word}" matches the definition: "{wordDetails?.definition}".
+                        {currentQuestion.type === 'picture' 
+                          ? `"${wordDetails?.word}" (${wordDetails?.translation}) matches the visual concept.`
+                          : `"${wordDetails?.word}" matches the definition: "${wordDetails?.definition}".`}
                       </p>
                     </div>
                   </>

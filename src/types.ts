@@ -60,6 +60,7 @@ export interface Word {
   lastReviewed: string | null;
   strength: number; // 0 to 4 (representing levels of familiarity)
   imageUrl?: string;
+  imagePrompt?: string;
 }
 
 
@@ -68,11 +69,12 @@ export interface QuizQuestion {
   id: string;
   wordId: string;
   word: string;
-  type: 'definition' | 'translation' | 'sentence' | 'spelling' | 'listening';
+  type: 'definition' | 'translation' | 'sentence' | 'spelling' | 'listening' | 'picture';
   question: string;
   options?: string[]; // For multiple choice
   correctAnswer: string;
   hint?: string;
+  imageUrl?: string;
 }
 
 export interface Streak {
@@ -87,4 +89,14 @@ export interface UserStats {
   totalQuizzesTaken: number;
   totalCorrectAnswers: number;
   streak: Streak;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  suggestedActions?: { label: string; action: string; payload?: any }[];
+  audioWord?: string;
+  imageUrl?: string;
 }

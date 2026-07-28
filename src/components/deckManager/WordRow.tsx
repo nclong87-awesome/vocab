@@ -31,16 +31,6 @@ export default function WordRow({
       className="bg-white border border-stone-200 hover:border-stone-400 p-3.5 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs group"
     >
       <div className="flex items-start md:items-center gap-3.5 min-w-0 flex-1">
-        {/* Optional Image thumbnail in compact list */}
-        {word.imageUrl && !brokenImageIds.has(word.id) && (
-          <img 
-            src={word.imageUrl} 
-            alt={word.word} 
-            referrerPolicy="no-referrer" 
-            onError={() => handleImageError(word.id)}
-            className="w-12 h-12 object-cover border border-stone-200 shrink-0 hidden sm:block" 
-          />
-        )}
         <div className="space-y-1 min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
             <h4 className="text-base font-black text-stone-900">{word.word}</h4>

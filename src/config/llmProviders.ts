@@ -12,7 +12,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "gemma4:31b",
     models: ["gemma4:31b","gpt-oss:20b","nemotron-3-nano:30b-cloud"],
     defaultBaseUrl: "https://rough-meadow-47c1.nclong87.workers.dev/v1",
-    requiresKey: true
+    requiresKey: false
   },
   {
     id: "openai",

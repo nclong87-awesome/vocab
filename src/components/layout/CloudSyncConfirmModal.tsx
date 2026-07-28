@@ -33,20 +33,12 @@ export default function CloudSyncConfirmModal({
 }: CloudSyncConfirmModalProps) {
   if (!isOpen || !localData || !remoteData) return null;
 
-  const localDecksCount = localData.stores?.decks?.length || 0;
-  const localWordsCount = localData.stores?.decks?.reduce(
-    (acc: number, deck: any) => acc + (deck.words?.length || 0), 
-    0
-  ) || 0;
+  const localWordsCount = localData.stores?.words?.length || 0;
   const localDate = localData.exportedAt 
     ? new Date(localData.exportedAt).toLocaleString() 
     : "Just now";
 
-  const remoteDecksCount = remoteData.stores?.decks?.length || 0;
-  const remoteWordsCount = remoteData.stores?.decks?.reduce(
-    (acc: number, deck: any) => acc + (deck.words?.length || 0), 
-    0
-  ) || 0;
+  const remoteWordsCount = remoteData.stores?.words?.length || 0;
   const remoteDate = remoteData.exportedAt 
     ? new Date(remoteData.exportedAt).toLocaleString() 
     : "Unknown date";
@@ -113,13 +105,6 @@ export default function CloudSyncConfirmModal({
               <div className="space-y-1.5 text-xs text-stone-700 font-medium">
                 <div className="flex items-center justify-between">
                   <span className="text-stone-500 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5" /> Decks:
-                  </span>
-                  <strong className="font-bold text-stone-950">{localDecksCount}</strong>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-stone-500 flex items-center gap-1">
                     <BookOpen className="w-3.5 h-3.5" /> Total Words:
                   </span>
                   <strong className="font-bold text-stone-950">{localWordsCount}</strong>
@@ -149,13 +134,6 @@ export default function CloudSyncConfirmModal({
               </div>
 
               <div className="space-y-1.5 text-xs text-stone-700 font-medium">
-                <div className="flex items-center justify-between">
-                  <span className="text-stone-500 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5" /> Decks:
-                  </span>
-                  <strong className="font-bold text-stone-950">{remoteDecksCount}</strong>
-                </div>
-
                 <div className="flex items-center justify-between">
                   <span className="text-stone-500 flex items-center gap-1">
                     <BookOpen className="w-3.5 h-3.5" /> Total Words:
@@ -200,7 +178,7 @@ export default function CloudSyncConfirmModal({
                     </span>
                   </div>
                   <p className="text-xs text-stone-300 mt-0.5">
-                    Overwrite cloud backup with your latest local database ({localDecksCount} decks, {localWordsCount} words)
+                    Overwrite cloud backup with your latest local database ({localWordsCount} words)
                   </p>
                 </div>
               </div>
@@ -226,7 +204,7 @@ export default function CloudSyncConfirmModal({
                     </span>
                   </div>
                   <p className="text-xs text-stone-600 mt-0.5">
-                    Download cloud backup and replace local data ({remoteDecksCount} decks, {remoteWordsCount} words)
+                    Download cloud backup and replace local data ({remoteWordsCount} words)
                   </p>
                 </div>
               </div>

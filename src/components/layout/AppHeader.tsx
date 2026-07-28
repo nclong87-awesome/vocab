@@ -17,6 +17,8 @@ interface AppHeaderProps {
   nativeLanguage?: string;
   onSelectLanguages?: (targetLang: string, nativeLang: string) => void;
   onReloadData?: () => Promise<void>;
+  sidePanelTab?: "collection" | "analytics" | "settings";
+  isSidePanelOpen?: boolean;
 }
 
 export default function AppHeader({
@@ -30,7 +32,9 @@ export default function AppHeader({
   targetLanguage = "English",
   nativeLanguage = "Spanish",
   onSelectLanguages,
-  onReloadData
+  onReloadData,
+  sidePanelTab = "collection",
+  isSidePanelOpen = false
 }: AppHeaderProps) {
   return (
     <header className="bg-white border-b border-stone-200 py-2.5 px-2.5 sm:py-5 sm:px-8 sticky top-0 z-40" id="main-header">
@@ -53,7 +57,7 @@ export default function AppHeader({
               <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-0.5 sm:gap-1.5">
                 Vocab
               </h1>
-              <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden sm:block">Clean Learning Coach</p>
+              <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden sm:block">AI Study Companion</p>
             </div>
           </div>
 
@@ -87,19 +91,19 @@ export default function AppHeader({
               onClick={() => {
                 setCurrentView("dashboard");
               }}
-              className={`transition-colors cursor-pointer ${
+              className={`transition-colors cursor-pointer font-semibold ${
                 currentView === "dashboard" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
               }`}
             >
-              Practice
+              AI Chat
             </button>
             
             <button
               onClick={() => {
                 setCurrentView("manage");
               }}
-              className={`transition-colors cursor-pointer ${
-                currentView === "manage" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
+              className={`transition-colors cursor-pointer font-semibold ${
+                isSidePanelOpen && sidePanelTab === "collection" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
               }`}
             >
               Collection
@@ -109,8 +113,8 @@ export default function AppHeader({
               onClick={() => {
                 setCurrentView("analytics");
               }}
-              className={`transition-colors cursor-pointer flex items-center gap-1 ${
-                currentView === "analytics" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
+              className={`transition-colors cursor-pointer flex items-center gap-1 font-semibold ${
+                isSidePanelOpen && sidePanelTab === "analytics" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
               }`}
               id="nav-analytics-btn"
             >
@@ -121,8 +125,8 @@ export default function AppHeader({
               onClick={() => {
                 setCurrentView("settings");
               }}
-              className={`transition-colors cursor-pointer flex items-center gap-1.5 ${
-                currentView === "settings" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
+              className={`transition-colors cursor-pointer flex items-center gap-1.5 font-semibold ${
+                isSidePanelOpen && sidePanelTab === "settings" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
               }`}
               id="nav-settings-btn"
             >

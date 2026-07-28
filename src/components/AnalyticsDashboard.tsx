@@ -18,7 +18,6 @@ import { analyzePerformanceService, PerformanceAnalysisResult } from "../service
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 
 import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
-import AnalyticsCharts from "./analytics/AnalyticsCharts";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
 
 interface AnalyticsDashboardProps {
@@ -70,21 +69,7 @@ export default function AnalyticsDashboard({
     return words.filter(w => w.starred);
   }, [words]);
 
-  // Familiarity strength levels distribution
-  const strengthDistribution = useMemo(() => {
-    const counts = [0, 0, 0, 0, 0]; // Index 0 to 4
-    words.forEach(w => {
-      const s = Math.min(4, Math.max(0, w.strength ?? 0));
-      counts[s]++;
-    });
-    return [
-      { level: "Level 0", label: "New / Unstudied", count: counts[0], color: "#78716c" },
-      { level: "Level 1", label: "Weak / Needs Focus", count: counts[1], color: "#f43f5e" },
-      { level: "Level 2", label: "Developing", count: counts[2], color: "#f59e0b" },
-      { level: "Level 3", label: "Familiar", count: counts[3], color: "#10b981" },
-      { level: "Level 4", label: "Mastered", count: counts[4], color: "#059669" }
-    ];
-  }, [words]);
+
 
   // Calculate overall accuracy rate
   const accuracyRate = useMemo(() => {
@@ -104,7 +89,6 @@ export default function AnalyticsDashboard({
         totalWords: totalWordsCount,
         masteredWords,
         improvingWords,
-        decksSummary: [],
         llmConfig
       });
 
@@ -225,16 +209,7 @@ export default function AnalyticsDashboard({
       </div>
 
       {/* Primary KPI Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" id="kpi-metrics-grid">
-        <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2">
-          <div className="flex justify-between items-center text-stone-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider">Total Collection</span>
-            <BookOpen className="w-4 h-4 text-stone-400" />
-          </div>
-          <div className="text-3xl font-bold text-stone-950 tracking-tight">{totalWordsCount}</div>
-          <p className="text-[11px] text-stone-500 font-serif italic">Total vocabulary words</p>
-        </div>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="kpi-metrics-grid">
         <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2 border-l-4 border-l-emerald-600">
           <div className="flex justify-between items-center text-stone-500">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Mastered Words</span>
@@ -254,17 +229,6 @@ export default function AnalyticsDashboard({
           <div className="text-3xl font-bold text-rose-950 tracking-tight">{improvingWords.length}</div>
           <p className="text-[11px] text-rose-700 font-serif italic">
             Strength &lt; 3 or unlearned
-          </p>
-        </div>
-
-        <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2 border-l-4 border-l-amber-500">
-          <div className="flex justify-between items-center text-stone-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900">Quiz Accuracy</span>
-            <Flame className="w-4 h-4 text-amber-500 fill-amber-500" />
-          </div>
-          <div className="text-3xl font-bold text-amber-950 tracking-tight">{accuracyRate}%</div>
-          <p className="text-[11px] text-stone-500 font-serif italic">
-            {stats.streak?.count || 0} day study streak
           </p>
         </div>
       </div>
@@ -288,10 +252,7 @@ export default function AnalyticsDashboard({
         )}
       </AnimatePresence>
 
-      {/* Visual Analytics Charts Section */}
-      <AnalyticsCharts 
-        strengthDistribution={strengthDistribution} 
-      />
+
 
       {/* DETAILED WORDS ANALYSIS & MANAGEMENT SECTION */}
       <div className="bg-white border border-stone-200 p-6 space-y-6 rounded-none shadow-2xs" id="words-breakdown-section">

@@ -12,7 +12,7 @@ interface DashboardProps {
   stats: UserStats;
   words: Word[];
   todayPracticeWords: Word[];
-  onSelectTab: (tab: "learn" | "quiz" | "decks" | "analytics") => void;
+  onSelectTab: (tab: "learn" | "quiz" | "collection" | "analytics") => void;
   onGenerateWords?: (topic: string, targetLanguage: string, nativeLanguage: string, quantity: number) => Promise<void>;
   isLoading: boolean;
   loadingMessage: string;
@@ -128,6 +128,7 @@ export default function Dashboard({
         todayPracticeWords={todayPracticeWords}
         onDailyQuizFinish={handleDailyQuizFinish}
         streakCount={stats.streak.count}
+        targetLanguage={targetLanguage}
       />
 
       {/* Stats Blocks */}

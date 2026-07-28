@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import { LLMConfig } from "../types";
+import { LLMConfig, Word, QuizQuestion } from "../types";
+import { generateQuizQuestions, generateConfusers } from "../utils/quizGenerator";
 
 // Clean raw JSON strings
 export function cleanJsonResponse(rawText: string): string {
@@ -465,9 +466,14 @@ export async function callLLMClientSide(
   const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
   const headers: Record<string, string> = {
-    "Authorization": `Bearer ${effectiveApiKey}`,
     "Content-Type": "application/json"
   };
+
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  } else if (provider !== "ollama" && effectiveApiKey) {
+    headers["Authorization"] = `Bearer ${effectiveApiKey}`;
+  }
 
   if (provider === "openrouter") {
     headers["X-Title"] = "Vocabulary Learner";
@@ -624,116 +630,31 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
   }
 }
 
-// 2. Generate Deck
-export async function generateDeckService(params: {
-  topic: string;
-  targetLanguage?: string;
-  nativeLanguage?: string;
-  quantity?: number;
-  llmConfig?: LLMConfig;
-}): Promise<any> {
-  const { topic, targetLanguage, nativeLanguage, quantity = 8, llmConfig } = params;
-  const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Spanish";
-
-  const prompt = `Generate a high-quality list of ${quantity} vocabulary words/expressions on the topic: "${topic}".
-The target language that the user wants to learn is "${userTarget}".
-The user's native language for translations is "${userNative}".
-
-CRITICAL INSTRUCTIONS:
-- "definition": Write clear, easy-to-understand definitions/explanations of each target word STRICTLY in the TARGET language (${userTarget}) for target language learning immersion. Do NOT write definitions in the native language (${userNative}).
-- "translation": Direct translation into the user's native language (${userNative}).
-- "example": Example sentence in target language (${userTarget}).
-- "exampleTranslation": Translation of the example sentence into the user's native language (${userNative}).
-- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word-or-topic]?width=800&height=600&nologo=true"
-Ensure the words selected cover different skill levels and are practical for real conversation.`;
-
-  const systemInstruction = `You are an expert language teacher specializing in creating vocabulary material for learners of ${userTarget}.`;
-  const schemaDesc = `{
-  "name": "Creative deck title",
-  "description": "Short description in ${userNative}",
-  "words": [
-    {
-      "word": "string (target word in ${userTarget})",
-      "pronunciation": "string (IPA format)",
-      "partOfSpeech": "string",
-      "definition": "string (definition written STRICTLY in ${userTarget})",
-      "translation": "string (direct translation in ${userNative})",
-      "example": "string (sentence in ${userTarget})",
-      "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageUrl": "string (pollinations AI image URL)"
-    }
-  ]
-}`;
-
-  if (isStaticHost()) {
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
-  }
-
-  try {
-    const res = await fetch("/api/generate-deck", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, quantity, llmConfig })
-    });
-
-    if (res.ok) {
-      return await res.json();
-    }
-
-    if (res.status === 405 || res.status === 404) {
-      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      return JSON.parse(text);
-    }
-
-    const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
-  }
-}
-
 // 3. Autofill Word Details
 export async function autofillWordService(params: {
   word: string;
   targetLanguage?: string;
   nativeLanguage?: string;
-  deckName?: string;
-  deckDescription?: string;
-  notebookName?: string;
-  notebookDescription?: string;
   llmConfig?: LLMConfig;
 }): Promise<any> {
   const { word, targetLanguage, nativeLanguage, llmConfig } = params;
-  const activeDeckName = params.deckName || params.notebookName;
-  const activeDeckDesc = params.deckDescription || params.notebookDescription;
 
   const userNative = nativeLanguage || "English";
   const userTarget = targetLanguage || "Spanish";
 
-  const deckContextText = activeDeckName 
-    ? `\nDECK CONTEXT: The term "${word}" belongs to the Vocabulary Deck "${activeDeckName}"${activeDeckDesc ? ` (${activeDeckDesc})` : ""}. Tailor the definition, example sentence, and image visual description specifically to fit this deck context.`
-    : "";
-
   const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
 Target language being learned: "${userTarget}".
-User's native language: "${userNative}".${deckContextText}
+User's native language: "${userNative}".
 
 CRITICAL MANDATORY REQUIREMENT:
-- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}). Tailor it to the deck topic if applicable.
+- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}).
 - "translation": Provide the direct, accurate translation of "${word}" into the user's native language (${userNative}).
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
-- "example": A realistic, high-quality example sentence in the target language (${userTarget})${activeDeckName ? ` contextualized to ${activeDeckName}` : ""}.
-- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
-- "imageUrl": Generate a relevant image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word${activeDeckName ? `-in-context-of-${encodeURIComponent(activeDeckName.toLowerCase().replace(/[^a-z0-0]/g, '-'))}` : ""}]?width=800&height=600&nologo=true"`;
+- "example": A realistic, high-quality example sentence in the target language (${userTarget}).
+- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).`;
 
-  const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).${activeDeckName ? ` Deck topic context: ${activeDeckName}.` : ""}`;
+  const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).`;
   const schemaDesc = `{
   "word": "string",
   "pronunciation": "string",
@@ -741,8 +662,7 @@ CRITICAL MANDATORY REQUIREMENT:
   "definition": "string (definition written STRICTLY in ${userTarget})",
   "translation": "string (translation in ${userNative})",
   "example": "string (example in ${userTarget})",
-  "exampleTranslation": "string (example translation in ${userNative})",
-  "imageUrl": "string (pollinations AI image URL)"
+  "exampleTranslation": "string (example translation in ${userNative})"
 }`;
 
   if (isStaticHost()) {
@@ -754,7 +674,7 @@ CRITICAL MANDATORY REQUIREMENT:
     const res = await fetch("/api/autofill-word", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word, targetLanguage: userTarget, nativeLanguage: userNative, deckName: activeDeckName, deckDescription: activeDeckDesc, llmConfig })
+      body: JSON.stringify({ word, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
     });
 
     if (res.ok) {
@@ -777,7 +697,71 @@ CRITICAL MANDATORY REQUIREMENT:
   }
 }
 
-// 3.5. Generate Random Words for Deck (Deduplicated)
+// 3.1. Check Word Multiple Definitions Sense Detection
+export async function checkWordDefinitionsService(params: {
+  word: string;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  llmConfig?: LLMConfig;
+}): Promise<any> {
+  const { word, targetLanguage, nativeLanguage, llmConfig } = params;
+  const userNative = nativeLanguage || "English";
+  const userTarget = targetLanguage || "Spanish";
+
+  const prompt = `Analyze the word or expression "${word}". Determine if it has multiple common meanings, definitions, or parts of speech in the target language "${userTarget}" (with translation to "${userNative}").
+If there is only 1 dominant or common definition, set "hasMultipleSenses" to false. If there are 2 to 4 distinct meanings or parts of speech, set "hasMultipleSenses" to true.
+Provide up to 4 most common distinct senses. For each sense, provide its part of speech, a clear definition STRICTLY in the target language ("${userTarget}"), its translation in "${userNative}", its pronunciation in IPA, an example sentence in "${userTarget}", a translation of the example sentence in "${userNative}", and a short English prompt to generate a relevant image.`;
+
+  const systemInstruction = `You are an elite dictionary lookup engine. You analyze target language words and output a JSON array of their major meanings or definitions.`;
+  const schemaDesc = `{
+  "word": "string",
+  "hasMultipleSenses": boolean,
+  "senses": [
+    {
+      "partOfSpeech": "string (e.g. noun, verb, adjective, expression)",
+      "definition": "string (definition written STRICTLY in ${userTarget})",
+      "translation": "string (translation in ${userNative})",
+      "pronunciation": "string (IPA pronunciation)",
+      "example": "string (sentence in ${userTarget})",
+      "exampleTranslation": "string (sentence translation in ${userNative})",
+      "imagePrompt": "string (a short, clear English description of the word's meaning for image generation, do not include urls here)"
+    }
+  ]
+}`;
+
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
+  try {
+    const res = await fetch("/api/check-word-definitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 405 || res.status === 404) {
+      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      return JSON.parse(text);
+    }
+
+    const errData = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errData.error || `Server Error ${res.status}`);
+  } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+}
+
+// 3.5. Generate Random Words for Collection (Deduplicated)
 export async function generateRandomWordsService(params: {
   topic: string;
   targetLanguage?: string;
@@ -791,19 +775,18 @@ export async function generateRandomWordsService(params: {
   const userTarget = targetLanguage || "Spanish";
 
   const avoidText = Array.isArray(existingWords) && existingWords.length > 0
-    ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the deck:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
+    ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the collection:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
     : "";
 
-  const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the deck topic "${topic || "Vocabulary"}".
+  const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the topic "${topic || "Vocabulary"}".
 The user's native language is "${userNative}".${avoidText}
 
 CRITICAL INSTRUCTIONS:
-- Every word generated MUST BE UNIQUE and NOT present in the existing deck list above.
+- Every word generated MUST BE UNIQUE and NOT present in the existing list above.
 - "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Realistic example sentence in target language (${userTarget}).
-- "exampleTranslation": Translation of example sentence into user's native language (${userNative}).
-- "imageUrl": Generate a vivid, specific example image URL using Pollinations AI. Format MUST be: "https://image.pollinations.ai/prompt/[short-english-description-of-word-or-action]?width=800&height=600&nologo=true"`;
+- "exampleTranslation": Translation of example sentence into user's native language (${userNative}).`;
 
   const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of new unique vocabulary words.`;
   const schemaDesc = `{
@@ -815,8 +798,7 @@ CRITICAL INSTRUCTIONS:
       "definition": "string (definition written STRICTLY in ${userTarget})",
       "translation": "string (direct translation in ${userNative})",
       "example": "string (sentence in ${userTarget})",
-      "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageUrl": "string (pollinations AI image URL)"
+      "exampleTranslation": "string (sentence translation in ${userNative})"
     }
   ]
 }`;
@@ -859,7 +841,6 @@ export interface PerformanceAnalysisRequest {
   totalWords: number;
   masteredWords?: any[];
   improvingWords?: any[];
-  decksSummary?: { name: string; totalWords: number; masteredCount: number }[];
   llmConfig?: LLMConfig;
 }
 
@@ -873,11 +854,10 @@ export interface PerformanceAnalysisResult {
 }
 
 export async function analyzePerformanceService(params: PerformanceAnalysisRequest): Promise<PerformanceAnalysisResult> {
-  const { stats, totalWords, masteredWords = [], improvingWords = [], decksSummary = [], llmConfig } = params;
+  const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig } = params;
 
   const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
   const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (level ${w.strength ?? 0}, ${w.translation || w.definition})`).join(", ") || "None yet";
-  const decksStr = (decksSummary || []).map((d: any) => `${d.name}: ${d.masteredCount}/${d.totalWords} mastered`).join("; ") || "No custom decks yet";
 
   const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report.
 
@@ -888,9 +868,6 @@ STUDENT PERFORMANCE DATA:
 - Quizzes Completed: ${stats?.totalQuizzesTaken || 0}
 - Correct Answers in Quizzes: ${stats?.totalCorrectAnswers || 0}
 - Active Study Streak: ${stats?.streak?.count || 0} days
-
-DECKS PROGRESS SUMMARY:
-${decksStr}
 
 SAMPLE MASTERED WORDS:
 ${masteredSampleStr}
@@ -926,7 +903,7 @@ Provide a structured AI analysis with constructive insights, memory retention st
     const res = await fetch("/api/analyze-performance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stats, totalWords, masteredWords, improvingWords, decksSummary, llmConfig })
+      body: JSON.stringify({ stats, totalWords, masteredWords, improvingWords, llmConfig })
     });
 
     if (res.ok) {
@@ -947,4 +924,218 @@ Provide a structured AI analysis with constructive insights, memory retention st
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     return JSON.parse(text);
   }
+}
+
+// 5. Interactive Chat Assistant Service
+export interface ChatMessageRequest {
+  messages: { role: string; content: string }[];
+  targetLanguage: string;
+  nativeLanguage: string;
+  llmConfig?: LLMConfig;
+}
+
+export interface ChatMessageResult {
+  text: string;
+  suggestedActions?: {
+    label: string;
+    action: "add_word" | "start_quiz";
+    payload?: {
+      word?: string;
+    };
+  }[];
+}
+
+export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
+  const { messages, targetLanguage, nativeLanguage, llmConfig } = params;
+
+  const chatHistoryStr = messages
+    .slice(-10)
+    .map((m: any) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  const prompt = `Below is the recent conversation history between the User and you (the Assistant):\n\n${chatHistoryStr}\n\nAssistant, formulate your next helpful response. Ensure to check if the user is interested in practicing or adding words, and attach appropriate suggestedActions.`;
+
+  const systemInstruction = `You are an elite, highly encouraging AI Language Coach and Vocabulary Assistant.
+Your mission is to help the user master their target language "${targetLanguage}" from their native language "${nativeLanguage}".
+You speak in a warm, welcoming, and linguistically precise tone.
+
+CRITICAL INSTRUCTIONS:
+- Answer questions about grammar, translation, and pronunciation.
+- If you explain, introduce, or define a vocabulary word that the user might want to study, always suggest adding it to their collection using the "add_word" action.
+- If the user indicates they want to take a test, quiz, practice, or study their flashcards, suggest starting a quiz using the "start_quiz" action.
+- You MUST respond with a valid JSON object matching the schema below.`;
+
+  const schemaDesc = `{
+  "text": "string (the main conversation response in markdown format. Keep it beautifully styled, use bolding, bullet points, etc. where helpful)",
+  "suggestedActions": [
+    {
+      "label": "string (compelling action text, e.g. 'Add \"serendipity\" to collection' or 'Start Vocab Quiz')",
+      "action": "string (one of: 'add_word', 'start_quiz')",
+      "payload": {
+        "word": "string (required only if action is 'add_word')"
+      }
+    }
+  ]
+}`;
+
+  if (isStaticHost()) {
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig })
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 405 || res.status === 404) {
+      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      return JSON.parse(text);
+    }
+
+    const errData = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errData.error || `Server Error ${res.status}`);
+  } catch (err: any) {
+    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    return JSON.parse(text);
+  }
+}
+
+export interface QuizGenerationRequest {
+  words: Word[];
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  llmConfig?: LLMConfig;
+}
+
+export async function generateAiQuizQuestionsService(
+  params: QuizGenerationRequest
+): Promise<QuizQuestion[]> {
+  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+
+  if (!words || words.length === 0) {
+    return [];
+  }
+
+  const fallbackQuestions = generateQuizQuestions(words, targetLanguage);
+
+  if (!llmConfig || !llmConfig.isLoggedIn) {
+    return fallbackQuestions;
+  }
+
+  const wordDataSummary = words.map(w => ({
+    id: w.id,
+    word: w.word,
+    partOfSpeech: w.partOfSpeech,
+    definition: w.definition,
+    translation: w.translation,
+    example: w.example || ""
+  }));
+
+  const systemInstruction = `You are a world-class AI Language Pedagogy Engine specializing in ${targetLanguage} assessment.
+Your goal is to generate a JSON array of high-quality, challenging quiz questions for the given vocabulary words.
+
+STRICT GENERATION RULES & RESTRICTIONS:
+1. Target-Language Immersion Restrictions:
+   - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
+   - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
+   - For 'spelling', the question text asks "Spell the word matching this definition:\n'[definition in ${targetLanguage}]'" or "Spell the missing word in this sentence:\n'[sentence in ${targetLanguage} with ______]'" and correctAnswer is the target word in ${targetLanguage}.
+2. Distractor Logic:
+   - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
+   - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
+   - Never put the same option twice.
+3. Question Types (mix across questions):
+   - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
+   - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
+   - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
+   - 'picture': "Which word matches the visual concept shown below?" (options contain target language words)
+   - 'spelling': "Spell the word matching this definition:\n'[definition in ${targetLanguage}]'" (or use sentence with blank: "Spell the missing word: '[sentence in ${targetLanguage} with ______]'")
+
+4. Output Schema:
+Return ONLY a valid JSON array of objects matching this schema:
+[
+  {
+    "id": "string",
+    "wordId": "string",
+    "word": "string",
+    "type": "definition" | "sentence" | "listening" | "picture" | "spelling",
+    "question": "string",
+    "options": ["string", "string", "string", "string"],
+    "correctAnswer": "string",
+    "hint": "string",
+    "imageUrl": "string"
+  }
+]`;
+
+  const prompt = `Generate 1 quiz question for each of these vocabulary words:\n${JSON.stringify(wordDataSummary, null, 2)}`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageUrl.`;
+
+  try {
+    let rawResultText = "";
+    if (isStaticHost()) {
+      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    } else {
+      const res = await fetch("/api/generate-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ words, targetLanguage, nativeLanguage, llmConfig })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    }
+
+    const cleaned = cleanJsonResponse(rawResultText);
+    const parsed = JSON.parse(cleaned);
+
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const validQuestions: QuizQuestion[] = parsed.map((q: any, idx: number) => {
+        const matchingWord = words.find(w => w.id === q.wordId || w.word.toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length];
+        
+        let options = Array.isArray(q.options) ? q.options : [];
+        if (q.type !== 'spelling') {
+          if (options.length > 0 && !options.includes(q.correctAnswer || matchingWord.word)) {
+            options[0] = q.correctAnswer || matchingWord.word;
+          }
+          options = Array.from(new Set(options));
+          if (options.length < 4) {
+            const extraDistractors = generateConfusers(matchingWord.word);
+            for (const d of extraDistractors) {
+              if (options.length >= 4) break;
+              if (!options.includes(d)) options.push(d);
+            }
+          }
+        }
+
+        return {
+          id: q.id || `ai-q-${matchingWord.id}-${idx}`,
+          wordId: matchingWord.id,
+          word: matchingWord.word,
+          type: q.type || 'definition',
+          question: q.question || `Which word matches: ${matchingWord.definition}`,
+          options: q.type !== 'spelling' ? options.sort(() => 0.5 - Math.random()) : undefined,
+          correctAnswer: q.correctAnswer || matchingWord.word,
+          hint: q.hint || matchingWord.pronunciation,
+          imageUrl: q.imageUrl || (q.type === 'picture' ? `https://loremflickr.com/500/400/${encodeURIComponent(matchingWord.word)}` : undefined)
+        };
+      });
+
+      return validQuestions;
+    }
+  } catch (err) {
+    console.warn("AI Quiz Generation failed, falling back to rule-based engine:", err);
+  }
+
+  return fallbackQuestions;
 }

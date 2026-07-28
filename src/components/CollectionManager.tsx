@@ -19,7 +19,7 @@ import WordRow from "./deckManager/WordRow";
 import AddWordModal from "./deckManager/AddWordModal";
 import RandomWordsModal from "./deckManager/RandomWordsModal";
 
-interface DeckManagerProps {
+interface CollectionManagerProps {
   words: Word[];
   onAddWord: (
     word: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
@@ -37,7 +37,7 @@ interface DeckManagerProps {
   nativeLanguage?: string;
 }
 
-export default function DeckManager({
+export default function CollectionManager({
   words,
   onAddWord,
   onDeleteWord,
@@ -48,7 +48,7 @@ export default function DeckManager({
   ttsConfig = DEFAULT_TTS_CONFIG,
   targetLanguage = "English",
   nativeLanguage = "Spanish",
-}: DeckManagerProps) {
+}: CollectionManagerProps) {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isRandomWordsModalOpen, setIsRandomWordsModalOpen] = useState(false);
@@ -61,7 +61,6 @@ export default function DeckManager({
   const [pronunciationInput, setPronunciationInput] = useState("");
   const [exampleInput, setExampleInput] = useState("");
   const [exampleTranslationInput, setExampleTranslationInput] = useState("");
-  const [imageUrlInput, setImageUrlInput] = useState("");
   const [autofilling, setAutofilling] = useState(false);
 
   // Form input states for generating N random words
@@ -103,8 +102,6 @@ export default function DeckManager({
         word: word.word,
         targetLanguage,
         nativeLanguage,
-        deckName: "",
-        deckDescription: "",
         llmConfig
       });
 
@@ -118,23 +115,13 @@ export default function DeckManager({
               partOfSpeech: details.partOfSpeech || w.partOfSpeech,
               pronunciation: details.pronunciation || w.pronunciation,
               example: details.example || w.example,
-              exampleTranslation: details.exampleTranslation || w.exampleTranslation,
-              imageUrl: details.imageUrl || w.imageUrl
+              exampleTranslation: details.exampleTranslation || w.exampleTranslation
             };
           }
           return w;
         });
 
         onUpdateWords(updatedWords);
-        
-        // Remove from broken images set if new image generated
-        if (details.imageUrl) {
-          setBrokenImageIds(prev => {
-            const next = new Set(prev);
-            next.delete(word.id);
-            return next;
-          });
-        }
 
         setRegeneratedSuccessWordId(word.id);
         setTimeout(() => setRegeneratedSuccessWordId(null), 4000);
@@ -156,8 +143,6 @@ export default function DeckManager({
         word: wordInput.trim(),
         targetLanguage,
         nativeLanguage,
-        deckName: "",
-        deckDescription: "",
         llmConfig
       });
 
@@ -167,7 +152,6 @@ export default function DeckManager({
       if (details.pronunciation) setPronunciationInput(details.pronunciation);
       if (details.example) setExampleInput(details.example);
       if (details.exampleTranslation) setExampleTranslationInput(details.exampleTranslation);
-      if (details.imageUrl) setImageUrlInput(details.imageUrl);
     } catch (err) {
       console.error("Failed to autofill word:", err);
       alert("AI Auto-fill failed. Please verify your LLM Key in Settings.");
@@ -201,7 +185,6 @@ export default function DeckManager({
         setPronunciationInput(freshWordObj.pronunciation || "");
         setExampleInput(freshWordObj.example || "");
         setExampleTranslationInput(freshWordObj.exampleTranslation || "");
-        setImageUrlInput(freshWordObj.imageUrl || "");
       }
     } catch (err) {
       console.error("AI word suggestion failed:", err);
@@ -223,7 +206,6 @@ export default function DeckManager({
       pronunciation: pronunciationInput.trim() || undefined,
       example: exampleInput.trim() || undefined,
       exampleTranslation: exampleTranslationInput.trim() || undefined,
-      imageUrl: imageUrlInput.trim() || undefined,
       starred: false
     });
 
@@ -235,7 +217,6 @@ export default function DeckManager({
     setPronunciationInput("");
     setExampleInput("");
     setExampleTranslationInput("");
-    setImageUrlInput("");
     setIsModalOpen(false);
   };
 
@@ -268,7 +249,6 @@ export default function DeckManager({
           pronunciation: item.pronunciation,
           example: item.example,
           exampleTranslation: item.exampleTranslation,
-          imageUrl: item.imageUrl,
           starred: false
         });
       });
@@ -336,7 +316,7 @@ export default function DeckManager({
   }, [words, searchQuery, sortBy]);
 
   return (
-    <div className="space-y-8" id="deck-manager-container">
+    <div className="space-y-8" id="collection-manager-container">
       <div className="space-y-4">
         <div className="bg-white border border-stone-200 p-4 space-y-6 shadow-2xs">
             {/* Active List Title & Quick Controls */}
@@ -503,8 +483,6 @@ export default function DeckManager({
         setExampleInput={setExampleInput}
         exampleTranslationInput={exampleTranslationInput}
         setExampleTranslationInput={setExampleTranslationInput}
-        imageUrlInput={imageUrlInput}
-        setImageUrlInput={setImageUrlInput}
         autofilling={autofilling}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
