@@ -99,4 +99,5 @@ export interface ChatMessage {
   suggestedActions?: { label: string; action: string; payload?: any }[];
   audioWord?: string;
   imageUrl?: string;
+  quizSpeechText?: string;
 }

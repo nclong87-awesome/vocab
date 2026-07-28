@@ -1048,7 +1048,6 @@ STRICT GENERATION RULES & RESTRICTIONS:
 1. Target-Language Immersion Restrictions:
    - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
    - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
-   - For 'spelling', the question text asks "Spell the word matching this definition:\n'[definition in ${targetLanguage}]'" or "Spell the missing word in this sentence:\n'[sentence in ${targetLanguage} with ______]'" and correctAnswer is the target word in ${targetLanguage}.
 2. Distractor Logic:
    - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
    - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
@@ -1058,7 +1057,6 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
    - 'picture': "Which word matches the visual concept shown below?" (options contain target language words)
-   - 'spelling': "Spell the word matching this definition:\n'[definition in ${targetLanguage}]'" (or use sentence with blank: "Spell the missing word: '[sentence in ${targetLanguage} with ______]'")
 
 4. Output Schema:
 Return ONLY a valid JSON array of objects matching this schema:
@@ -1067,7 +1065,7 @@ Return ONLY a valid JSON array of objects matching this schema:
     "id": "string",
     "wordId": "string",
     "word": "string",
-    "type": "definition" | "sentence" | "listening" | "picture" | "spelling",
+    "type": "definition" | "sentence" | "listening" | "picture",
     "question": "string",
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
@@ -1104,17 +1102,15 @@ Return ONLY a valid JSON array of objects matching this schema:
         const matchingWord = words.find(w => w.id === q.wordId || w.word.toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length];
         
         let options = Array.isArray(q.options) ? q.options : [];
-        if (q.type !== 'spelling') {
-          if (options.length > 0 && !options.includes(q.correctAnswer || matchingWord.word)) {
-            options[0] = q.correctAnswer || matchingWord.word;
-          }
-          options = Array.from(new Set(options));
-          if (options.length < 4) {
-            const extraDistractors = generateConfusers(matchingWord.word);
-            for (const d of extraDistractors) {
-              if (options.length >= 4) break;
-              if (!options.includes(d)) options.push(d);
-            }
+        if (options.length > 0 && !options.includes(q.correctAnswer || matchingWord.word)) {
+          options[0] = q.correctAnswer || matchingWord.word;
+        }
+        options = Array.from(new Set(options));
+        if (options.length < 4) {
+          const extraDistractors = generateConfusers(matchingWord.word);
+          for (const d of extraDistractors) {
+            if (options.length >= 4) break;
+            if (!options.includes(d)) options.push(d);
           }
         }
 
@@ -1124,7 +1120,7 @@ Return ONLY a valid JSON array of objects matching this schema:
           word: matchingWord.word,
           type: q.type || 'definition',
           question: q.question || `Which word matches: ${matchingWord.definition}`,
-          options: q.type !== 'spelling' ? options.sort(() => 0.5 - Math.random()) : undefined,
+          options: options.sort(() => 0.5 - Math.random()),
           correctAnswer: q.correctAnswer || matchingWord.word,
           hint: q.hint || matchingWord.pronunciation,
           imageUrl: q.imageUrl || (q.type === 'picture' ? `https://loremflickr.com/500/400/${encodeURIComponent(matchingWord.word)}` : undefined)

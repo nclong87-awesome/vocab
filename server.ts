@@ -729,7 +729,6 @@ STRICT GENERATION RULES & RESTRICTIONS:
 1. Target-Language Immersion Restrictions:
    - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
    - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
-   - For 'spelling', the question text asks "Spell the word matching this definition:\n'[definition in ${targetLanguage}]'" or "Spell the missing word in this sentence:\n'[sentence in ${targetLanguage} with ______]'" and correctAnswer is the target word in ${targetLanguage}.
 2. Distractor Logic:
    - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
    - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
@@ -739,7 +738,6 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
    - 'picture': "Which word matches the visual concept shown below?" (options contain target language words)
-   - 'spelling': "Spell the word matching this definition:\n'[definition in ${targetLanguage}]'" (or use sentence with blank: "Spell the missing word: '[sentence in ${targetLanguage} with ______]'")
 
 4. Output Schema:
 Return ONLY a valid JSON array of objects matching this schema:
@@ -748,7 +746,7 @@ Return ONLY a valid JSON array of objects matching this schema:
     "id": "string",
     "wordId": "string",
     "word": "string",
-    "type": "definition" | "sentence" | "listening" | "picture" | "spelling",
+    "type": "definition" | "sentence" | "listening" | "picture",
     "question": "string",
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",

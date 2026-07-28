@@ -59,12 +59,11 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
   const generated: QuizQuestion[] = [];
 
   allWords.forEach((word) => {
-    const types: ('definition' | 'sentence' | 'listening' | 'picture' | 'spelling')[] = [
+    const types: ('definition' | 'sentence' | 'listening' | 'picture')[] = [
       'definition', 
       'sentence',
       'listening',
-      'picture',
-      'spelling'
+      'picture'
     ];
     let type = types[Math.floor(Math.random() * types.length)];
 
@@ -130,18 +129,6 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       
       const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
-    }
-    else if (type === 'spelling') {
-      correctAnswer = word.word;
-      if (word.definition && !containsNonTargetLanguage(word.definition, targetLanguage)) {
-        questionText = `Spell the word matching this definition:\n"${word.definition}"`;
-      } else if (word.example) {
-        const regex = new RegExp(`\\b${word.word}\\b`, "i");
-        const hidden = word.example.replace(regex, "______");
-        questionText = `Spell the missing word in this sentence:\n"${hidden}"`;
-      } else {
-        questionText = `Spell the target language word pronounced as /${word.pronunciation || word.word}/`;
-      }
     }
     else {
       // sentence type
