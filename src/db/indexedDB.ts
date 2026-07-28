@@ -419,6 +419,10 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
 
   const getStoreData = <T>(storeName: keyof DBStores): Promise<T[]> => {
     return new Promise((resolve, reject) => {
+      if (!db.objectStoreNames.contains(STORES[storeName])) {
+        resolve([]);
+        return;
+      }
       const tx = db.transaction(STORES[storeName], "readonly");
       const store = tx.objectStore(STORES[storeName]);
       const req = store.getAll();
