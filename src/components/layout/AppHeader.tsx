@@ -152,7 +152,7 @@ export default function AppHeader({
       <div className="max-w-7xl mx-auto">
         
         {/* Mobile Header Layout (< md) */}
-        <div className="flex flex-col gap-2.5 sm:gap-4 md:hidden">
+        <div className="flex flex-col gap-2.5 sm:gap-4">
           {/* Row 1: Logo (left) & Switchers (right) */}
           <div className="flex items-center justify-between gap-1 sm:gap-3 flex-nowrap min-w-0 w-full">
             {renderLogo()}
@@ -161,23 +161,6 @@ export default function AppHeader({
           {/* Row 2: Nav Links */}
           <div className="flex items-center justify-between gap-4 text-xs font-medium tracking-normal pt-2 border-t border-stone-100">
             {renderNavLinks()}
-          </div>
-        </div>
-
-        {/* Desktop Header Layout (>= md) */}
-        <div className="hidden md:flex items-center justify-between gap-6">
-          {/* Left: Logo & Navigation Tabs */}
-          <div className="flex items-center gap-8 lg:gap-12 min-w-0">
-            {renderLogo()}
-            <div className="text-xs font-medium tracking-normal">
-              {renderNavLinks()}
-            </div>
-          </div>
-          
-          {/* Right: Switchers & Streak Indicator */}
-          <div className="flex items-center gap-4 lg:gap-6 shrink-0">
-            {renderSwitchers()}
-            {renderStreak()}
           </div>
         </div>
 

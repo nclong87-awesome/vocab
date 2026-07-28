@@ -166,10 +166,10 @@ export default function ChatView({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-92px)] sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-200 overflow-hidden shadow-none sm:shadow-sm" id="chat-container">
+    <div className="flex flex-col h-[calc(100dvh-92px)] sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-300 overflow-hidden shadow-none" id="chat-container">
       
       {/* Chat Messages Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages-body">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-message-body" id="chat-messages-body">
         <AnimatePresence initial={false}>
           {messages.map((msg) => {
             const isUser = msg.role === "user";
@@ -202,7 +202,7 @@ export default function ChatView({
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
-                className={`flex flex-col max-w-[92%] sm:max-w-[85%] ${isUser ? "ml-auto" : "mr-auto"}`}
+                className={`flex flex-col ${isUser ? "ml-auto" : "mr-auto"}`}
               >
                 {/* Message Content Bubble */}
                 <div className="space-y-2">
@@ -262,20 +262,6 @@ export default function ChatView({
                         )}
                       </>
                     )}
-
-                    {/* Audio reading control for Assistant replies */}
-                    {!isUser && (
-                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-stone-200/50 text-[10px] text-stone-500">
-                        <span>AI Tutor</span>
-                        <button
-                          onClick={() => handleSpeak(msg.audioWord || msg.quizSpeechText || msg.content)}
-                          className="flex items-center gap-1 hover:text-stone-900 transition-colors cursor-pointer bg-white border border-stone-200 py-1 px-2 rounded-md hover:bg-stone-50"
-                        >
-                          <Volume2 className="w-3 h-3 text-stone-600" />
-                          {msg.audioWord ? "Listen Audio Clip" : "Listen Pronunciation"}
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   {/* AI Suggested Actions Render */}
@@ -322,7 +308,7 @@ export default function ChatView({
             <motion.div
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex max-w-[92%] sm:max-w-[85%] mr-auto"
+              className="flex mr-auto"
             >
               <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm">
                 <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>

@@ -1165,7 +1165,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50/40 text-stone-900 flex flex-col antialiased border-0 sm:border-[12px] md:border-[18px] border-stone-100/70">
+    <div className="min-h-screen bg-stone-50/40 text-stone-900 flex flex-col antialiased border-0">
       
       {/* Visual Top Header */}
       <AppHeader
@@ -1189,7 +1189,7 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Main workspace section */}
-          <div className="lg:col-span-7 xl:col-span-8 flex flex-col min-w-0">
+          <div className="lg:col-span-12 xl:col-span-8 flex flex-col min-w-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentView}
@@ -1216,47 +1216,16 @@ export default function App() {
                     words={words}
                   />
                 )}
-
-                {currentView === "learn" && (
-                  <FlashcardsView 
-                    words={words}
-                    onToggleStar={handleToggleStar}
-                    onToggleLearned={handleToggleLearned}
-                    onGoBack={() => setCurrentView("dashboard")}
-                    onStartQuiz={() => setCurrentView("quiz")}
-                    ttsConfig={ttsConfig}
-                    llmConfig={llmConfig}
-                    targetLanguage={targetLanguage}
-                  />
-                )}
-
-                {currentView === "quiz" && (
-                  <QuizView 
-                    words={words}
-                    targetLanguage={targetLanguage}
-                    onFinishQuiz={handleFinishQuiz}
-                    onToggleStar={handleToggleStar}
-                    onGoBack={() => setCurrentView("dashboard")}
-                    ttsConfig={ttsConfig}
-                    llmConfig={llmConfig}
-                  />
-                )}
               </motion.div>
             </AnimatePresence>
           </div>
-
-          {/* Desktop Right Side Panel */}
-          <div className="hidden lg:block lg:col-span-5 xl:col-span-4 bg-white border border-stone-200 rounded-xl shadow-sm overflow-hidden h-[calc(100vh-140px)] sticky top-[100px] flex flex-col" id="desktop-side-panel">
-            {renderSidePanelContent()}
-          </div>
-
         </div>
       </main>
 
       {/* Mobile Drawer Slide Panel */}
       <AnimatePresence>
         {isSidePanelOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden" id="mobile-drawer-overlay">
+          <div className="fixed inset-0 z-50" id="mobile-drawer-overlay">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -1271,7 +1240,7 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-xl flex flex-col h-full overflow-hidden"
+              className="absolute right-0 top-0 bottom-0 w-full bg-white shadow-xl flex flex-col h-full overflow-hidden"
               id="mobile-drawer-body"
             >
               {/* Header */}

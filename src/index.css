@@ -45,3 +45,10 @@ h1, h2, h3, .font-display {
   background: #d6d3d1; /* stone-300 */
 }
 
+.chat-message-body {
+  background-color: #ebecf0;
+}
+
+main {
+  background-color: #fff;
+}
