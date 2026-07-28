@@ -566,6 +566,11 @@ export async function resetIndexedDBDatabase(): Promise<void> {
 export async function clearAllWordsFromDB(): Promise<void> {
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
+    // check if the store exists before attempting to clear it
+    if (!db.objectStoreNames.contains(STORES.words)) {
+      resolve();
+      return;
+    }
     const tx = db.transaction(STORES.words, "readwrite");
     const store = tx.objectStore(STORES.words);
     const clearReq = store.clear();
