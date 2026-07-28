@@ -209,8 +209,8 @@ export default function ChatView({
                   <div 
                     className={`p-3.5 rounded-2xl ${
                       isUser 
-                        ? "text-stone-900 border border-stone-200/60 rounded-tr-none shadow-3xs" 
-                        : "bg-stone-50 border border-stone-100 text-stone-950 rounded-tl-none"
+                        ? "text-stone-900 border border-stone-200 rounded-tr-none shadow-3xs" 
+                        : "bg-stone-50 border border-stone-200 text-stone-950 rounded-tl-none"
                     }`}
                     style={isUser ? { backgroundColor: "#E5F1FF" } : undefined}
                   >

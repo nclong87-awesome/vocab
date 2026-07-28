@@ -1189,7 +1189,7 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Main workspace section */}
-          <div className="lg:col-span-12 xl:col-span-8 flex flex-col min-w-0">
+          <div className="lg:col-span-12 xl:col-span-12 flex flex-col min-w-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentView}

@@ -84,17 +84,6 @@ export default function AppHeader({
     <div className="flex items-center gap-4 sm:gap-8">
       <button
         onClick={() => {
-          setCurrentView("dashboard");
-        }}
-        className={`transition-colors cursor-pointer font-semibold ${
-          currentView === "dashboard" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
-        }`}
-      >
-        AI Chat
-      </button>
-      
-      <button
-        onClick={() => {
           setCurrentView("manage");
         }}
         className={`transition-colors cursor-pointer font-semibold ${
