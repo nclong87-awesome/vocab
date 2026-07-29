@@ -463,6 +463,9 @@ export default function SettingsView({
               <Volume2 className="w-3.5 h-3.5 text-stone-900" />
               Active TTS: <strong className="text-stone-900 capitalize">{config.engine}</strong>
             </span>
+            <span className="text-xs font-semibold text-stone-800 bg-stone-100 border border-stone-200 px-3 py-1.5 flex items-center gap-1.5">
+              Version: <strong className="text-stone-900 capitalize">{APP_VERSION} </strong>
+            </span>
           </div>
         </div>
       </div>
@@ -1441,34 +1444,6 @@ export default function SettingsView({
             <span className="text-xs font-medium text-stone-500">
               {isTesting ? "Playing speech..." : "Click button to test output"}
             </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Section 6: App System & Version Information */}
-      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4">
-        <div className="border-none flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-              <Info className="w-4 h-4 text-stone-800" />
-              App Information
-              <span className="text-xs font-mono font-bold px-3 py-1 bg-stone-900 text-white shadow-2xs">
-                v{APP_VERSION}
-              </span>
-            </h3>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">App Version</span>
-            <span className="font-mono font-bold text-stone-900 text-sm">v{APP_VERSION}</span>
-          </div>
-
-          <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Local Database</span>
-            <span className="font-semibold text-stone-900 text-xs block">IndexedDB (VocabLearnerDB v1)</span>
-            <p className="text-[11px] text-stone-500 font-serif italic">Client-side offline state</p>
           </div>
         </div>
       </div>
