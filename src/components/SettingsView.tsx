@@ -452,16 +452,8 @@ export default function SettingsView({
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
-                  Settings & Voice Engine
-                </h2>
-                <span className="text-xs font-mono font-bold bg-stone-900 text-white px-2 py-0.5 shadow-2xs">
-                  v{APP_VERSION}
-                </span>
-              </div>
               <p className="text-xs sm:text-sm text-stone-500 font-normal mt-0.5">
-                Configure Text-to-Speech AI Models, speech pitch, speed, and learning preferences
+                Configure AI Models, Cloud Sync, TTS, and Language Preferences for Vocabulary Learner.
               </p>
             </div>
           </div>
@@ -602,16 +594,14 @@ export default function SettingsView({
         <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-stone-200 pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">Active AI Engine:</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5 pl-4 sm:pl-0">
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">AI Engine:</span>
                 <span className="text-sm font-black text-stone-900 capitalize">
                   {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
                 </span>
-                <span className="text-xs font-mono font-medium text-stone-600 bg-white border border-stone-200 px-2 py-0.5 rounded-none max-w-[200px] sm:max-w-xs truncate">
-                  {llmConfig.model}
+                <span className="text-xs font-mono font-medium text-stone-600 truncate">
+                  ({llmConfig.model})
                 </span>
               </div>
             </div>
@@ -638,7 +628,7 @@ export default function SettingsView({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
             <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key Status</span>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key</span>
               <span className="font-mono text-stone-800 font-semibold">
                 {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
               </span>
@@ -775,6 +765,34 @@ export default function SettingsView({
             })}
           </div>
         </div>
+      </div>
+
+      {/* Section 5: Quiz Audio Preference */}
+      <div className="bg-white border border-stone-200 p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-stone-800" />
+            Quiz Session Audio
+          </h3>
+          <p className="text-xs text-stone-500 mt-1">
+            Automatically pronounce questions when transitioning between quiz items
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setConfig({ ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz })}
+          className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
+            config.autoPlayAudioInQuiz 
+              ? "bg-stone-900 border-stone-900 text-white" 
+              : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {config.autoPlayAudioInQuiz ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
+            <span>Auto-Play Quiz Voice: {config.autoPlayAudioInQuiz ? "Enabled" : "Disabled"}</span>
+          </div>
+        </button>
       </div>
 
       {/* Section 2: IndexedDB Database Management (Import & Export) */}
@@ -1427,63 +1445,24 @@ export default function SettingsView({
         </div>
       </div>
 
-      {/* Section 5: Quiz Audio Preference */}
-      <div className="bg-white border border-stone-200 p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-            <Volume2 className="w-4 h-4 text-stone-800" />
-            Quiz Session Audio
-          </h3>
-          <p className="text-xs text-stone-500 mt-1">
-            Automatically pronounce questions when transitioning between quiz items
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setConfig({ ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz })}
-          className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
-            config.autoPlayAudioInQuiz 
-              ? "bg-stone-900 border-stone-900 text-white" 
-              : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {config.autoPlayAudioInQuiz ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
-            <span>Auto-Play Quiz Voice: {config.autoPlayAudioInQuiz ? "Enabled" : "Disabled"}</span>
-          </div>
-          <div className={`w-3 h-3 rounded-full ${config.autoPlayAudioInQuiz ? "bg-amber-400" : "bg-stone-300"}`} />
-        </button>
-      </div>
-
       {/* Section 6: App System & Version Information */}
       <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4">
-        <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
+        <div className="border-none flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
               <Info className="w-4 h-4 text-stone-800" />
-              App Information & System Status
+              App Information
+              <span className="text-xs font-mono font-bold px-3 py-1 bg-stone-900 text-white shadow-2xs">
+                v{APP_VERSION}
+              </span>
             </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              System metadata and application version generated directly from package.json
-            </p>
           </div>
-          <span className="text-xs font-mono font-bold px-3 py-1 bg-stone-900 text-white shadow-2xs">
-            v{APP_VERSION}
-          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">App Version</span>
             <span className="font-mono font-bold text-stone-900 text-sm">v{APP_VERSION}</span>
-            <p className="text-[11px] text-stone-500 font-serif italic">Generated from package.json</p>
-          </div>
-
-          <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Framework & Engine</span>
-            <span className="font-semibold text-stone-900 text-xs block">React 19 + Vite 6</span>
-            <p className="text-[11px] text-stone-500 font-serif italic">Express + TypeScript build system</p>
           </div>
 
           <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
@@ -1593,25 +1572,6 @@ export default function SettingsView({
           </div>
         </div>
       )}
-
-      {/* Save Settings Action Bar */}
-      <div className="bg-stone-900 text-white p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h4 className="font-bold text-base">Save Voice & Audio Preferences</h4>
-          <p className="text-xs text-stone-300 mt-0.5">
-            Applies chosen speech synthesis engine across practice quizzes, flashcards, and word collection
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleSave}
-          className="w-full sm:w-auto px-8 py-3 bg-white text-stone-950 font-bold text-xs hover:bg-amber-400 transition-all cursor-pointer shadow-md shrink-0 flex items-center justify-center gap-2"
-        >
-          <Check className="w-4 h-4 stroke-[3]" />
-          <span>Save Settings</span>
-        </button>
-      </div>
     </div>
   );
 }
