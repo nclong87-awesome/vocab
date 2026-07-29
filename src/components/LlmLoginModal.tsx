@@ -342,7 +342,7 @@ export default function LlmLoginModal({
                   const isSelected = nativeLanguage === lang.code;
                   return (
                     <button
-                      key={lang.code}
+                      key={`native-lang-${lang.code}`}
                       type="button"
                       onClick={() => setNativeLanguage(lang.code)}
                       className={`p-2 border text-left transition-all cursor-pointer flex items-center justify-between ${
@@ -401,7 +401,7 @@ export default function LlmLoginModal({
                   const isSelected = targetLanguage === lang.code;
                   return (
                     <button
-                      key={lang.code}
+                      key={`target-lang-${lang.code}`}
                       type="button"
                       onClick={() => setTargetLanguage(lang.code)}
                       className={`p-2 border text-left transition-all cursor-pointer flex items-center justify-between ${
@@ -497,12 +497,12 @@ export default function LlmLoginModal({
                   <span>Stored AI Engine Profiles</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {(Object.values(savedProfiles) as SavedProviderConfig[]).map((sp) => {
+                  {(Object.values(savedProfiles) as SavedProviderConfig[]).map((sp, idx) => {
                     const isCurrent = provider === sp.provider;
                     const meta = PROVIDER_OPTIONS.find(p => p.id === sp.provider);
                     return (
                       <button
-                        key={sp.provider}
+                        key={`saved-profile-${sp.provider}-${idx}`}
                         type="button"
                         onClick={() => handleProviderSelect(sp.provider)}
                         className={`px-2.5 py-1 text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
@@ -527,14 +527,14 @@ export default function LlmLoginModal({
                 <Server className="w-3.5 h-3.5 text-stone-900" /> 1. Select LLM Provider
               </label>
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-2.5">
-                {PROVIDER_OPTIONS.map((p) => {
+                {PROVIDER_OPTIONS.map((p, idx) => {
                   const isSelected = provider === p.id;
                   const saved = savedProfiles[p.id];
                   const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
                   return (
                     <button
                       type="button"
-                      key={p.id}
+                      key={`provider-option-${p.id}-${idx}`}
                       onClick={() => handleProviderSelect(p.id)}
                       className={`p-2.5 sm:p-3 border text-left transition-all cursor-pointer flex flex-col justify-between relative ${
                         isSelected 
@@ -599,8 +599,8 @@ export default function LlmLoginModal({
                   onChange={(e) => setModel(e.target.value)}
                   className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900 cursor-pointer"
                 >
-                  {currentProviderMeta.models.map((m) => (
-                    <option key={m} value={m}>
+                  {currentProviderMeta.models.map((m, idx) => (
+                    <option key={`model-${m}-${idx}`} value={m}>
                       {m} {m === currentProviderMeta.defaultModel ? "(Recommended Default)" : ""}
                     </option>
                   ))}

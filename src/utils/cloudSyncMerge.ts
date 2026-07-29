@@ -43,6 +43,9 @@ function parseTime(dateStr?: string | null): number {
 }
 
 function getDeletedWordsFromExportData(data: IndexedDBExportData): DeletedWordRecord[] {
+  if (Array.isArray(data.stores?.deletedWords) && data.stores.deletedWords.length > 0) {
+    return data.stores.deletedWords;
+  }
   const settingRec = data.stores?.settings?.find(s => s && s.key === "deleted_words");
   if (!settingRec || !settingRec.value) return [];
   try {
@@ -325,23 +328,14 @@ export function autoMergeLocalAndRemote(
   }
 
   const mergedConfig = Array.from(mergedConfigMap.values());
-  const localSettings = localData.stores?.settings || [];
-  const remoteSettings = remoteData.stores?.settings || [];
+  const localSettings = (localData.stores?.settings || []).filter((s) => !s || s.key !== "deleted_words");
+  const remoteSettings = (remoteData.stores?.settings || []).filter((s) => !s || s.key !== "deleted_words");
 
   const settingsMap = new Map<string, StoredSetting>();
   for (const s of remoteSettings) if (s && s.key) settingsMap.set(s.key, s);
   for (const s of localSettings) if (s && s.key) settingsMap.set(s.key, s);
 
-  // Preserve merged deleted_words tombstones in settings
   const mergedDeletedList = Array.from(mergedDeletedWordsMap.values());
-  if (mergedDeletedList.length > 0) {
-    settingsMap.set("deleted_words", {
-      key: "deleted_words",
-      value: JSON.stringify(mergedDeletedList),
-      updatedAt: new Date().toISOString()
-    });
-  }
-
   const mergedSettings = Array.from(settingsMap.values());
 
   const mergedExportData: IndexedDBExportData = {
@@ -352,7 +346,8 @@ export function autoMergeLocalAndRemote(
       words: mergedWordsList,
       stats: [mergedStatsRec],
       config: mergedConfig,
-      settings: mergedSettings
+      settings: mergedSettings,
+      deletedWords: mergedDeletedList
     }
   };
 
@@ -394,7 +389,8 @@ export function sanitizeDataForCloudSync(data: IndexedDBExportData): IndexedDBEx
     words: data.stores.words ? [...data.stores.words] : [],
     stats: data.stores.stats ? JSON.parse(JSON.stringify(data.stores.stats)) : [],
     config: data.stores.config ? JSON.parse(JSON.stringify(data.stores.config)) : [],
-    settings: data.stores.settings ? JSON.parse(JSON.stringify(data.stores.settings)) : []
+    settings: data.stores.settings ? JSON.parse(JSON.stringify(data.stores.settings)) : [],
+    deletedWords: data.stores.deletedWords ? JSON.parse(JSON.stringify(data.stores.deletedWords)) : []
   };
 
   // 1. Sanitize config store (LLMConfig and TTSConfig)

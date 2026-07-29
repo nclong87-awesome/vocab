@@ -56,19 +56,19 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
       };
 
       for (const [storeName, storeData] of Object.entries(sanitized.stores)) {
-        let finalStoreData = storeData;
-        if (storeName === 'settings' && Array.isArray(storeData)) {
-          const deletedWords = storeData.find((s: any) => s && s.key === 'deleted_words');
-          if (deletedWords) {
-            filesToUpdate['VocabLearner_01_deleted_words.json'] = {
-              content: JSON.stringify(deletedWords, null, 2)
-            };
+        if (storeName === 'deletedWords') {
+          filesToUpdate['VocabLearner_01_deleted_words.json'] = {
+            content: JSON.stringify(storeData, null, 2)
+          };
+        } else {
+          let finalStoreData = storeData;
+          if (storeName === 'settings' && Array.isArray(storeData)) {
             finalStoreData = (storeData as any[]).filter((s: any) => !s || s.key !== 'deleted_words') as typeof storeData;
           }
+          filesToUpdate[`VocabLearner_02_store_${storeName}.json`] = {
+            content: JSON.stringify(finalStoreData, null, 2)
+          };
         }
-        filesToUpdate[`VocabLearner_02_store_${storeName}.json`] = {
-          content: JSON.stringify(finalStoreData, null, 2)
-        };
       }
     } else {
       throw new Error("Invalid export data format");
@@ -153,12 +153,20 @@ export const syncFromGist = async (token: string, gistId: string): Promise<any> 
 
   const deletedWordsFile = result.files['VocabLearner_01_deleted_words.json'] || result.files['deleted_words.json'];
   if (deletedWordsFile && deletedWordsFile.content) {
-    const deletedWordsContent = JSON.parse(deletedWordsFile.content);
-    if (!parsedData.stores.settings) {
-      parsedData.stores.settings = [];
+    try {
+      const deletedWordsContent = JSON.parse(deletedWordsFile.content);
+      if (Array.isArray(deletedWordsContent)) {
+        parsedData.stores.deletedWords = deletedWordsContent;
+      } else if (deletedWordsContent && deletedWordsContent.value) {
+        const parsedArr = JSON.parse(deletedWordsContent.value);
+        if (Array.isArray(parsedArr)) {
+          parsedData.stores.deletedWords = parsedArr;
+        }
+      }
+      hasValidData = true;
+    } catch {
+      // ignore
     }
-    parsedData.stores.settings.push(deletedWordsContent);
-    hasValidData = true;
   }
 
   if (hasValidData) {

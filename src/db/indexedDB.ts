@@ -14,12 +14,13 @@ const STORES = {
   words: "words",
   stats: "stats",
   config: "config",
-  settings: "settings"
+  settings: "settings",
+  deletedWords: "deleted_words"
 } as const;
 
 type StoreName = keyof typeof STORES;
 
-const ALL_STORES: StoreName[] = ["words", "stats", "config", "settings"];
+const ALL_STORES: StoreName[] = ["words", "stats", "config", "settings", "deletedWords"];
 
 /** Keys of records kept inside the shared `config` / `settings` stores. */
 const KEYS = {
@@ -85,7 +86,8 @@ const STORE_KEY_PATHS: Record<StoreName, string> = {
   words: "id",
   stats: "id",
   config: "id",
-  settings: "key"
+  settings: "key",
+  deletedWords: "id"
 };
 
 function createMissingStores(db: IDBDatabase): void {
@@ -301,18 +303,42 @@ export interface DeletedWordRecord {
 
 export async function getDeletedWordsFromDB(): Promise<DeletedWordRecord[]> {
   try {
-    const raw = await getSettingFromDB("deleted_words");
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
+    const records = await withStores(["deletedWords"], "readonly", (tx) =>
+      readAll<DeletedWordRecord>(tx, "deletedWords")
+    );
+    if (records.length > 0) {
+      return records;
+    }
+
+    // Fallback/Migration: Check if legacy settings store has deleted_words
+    const legacyRaw = await getSettingFromDB("deleted_words");
+    if (legacyRaw) {
+      try {
+        const parsed = JSON.parse(legacyRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          await saveDeletedWordsToDB(parsed);
+          // Clean up legacy setting record
+          await withStores(["settings"], "readwrite", (tx) => {
+            tx.objectStore(STORES.settings).delete("deleted_words");
+          }).catch(() => {});
+          return parsed;
+        }
+      } catch (err) {
+        console.error("Error parsing legacy deleted_words setting:", err);
+      }
+    }
+    return [];
+  } catch (err) {
+    console.error("Error reading deleted words from IndexedDB:", err);
     return [];
   }
 }
 
 export async function saveDeletedWordsToDB(records: DeletedWordRecord[]): Promise<void> {
   try {
-    await saveSettingToDB("deleted_words", JSON.stringify(records));
+    await withStores(["deletedWords"], "readwrite", (tx) => {
+      replaceAll(tx, "deletedWords", records);
+    });
   } catch (err) {
     console.error("Error saving deleted words tombstone:", err);
   }
@@ -564,21 +590,23 @@ export interface IndexedDBExportData {
     stats: StoredRecord<UserStats>[];
     config: StoredRecord<LLMConfig | TTSConfig>[];
     settings: StoredSetting[];
+    deletedWords?: DeletedWordRecord[];
   };
 }
 
 // Export the full database as a JSON object (one snapshot-consistent transaction)
 export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
-  const [words, stats, config, settings] = await withStores(ALL_STORES, "readonly", (tx) =>
+  const [words, stats, config, settings, deletedWords] = await withStores(ALL_STORES, "readonly", (tx) =>
     Promise.all([
       readAll<Word>(tx, "words"),
       readAll<StoredRecord<UserStats>>(tx, "stats"),
       readAll<StoredRecord<LLMConfig | TTSConfig>>(tx, "config"),
-      readAll<StoredSetting>(tx, "settings")
+      readAll<StoredSetting>(tx, "settings"),
+      readAll<DeletedWordRecord>(tx, "deletedWords")
     ])
   );
 
-  const stores = { words, stats, config, settings };
+  const stores = { words, stats, config, settings, deletedWords };
 
   return {
     version: DB_SCHEMA_VERSION,
@@ -605,6 +633,23 @@ export async function importIndexedDBDatabase(data: unknown): Promise<ImportResu
   }
   if (!Array.isArray(stores.words)) {
     throw new Error("Invalid backup file: 'words' array is required.");
+  }
+
+  // Legacy backup compatibility: if stores.deletedWords is missing but stores.settings has deleted_words key, migrate it
+  if (!Array.isArray(stores.deletedWords) && Array.isArray(stores.settings)) {
+    const deletedWordsSetting = stores.settings.find((s: any) => s && s.key === "deleted_words") as { key?: string; value?: string } | undefined;
+    if (deletedWordsSetting && typeof deletedWordsSetting.value === "string") {
+      try {
+        const parsed = JSON.parse(deletedWordsSetting.value);
+        if (Array.isArray(parsed)) {
+          stores.deletedWords = parsed;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    // Filter out legacy deleted_words setting key
+    stores.settings = stores.settings.filter((s: any) => !s || s.key !== "deleted_words");
   }
 
   // Preserve existing local API keys and settings if the imported payload has empty/missing keys
@@ -691,13 +736,13 @@ async function clearStores(stores: StoreName[]): Promise<void> {
   lsRemove(LEGACY_KEYS.decksBackup);
 }
 
-// Wipe every store (words, stats, config, settings) without restoring defaults
+// Wipe every store (words, stats, config, settings, deletedWords) without restoring defaults
 export function resetIndexedDBDatabase(): Promise<void> {
   return clearStores(ALL_STORES);
 }
 
-// Wipe words and stats only, keeping config and settings intact
+// Wipe words, stats, and deletedWords tombstones, keeping config and settings intact
 export function clearAllWordsAndStatsFromDB(): Promise<void> {
-  return clearStores(["words", "stats"]);
+  return clearStores(["words", "stats", "deletedWords"]);
 }
 
