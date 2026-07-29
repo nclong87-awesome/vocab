@@ -41,6 +41,7 @@ import {
   resetIndexedDBDatabase 
 } from "../db/indexedDB";
 import { syncToGist, syncFromGist } from "../services/githubGistService";
+import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
 
 import { SUPPORTED_LANGUAGES } from "../config/languages";
 
@@ -158,7 +159,8 @@ export default function SettingsView({
       setDbStatusMessage({ type: "info", text: "Generating backup and syncing to GitHub Gist..." });
       
       const dbData = await exportIndexedDBDatabase();
-      const jsonString = JSON.stringify(dbData);
+      const sanitizedData = sanitizeDataForCloudSync(dbData);
+      const jsonString = JSON.stringify(sanitizedData);
       
       const newGistId = await syncToGist(gistToken, jsonString, gistId);
       if (!gistId) {
@@ -309,7 +311,8 @@ export default function SettingsView({
       setDbStatusMessage({ type: "info", text: "Generating IndexedDB database backup..." });
       
       const dbData = await exportIndexedDBDatabase();
-      const jsonString = JSON.stringify(dbData, null, 2);
+      const sanitizedData = sanitizeDataForCloudSync(dbData);
+      const jsonString = JSON.stringify(sanitizedData, null, 2);
       const blob = new Blob([jsonString], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       

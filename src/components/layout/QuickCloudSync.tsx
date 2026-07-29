@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { exportIndexedDBDatabase, importIndexedDBDatabase } from "../../db/indexedDB";
 import { syncToGist, syncFromGist } from "../../services/githubGistService";
-import { autoMergeLocalAndRemote, MergeResult } from "../../utils/cloudSyncMerge";
+import { autoMergeLocalAndRemote, sanitizeDataForCloudSync, MergeResult } from "../../utils/cloudSyncMerge";
 import CloudSyncConfirmModal from "./CloudSyncConfirmModal";
 import CloudSyncConfigModal from "./CloudSyncConfigModal";
 
@@ -61,7 +61,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       if (!gistId) {
         // Token exists but no Gist ID yet -> Upload initial local database to cloud
         showToast("info", "No Gist ID found. Uploading initial cloud backup...");
-        const jsonString = JSON.stringify(localData);
+        const jsonString = JSON.stringify(sanitizeDataForCloudSync(localData));
         const newGistId = await syncToGist(token, jsonString);
         localStorage.setItem("github_gist_id", newGistId);
         showToast("success", "Created new GitHub Gist backup & synced cloud!");
@@ -129,7 +129,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       await importIndexedDBDatabase(mergeResult.mergedData);
 
       // 2. Save merged data to GitHub Gist
-      const jsonString = JSON.stringify(mergeResult.mergedData);
+      const jsonString = JSON.stringify(sanitizeDataForCloudSync(mergeResult.mergedData));
       const newGistId = await syncToGist(token, jsonString, gistId);
       if (!gistId && newGistId) {
         localStorage.setItem("github_gist_id", newGistId);
@@ -164,7 +164,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     try {
       setIsSyncing(true);
       const localData = await exportIndexedDBDatabase();
-      const jsonString = JSON.stringify(localData);
+      const jsonString = JSON.stringify(sanitizeDataForCloudSync(localData));
 
       const newGistId = await syncToGist(token, jsonString, gistId);
       if (!gistId && newGistId) {

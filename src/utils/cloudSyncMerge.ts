@@ -206,8 +206,46 @@ export function autoMergeLocalAndRemote(
     updatedAt: new Date().toISOString()
   };
 
-  // 4. Merge Config & Settings
-  const mergedConfig = localData.stores?.config || remoteData.stores?.config || [];
+  // 4. Merge Config & Settings (Preserve local API keys)
+  const localConfigList = localData.stores?.config || [];
+  const remoteConfigList = remoteData.stores?.config || [];
+  const mergedConfigMap = new Map<string, StoredRecord<any>>();
+
+  for (const rRec of remoteConfigList) {
+    if (rRec && rRec.id) {
+      mergedConfigMap.set(rRec.id, JSON.parse(JSON.stringify(rRec)));
+    }
+  }
+
+  for (const lRec of localConfigList) {
+    if (!lRec || !lRec.id) continue;
+    const existing = mergedConfigMap.get(lRec.id);
+    if (!existing) {
+      mergedConfigMap.set(lRec.id, JSON.parse(JSON.stringify(lRec)));
+    } else {
+      const mergedRecData = { ...existing.data, ...lRec.data };
+      if ((lRec.data as any)?.apiKey) {
+        mergedRecData.apiKey = (lRec.data as any).apiKey;
+      }
+      if ((lRec.data as any)?.savedProviders && (existing.data as any)?.savedProviders) {
+        const mergedProviders = { ...(existing.data as any).savedProviders };
+        for (const [pKey, pVal] of Object.entries((lRec.data as any).savedProviders as Record<string, any>)) {
+          if (pVal && typeof pVal === "object") {
+            const existingP = mergedProviders[pKey] || {};
+            mergedProviders[pKey] = {
+              ...existingP,
+              ...pVal,
+              apiKey: pVal.apiKey || existingP.apiKey || ""
+            };
+          }
+        }
+        mergedRecData.savedProviders = mergedProviders;
+      }
+      mergedConfigMap.set(lRec.id, { ...existing, ...lRec, data: mergedRecData });
+    }
+  }
+
+  const mergedConfig = Array.from(mergedConfigMap.values());
   const localSettings = localData.stores?.settings || [];
   const remoteSettings = remoteData.stores?.settings || [];
 
@@ -251,5 +289,74 @@ export function autoMergeLocalAndRemote(
       },
       totalMergedWordsCount: mergedWordsList.length
     }
+  };
+}
+
+/**
+ * Sanitizes exported IndexedDB data by stripping API keys and secret tokens
+ * before sending to cloud storage (e.g. GitHub Gist).
+ */
+export function sanitizeDataForCloudSync(data: IndexedDBExportData): IndexedDBExportData {
+  if (!data || !data.stores) return data;
+
+  const storesCopy = {
+    words: data.stores.words ? [...data.stores.words] : [],
+    stats: data.stores.stats ? JSON.parse(JSON.stringify(data.stores.stats)) : [],
+    config: data.stores.config ? JSON.parse(JSON.stringify(data.stores.config)) : [],
+    settings: data.stores.settings ? JSON.parse(JSON.stringify(data.stores.settings)) : []
+  };
+
+  // 1. Sanitize config store (LLMConfig and TTSConfig)
+  if (Array.isArray(storesCopy.config)) {
+    storesCopy.config = storesCopy.config.map((rec: any) => {
+      if (!rec || !rec.data) return rec;
+
+      const recData = JSON.parse(JSON.stringify(rec.data));
+
+      if (typeof recData.apiKey === "string") {
+        recData.apiKey = "";
+      }
+
+      if (recData.savedProviders && typeof recData.savedProviders === "object") {
+        const sanitizedProviders: Record<string, any> = {};
+        for (const [pKey, pVal] of Object.entries(recData.savedProviders)) {
+          if (pVal && typeof pVal === "object") {
+            sanitizedProviders[pKey] = {
+              ...(pVal as object),
+              apiKey: ""
+            };
+          } else {
+            sanitizedProviders[pKey] = pVal;
+          }
+        }
+        recData.savedProviders = sanitizedProviders;
+      }
+
+      return { ...rec, data: recData };
+    });
+  }
+
+  // 2. Sanitize settings store
+  if (Array.isArray(storesCopy.settings)) {
+    storesCopy.settings = storesCopy.settings.filter((s: any) => {
+      if (!s || !s.key) return false;
+      const lowerKey = s.key.toLowerCase();
+      if (
+        lowerKey.includes("token") ||
+        lowerKey.includes("api_key") ||
+        lowerKey.includes("apikey") ||
+        lowerKey.includes("secret") ||
+        lowerKey.includes("password") ||
+        lowerKey === "github_gist_token"
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  return {
+    ...data,
+    stores: storesCopy
   };
 }

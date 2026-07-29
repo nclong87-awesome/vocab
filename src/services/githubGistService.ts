@@ -1,4 +1,19 @@
+import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
+import { IndexedDBExportData } from "../db/indexedDB";
+
 export const syncToGist = async (token: string, data: string, gistId?: string): Promise<string> => {
+  let contentToSend = data;
+
+  try {
+    const parsed = JSON.parse(data);
+    if (parsed && typeof parsed === "object" && parsed.stores) {
+      const sanitized = sanitizeDataForCloudSync(parsed as IndexedDBExportData);
+      contentToSend = JSON.stringify(sanitized);
+    }
+  } catch {
+    // If not valid JSON object, send string as is
+  }
+
   const url = gistId 
     ? `https://api.github.com/gists/${gistId}`
     : 'https://api.github.com/gists';
@@ -15,7 +30,7 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
       public: false,
       files: {
         'vocab_learner_backup.json': {
-          content: data
+          content: contentToSend
         }
       }
     })

@@ -529,6 +529,60 @@ export async function importIndexedDBDatabase(data: unknown): Promise<ImportResu
     throw new Error("Invalid backup file: 'words' array is required.");
   }
 
+  // Preserve existing local API keys and settings if the imported payload has empty/missing keys
+  try {
+    const existingConfig = await withStores(["config"], "readonly", (tx) => readAll<StoredRecord<any>>(tx, "config"));
+    const existingSettings = await withStores(["settings"], "readonly", (tx) => readAll<StoredSetting>(tx, "settings"));
+
+    if (Array.isArray(stores.config)) {
+      stores.config = stores.config.map((incomingRec: any) => {
+        if (!incomingRec || !incomingRec.id) return incomingRec;
+        const localMatch = existingConfig.find((c) => c.id === incomingRec.id);
+        if (!localMatch || !localMatch.data) return incomingRec;
+
+        const updatedData = { ...incomingRec.data };
+
+        // Restore local top-level apiKey if incoming is empty
+        if (!updatedData.apiKey && localMatch.data.apiKey) {
+          updatedData.apiKey = localMatch.data.apiKey;
+        }
+
+        // Restore local savedProviders apiKeys
+        if (localMatch.data.savedProviders && updatedData.savedProviders) {
+          const mergedProviders = { ...updatedData.savedProviders };
+          for (const [pKey, localP] of Object.entries(localMatch.data.savedProviders as Record<string, any>)) {
+            if (localP && localP.apiKey) {
+              mergedProviders[pKey] = {
+                ...(mergedProviders[pKey] || {}),
+                apiKey: localP.apiKey
+              };
+            }
+          }
+          updatedData.savedProviders = mergedProviders;
+        }
+
+        return { ...incomingRec, data: updatedData };
+      });
+    }
+
+    if (Array.isArray(stores.settings)) {
+      const incomingKeys = new Set(stores.settings.map((s: any) => s?.key));
+      for (const localSetting of existingSettings) {
+        if (localSetting && localSetting.key) {
+          const lowerKey = localSetting.key.toLowerCase();
+          if (
+            (lowerKey.includes("token") || lowerKey.includes("key") || lowerKey.includes("secret")) &&
+            !incomingKeys.has(localSetting.key)
+          ) {
+            stores.settings.push(localSetting);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Notice: could not preserve existing local API keys during import", err);
+  }
+
   const payload = ALL_STORES.map((name) => ({
     name,
     items: Array.isArray(stores[name]) ? (stores[name] as unknown[]) : null
