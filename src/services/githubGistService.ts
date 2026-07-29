@@ -58,12 +58,12 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
       for (const [storeName, storeData] of Object.entries(sanitized.stores)) {
         let finalStoreData = storeData;
         if (storeName === 'settings' && Array.isArray(storeData)) {
-          const deletedWords = storeData.find(s => s && s.key === 'deleted_words');
+          const deletedWords = storeData.find((s: any) => s && s.key === 'deleted_words');
           if (deletedWords) {
             filesToUpdate['VocabLearner_01_deleted_words.json'] = {
               content: JSON.stringify(deletedWords, null, 2)
             };
-            finalStoreData = storeData.filter(s => !s || s.key !== 'deleted_words');
+            finalStoreData = (storeData as any[]).filter((s: any) => !s || s.key !== 'deleted_words') as typeof storeData;
           }
         }
         filesToUpdate[`VocabLearner_02_store_${storeName}.json`] = {

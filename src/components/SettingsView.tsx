@@ -28,8 +28,10 @@ import {
   BookmarkCheck,
   ShieldCheck,
   ExternalLink,
-  Cloud
+  Cloud,
+  Info
 } from "lucide-react";
+import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider, SavedProviderConfig } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
@@ -450,9 +452,14 @@ export default function SettingsView({
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
-                Settings & Voice Engine
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+                  Settings & Voice Engine
+                </h2>
+                <span className="text-xs font-mono font-bold bg-stone-900 text-white px-2 py-0.5 shadow-2xs">
+                  v{APP_VERSION}
+                </span>
+              </div>
               <p className="text-xs sm:text-sm text-stone-500 font-normal mt-0.5">
                 Configure Text-to-Speech AI Models, speech pitch, speed, and learning preferences
               </p>
@@ -1449,7 +1456,43 @@ export default function SettingsView({
         </button>
       </div>
 
+      {/* Section 6: App System & Version Information */}
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4">
+        <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+              <Info className="w-4 h-4 text-stone-800" />
+              App Information & System Status
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              System metadata and application version generated directly from package.json
+            </p>
+          </div>
+          <span className="text-xs font-mono font-bold px-3 py-1 bg-stone-900 text-white shadow-2xs">
+            v{APP_VERSION}
+          </span>
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">App Version</span>
+            <span className="font-mono font-bold text-stone-900 text-sm">v{APP_VERSION}</span>
+            <p className="text-[11px] text-stone-500 font-serif italic">Generated from package.json</p>
+          </div>
+
+          <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Framework & Engine</span>
+            <span className="font-semibold text-stone-900 text-xs block">React 19 + Vite 6</span>
+            <p className="text-[11px] text-stone-500 font-serif italic">Express + TypeScript build system</p>
+          </div>
+
+          <div className="bg-stone-50 border border-stone-200 p-3 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">Local Database</span>
+            <span className="font-semibold text-stone-900 text-xs block">IndexedDB (VocabLearnerDB v1)</span>
+            <p className="text-[11px] text-stone-500 font-serif italic">Client-side offline state</p>
+          </div>
+        </div>
+      </div>
 
       {/* Reset Confirmation Modal */}
       {showResetConfirmModal && (
