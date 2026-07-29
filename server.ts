@@ -343,10 +343,10 @@ CRITICAL MANDATORY REQUIREMENT:
   }
 });
 
-// 4.1. Check multiple definitions of a word
+// 4.1. Check multiple definitions or exact definition with context hint of a word
 app.post("/api/check-word-definitions", async (req, res) => {
   try {
-    const { word, targetLanguage, nativeLanguage, llmConfig } = req.body;
+    const { word, hint, targetLanguage, nativeLanguage, llmConfig } = req.body;
 
     if (!word) {
       return res.status(400).json({ error: "Word is required" });
@@ -355,13 +355,28 @@ app.post("/api/check-word-definitions", async (req, res) => {
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
-    const prompt = `Analyze the word or expression "${word}". Determine if it has multiple common meanings, definitions, or parts of speech in the target language "${userTarget}" (with translation to "${userNative}").
-If there is only 1 dominant or common definition, set "hasMultipleSenses" to false. If there are 2 to 4 distinct meanings or parts of speech, set "hasMultipleSenses" to true.
-Provide up to 4 most common distinct senses. For each sense, provide its part of speech, a clear definition STRICTLY in the target language ("${userTarget}"), its translation in "${userNative}", its pronunciation in IPA, an example sentence in "${userTarget}", a translation of the example sentence in "${userNative}", and a short English prompt to generate a relevant image.`;
+    const prompt = `Analyze the word or expression "${word}".
+${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL MANDATORY REQUIREMENT: The user wants to add "${word}" specifically in the scope/context described above.` : ""}
+Target language: "${userTarget}".
+User's native language: "${userNative}".
 
-    const systemInstruction = `You are an elite dictionary lookup engine. You analyze target language words and output a JSON array of their major meanings or definitions.`;
+CRITICAL INSTRUCTIONS:
+1. ${hint ? `Use the provided Scope/Context Hint ("${hint}") to generate the exact definition, translation, pronunciation, and example sentence for "${word}" matching that specific scope/context.` : "Analyze the word or expression and provide its definition and translation."}
+2. If no valid definition, translation, or meaning can be found or generated for "${word}" (or if "${word}" is invalid, unrecognized, or cannot be matched with a definition in the given context), set "notFound": true, "hasMultipleSenses": false, and "senses": [].
+3. ${hint ? `Since a specific Scope/Context Hint was provided ("${hint}"), set "hasMultipleSenses": false and return ONLY 1 exact matching sense in "senses".` : `If there is only 1 dominant or common definition, set "hasMultipleSenses": false. If there are 2 to 4 distinct meanings or parts of speech in "${userTarget}", set "hasMultipleSenses": true.`}
+4. Provide the matching sense(s) in "senses". For each sense, provide:
+   - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression
+   - "definition": clear definition written STRICTLY in the target language ("${userTarget}")
+   - "translation": direct translation in the user's native language ("${userNative}")
+   - "pronunciation": IPA pronunciation
+   - "example": example sentence in "${userTarget}"
+   - "exampleTranslation": translation of example sentence in "${userNative}"
+   - "imagePrompt": short English visual description`;
+
+    const systemInstruction = `You are an elite dictionary lookup engine. You analyze target language words and output JSON with exact definitions and translations. If no valid definition exists or cannot be found, set "notFound": true and "senses": [].`;
     const schemaDesc = `{
   "word": "string",
+  "notFound": boolean,
   "hasMultipleSenses": boolean,
   "senses": [
     {
@@ -371,7 +386,7 @@ Provide up to 4 most common distinct senses. For each sense, provide its part of
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imagePrompt": "string (a short, clear English description of the word's meaning for image generation, do not include urls here)"
+      "imagePrompt": "string (short English visual description)"
     }
   ]
 }`;

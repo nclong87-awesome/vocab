@@ -14,7 +14,7 @@ interface ChatViewProps {
   isTyping: boolean;
   targetLanguage: string;
   nativeLanguage: string;
-  onAddWord: (word?: string) => void;
+  onAddWord: (word?: string, hint?: string) => void;
   onGenerateByTopic: () => void;
   onStartQuiz: () => void;
   onFixGrammar: () => void;
@@ -414,7 +414,7 @@ export default function ChatView({
                               } else if (act.action === "fix_another") {
                                 onFixGrammar();
                               } else if (act.action === "add_word" && act.payload?.word) {
-                                onAddWord(act.payload.word);
+                                onAddWord(act.payload.word, act.payload?.hint);
                               } else if (act.action === "start_quiz") {
                                 onStartQuiz();
                               } else if (act.action === "quiz_answer" && act.payload?.answer) {

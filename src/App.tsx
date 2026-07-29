@@ -434,35 +434,58 @@ export default function App() {
   };
 
   // Add individual word directly from chat suggestions (or conversational input)
-  const handleConversationalAddWord = async (wordText: string) => {
+  const handleConversationalAddWord = async (wordText: string, hint?: string) => {
     setIsTyping(true);
     const statusMsgId = `add-word-status-${Date.now()}`;
+    const contextHintStr = hint ? ` with context *"${hint}"*` : "";
+
     setChatMessages(prev => [
       ...prev,
       {
         id: statusMsgId,
         role: "assistant",
-        content: `🔍 *Consulting dictionary, translating, and checking if **"${wordText}"** has multiple definitions...*`,
+        content: `🔍 *Consulting dictionary, translating, and generating definition for **"${wordText}"**${contextHintStr}...*`,
         timestamp: new Date().toISOString()
       }
     ]);
 
     try {
-      // Check if word has multiple distinct meanings/definitions
+      // Check if word has multiple distinct meanings or generate exact definition with context hint
       const data = await checkWordDefinitionsService({
         word: wordText,
+        hint: hint,
         targetLanguage,
         nativeLanguage,
         llmConfig
       });
 
-      if (data.hasMultipleSenses && data.senses && data.senses.length > 1) {
+      // Filter valid senses that contain a definition or translation
+      const validSenses = (data.senses || []).filter((s: any) => s && (s.definition || s.translation));
+
+      // IF NO DEFINITION FOUND OR GENERATED -> DO NOT ADD TO DB
+      if (data.notFound || validSenses.length === 0) {
+        setChatMessages(prev => {
+          const filtered = prev.filter(m => m.id !== statusMsgId);
+          return [
+            ...filtered,
+            {
+              id: `sys-not-found-${Date.now()}`,
+              role: "assistant",
+              content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.`,
+              timestamp: new Date().toISOString()
+            }
+          ];
+        });
+        return;
+      }
+
+      if (data.hasMultipleSenses && validSenses.length > 1) {
         setPendingWordSenses({
           word: wordText,
-          senses: data.senses
+          senses: validSenses
         });
 
-        const actions = data.senses.map((sense: any, idx: number) => {
+        const actions = validSenses.map((sense: any, idx: number) => {
           const partOfSpeech = sense.partOfSpeech || "word";
           const translation = sense.translation && sense.translation !== "undefined" ? sense.translation : "";
           const translationPart = translation ? `${translation}: ` : "";
@@ -494,16 +517,31 @@ export default function App() {
           ];
         });
       } else {
-        // Only 1 definition or no senses array found, use fallback or the single sense
-        const sense = (data.senses && data.senses.length > 0) ? data.senses[0] : null;
+        // Only 1 definition found (exact definition matching context hint)
+        const sense = validSenses[0];
         
         const pronunciationVal = sense?.pronunciation || data.pronunciation || "/.../";
-        const partOfSpeechVal = sense?.partOfSpeech || data.partOfSpeech || "noun";
-        const definitionVal = sense?.definition || data.definition || `Vocabulary word "${wordText}"`;
-        const translationVal = sense?.translation || data.translation || "Translation";
+        const partOfSpeechVal = sense?.partOfSpeech || data.partOfSpeech || "expression";
+        const definitionVal = sense?.definition || data.definition;
+        const translationVal = sense?.translation || data.translation;
         const exampleVal = sense?.example || data.example || undefined;
         const exampleTranslationVal = sense?.exampleTranslation || data.exampleTranslation || undefined;
-        const imagePromptVal = sense?.imagePrompt || sense?.definition || data.definition || wordText;
+
+        if (!definitionVal || !translationVal) {
+          setChatMessages(prev => {
+            const filtered = prev.filter(m => m.id !== statusMsgId);
+            return [
+              ...filtered,
+              {
+                id: `sys-not-found-${Date.now()}`,
+                role: "assistant",
+                content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.`,
+                timestamp: new Date().toISOString()
+              }
+            ];
+          });
+          return;
+        }
 
         const newWord: Word = {
           id: `ai-word-${Date.now()}`,
@@ -534,7 +572,7 @@ export default function App() {
             {
               id: `sys-add-${Date.now()}`,
               role: "assistant",
-              content: `🎉 **Successfully added "${newWord.word}" to your collection!**\n\n- **Translation**: ${newWord.translation}\n- **Pronunciation**: \`${newWord.pronunciation}\`\n- **Definition**: *${newWord.definition}*\n- **Example**: "${newWord.example || ""}"\n- **Example Translation**: "${newWord.exampleTranslation || ""}"\n\nI've designed a custom visual card and added it to your collection! You can study it anytime in the **My Words** panel on the right.`,
+              content: `🎉 **Successfully added "${newWord.word}" to your collection!**\n\n- **Translation**: ${newWord.translation}\n- **Pronunciation**: \`${newWord.pronunciation}\`\n- **Definition**: *${newWord.definition}*${newWord.example ? `\n- **Example**: "${newWord.example}"` : ""}${newWord.exampleTranslation ? `\n- **Example Translation**: "${newWord.exampleTranslation}"` : ""}\n\nI generated the exact definition for this word context and saved it to your database collection!`,
               timestamp: new Date().toISOString()
             }
           ];
@@ -549,7 +587,7 @@ export default function App() {
           {
             id: `sys-add-err-${Date.now()}`,
             role: "assistant",
-            content: `⚠️ **Failed to add word:** ${err.message || "Unknown error"}. Please check your settings and try again.`,
+            content: `⚠️ **Failed to add word:** ${err.message || "Unknown error"}. Nothing was added to your database collection.`,
             timestamp: new Date().toISOString()
           }
         ];
@@ -647,13 +685,13 @@ export default function App() {
   };
 
   // Unified conversational word addition or direct addition
-  const handleConversationalAddWordOrPrompt = (wordText?: string) => {
+  const handleConversationalAddWordOrPrompt = (wordText?: string, hint?: string) => {
     setActiveQuiz(null);
     setPendingWordSenses(null);
     setPendingTopicSubject("");
 
     if (wordText && wordText.trim()) {
-      handleConversationalAddWord(wordText.trim());
+      handleConversationalAddWord(wordText.trim(), hint?.trim());
     } else {
       setConversationalState("adding_word");
       const addWordMsg: ChatMessage = {
@@ -847,7 +885,7 @@ export default function App() {
             actions.push({
               label: `➕ Add "${cand.word}" to collection (${cand.reason || "Candidate vocabulary"})`,
               action: "add_word",
-              payload: { word: cand.word }
+              payload: { word: cand.word, hint: cand.reason }
             });
           }
         });
