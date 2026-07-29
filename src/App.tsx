@@ -20,7 +20,7 @@ import {
   getTTSConfigFromDB,
   saveTTSConfigToDB
 } from "./db/indexedDB";
-import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
+import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay, getDaysSinceLastReview } from "./utils/spacedRepetition";
 
 import Dashboard from "./components/Dashboard";
@@ -81,6 +81,32 @@ export default function App() {
     totalCorrectAnswers: 0,
     streak: { count: 0, lastActiveDate: "", history: [] }
   });
+
+  // Global Interaction Listener to stop TTS immediately on user inputs
+  useEffect(() => {
+    const handleInteraction = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' || 
+        target.tagName === 'TEXTAREA' || 
+        target.tagName === 'BUTTON' ||
+        target.closest('button') ||
+        target.closest('input')
+      ) {
+        stopSpeech();
+      }
+    };
+
+    window.addEventListener('click', handleInteraction, true);
+    window.addEventListener('keydown', handleInteraction, true);
+    window.addEventListener('touchstart', handleInteraction, true);
+
+    return () => {
+      window.removeEventListener('click', handleInteraction, true);
+      window.removeEventListener('keydown', handleInteraction, true);
+      window.removeEventListener('touchstart', handleInteraction, true);
+    };
+  }, []);
 
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
@@ -1198,9 +1224,10 @@ export default function App() {
 
   // Delete individual word
   const handleDeleteWord = useCallback((wordId: string) => {
+    const targetWord = words.find(w => w.id === wordId);
     setWords(prev => prev.filter(w => w.id !== wordId));
-    deleteWordFromDB(wordId).catch(e => console.error("IndexedDB delete word save error:", e));
-  }, []);
+    deleteWordFromDB(wordId, targetWord?.word).catch(e => console.error("IndexedDB delete word save error:", e));
+  }, [words]);
 
   // Update words list
   const handleUpdateWords = useCallback((updatedWords: Word[]) => {

@@ -293,9 +293,67 @@ export async function getAllWordsFromDB(): Promise<Word[]> {
   }
 }
 
+export interface DeletedWordRecord {
+  id: string;
+  word: string;
+  deletedAt: string;
+}
+
+export async function getDeletedWordsFromDB(): Promise<DeletedWordRecord[]> {
+  try {
+    const raw = await getSettingFromDB("deleted_words");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDeletedWordsToDB(records: DeletedWordRecord[]): Promise<void> {
+  try {
+    await saveSettingToDB("deleted_words", JSON.stringify(records));
+  } catch (err) {
+    console.error("Error saving deleted words tombstone:", err);
+  }
+}
+
+export async function recordDeletedWordsInDB(items: { id: string; word?: string }[]): Promise<void> {
+  if (items.length === 0) return;
+  try {
+    const existing = await getDeletedWordsFromDB();
+    const existingMap = new Map<string, DeletedWordRecord>();
+    for (const rec of existing) {
+      if (rec && rec.id) existingMap.set(rec.id, rec);
+    }
+    const now = new Date().toISOString();
+    for (const item of items) {
+      if (!item || !item.id) continue;
+      existingMap.set(item.id, {
+        id: item.id,
+        word: item.word || "",
+        deletedAt: now
+      });
+    }
+    await saveDeletedWordsToDB(Array.from(existingMap.values()));
+  } catch (err) {
+    console.error("Error recording deleted words:", err);
+  }
+}
+
 // Replace the whole word collection in a single transaction
 export async function saveAllWordsToDB(words: Word[]): Promise<void> {
   try {
+    // Check if any existing words were removed to record tombstones
+    const existingWords = await withStores(["words"], "readonly", (tx) => readAll<Word>(tx, "words")).catch(() => []);
+    if (existingWords.length > 0) {
+      const newWordIds = new Set(words.map(w => w.id));
+      const removedWords = existingWords.filter(w => w && w.id && !newWordIds.has(w.id));
+      if (removedWords.length > 0) {
+        await recordDeletedWordsInDB(removedWords.map(w => ({ id: w.id, word: w.word })));
+      }
+    }
+
     await withStores(["words"], "readwrite", (tx) => replaceAll(tx, "words", words));
     await markInitialized();
   } catch (err) {
@@ -328,11 +386,12 @@ export async function saveWordsToDB(words: readonly Word[]): Promise<void> {
 }
 
 // Remove a single word from IndexedDB
-export async function deleteWordFromDB(wordId: string): Promise<void> {
+export async function deleteWordFromDB(wordId: string, wordText?: string): Promise<void> {
   try {
     await withStores(["words"], "readwrite", (tx) => {
       tx.objectStore(STORES.words).delete(wordId);
     });
+    await recordDeletedWordsInDB([{ id: wordId, word: wordText || "" }]);
   } catch (err) {
     console.error("Error deleting word from IndexedDB:", err);
   }
@@ -346,10 +405,29 @@ export async function deleteWordFromDB(wordId: string): Promise<void> {
 export async function getStatsFromDB(defaultStats: UserStats): Promise<UserStats> {
   try {
     const stored = await readRecordData<UserStats>("stats", KEYS.stats);
-    if (stored) return stored;
+    if (stored) {
+      return {
+        ...defaultStats,
+        ...stored,
+        streak: {
+          count: stored.streak?.count ?? 0,
+          lastActiveDate: stored.streak?.lastActiveDate ?? "",
+          history: Array.isArray(stored.streak?.history) ? stored.streak.history : []
+        }
+      };
+    }
 
     const legacy = parseJSON<UserStats>(lsGet(LEGACY_KEYS.stats), "stats");
-    const stats = legacy ?? defaultStats;
+    const rawStats = legacy ?? defaultStats;
+    const stats: UserStats = {
+      ...defaultStats,
+      ...rawStats,
+      streak: {
+        count: rawStats.streak?.count ?? 0,
+        lastActiveDate: rawStats.streak?.lastActiveDate ?? "",
+        history: Array.isArray(rawStats.streak?.history) ? rawStats.streak.history : []
+      }
+    };
     await saveStatsToDB(stats);
     return stats;
   } catch (err) {

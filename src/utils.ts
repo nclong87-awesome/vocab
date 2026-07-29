@@ -17,25 +17,30 @@ export function getYesterdayStr(): string {
   return `${year}-${month}-${day}`;
 }
 
-export function calculateNewStreak(currentStreak: Streak): Streak {
+export function calculateNewStreak(currentStreak?: Streak): Streak {
   const today = getTodayStr();
   const yesterday = getYesterdayStr();
   
-  const history = [...currentStreak.history];
-  let count = currentStreak.count;
+  const safeStreak = currentStreak || { count: 0, lastActiveDate: "", history: [] };
+  const history = Array.isArray(safeStreak.history) ? [...safeStreak.history] : [];
+  let count = typeof safeStreak.count === "number" ? safeStreak.count : 0;
 
   // If already studied today, history has it, do not double-increment count
   if (history.includes(today)) {
-    return currentStreak;
+    return {
+      count,
+      lastActiveDate: today,
+      history
+    };
   }
 
   // Add today to history
   history.push(today);
 
   // Check last active date to update streak count
-  if (currentStreak.lastActiveDate === yesterday) {
+  if (safeStreak.lastActiveDate === yesterday) {
     count += 1;
-  } else if (currentStreak.lastActiveDate === today) {
+  } else if (safeStreak.lastActiveDate === today) {
     // No change
   } else {
     // Streak broken or brand new

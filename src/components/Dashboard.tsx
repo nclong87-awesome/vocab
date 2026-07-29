@@ -65,6 +65,7 @@ export default function Dashboard({
   const pastSevenDays = useMemo(() => {
     const days = [];
     const date = new Date();
+    const historyList = Array.isArray(stats?.streak?.history) ? stats.streak.history : [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(date);
       d.setDate(date.getDate() - i);
@@ -73,11 +74,11 @@ export default function Dashboard({
         dateStr: str,
         dayName: d.toLocaleDateString(undefined, { weekday: "short" }),
         dayNum: d.getDate(),
-        studied: stats.streak.history.includes(str)
+        studied: historyList.includes(str)
       });
     }
     return days;
-  }, [stats.streak.history]);
+  }, [stats?.streak?.history]);
 
   return (
     <div className="space-y-12" id="dashboard-container">

@@ -45,8 +45,10 @@ export function getLanguageCode(langName?: string): string {
 
 let currentAudioElement: HTMLAudioElement | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
+let currentSpeechToken: number = 0;
 
 export function stopSpeech(): void {
+  currentSpeechToken++;
   if (typeof window !== "undefined" && window.speechSynthesis) {
     try {
       window.speechSynthesis.cancel();
@@ -130,13 +132,33 @@ export async function speakText(
   onEnd?: () => void
 ): Promise<void> {
   stopSpeech();
+  const myToken = currentSpeechToken;
 
-  if (!text || !text.trim()) return;
+  if (!text || !text.trim()) {
+    if (onEnd) onEnd();
+    return;
+  }
+
+  let hasStarted = false;
+  const safeOnStart = () => {
+    if (!hasStarted) {
+      hasStarted = true;
+      if (onStart) onStart();
+    }
+  };
+
+  let hasEnded = false;
+  const safeOnEnd = () => {
+    if (!hasEnded) {
+      hasEnded = true;
+      if (onEnd) onEnd();
+    }
+  };
 
   // Browser Native Speech Synthesis (Default or Fallback)
   const speakWithBrowser = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
-      if (onEnd) onEnd();
+      safeOnEnd();
       return;
     }
 
@@ -148,9 +170,11 @@ export async function speakText(
     } catch {}
 
     const triggerSpeech = () => {
+      if (myToken !== currentSpeechToken) return;
       try {
         const utterance = new SpeechSynthesisUtterance(text);
         activeUtterance = utterance;
+        (window as any)._activeUtteranceRef = utterance; // Prevent garbage collection bug in Chromium browsers
 
         utterance.rate = ttsConfig.speed ?? 1.0;
         utterance.pitch = ttsConfig.pitch ?? 1.0;
@@ -175,14 +199,15 @@ export async function speakText(
         }
 
         utterance.onstart = () => {
-          if (onStart) onStart();
+          safeOnStart();
         };
 
         utterance.onend = () => {
           if (activeUtterance === utterance) {
             activeUtterance = null;
           }
-          if (onEnd) onEnd();
+          (window as any)._activeUtteranceRef = null;
+          safeOnEnd();
         };
 
         utterance.onerror = (err) => {
@@ -190,22 +215,25 @@ export async function speakText(
           if (activeUtterance === utterance) {
             activeUtterance = null;
           }
-          if (onEnd) onEnd();
+          (window as any)._activeUtteranceRef = null;
+          safeOnEnd();
         };
 
+        // Fallback safety timeout if browser fires onstart immediately
+        safeOnStart();
         window.speechSynthesis.speak(utterance);
       } catch (err) {
         console.warn("SpeechSynthesis execution error:", err);
         activeUtterance = null;
-        if (onEnd) onEnd();
+        (window as any)._activeUtteranceRef = null;
+        safeOnEnd();
       }
     };
 
-    setTimeout(triggerSpeech, 80);
+    setTimeout(triggerSpeech, 60);
   };
 
-  const isIframe = typeof window !== "undefined" && window.self !== window.top;
-  const activeEngine = (ttsConfig?.engine === 'browser' && isIframe) ? 'gemini' : (ttsConfig?.engine || 'browser');
+  const activeEngine = ttsConfig?.engine || 'browser';
 
   if (activeEngine === 'browser') {
     speakWithBrowser();
@@ -219,14 +247,17 @@ export async function speakText(
   if (cachedDataUrl) {
     cachedDataUrl = wrapPcmBase64ToWavDataUrl(cachedDataUrl);
     try {
-      if (onStart) onStart();
       const audio = new Audio(cachedDataUrl);
       currentAudioElement = audio;
       audio.playbackRate = ttsConfig?.speed ?? 1.0;
 
+      audio.onplay = () => {
+        safeOnStart();
+      };
+
       audio.onended = () => {
         currentAudioElement = null;
-        if (onEnd) onEnd();
+        safeOnEnd();
       };
 
       audio.onerror = (e) => {
@@ -247,8 +278,6 @@ export async function speakText(
 
   // AI TTS Model generation via server proxy
   try {
-    if (onStart) onStart();
-
     const response = await fetch("/api/tts", {
       method: "POST",
       headers: {
@@ -265,6 +294,8 @@ export async function speakText(
       })
     });
 
+    if (myToken !== currentSpeechToken) return;
+
     if (!response.ok) {
       console.warn(`AI TTS server returned status ${response.status}, falling back to browser speech synthesis`);
       speakWithBrowser();
@@ -272,6 +303,8 @@ export async function speakText(
     }
 
     const data = await response.json();
+    if (myToken !== currentSpeechToken) return;
+    
     if (!data.audioDataUrl) {
       console.warn("No audio data returned, falling back to browser speech");
       speakWithBrowser();
@@ -287,9 +320,13 @@ export async function speakText(
     currentAudioElement = audio;
     audio.playbackRate = ttsConfig.speed ?? 1.0;
 
+    audio.onplay = () => {
+      safeOnStart();
+    };
+
     audio.onended = () => {
       currentAudioElement = null;
-      if (onEnd) onEnd();
+      safeOnEnd();
     };
 
     audio.onerror = (e) => {

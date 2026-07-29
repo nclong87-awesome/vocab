@@ -21,7 +21,7 @@ import {
   Layers
 } from "lucide-react";
 import { Word, QuizQuestion, TTSConfig, LLMConfig, UserStats } from "../types";
-import { speakText as speakTextService, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
+import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { generateQuizQuestions, containsNonTargetLanguage, getImageSearchTerm } from "../utils/quizGenerator";
 import { generateAiQuizQuestionsService } from "../services/llmClientService";
 
@@ -35,6 +35,19 @@ interface QuizViewProps {
   onGoBack: () => void;
   ttsConfig?: TTSConfig;
   llmConfig?: LLMConfig;
+}
+
+// Animated Audio Equalizer Visualizer for Synchronized Visual Feedback
+function AudioEqualizer({ active = false }: { active?: boolean }) {
+  if (!active) return null;
+  return (
+    <span className="inline-flex items-end gap-0.5 h-3.5 px-1 py-0.5 bg-amber-400/20 border border-amber-400/40 rounded-xs shrink-0 select-none">
+      <span className="w-0.5 bg-amber-600 animate-[bounce_0.6s_infinite_100ms] h-full" />
+      <span className="w-0.5 bg-amber-600 animate-[bounce_0.6s_infinite_300ms] h-2/3" />
+      <span className="w-0.5 bg-amber-600 animate-[bounce_0.6s_infinite_200ms] h-full" />
+      <span className="w-0.5 bg-amber-600 animate-[bounce_0.6s_infinite_400ms] h-1/2" />
+    </span>
+  );
 }
 
 // Sub-component to manage quiz images with loaders, smooth loads and error fallbacks
@@ -110,7 +123,8 @@ export default function QuizView({
   const [showSummary, setShowSummary] = useState(false);
   const [wrongAnswersList, setWrongAnswersList] = useState<{ question: QuizQuestion; wrongPicked: string }[]>([]);
   const [autoPlayAudio, setAutoPlayAudio] = useState(ttsConfig?.autoPlayAudioInQuiz ?? true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const isSpeaking = Boolean(speakingId);
   const [starFeedback, setStarFeedback] = useState<string | null>(null);
   const questionHeaderRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -152,13 +166,22 @@ export default function QuizView({
     }
   }, [currentQuestionIdx, showSummary, questions.length]);
 
-  // Advanced speak helper using configured TTS service
-  const speakText = (text: string, customLang?: string) => {
-    const cleanText = text
-      .replace(/______/g, "blank")
-      .replace(/\n\n/g, ". ")
-      .replace(/\n/g, ", ");
+  // Advanced speak helper using configured TTS service with synchronized visual feedback ID tracking
+  const speakText = (text: string, customLang?: string, audioId?: string) => {
+    let cleanText = text
+      // Replace any consecutive underscores (1 or more) with a natural paused "blank"
+      .replace(/_{1,}/g, ", blank, ")
+      // Streamline prompt prefixes for fluent audio reading
+      .replace(/^Fill in the blank for the sentence:\s*/i, "Complete sentence: ")
+      // Strip redundant double-quotes so speech synthesis reads cleanly without quotes
+      .replace(/["“”«»]/g, "")
+      // Normalize line breaks and multiple spaces/commas
+      .replace(/\n+/g, ". ")
+      .replace(/,\s*,/g, ",")
+      .replace(/\s+/g, " ")
+      .trim();
 
+    const id = audioId || "default";
     const langCode = customLang || getLanguageCode(targetLanguage);
 
     speakTextService(
@@ -166,8 +189,8 @@ export default function QuizView({
       ttsConfig,
       llmConfig,
       langCode,
-      () => setIsSpeaking(true),
-      () => setIsSpeaking(false)
+      () => setSpeakingId(id),
+      () => setSpeakingId(prev => (prev === id ? null : prev))
     );
   };
 
@@ -320,11 +343,16 @@ export default function QuizView({
 
   const handleOptionSelect = (option: string) => {
     if (isAnswered) return;
+    // Stop reading question or audio immediately when user selects an option
+    stopSpeech();
+    setSpeakingId(null);
     setSelectedAnswer(option);
   };
 
   const handleVerify = () => {
     if (isAnswered) return;
+    stopSpeech();
+    setSpeakingId(null);
     
     let isCorrect = false;
 
@@ -350,14 +378,20 @@ export default function QuizView({
 
     setIsAnswered(true);
 
+    // Build natural feedback audio phrase stating user choice and result correctness
+    const userChoiceText = (currentQuestion.type === 'spelling' ? typedAnswer.trim() : (selectedAnswer || "")).trim() || "no answer";
+    const feedbackAudioMessage = isCorrect
+      ? (currentQuestion.type === 'spelling' 
+          ? `You spelled ${userChoiceText}. That is correct!`
+          : `You chose ${userChoiceText}. That is correct!`)
+      : (currentQuestion.type === 'spelling'
+          ? `You spelled ${userChoiceText}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.`
+          : `You chose ${userChoiceText}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.`);
+
     // Auto voice feedback upon answer verification
     if (autoPlayAudio) {
       setTimeout(() => {
-        if (isCorrect) {
-          speakText(`Correct! ${currentQuestion.correctAnswer}`);
-        } else {
-          speakText(`Incorrect. The answer is ${currentQuestion.correctAnswer}`);
-        }
+        speakText(feedbackAudioMessage, "en-US", "feedback");
       }, 250);
     }
   };
@@ -794,21 +828,22 @@ export default function QuizView({
               type="button"
               onClick={() => {
                 if (isSpeaking) {
-                  window.speechSynthesis?.cancel();
-                  setIsSpeaking(false);
+                  stopSpeech();
+                  setSpeakingId(null);
                 } else if (currentQuestion) {
-                  speakText(currentQuestion.question);
+                  speakText(currentQuestion.question, undefined, "question");
                 }
               }}
               className={`px-2.5 py-1.5 border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap ${
-                isSpeaking 
-                  ? "bg-amber-100 border-amber-400 text-amber-900 animate-pulse" 
+                speakingId === "question" 
+                  ? "bg-amber-100 border-amber-400 text-amber-900 font-extrabold shadow-2xs" 
                   : "bg-white border-stone-200 text-stone-800 hover:border-stone-900"
               }`}
               title="Listen to question"
             >
-              <Volume2 className="w-3.5 h-3.5 text-stone-900 shrink-0" />
-              <span>{isSpeaking ? "Speaking" : "Read"}</span>
+              <Volume2 className={`w-3.5 h-3.5 shrink-0 ${speakingId === "question" ? "text-amber-800 animate-pulse" : "text-stone-900"}`} />
+              <span>{speakingId === "question" ? "Speaking..." : "Read"}</span>
+              <AudioEqualizer active={speakingId === "question"} />
             </button>
 
             <button
@@ -816,9 +851,9 @@ export default function QuizView({
               onClick={() => {
                 const nextVal = !autoPlayAudio;
                 setAutoPlayAudio(nextVal);
-                if (!nextVal && window.speechSynthesis) {
-                  window.speechSynthesis.cancel();
-                  setIsSpeaking(false);
+                if (!nextVal) {
+                  stopSpeech();
+                  setSpeakingId(null);
                 }
               }}
               className={`px-2.5 py-1.5 border text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all whitespace-nowrap ${
@@ -880,11 +915,16 @@ export default function QuizView({
             {currentQuestion.question}
           </h4>
           <button
-            onClick={() => speakText(currentQuestion.type === 'listening' ? currentQuestion.word : currentQuestion.question)}
-            className="p-2.5 bg-stone-50 border border-stone-200 hover:border-stone-900 hover:bg-stone-100 text-stone-800 transition-all cursor-pointer shrink-0"
+            onClick={() => speakText(currentQuestion.type === 'listening' ? currentQuestion.word : currentQuestion.question, undefined, "question")}
+            className={`p-2.5 border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+              speakingId === "question"
+                ? "bg-amber-100 border-amber-400 text-amber-900 shadow-2xs"
+                : "bg-stone-50 border-stone-200 hover:border-stone-900 hover:bg-stone-100 text-stone-800"
+            }`}
             title="Read aloud"
           >
-            <Volume2 className="w-4 h-4 text-stone-900" />
+            <Volume2 className={`w-4 h-4 ${speakingId === "question" ? "animate-pulse text-amber-800" : "text-stone-900"}`} />
+            <AudioEqualizer active={speakingId === "question"} />
           </button>
         </div>
 
@@ -901,13 +941,15 @@ export default function QuizView({
 
         {/* Dedicated Listening Audio Card */}
         {currentQuestion.type === 'listening' && (
-          <div className="bg-amber-50/70 border border-amber-200 p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 my-2">
+          <div className={`border p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 my-2 transition-all ${
+            speakingId === "listening" ? "bg-amber-100/90 border-amber-400 ring-2 ring-amber-300/80 shadow-xs" : "bg-amber-50/70 border-amber-200"
+          }`}>
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <button
                 type="button"
-                onClick={() => speakText(currentQuestion.word)}
+                onClick={() => speakText(currentQuestion.word, undefined, "listening")}
                 className={`w-12 h-12 sm:w-14 sm:h-14 rounded-none bg-stone-900 text-amber-400 hover:bg-stone-800 transition-all flex items-center justify-center cursor-pointer shrink-0 ${
-                  isSpeaking ? "animate-pulse ring-2 ring-amber-400" : ""
+                  speakingId === "listening" ? "animate-pulse ring-4 ring-amber-400/80 bg-stone-950 scale-105" : ""
                 }`}
                 title="Play audio clip"
               >
@@ -918,18 +960,31 @@ export default function QuizView({
                   <Volume2 className="w-3.5 h-3.5 text-amber-600" />
                   Audio Pronunciation
                 </h5>
-                <p className="text-xs text-stone-600 mt-0.5 font-serif italic">
-                  {isSpeaking ? "Playing audio..." : "Tap button to replay spoken word"}
+                <p className="text-xs text-stone-600 mt-0.5 font-serif italic flex items-center gap-1.5">
+                  {speakingId === "listening" ? (
+                    <>
+                      <span className="font-bold text-amber-900">Playing sound clip...</span>
+                      <AudioEqualizer active={true} />
+                    </>
+                  ) : (
+                    "Tap button to replay spoken word"
+                  )}
                 </p>
               </div>
             </div>
             
             <button
               type="button"
-              onClick={() => speakText(currentQuestion.word)}
-              className="w-full sm:w-auto px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0"
+              onClick={() => speakText(currentQuestion.word, undefined, "listening")}
+              className={`w-full sm:w-auto px-4 py-2.5 font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer transition-all shrink-0 ${
+                speakingId === "listening"
+                  ? "bg-amber-400 text-stone-950 border border-amber-500 shadow-2xs"
+                  : "bg-stone-900 hover:bg-stone-800 text-amber-400"
+              }`}
             >
-              <Volume2 className="w-3.5 h-3.5" /> Replay Sound
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>{speakingId === "listening" ? "Playing..." : "Replay Sound"}</span>
+              <AudioEqualizer active={speakingId === "listening"} />
             </button>
           </div>
         )}
@@ -944,7 +999,15 @@ export default function QuizView({
                   type="text"
                   disabled={isAnswered}
                   value={typedAnswer}
-                  onChange={(e) => setTypedAnswer(e.target.value)}
+                  onFocus={() => {
+                    stopSpeech();
+                    setSpeakingId(null);
+                  }}
+                  onChange={(e) => {
+                    stopSpeech();
+                    setSpeakingId(null);
+                    setTypedAnswer(e.target.value);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && typedAnswer.trim() && !isAnswered) {
                       handleVerify();
@@ -955,11 +1018,16 @@ export default function QuizView({
                 />
                 <button
                   type="button"
-                  onClick={() => speakText(currentQuestion.word)}
-                  className="p-3 bg-stone-50 border border-stone-200 hover:border-stone-900 text-stone-900 transition-all cursor-pointer shrink-0"
+                  onClick={() => speakText(currentQuestion.word, undefined, "spelling")}
+                  className={`p-3 border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                    speakingId === "spelling"
+                      ? "bg-amber-100 border-amber-400 text-amber-900"
+                      : "bg-stone-50 border-stone-200 hover:border-stone-900 text-stone-900"
+                  }`}
                   title="Listen word to spell"
                 >
-                  <Volume2 className="w-4 h-4" />
+                  <Volume2 className={`w-4 h-4 ${speakingId === "spelling" ? "animate-pulse text-amber-800" : ""}`} />
+                  <AudioEqualizer active={speakingId === "spelling"} />
                 </button>
               </div>
             </div>
@@ -968,6 +1036,7 @@ export default function QuizView({
             <div className="grid grid-cols-1 gap-3">
               {currentQuestion.options?.map((option, idx) => {
                 const isSelected = selectedAnswer === option;
+                const isOptionSpeaking = speakingId === `option-${idx}`;
                 let btnStyles = "border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-800";
                 
                 if (isAnswered) {
@@ -984,6 +1053,10 @@ export default function QuizView({
                   btnStyles = "border-stone-900 bg-stone-50 text-stone-950 font-bold";
                 }
 
+                if (isOptionSpeaking) {
+                  btnStyles += " ring-2 ring-amber-400 bg-amber-50/80 border-amber-400";
+                }
+
                 return (
                   <button
                     key={idx}
@@ -998,18 +1071,23 @@ export default function QuizView({
                         tabIndex={0}
                         onClick={(e) => {
                           e.stopPropagation();
-                          speakText(option);
+                          speakText(option, undefined, `option-${idx}`);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.stopPropagation();
-                            speakText(option);
+                            speakText(option, undefined, `option-${idx}`);
                           }
                         }}
-                        className="p-1 text-stone-400 hover:text-stone-900 hover:bg-stone-200/60 rounded-none transition-all cursor-pointer"
+                        className={`p-1.5 border transition-all cursor-pointer flex items-center gap-1 ${
+                          isOptionSpeaking
+                            ? "bg-amber-200/80 border-amber-400 text-amber-950 font-bold"
+                            : "text-stone-400 hover:text-stone-900 hover:bg-stone-200/60 border-transparent"
+                        }`}
                         title="Speak option aloud"
                       >
-                        <Volume2 className="w-3.5 h-3.5" />
+                        <Volume2 className={`w-3.5 h-3.5 ${isOptionSpeaking ? "animate-pulse text-amber-800" : ""}`} />
+                        <AudioEqualizer active={isOptionSpeaking} />
                       </span>
                       {isAnswered && option === currentQuestion.correctAnswer && (
                         <Check className="w-4 h-4 text-stone-900 stroke-[3]" />
@@ -1025,53 +1103,96 @@ export default function QuizView({
           )}
         </div>
 
-        {/* Dynamic Verification Feedback Block */}
+        {/* Dynamic Verification Feedback Block with Synchronized Visual Feedback */}
         <AnimatePresence>
-          {isAnswered && (
-            <motion.div 
-              ref={feedbackRef}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              className="p-5 rounded-none flex items-start gap-4 border bg-stone-50 border-stone-200 text-stone-800 justify-between"
-            >
-              <div className="flex items-start gap-4">
-                {(currentQuestion.type === 'spelling' 
-                  ? typedAnswer.toLowerCase().trim() === currentQuestion.correctAnswer.toLowerCase().trim()
-                  : selectedAnswer === currentQuestion.correctAnswer) ? (
-                  <>
-                    <Check className="w-5 h-5 text-stone-900 shrink-0 mt-0.5 stroke-[3]" />
-                    <div className="space-y-1">
-                      <h5 className="font-bold text-[10px] uppercase tracking-widest text-stone-900">Correct Response</h5>
-                      <p className="text-xs text-stone-500 font-serif italic mt-1">
-                        {currentQuestion.type === 'picture' 
-                          ? `"${wordDetails?.word}" (${wordDetails?.translation}) matches the visual concept.`
-                          : `"${wordDetails?.word}" matches the definition: "${wordDetails?.definition}".`}
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <X className="w-5 h-5 text-stone-400 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <h5 className="font-bold text-[10px] uppercase tracking-widest text-stone-400">Incorrect Response</h5>
-                      <p className="text-xs text-stone-500 font-serif italic mt-1">
-                        The correct match is: <strong className="font-bold text-stone-900">"{currentQuestion.correctAnswer}"</strong>.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
+          {isAnswered && (() => {
+            const isAnswerCorrect = currentQuestion.type === 'spelling' 
+              ? typedAnswer.toLowerCase().trim() === currentQuestion.correctAnswer.toLowerCase().trim()
+              : selectedAnswer === currentQuestion.correctAnswer;
+            const chosenVal = (currentQuestion.type === 'spelling' ? typedAnswer.trim() : (selectedAnswer || "")).trim() || "no response";
+            const feedbackTextToSpeak = isAnswerCorrect
+              ? (currentQuestion.type === 'spelling' 
+                  ? `You spelled ${chosenVal}. That is correct!` 
+                  : `You chose ${chosenVal}. That is correct!`)
+              : (currentQuestion.type === 'spelling' 
+                  ? `You spelled ${chosenVal}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.` 
+                  : `You chose ${chosenVal}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.`);
+            const isFeedbackSpeaking = speakingId === "feedback";
 
-              <button
-                type="button"
-                onClick={() => speakText(`The answer is ${currentQuestion.correctAnswer}. ${wordDetails?.definition || ""}`)}
-                className="p-2 bg-white border border-stone-200 hover:border-stone-900 text-stone-800 transition-all cursor-pointer shrink-0"
-                title="Speak answer and definition"
+            return (
+              <motion.div 
+                ref={feedbackRef}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                className={`p-5 rounded-none flex flex-col sm:flex-row sm:items-start gap-4 border transition-all duration-300 justify-between ${
+                  isFeedbackSpeaking 
+                    ? "bg-amber-50/90 border-amber-400 ring-2 ring-amber-300/90 shadow-2xs" 
+                    : "bg-stone-50 border-stone-200 text-stone-800"
+                }`}
               >
-                <Volume2 className="w-4 h-4" />
-              </button>
-            </motion.div>
-          )}
+                <div className="flex flex-col gap-2 flex-1">
+                  {isFeedbackSpeaking && (
+                    <div className="px-3 py-1 bg-amber-200/70 border border-amber-300 text-amber-950 text-[11px] font-bold flex items-center justify-between rounded-none mb-1">
+                      <div className="flex items-center gap-2">
+                        <Volume2 className="w-3.5 h-3.5 text-amber-800 animate-pulse" />
+                        <span>🔊 Voice Feedback Playing...</span>
+                      </div>
+                      <AudioEqualizer active={true} />
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-3">
+                    {isAnswerCorrect ? (
+                      <>
+                        <Check className="w-5 h-5 text-stone-900 shrink-0 mt-0.5 stroke-[3]" />
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-[10px] uppercase tracking-widest text-stone-900">Correct Response</h5>
+                          <p className="text-xs text-stone-700 font-medium">
+                            You chose <strong className="font-bold text-stone-950">"{chosenVal}"</strong> — It's correct!
+                          </p>
+                          <p className="text-xs text-stone-500 font-serif italic mt-0.5">
+                            {currentQuestion.type === 'picture' 
+                              ? `"${wordDetails?.word}" (${wordDetails?.translation}) matches the visual concept.`
+                              : `"${wordDetails?.word}" matches the definition: "${wordDetails?.definition}".`}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-5 h-5 text-stone-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-[10px] uppercase tracking-widest text-stone-500">Incorrect Response</h5>
+                          <p className="text-xs text-stone-700 font-medium">
+                            You chose <span className="line-through text-stone-500">"{chosenVal}"</span> — It's incorrect.
+                          </p>
+                          <p className="text-xs text-stone-600 font-serif italic mt-0.5">
+                            The correct answer is: <strong className="font-bold text-stone-950">"{currentQuestion.correctAnswer}"</strong>.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => speakText(feedbackTextToSpeak, "en-US", "feedback")}
+                  className={`p-2 border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-semibold ${
+                    isFeedbackSpeaking
+                      ? "bg-amber-400 text-stone-950 border-amber-500 shadow-2xs font-bold"
+                      : "bg-white border-stone-200 hover:border-stone-900 text-stone-800"
+                  }`}
+                  title="Speak feedback result aloud"
+                >
+                  <Volume2 className={`w-4 h-4 ${isFeedbackSpeaking ? "animate-pulse text-stone-950" : "text-stone-900"}`} />
+                  <span className="hidden sm:inline text-[10px] uppercase tracking-wider font-mono">
+                    {isFeedbackSpeaking ? "Speaking..." : "Replay"}
+                  </span>
+                  <AudioEqualizer active={isFeedbackSpeaking} />
+                </button>
+              </motion.div>
+            );
+          })()}
         </AnimatePresence>
 
         {/* Action button row */}

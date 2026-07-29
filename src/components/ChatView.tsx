@@ -146,6 +146,119 @@ export default function ChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
 
+  // Quick Actions Usage Counter (persisted in localStorage)
+  const [actionCounts, setActionCounts] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem("vocab_action_usage_counts");
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return {};
+  });
+
+  const handleIncrementActionCount = (actionId: string) => {
+    setActionCounts(prev => {
+      const updated = { ...prev, [actionId]: (prev[actionId] || 0) + 1 };
+      try {
+        localStorage.setItem("vocab_action_usage_counts", JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  };
+
+  // Ordered quick action items according to most used
+  const quickActionItems = [
+    {
+      id: "fix_grammar",
+      label: "Fix Grammar & Polish",
+      icon: <CheckSquare className="w-3.5 h-3.5 text-amber-600" />,
+      title: "Fix grammar & spelling, improve clarity and readability",
+      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 0,
+      onClick: () => {
+        handleIncrementActionCount("fix_grammar");
+        onFixGrammar();
+        scrollToBottom("smooth");
+      }
+    },
+    {
+      id: "start_quiz",
+      label: "Start Today's Quiz",
+      icon: <Brain className="w-3.5 h-3.5" />,
+      title: "Start daily interactive quiz",
+      className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-sm transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 1,
+      onClick: () => {
+        handleIncrementActionCount("start_quiz");
+        onStartQuiz();
+        scrollToBottom("smooth");
+      }
+    },
+    {
+      id: "generate_topic",
+      label: "Generate by Topic",
+      icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" />,
+      title: "Generate words around a topic",
+      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 2,
+      onClick: () => {
+        handleIncrementActionCount("generate_topic");
+        onGenerateByTopic();
+        scrollToBottom("smooth");
+      }
+    },
+    {
+      id: "add_word",
+      label: "Add Word",
+      icon: <Plus className="w-3.5 h-3.5 text-stone-600" />,
+      title: "Add a word to collection",
+      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 3,
+      onClick: () => {
+        handleIncrementActionCount("add_word");
+        onAddWord();
+        scrollToBottom("smooth");
+      }
+    },
+    {
+      id: "common_phrases",
+      label: "Common Phrases",
+      icon: <HelpCircle className="w-3.5 h-3.5 text-stone-500" />,
+      title: "Learn common useful phrases",
+      className: "bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold py-1.5 px-3 rounded-full transition-all cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 4,
+      onClick: () => {
+        handleIncrementActionCount("common_phrases");
+        onClearHistory();
+        onSendMessage(`What are the top 5 most common useful phrases in ${targetLanguage}?`);
+        scrollToBottom("smooth");
+      }
+    },
+    {
+      id: "new_chat",
+      label: "Start new chat",
+      icon: <RotateCcw className="w-3.5 h-3.5 text-stone-500" />,
+      title: "Start a fresh chat conversation",
+      className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 5,
+      onClick: () => {
+        handleIncrementActionCount("new_chat");
+        onClearHistory();
+        scrollToBottom("smooth");
+      }
+    }
+  ].sort((a, b) => {
+    const countA = actionCounts[a.id] || 0;
+    const countB = actionCounts[b.id] || 0;
+    if (countB !== countA) {
+      return countB - countA;
+    }
+    return a.defaultIndex - b.defaultIndex;
+  });
+
   const showToast = (msgText: string) => {
     setToast(msgText);
     setTimeout(() => setToast(null), 3000);
@@ -412,16 +525,20 @@ export default function ChatView({
                                   showToast("📋 Copied fixed sentence to clipboard!");
                                 }
                               } else if (act.action === "fix_another") {
+                                handleIncrementActionCount("fix_grammar");
                                 onFixGrammar();
                               } else if (act.action === "add_word" && act.payload?.word) {
+                                handleIncrementActionCount("add_word");
                                 onAddWord(act.payload.word, act.payload?.hint);
                               } else if (act.action === "start_quiz") {
+                                handleIncrementActionCount("start_quiz");
                                 onStartQuiz();
                               } else if (act.action === "quiz_answer" && act.payload?.answer) {
                                 onSendMessage(act.payload.answer);
                               } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
                                 onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
                               } else if (act.action === "common_phrases") {
+                                handleIncrementActionCount("common_phrases");
                                 onClearHistory();
                                 onSendMessage(`What are some common idioms and phrases in ${targetLanguage}?`);
                               } else if (act.action === "send_message" && act.payload?.message) {
@@ -472,80 +589,26 @@ export default function ChatView({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Action Dock - Centered & Highly Accessible */}
+      {/* Quick Action Dock - Sorted by Most Used */}
       <div className="bg-stone-50/50 border-t border-stone-200 px-3 py-2 flex items-center gap-2 overflow-x-auto scrollbar-none shrink-0" id="quick-actions-dock">
         <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider shrink-0 mr-1 select-none">Quick:</span>
         
-        <button
-          onClick={() => {
-            onClearHistory();
-            scrollToBottom("smooth");
-          }}
-          className="flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0"
-          title="Start a fresh chat conversation"
-          id="start-new-chat-btn"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
-          <span>Start new chat</span>
-        </button>
+        {quickActionItems.map((item) => {
+          const count = actionCounts[item.id] || 0;
 
-        <button
-          onClick={() => {
-            onFixGrammar();
-            scrollToBottom("smooth");
-          }}
-          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
-          title="Fix grammar & spelling, improve clarity and readability"
-          id="quick-fix-grammar-btn"
-        >
-          <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
-          <span>Fix Grammar & Polish</span>
-        </button>
-
-        <button
-          onClick={() => {
-            onStartQuiz();
-            scrollToBottom("smooth");
-          }}
-          className="flex items-center gap-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-sm transition-all hover:scale-102 cursor-pointer shrink-0"
-        >
-          <Brain className="w-3.5 h-3.5" />
-          Start Today's Quiz
-        </button>
-
-        <button
-          onClick={() => {
-            onGenerateByTopic();
-            scrollToBottom("smooth");
-          }}
-          className="flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          Generate by Topic
-        </button>
-
-        <button
-          onClick={() => {
-            onAddWord();
-            scrollToBottom("smooth");
-          }}
-          className="flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5 text-stone-600" />
-          Add Word
-        </button>
-
-        <button
-          onClick={() => {
-            onClearHistory();
-            onSendMessage(`What are the top 5 most common useful phrases in ${targetLanguage}?`);
-            scrollToBottom("smooth");
-          }}
-          className="flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold py-1.5 px-3 rounded-full transition-all cursor-pointer shrink-0"
-        >
-          <HelpCircle className="w-3.5 h-3.5 text-stone-500" />
-          Common Phrases
-        </button>
+          return (
+            <button
+              key={item.id}
+              onClick={item.onClick}
+              className={`${item.className} relative group`}
+              title={`${item.title}${count > 0 ? ` (Used ${count} time${count === 1 ? '' : 's'})` : ''}`}
+              id={`quick-action-btn-${item.id}`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Input Message Footer Form */}

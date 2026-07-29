@@ -1,6 +1,12 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 
+export interface DeletedWordRecord {
+  id: string;
+  word: string;
+  deletedAt: string;
+}
+
 export interface WordDiffItem {
   word: string;
   changes: string[];
@@ -9,6 +15,7 @@ export interface WordDiffItem {
 export interface SyncDiffDetails {
   newLocalWords: Word[];
   newRemoteWords: Word[];
+  deletedWordsToSync: Word[];
   updatedWords: WordDiffItem[];
   statsChanged: boolean;
   statsSummary?: {
@@ -35,6 +42,17 @@ function parseTime(dateStr?: string | null): number {
   return isNaN(t) ? 0 : t;
 }
 
+function getDeletedWordsFromExportData(data: IndexedDBExportData): DeletedWordRecord[] {
+  const settingRec = data.stores?.settings?.find(s => s && s.key === "deleted_words");
+  if (!settingRec || !settingRec.value) return [];
+  try {
+    const parsed = JSON.parse(settingRec.value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Calculates merged dataset between local and remote backups based on timestamps and record IDs.
  */
@@ -47,8 +65,31 @@ export function autoMergeLocalAndRemote(
 
   const newLocalWords: Word[] = [];
   const newRemoteWords: Word[] = [];
+  const deletedWordsToSync: Word[] = [];
   const updatedWords: WordDiffItem[] = [];
   const mergedWordsMap = new Map<string, Word>();
+
+  // Extract tombstones & timestamps
+  const localDeleted = getDeletedWordsFromExportData(localData);
+  const remoteDeleted = getDeletedWordsFromExportData(remoteData);
+
+  const mergedDeletedWordsMap = new Map<string, DeletedWordRecord>();
+  for (const d of [...localDeleted, ...remoteDeleted]) {
+    if (!d) continue;
+    const keys = [d.id, d.word ? d.word.trim().toLowerCase() : ""].filter(Boolean);
+    for (const k of keys) {
+      const existing = mergedDeletedWordsMap.get(k);
+      if (!existing || parseTime(d.deletedAt) > parseTime(existing.deletedAt)) {
+        mergedDeletedWordsMap.set(k, d);
+      }
+    }
+  }
+
+  const localExportTime = parseTime(localData.exportedAt);
+  const remoteExportTime = parseTime(remoteData.exportedAt);
+
+  const isLocalNewer = localExportTime > 0 && remoteExportTime > 0 && localExportTime > remoteExportTime;
+  const isRemoteNewer = localExportTime > 0 && remoteExportTime > 0 && remoteExportTime > localExportTime;
 
   // Map words by key (case-insensitive word string or ID)
   const remoteWordMap = new Map<string, Word>();
@@ -66,12 +107,34 @@ export function autoMergeLocalAndRemote(
     const normKey = lWord.word ? lWord.word.trim().toLowerCase() : "";
     const matchByKey = remoteWordMap.get(normKey);
     const matchById = remoteByIdMap.get(lWord.id);
-    const match = matchById || matchKeyMatch(matchByKey, lWord);
+    const match = matchById || matchByKey;
 
-    function matchKeyMatch(keyMatch?: Word, target?: Word): Word | undefined {
-      if (!keyMatch) return undefined;
-      // If words match textually, consider them the same word
-      return keyMatch;
+    // Check if lWord was deleted on remote
+    const tombstone = (lWord.id && mergedDeletedWordsMap.get(lWord.id)) || (normKey && mergedDeletedWordsMap.get(normKey));
+    const lUpdatedTime = Math.max(parseTime(lWord.lastReviewed), parseTime(lWord.createdAt));
+
+    let isDeletedOnRemote = false;
+    if (tombstone) {
+      const deletedTime = parseTime(tombstone.deletedAt);
+      if (lUpdatedTime <= deletedTime && !match) {
+        isDeletedOnRemote = true;
+      }
+    } else if (isRemoteNewer && !match) {
+      if (lUpdatedTime <= remoteExportTime) {
+        isDeletedOnRemote = true;
+      }
+    }
+
+    if (isDeletedOnRemote) {
+      deletedWordsToSync.push(lWord);
+      if (!tombstone) {
+        mergedDeletedWordsMap.set(lWord.id || normKey, {
+          id: lWord.id || normKey,
+          word: lWord.word || "",
+          deletedAt: new Date(remoteExportTime || Date.now()).toISOString()
+        });
+      }
+      continue;
     }
 
     if (!match) {
@@ -90,7 +153,6 @@ export function autoMergeLocalAndRemote(
       // Choose base record from whichever was updated / reviewed most recently
       const baseIsLocal = localReviewTime >= remoteReviewTime;
       const primary = baseIsLocal ? lWord : match;
-      const secondary = baseIsLocal ? match : lWord;
 
       // Merge combined fields:
       // - Starred: if starred anywhere, keep true
@@ -139,8 +201,36 @@ export function autoMergeLocalAndRemote(
   // 2. Process Remote Words missing in Local
   for (const rWord of remoteWords) {
     const normKey = rWord.word ? rWord.word.trim().toLowerCase() : "";
-    const isProcessed = (rWord.id && processedRemoteKeys.has(rWord.id)) || (normKey && processedRemoteKeys.has(normKey));
-    if (!isProcessed) {
+    const rId = rWord.id;
+    const isProcessed = (rId && processedRemoteKeys.has(rId)) || (normKey && processedRemoteKeys.has(normKey));
+    if (isProcessed) continue;
+
+    // Check if rWord was deleted on local
+    const tombstone = (rId && mergedDeletedWordsMap.get(rId)) || (normKey && mergedDeletedWordsMap.get(normKey));
+    const rUpdatedTime = Math.max(parseTime(rWord.lastReviewed), parseTime(rWord.createdAt));
+
+    let isDeletedOnLocal = false;
+    if (tombstone) {
+      const deletedTime = parseTime(tombstone.deletedAt);
+      if (rUpdatedTime <= deletedTime) {
+        isDeletedOnLocal = true;
+      }
+    } else if (isLocalNewer) {
+      if (rUpdatedTime <= localExportTime) {
+        isDeletedOnLocal = true;
+      }
+    }
+
+    if (isDeletedOnLocal) {
+      deletedWordsToSync.push(rWord);
+      if (!tombstone) {
+        mergedDeletedWordsMap.set(rId || normKey, {
+          id: rId || normKey,
+          word: rWord.word || "",
+          deletedAt: new Date(localExportTime || Date.now()).toISOString()
+        });
+      }
+    } else {
       newRemoteWords.push(rWord);
       mergedWordsMap.set(rWord.id || `remote-${normKey}`, rWord);
     }
@@ -251,7 +341,17 @@ export function autoMergeLocalAndRemote(
 
   const settingsMap = new Map<string, StoredSetting>();
   for (const s of remoteSettings) if (s && s.key) settingsMap.set(s.key, s);
-  for (const s of localSettings) if (s && s.key) settingsMap.set(s.key, s); // Local overrides settings if newer
+  for (const s of localSettings) if (s && s.key) settingsMap.set(s.key, s);
+
+  // Preserve merged deleted_words tombstones in settings
+  const mergedDeletedList = Array.from(mergedDeletedWordsMap.values());
+  if (mergedDeletedList.length > 0) {
+    settingsMap.set("deleted_words", {
+      key: "deleted_words",
+      value: JSON.stringify(mergedDeletedList),
+      updatedAt: new Date().toISOString()
+    });
+  }
 
   const mergedSettings = Array.from(settingsMap.values());
 
@@ -270,6 +370,7 @@ export function autoMergeLocalAndRemote(
   const hasChanges =
     newLocalWords.length > 0 ||
     newRemoteWords.length > 0 ||
+    deletedWordsToSync.length > 0 ||
     updatedWords.length > 0 ||
     statsChanged;
 
@@ -279,6 +380,7 @@ export function autoMergeLocalAndRemote(
     diffDetails: {
       newLocalWords,
       newRemoteWords,
+      deletedWordsToSync,
       updatedWords,
       statsChanged,
       statsSummary: {

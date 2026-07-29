@@ -663,8 +663,15 @@ app.post("/api/tts", async (req, res) => {
 
     return res.status(400).json({ error: "Unsupported TTS engine specified" });
   } catch (error: any) {
-    console.error("TTS API Error:", error);
-    res.status(500).json({ error: error.message || "Failed to generate speech with AI TTS model" });
+    const engine = req.body?.engine || "gemini";
+    const parsed = parseServerError(error, engine);
+    console.warn(`[TTS API Fallback - ${engine}]`, parsed.userMessage);
+    res.status(parsed.statusCode || 400).json({ 
+      error: parsed.userMessage, 
+      statusCode: parsed.statusCode, 
+      errorType: parsed.errorType,
+      fallback: true 
+    });
   }
 });
 
