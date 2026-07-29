@@ -294,10 +294,34 @@ export default function ChatView({
       }
 
       const lastMsg = messages[messages.length - 1];
-      const textToPlay = lastMsg.audioWord || lastMsg.quizSpeechText;
-      if (lastMsg.role === "assistant" && textToPlay && (ttsConfig.autoPlayAudioInQuiz ?? true)) {
+      const feedbackText = lastMsg.quizSpeechText?.trim();
+      const nextQuestionText = lastMsg.nextQuestionSpeechText?.trim();
+      const fallbackText = lastMsg.audioWord || feedbackText;
+
+      if (lastMsg.role === "assistant" && (fallbackText || nextQuestionText) && (ttsConfig.autoPlayAudioInQuiz ?? true)) {
         const audioTimer = setTimeout(() => {
-          speakText(textToPlay, ttsConfig, llmConfig, getLanguageCode(targetLanguage));
+          const langCode = getLanguageCode(targetLanguage);
+
+          if (feedbackText && nextQuestionText) {
+            speakText(
+              feedbackText,
+              ttsConfig,
+              llmConfig,
+              langCode,
+              undefined,
+              () => {
+                // Small gap keeps the sequence natural and prevents overlap.
+                setTimeout(() => {
+                  speakText(nextQuestionText, ttsConfig, llmConfig, langCode);
+                }, 180);
+              }
+            );
+            return;
+          }
+
+          if (fallbackText) {
+            speakText(fallbackText, ttsConfig, llmConfig, langCode);
+          }
         }, 350);
         return () => clearTimeout(audioTimer);
       }

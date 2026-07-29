@@ -299,7 +299,11 @@ export default function App() {
           content: `${feedback}\n\n---\n\n### Question ${nextIndex + 1} of ${activeQuiz.questions.length}:\n**${nextQ.question}**`,
           timestamp: new Date().toISOString(),
           audioWord: nextQ.type === 'listening' ? nextQ.word : undefined,
-          quizSpeechText: (nextQ.type === 'listening' || nextQ.type === 'spelling') ? nextQ.word : nextQ.question,
+          // Prioritize answer feedback first; otherwise autoplay jumps straight to the next question.
+          quizSpeechText: isCorrect
+            ? "Correct!"
+            : `Incorrect! Correct answer: ${currentQ.correctAnswer}`,
+          nextQuestionSpeechText: (nextQ.type === 'listening' || nextQ.type === 'spelling') ? nextQ.word : nextQ.question,
           imageUrl: nextQ.imageUrl,
           suggestedActions: nextQ.options?.map(opt => ({
             label: opt,

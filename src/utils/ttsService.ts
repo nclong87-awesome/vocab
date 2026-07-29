@@ -245,68 +245,64 @@ export async function speakText(
       window.speechSynthesis.cancel();
     } catch {}
 
-    const triggerSpeech = () => {
-      if (myToken !== currentSpeechToken) return;
-      try {
-        const utterance = new SpeechSynthesisUtterance(normalizedText);
-        activeUtterance = utterance;
-        (window as any)._activeUtteranceRef = utterance; // Prevent garbage collection bug in Chromium browsers
+    if (myToken !== currentSpeechToken) return;
+    try {
+      const utterance = new SpeechSynthesisUtterance(normalizedText);
+      activeUtterance = utterance;
+      (window as any)._activeUtteranceRef = utterance; // Prevent garbage collection bug in Chromium browsers
 
-        utterance.rate = ttsConfig.speed ?? 1.0;
-        utterance.pitch = ttsConfig.pitch ?? 1.0;
-        if (customLang) {
-          utterance.lang = customLang;
+      utterance.rate = ttsConfig.speed ?? 1.0;
+      utterance.pitch = ttsConfig.pitch ?? 1.0;
+      if (customLang) {
+        utterance.lang = customLang;
+      }
+
+      const voices = window.speechSynthesis.getVoices();
+      if (ttsConfig.voiceURI && voices.length > 0) {
+        const selectedVoice = voices.find(v => v.voiceURI === ttsConfig.voiceURI);
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
         }
+      }
 
-        const voices = window.speechSynthesis.getVoices();
-        if (ttsConfig.voiceURI && voices.length > 0) {
-          const selectedVoice = voices.find(v => v.voiceURI === ttsConfig.voiceURI);
-          if (selectedVoice) {
-            utterance.voice = selectedVoice;
-          }
+      if (!utterance.voice && customLang && voices.length > 0) {
+        const langPrefix = customLang.split('-')[0].toLowerCase();
+        const matchingVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(langPrefix));
+        if (matchingVoice) {
+          utterance.voice = matchingVoice;
         }
-        
-        if (!utterance.voice && customLang && voices.length > 0) {
-          const langPrefix = customLang.split('-')[0].toLowerCase();
-          const matchingVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(langPrefix));
-          if (matchingVoice) {
-            utterance.voice = matchingVoice;
-          }
-        }
+      }
 
-        utterance.onstart = () => {
-          safeOnStart();
-        };
-
-        utterance.onend = () => {
-          if (activeUtterance === utterance) {
-            activeUtterance = null;
-          }
-          (window as any)._activeUtteranceRef = null;
-          safeOnEnd();
-        };
-
-        utterance.onerror = (err) => {
-          console.warn("Browser SpeechSynthesis error:", err);
-          if (activeUtterance === utterance) {
-            activeUtterance = null;
-          }
-          (window as any)._activeUtteranceRef = null;
-          safeOnEnd();
-        };
-
-        // Fallback safety timeout if browser fires onstart immediately
+      utterance.onstart = () => {
         safeOnStart();
-        window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn("SpeechSynthesis execution error:", err);
-        activeUtterance = null;
+      };
+
+      utterance.onend = () => {
+        if (activeUtterance === utterance) {
+          activeUtterance = null;
+        }
         (window as any)._activeUtteranceRef = null;
         safeOnEnd();
-      }
-    };
+      };
 
-    setTimeout(triggerSpeech, 60);
+      utterance.onerror = (err) => {
+        console.warn("Browser SpeechSynthesis error:", err);
+        if (activeUtterance === utterance) {
+          activeUtterance = null;
+        }
+        (window as any)._activeUtteranceRef = null;
+        safeOnEnd();
+      };
+
+      // Ensure UI reflects active speaking even if some browsers delay `onstart`.
+      safeOnStart();
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn("SpeechSynthesis execution error:", err);
+      activeUtterance = null;
+      (window as any)._activeUtteranceRef = null;
+      safeOnEnd();
+    }
   };
 
   const activeEngine = ttsConfig?.engine || 'browser';

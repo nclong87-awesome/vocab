@@ -172,13 +172,14 @@ export default function QuizView({
   }, [currentQuestionIdx, showSummary, questions.length]);
 
   // Advanced speak helper using configured TTS service with synchronized visual feedback ID tracking
-  const speakText = (text: string, customLang?: string, audioId?: string) => {
+  const speakText = (text: string, customLang?: string, audioId?: string, options?: { forceBrowser?: boolean }) => {
     const id = audioId || "default";
     const langCode = customLang || getLanguageCode(targetLanguage);
+    const resolvedTtsConfig = options?.forceBrowser ? { ...ttsConfig, engine: "browser" } : ttsConfig;
 
     speakTextService(
       text,
-      ttsConfig,
+      resolvedTtsConfig,
       llmConfig,
       langCode,
       () => setSpeakingId(id),
@@ -283,7 +284,8 @@ export default function QuizView({
 
   // Auto-read question or spoken word when switching questions
   useEffect(() => {
-    if (questions.length > 0 && currentQuestionIdx < questions.length && !showSummary && !isAnswered) {
+    // Do not auto-read a question while another clip (notably feedback) is still speaking.
+    if (questions.length > 0 && currentQuestionIdx < questions.length && !showSummary && !isAnswered && !isSpeaking) {
       const currQ = questions[currentQuestionIdx];
       if (currQ) {
         if (currQ.type === 'listening') {
@@ -304,7 +306,7 @@ export default function QuizView({
         }
       }
     }
-  }, [currentQuestionIdx, autoPlayAudio, showSummary, questions, isAnswered]);
+  }, [currentQuestionIdx, autoPlayAudio, showSummary, questions, isAnswered, isSpeaking]);
 
   if (!words || words.length < 2 || questions.length === 0) {
     if (words && words.length >= 2 && questions.length === 0) {
@@ -377,7 +379,7 @@ export default function QuizView({
 
     // Speak immediately in the same user gesture; delayed calls can be blocked by autoplay policies.
     if (autoPlayAudio) {
-      speakText(feedbackAudioMessage, "en-US", "feedback");
+      speakText(feedbackAudioMessage, "en-US", "feedback", { forceBrowser: true });
     }
   };
 
@@ -1158,7 +1160,7 @@ export default function QuizView({
 
                 <button
                   type="button"
-                  onClick={() => speakText(feedbackTextToSpeak, "en-US", "feedback")}
+                  onClick={() => speakText(feedbackTextToSpeak, "en-US", "feedback", { forceBrowser: true })}
                   className={`p-2 border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-semibold ${
                     isFeedbackSpeaking
                       ? "bg-amber-400 text-stone-950 border-amber-500 shadow-2xs font-bold"
