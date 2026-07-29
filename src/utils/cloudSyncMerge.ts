@@ -88,9 +88,6 @@ export function autoMergeLocalAndRemote(
   const localExportTime = parseTime(localData.exportedAt);
   const remoteExportTime = parseTime(remoteData.exportedAt);
 
-  const isLocalNewer = localExportTime > 0 && remoteExportTime > 0 && localExportTime > remoteExportTime;
-  const isRemoteNewer = localExportTime > 0 && remoteExportTime > 0 && remoteExportTime > localExportTime;
-
   // Map words by key (case-insensitive word string or ID)
   const remoteWordMap = new Map<string, Word>();
   const remoteByIdMap = new Map<string, Word>();
@@ -117,10 +114,6 @@ export function autoMergeLocalAndRemote(
     if (tombstone) {
       const deletedTime = parseTime(tombstone.deletedAt);
       if (lUpdatedTime <= deletedTime && !match) {
-        isDeletedOnRemote = true;
-      }
-    } else if (isRemoteNewer && !match) {
-      if (lUpdatedTime <= remoteExportTime) {
         isDeletedOnRemote = true;
       }
     }
@@ -213,10 +206,6 @@ export function autoMergeLocalAndRemote(
     if (tombstone) {
       const deletedTime = parseTime(tombstone.deletedAt);
       if (rUpdatedTime <= deletedTime) {
-        isDeletedOnLocal = true;
-      }
-    } else if (isLocalNewer) {
-      if (rUpdatedTime <= localExportTime) {
         isDeletedOnLocal = true;
       }
     }
