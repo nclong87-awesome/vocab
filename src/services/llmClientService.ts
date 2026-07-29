@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
-import { generateQuizQuestions, generateConfusers } from "../utils/quizGenerator";
+import { generateQuizQuestions, generateConfusers, getPollinationsImageUrl } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 
 // Clean raw JSON strings
@@ -641,8 +641,8 @@ export async function autofillWordService(params: {
 }): Promise<any> {
   const { word, hint, targetLanguage, nativeLanguage, llmConfig } = params;
 
-  const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Vietnamese";
+  const userNative = nativeLanguage || "Vietnamese";
+  const userTarget = targetLanguage || "Spanish";
 
   const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL: Generate the definition, translation, and example sentence matching this exact scope/context hint.` : ""}
@@ -709,8 +709,8 @@ export async function checkWordDefinitionsService(params: {
   llmConfig?: LLMConfig;
 }): Promise<any> {
   const { word, hint, targetLanguage, nativeLanguage, llmConfig } = params;
-  const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Vietnamese";
+  const userNative = nativeLanguage || "Vietnamese";
+  const userTarget = targetLanguage || "Spanish";
 
   const prompt = `Analyze the word or expression "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL MANDATORY REQUIREMENT: The user wants to add "${word}" specifically in the scope/context described above.` : ""}
@@ -790,8 +790,8 @@ export async function generateRandomWordsService(params: {
   llmConfig?: LLMConfig;
 }): Promise<{ words: any[] }> {
   const { topic, targetLanguage, nativeLanguage, count = 5, existingWords = [], llmConfig } = params;
-  const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Vietnamese";
+  const userNative = nativeLanguage || "Vietnamese";
+  const userTarget = targetLanguage || "Spanish";
 
   const avoidText = Array.isArray(existingWords) && existingWords.length > 0
     ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the collection:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
@@ -1192,7 +1192,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (options contain target language words)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded description of target word]?width=500&height=400&nologo=true)
 
 5. Output Schema:
 Return ONLY a valid JSON array of objects matching this schema:
@@ -1262,7 +1262,7 @@ Return ONLY a valid JSON array of objects matching this schema:
           options: options.sort(() => 0.5 - Math.random()),
           correctAnswer: q.correctAnswer || matchingWord.word,
           hint: q.hint || matchingWord.pronunciation,
-          imageUrl: q.imageUrl || (q.type === 'picture' ? `https://loremflickr.com/500/400/${encodeURIComponent(matchingWord.word)}` : undefined)
+          imageUrl: (q.imageUrl && !q.imageUrl.includes("loremflickr")) ? q.imageUrl : (q.type === 'picture' ? getPollinationsImageUrl(matchingWord) : undefined)
         };
       });
 

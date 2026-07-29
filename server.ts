@@ -307,7 +307,7 @@ app.post("/api/autofill-word", async (req, res) => {
     }
 
     const userNative = nativeLanguage || "English";
-    const userTarget = targetLanguage || "Vietnamese";
+    const userTarget = targetLanguage || "Spanish";
 
     const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
 Target language being learned: "${userTarget}".
@@ -353,7 +353,7 @@ app.post("/api/check-word-definitions", async (req, res) => {
     }
 
     const userNative = nativeLanguage || "English";
-    const userTarget = targetLanguage || "Vietnamese";
+    const userTarget = targetLanguage || "Spanish";
 
     const prompt = `Analyze the word or expression "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL MANDATORY REQUIREMENT: The user wants to add "${word}" specifically in the scope/context described above.` : ""}
@@ -408,7 +408,7 @@ app.post("/api/generate-random-words", async (req, res) => {
     const { topic, targetLanguage, nativeLanguage, count = 5, existingWords = [], llmConfig } = req.body;
 
     const userNative = nativeLanguage || "English";
-    const userTarget = targetLanguage || "Vietnamese";
+    const userTarget = targetLanguage || "Spanish";
 
     const avoidText = Array.isArray(existingWords) && existingWords.length > 0
       ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the collection:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
@@ -732,7 +732,7 @@ Provide a structured AI analysis with constructive insights, memory retention st
 // 7. Interactive Chat Assistant endpoint
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+    const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Messages array is required and cannot be empty" });
@@ -850,7 +850,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (options contain target language words)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded prompt describing target word]?width=500&height=400&nologo=true)
 
 5. Output Schema:
 Return ONLY a valid JSON array of objects matching this schema:

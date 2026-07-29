@@ -157,6 +157,8 @@ export default function ChatView({
     return {};
   });
 
+  const lastMessageIdRef = useRef<string | null>(null);
+
   const handleIncrementActionCount = (actionId: string) => {
     setActionCounts(prev => {
       const updated = { ...prev, [actionId]: (prev[actionId] || 0) + 1 };
@@ -264,22 +266,33 @@ export default function ChatView({
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Scroll to bottom helper
+  // Helper to auto scroll to bottom
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
     }, 50);
-    // Secondary safety trigger in case of layout shifts or image/card rendering
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-    }, 250);
   };
 
-  // Scroll to bottom when messages or typing status change and auto-speak audioWord or quizSpeechText if present
-  useEffect(() => {
-    scrollToBottom("smooth");
+  // Helper to auto scroll to the top of the newly added message
+  const scrollToTopOfLatestMessage = (behavior: ScrollBehavior = "smooth") => {
+    setTimeout(() => {
+      if (latestMessageRef.current) {
+        latestMessageRef.current.scrollIntoView({ behavior, block: "start" });
+      } else if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "auto", block: "end" });
+      }
+    }, 50);
+  };
 
+  // Auto scroll to top of message when a new message is added to the conversation
+  useEffect(() => {
     if (messages.length > 0) {
+      const currentLastId = messages[messages.length - 1].id;
+      if (currentLastId !== lastMessageIdRef.current) {
+        scrollToTopOfLatestMessage("smooth");
+        lastMessageIdRef.current = currentLastId;
+      }
+
       const lastMsg = messages[messages.length - 1];
       const textToPlay = lastMsg.audioWord || lastMsg.quizSpeechText;
       if (lastMsg.role === "assistant" && textToPlay && (ttsConfig.autoPlayAudioInQuiz ?? true)) {
@@ -288,8 +301,10 @@ export default function ChatView({
         }, 350);
         return () => clearTimeout(audioTimer);
       }
+    } else {
+      lastMessageIdRef.current = null;
     }
-  }, [messages, isTyping, ttsConfig, llmConfig, targetLanguage]);
+  }, [messages, ttsConfig, llmConfig, targetLanguage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

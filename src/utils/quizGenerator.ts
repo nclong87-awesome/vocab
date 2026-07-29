@@ -1,6 +1,6 @@
 import { Word, QuizQuestion } from "../types";
 
-// Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Vietnamese/etc.)
+// Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Spanish/etc.)
 export function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
   if (!text) return true;
   // Check for Vietnamese diacritics
@@ -9,7 +9,7 @@ export function containsNonTargetLanguage(text: string, targetLanguage?: string)
   
   // Check for CJK characters if target language is English/European
   const cjkRegex = /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF\u4E00-\u9FAF]/;
-  if ((!targetLanguage || targetLanguage === "English" || targetLanguage === "Vietnamese" || targetLanguage === "French" || targetLanguage === "German") && cjkRegex.test(text)) {
+  if ((!targetLanguage || targetLanguage === "English" || targetLanguage === "Spanish" || targetLanguage === "French" || targetLanguage === "German") && cjkRegex.test(text)) {
     return true;
   }
 
@@ -19,6 +19,14 @@ export function containsNonTargetLanguage(text: string, targetLanguage?: string)
 // Helper function to extract a clean image search term from word properties
 export function getImageSearchTerm(word: Word): string {
   return word.word;
+}
+
+// Helper function to generate relevant Pollinations AI image URL
+export function getPollinationsImageUrl(word: Word | string, definition?: string): string {
+  const wordText = typeof word === 'string' ? word : word.word;
+  const defText = typeof word === 'object' ? (definition || word.definition || "") : (definition || "");
+  const promptText = `a clear visual representation of ${wordText}${defText ? `, ${defText}` : ''}, realistic photograph, clean background`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?width=500&height=400&nologo=true`;
 }
 
 // Helper to generate confusing sound-alike or misspelling distractors
@@ -113,8 +121,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     else if (type === 'picture') {
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
-      const term = getImageSearchTerm(word);
-      imageUrl = `https://loremflickr.com/500/400/${encodeURIComponent(term)}`;
+      imageUrl = getPollinationsImageUrl(word);
 
       let potentialWrongs = allWords
         .filter(w => w.id !== word.id)

@@ -68,7 +68,7 @@ function QuizImage({ src, alt, word }: { src: string; alt: string; word: string 
         <div className="absolute inset-0 flex items-center justify-center bg-stone-100 animate-pulse">
           <div className="flex flex-col items-center gap-2">
             <Sparkles className="w-5 h-5 text-amber-500 animate-spin" />
-            <span className="text-[10px] font-bold text-stone-400 tracking-wider font-mono">LOADING IMAGE...</span>
+            <span className="text-[10px] font-bold text-stone-500 tracking-wider font-mono">POLLINATIONS AI GENERATING IMAGE...</span>
           </div>
         </div>
       )}
@@ -80,24 +80,23 @@ function QuizImage({ src, alt, word }: { src: string; alt: string; word: string 
           referrerPolicy="no-referrer"
           onLoad={() => setLoading(false)}
           onError={() => {
-            setImgSrc(`https://picsum.photos/seed/${encodeURIComponent(word)}/500/400`);
-            setFailed(true);
+            const fallbackPollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`a photo of ${word}`)}?width=500&height=400&nologo=true&seed=42`;
+            if (imgSrc !== fallbackPollinationsUrl) {
+              setImgSrc(fallbackPollinationsUrl);
+            } else {
+              setFailed(true);
+              setLoading(false);
+            }
           }}
           className={`w-full h-full object-cover transition-transform duration-500 hover:scale-105 ${
             loading ? "opacity-0" : "opacity-100"
           }`}
         />
       ) : (
-        <img
-          src={`https://picsum.photos/seed/${encodeURIComponent(word)}/500/400`}
-          alt={alt}
-          referrerPolicy="no-referrer"
-          onLoad={() => setLoading(false)}
-          onError={() => {
-            setLoading(false);
-          }}
-          className="w-full h-full object-cover"
-        />
+        <div className="w-full h-full flex flex-col items-center justify-center bg-stone-100 text-stone-400 p-4 text-center">
+          <HelpCircle className="w-8 h-8 text-stone-300 mb-2" />
+          <span className="text-xs font-bold font-mono text-stone-600 uppercase">Visual Clue: {word}</span>
+        </div>
       )}
     </div>
   );
@@ -129,12 +128,18 @@ export default function QuizView({
   const questionHeaderRef = useRef<HTMLDivElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to feedback result when answered
+  // Auto scroll to feedback result centered in viewport when answered
   useEffect(() => {
-    if (isAnswered && feedbackRef.current) {
-      setTimeout(() => {
-        feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 50);
+    if (isAnswered) {
+      const timer = setTimeout(() => {
+        if (feedbackRef.current) {
+          feedbackRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+        }
+      }, 80);
+      return () => clearTimeout(timer);
     }
   }, [isAnswered]);
 
@@ -1122,8 +1127,9 @@ export default function QuizView({
             return (
               <motion.div 
                 ref={feedbackRef}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
                 className={`p-5 rounded-none flex flex-col sm:flex-row sm:items-start gap-4 border transition-all duration-300 justify-between ${
                   isFeedbackSpeaking 
                     ? "bg-amber-50/90 border-amber-400 ring-2 ring-amber-300/90 shadow-2xs" 
