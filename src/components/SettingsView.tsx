@@ -595,18 +595,44 @@ export default function SettingsView({
 
         {/* Active Engine Highlight Box */}
         <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-stone-200 pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-1">
               <div className="flex items-center gap-1">
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">AI Engine:</span>
-                <span className="text-sm font-black text-stone-900 capitalize">
-                  {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
-                </span>
-                <span className="text-xs font-mono font-medium text-stone-600 truncate">
-                  ({llmConfig.model})
-                </span>
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">Active AI Engine</span>
               </div>
+            </div>
+
+            
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Provider</span>
+              <span className="font-mono text-stone-800 font-semibold">
+                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Model</span>
+              <span className="font-mono text-stone-800 font-semibold">
+                {llmConfig.model}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key</span>
+              <span className="font-mono text-stone-800 font-semibold">
+                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
+              <span className="font-mono text-stone-800 font-semibold truncate block">
+                {llmConfig.baseUrl || "Default API Gateway"}
+              </span>
             </div>
 
             <button
@@ -629,29 +655,6 @@ export default function SettingsView({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key</span>
-              <span className="font-mono text-stone-800 font-semibold">
-                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
-              <span className="font-mono text-stone-800 font-semibold truncate block">
-                {llmConfig.baseUrl || "Default API Gateway"}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Total Saved Profiles</span>
-              <span className="font-semibold text-stone-800">
-                {Object.keys(savedProvidersMap).length} Provider Credentials Stored
-              </span>
-            </div>
-          </div>
-
           {llmTestResult && (
             <div className={`p-2.5 text-xs font-semibold flex items-center gap-2 border ${
               llmTestResult.success ? "bg-emerald-50 border-emerald-300 text-emerald-900" : "bg-red-50 border-red-300 text-red-900"
@@ -665,7 +668,7 @@ export default function SettingsView({
         {/* Provider Cards Grid */}
         <div className="space-y-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-            Stored AI Engine Profiles ({PROVIDER_OPTIONS.length} Supported Providers)
+            Stored AI Engine Profiles
           </h4>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
