@@ -1,6 +1,6 @@
 import { Word, QuizQuestion } from "../types";
 
-// Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Spanish/etc.)
+// Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Vietnamese/etc.)
 export function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
   if (!text) return true;
   // Check for Vietnamese diacritics
@@ -9,7 +9,7 @@ export function containsNonTargetLanguage(text: string, targetLanguage?: string)
   
   // Check for CJK characters if target language is English/European
   const cjkRegex = /[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF\u4E00-\u9FAF]/;
-  if ((!targetLanguage || targetLanguage === "English" || targetLanguage === "Spanish" || targetLanguage === "French" || targetLanguage === "German") && cjkRegex.test(text)) {
+  if ((!targetLanguage || targetLanguage === "English" || targetLanguage === "Vietnamese" || targetLanguage === "French" || targetLanguage === "German") && cjkRegex.test(text)) {
     return true;
   }
 

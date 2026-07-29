@@ -60,7 +60,7 @@ export default function App() {
     return localStorage.getItem("vocab_learner_target_lang") || "English";
   });
   const [nativeLanguage, setNativeLanguage] = useState<string>(() => {
-    return localStorage.getItem("vocab_learner_native_lang") || "Spanish";
+    return localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
   });
 
   const handleSelectLanguages = useCallback((targetLang: string, nativeLang: string) => {

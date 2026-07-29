@@ -30,7 +30,7 @@ export default function AppHeader({
   onSwitchProvider,
   onOpenLlmModal,
   targetLanguage = "English",
-  nativeLanguage = "Spanish",
+  nativeLanguage = "Vietnamese",
   onSelectLanguages,
   onReloadData,
   sidePanelTab = "collection",

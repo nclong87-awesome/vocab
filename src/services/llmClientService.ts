@@ -642,7 +642,7 @@ export async function autofillWordService(params: {
   const { word, hint, targetLanguage, nativeLanguage, llmConfig } = params;
 
   const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Spanish";
+  const userTarget = targetLanguage || "Vietnamese";
 
   const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL: Generate the definition, translation, and example sentence matching this exact scope/context hint.` : ""}
@@ -710,7 +710,7 @@ export async function checkWordDefinitionsService(params: {
 }): Promise<any> {
   const { word, hint, targetLanguage, nativeLanguage, llmConfig } = params;
   const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Spanish";
+  const userTarget = targetLanguage || "Vietnamese";
 
   const prompt = `Analyze the word or expression "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL MANDATORY REQUIREMENT: The user wants to add "${word}" specifically in the scope/context described above.` : ""}
@@ -791,7 +791,7 @@ export async function generateRandomWordsService(params: {
 }): Promise<{ words: any[] }> {
   const { topic, targetLanguage, nativeLanguage, count = 5, existingWords = [], llmConfig } = params;
   const userNative = nativeLanguage || "English";
-  const userTarget = targetLanguage || "Spanish";
+  const userTarget = targetLanguage || "Vietnamese";
 
   const avoidText = Array.isArray(existingWords) && existingWords.length > 0
     ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the collection:\n[ ${existingWords.slice(0, 100).join(", ")} ]`

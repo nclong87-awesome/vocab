@@ -65,7 +65,7 @@ export default function SettingsView({
   onOpenLlmModal,
   onReloadData,
   targetLanguage = "English",
-  nativeLanguage = "Spanish",
+  nativeLanguage = "Vietnamese",
   onSelectLanguages
 }: SettingsViewProps) {
   const [config, setConfig] = useState<TTSConfig>(ttsConfig);

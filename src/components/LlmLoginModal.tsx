@@ -66,7 +66,7 @@ export default function LlmLoginModal({
     initialNativeLanguage || localStorage.getItem("vocab_learner_native_lang") || "English"
   );
   const [targetLanguage, setTargetLanguage] = useState<string>(
-    initialTargetLanguage || localStorage.getItem("vocab_learner_target_lang") || "Spanish"
+    initialTargetLanguage || localStorage.getItem("vocab_learner_target_lang") || "Vietnamese"
   );
   const [customNative, setCustomNative] = useState<string>("");
   const [customTarget, setCustomTarget] = useState<string>("");
@@ -111,7 +111,7 @@ export default function LlmLoginModal({
       setTestMessage("");
       
       const storedNative = initialNativeLanguage || localStorage.getItem("vocab_learner_native_lang") || "English";
-      const storedTarget = initialTargetLanguage || localStorage.getItem("vocab_learner_target_lang") || "Spanish";
+      const storedTarget = initialTargetLanguage || localStorage.getItem("vocab_learner_target_lang") || "Vietnamese";
       setNativeLanguage(storedNative);
       setTargetLanguage(storedTarget);
     }
@@ -189,7 +189,7 @@ export default function LlmLoginModal({
   };
 
   const finalNativeLang = nativeLanguage === "Custom" ? customNative.trim() || "English" : nativeLanguage;
-  const finalTargetLang = targetLanguage === "Custom" ? customTarget.trim() || "Spanish" : targetLanguage;
+  const finalTargetLang = targetLanguage === "Custom" ? customTarget.trim() || "Vietnamese" : targetLanguage;
 
   const handleCompleteSetup = (e: React.FormEvent) => {
     e.preventDefault();

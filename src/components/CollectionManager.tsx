@@ -47,7 +47,7 @@ export default function CollectionManager({
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
   targetLanguage = "English",
-  nativeLanguage = "Spanish",
+  nativeLanguage = "Vietnamese",
 }: CollectionManagerProps) {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);

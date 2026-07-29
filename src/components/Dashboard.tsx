@@ -33,7 +33,7 @@ export default function Dashboard({
   loadingMessage,
   onFinishQuiz,
   targetLanguage = "English",
-  nativeLanguage = "Spanish",
+  nativeLanguage = "Vietnamese",
 }: DashboardProps) {
   // Today's practice quiz states
   const [isQuizActive, setIsQuizActive] = useState(false);
