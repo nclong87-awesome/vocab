@@ -1,5 +1,6 @@
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { DEFAULT_WORDS } from "../defaultWords";
+import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 
 const DB_NAME = "VocabLearnerDB";
 
@@ -307,7 +308,7 @@ export async function getDeletedWordsFromDB(): Promise<DeletedWordRecord[]> {
       readAll<DeletedWordRecord>(tx, "deletedWords")
     );
     if (records.length > 0) {
-      return records;
+      return deduplicateDeletedWords(records);
     }
 
     // Fallback/Migration: Check if legacy settings store has deleted_words
@@ -316,12 +317,13 @@ export async function getDeletedWordsFromDB(): Promise<DeletedWordRecord[]> {
       try {
         const parsed = JSON.parse(legacyRaw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          await saveDeletedWordsToDB(parsed);
+          const deduplicated = deduplicateDeletedWords(parsed);
+          await saveDeletedWordsToDB(deduplicated);
           // Clean up legacy setting record
           await withStores(["settings"], "readwrite", (tx) => {
             tx.objectStore(STORES.settings).delete("deleted_words");
           }).catch(() => {});
-          return parsed;
+          return deduplicated;
         }
       } catch (err) {
         console.error("Error parsing legacy deleted_words setting:", err);
@@ -336,8 +338,9 @@ export async function getDeletedWordsFromDB(): Promise<DeletedWordRecord[]> {
 
 export async function saveDeletedWordsToDB(records: DeletedWordRecord[]): Promise<void> {
   try {
+    const deduplicated = deduplicateDeletedWords(records);
     await withStores(["deletedWords"], "readwrite", (tx) => {
-      replaceAll(tx, "deletedWords", records);
+      replaceAll(tx, "deletedWords", deduplicated);
     });
   } catch (err) {
     console.error("Error saving deleted words tombstone:", err);
@@ -348,20 +351,16 @@ export async function recordDeletedWordsInDB(items: { id: string; word?: string 
   if (items.length === 0) return;
   try {
     const existing = await getDeletedWordsFromDB();
-    const existingMap = new Map<string, DeletedWordRecord>();
-    for (const rec of existing) {
-      if (rec && rec.id) existingMap.set(rec.id, rec);
-    }
     const now = new Date().toISOString();
-    for (const item of items) {
-      if (!item || !item.id) continue;
-      existingMap.set(item.id, {
-        id: item.id,
+    const newRecords: DeletedWordRecord[] = items
+      .filter((item) => item && (item.id || item.word))
+      .map((item) => ({
+        id: item.id || (item.word ? item.word.trim().toLowerCase() : ""),
         word: item.word || "",
         deletedAt: now
-      });
-    }
-    await saveDeletedWordsToDB(Array.from(existingMap.values()));
+      }));
+
+    await saveDeletedWordsToDB([...existing, ...newRecords]);
   } catch (err) {
     console.error("Error recording deleted words:", err);
   }
@@ -650,6 +649,10 @@ export async function importIndexedDBDatabase(data: unknown): Promise<ImportResu
     }
     // Filter out legacy deleted_words setting key
     stores.settings = stores.settings.filter((s: any) => !s || s.key !== "deleted_words");
+  }
+
+  if (Array.isArray(stores.deletedWords)) {
+    stores.deletedWords = deduplicateDeletedWords(stores.deletedWords as DeletedWordRecord[]);
   }
 
   // Preserve existing local API keys and settings if the imported payload has empty/missing keys

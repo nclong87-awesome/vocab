@@ -1,4 +1,4 @@
-import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
+import { sanitizeDataForCloudSync, deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { IndexedDBExportData } from "../db/indexedDB";
 
 export const syncToGist = async (token: string, data: string, gistId?: string): Promise<string> => {
@@ -156,11 +156,11 @@ export const syncFromGist = async (token: string, gistId: string): Promise<any> 
     try {
       const deletedWordsContent = JSON.parse(deletedWordsFile.content);
       if (Array.isArray(deletedWordsContent)) {
-        parsedData.stores.deletedWords = deletedWordsContent;
+        parsedData.stores.deletedWords = deduplicateDeletedWords(deletedWordsContent);
       } else if (deletedWordsContent && deletedWordsContent.value) {
         const parsedArr = JSON.parse(deletedWordsContent.value);
         if (Array.isArray(parsedArr)) {
-          parsedData.stores.deletedWords = parsedArr;
+          parsedData.stores.deletedWords = deduplicateDeletedWords(parsedArr);
         }
       }
       hasValidData = true;
