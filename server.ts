@@ -535,14 +535,46 @@ function pcmToWav(pcmBuffer: Buffer, sampleRate = 24000, numChannels = 1, bitsPe
   return wavBuffer;
 }
 
+function normalizeServerTextForTTS(text: string): string {
+  if (!text) return "";
+  let cleaned = text;
+  cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF\u00A0\u0000-\u001F]/g, " ");
+  cleaned = cleaned.replace(/<[^>]*>/g, " ");
+  cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E0}-\u{1F1FF}]/gu, "");
+  cleaned = cleaned.replace(/[★☆●•►▪✦✧✔✕✖✓✗➔→←⇒▲▼♦♠♣♥]/g, " ");
+  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
+  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, "$1");
+  cleaned = cleaned.replace(/\*([^*]+)\*/g, "$1");
+  cleaned = cleaned.replace(/~~([^~]+)~~/g, "$1");
+  cleaned = cleaned.replace(/`([^`]+)`/g, "$1");
+  cleaned = cleaned.replace(/^[#>\-\*\+\s]+/gm, " ");
+  cleaned = cleaned.replace(/\[\s*_{1,}\s*\]/g, " blank ");
+  cleaned = cleaned.replace(/\(\s*_{1,}\s*\)/g, " blank ");
+  cleaned = cleaned.replace(/_{2,}/g, " blank ");
+  cleaned = cleaned.replace(/-{3,}/g, " blank ");
+  cleaned = cleaned.replace(/\.{4,}/g, " blank ");
+  cleaned = cleaned.replace(/^(Fill in the blank for the sentence|Complete the sentence|Fill in the blank):\s*/i, "Complete sentence: ");
+  cleaned = cleaned.replace(/^(Which word matches the following definition|Which word matches the definition):\s*/i, "Definition: ");
+  cleaned = cleaned.replace(/^(Question|Q):\s*/i, "");
+  cleaned = cleaned.replace(/["“”«»„‟]/g, "");
+  cleaned = cleaned.replace(/['‘’]/g, "'");
+  cleaned = cleaned.replace(/[~^|\\@#$%*+=<>]/g, " ");
+  cleaned = cleaned.replace(/[\r\n]+/g, ". ");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  return cleaned || text.trim();
+}
+
 // 5. Text-to-Speech API
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text, engine, model, voice, apiKey, customEndpoint, llmConfig } = req.body;
+    const { text: rawText, engine, model, voice, apiKey, customEndpoint, llmConfig } = req.body;
 
-    if (!text) {
+    if (!rawText) {
       return res.status(400).json({ error: "Text is required for TTS generation" });
     }
+
+    const text = normalizeServerTextForTTS(rawText);
 
     const effectiveApiKey = apiKey || (llmConfig?.provider === engine ? llmConfig?.apiKey : undefined) || (engine === "gemini" ? process.env.GEMINI_API_KEY : "");
 

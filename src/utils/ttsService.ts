@@ -123,6 +123,80 @@ function wrapPcmBase64ToWavDataUrl(dataUrl: string): string {
   }
 }
 
+// Helper to normalize text for speech synthesis (TTS) to avoid strange characters or prompt noise
+export function normalizeTextForTTS(text: string): string {
+  if (!text) return "";
+
+  let cleaned = text;
+
+  // 1. Remove zero-width spaces, soft hyphens, non-breaking spaces & control characters
+  cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF\u00A0\u0000-\u001F]/g, " ");
+
+  // 2. Strip HTML tags (e.g. <b>, <br/>, <span class="...">)
+  cleaned = cleaned.replace(/<[^>]*>/g, " ");
+
+  // 3. Strip Emojis & decorative non-speech symbols (e.g. ★, ☆, ●, •, ►, ▪, ✦, ✧, ✔, ✕, ✖)
+  cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E0}-\u{1F1FF}]/gu, "");
+  cleaned = cleaned.replace(/[★☆●•►▪✦✧✔✕✖✓✗➔→←⇒▲▼♦♠♣♥]/g, " ");
+
+  // 4. Handle Markdown syntax
+  // Markdown links: [text](url) -> text
+  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  // Markdown images: ![alt](url) -> ""
+  cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
+  // Remove bold, italic, strikethrough, inline code (keep text inside): **text**, *text*, __text__, _text_, ~~text~~, `text`
+  cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, "$1");
+  cleaned = cleaned.replace(/\*([^*]+)\*/g, "$1");
+  cleaned = cleaned.replace(/~~([^~]+)~~/g, "$1");
+  cleaned = cleaned.replace(/`([^`]+)`/g, "$1");
+  // Heading marks, blockquotes, list markers at start of line
+  cleaned = cleaned.replace(/^[#>\-\*\+\s]+/gm, " ");
+
+  // 5. Handle bracketed IPA phonetics if present alongside regular text (e.g., /bɔ̃ʒuʁ/)
+  if (/[a-zA-Z0-9]/.test(cleaned.replace(/\/[^/]+\//g, ""))) {
+    cleaned = cleaned.replace(/\/[^/]{2,30}\//g, " ");
+  }
+
+  // 6. Normalize fill-in-the-blanks / placeholders so speech engines don't read "underscore underscore"
+  // Handles [___], (___), [...], (...), ________, -----, ......
+  cleaned = cleaned.replace(/\[\s*_{1,}\s*\]/g, " blank ");
+  cleaned = cleaned.replace(/\(\s*_{1,}\s*\)/g, " blank ");
+  cleaned = cleaned.replace(/\[\s*\.{3,}\s*\]/g, " blank ");
+  cleaned = cleaned.replace(/\(\s*\.{3,}\s*\)/g, " blank ");
+  cleaned = cleaned.replace(/_{2,}/g, " blank ");
+  cleaned = cleaned.replace(/-{3,}/g, " blank ");
+  cleaned = cleaned.replace(/\.{4,}/g, " blank ");
+
+  // 7. Streamline common prompt prefixes for speech clarity
+  cleaned = cleaned.replace(/^(Fill in the blank for the sentence|Complete the sentence|Fill in the blank):\s*/i, "Complete sentence: ");
+  cleaned = cleaned.replace(/^(Which word matches the following definition|Which word matches the definition):\s*/i, "Definition: ");
+  cleaned = cleaned.replace(/^(Question|Q):\s*/i, "");
+
+  // 8. Clean redundant or strange quotes
+  cleaned = cleaned.replace(/["“”«»„‟]/g, "");
+  cleaned = cleaned.replace(/['‘’]/g, "'"); // Normalize curly apostrophes
+
+  // 9. Remove non-speech punctuation/symbols like ~, ^, |, \, @, #, $, %, *, +, =, <, >
+  cleaned = cleaned.replace(/[~^|\\@#$%*+=<>]/g, " ");
+
+  // 10. Clean up multiple punctuation and line breaks
+  cleaned = cleaned.replace(/[\r\n]+/g, ". ");
+  cleaned = cleaned.replace(/,\s*,/g, ",");
+  cleaned = cleaned.replace(/\?\s*\?/g, "?");
+  cleaned = cleaned.replace(/!\s*!/g, "!");
+  cleaned = cleaned.replace(/\.\s*\./g, ".");
+
+  // 11. Normalize spaces
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+  // Fallback safety check: if everything was stripped, return basic sanitized original text
+  if (!cleaned) {
+    return text.replace(/[\u200B-\u200D\uFEFF\u00A0\u0000-\u001F]/g, " ").replace(/<[^>]*>/g, " ").trim();
+  }
+
+  return cleaned;
+}
+
 export async function speakText(
   text: string,
   ttsConfig: TTSConfig = DEFAULT_TTS_CONFIG,
@@ -134,7 +208,9 @@ export async function speakText(
   stopSpeech();
   const myToken = currentSpeechToken;
 
-  if (!text || !text.trim()) {
+  const normalizedText = normalizeTextForTTS(text);
+
+  if (!normalizedText || !normalizedText.trim()) {
     if (onEnd) onEnd();
     return;
   }
@@ -172,7 +248,7 @@ export async function speakText(
     const triggerSpeech = () => {
       if (myToken !== currentSpeechToken) return;
       try {
-        const utterance = new SpeechSynthesisUtterance(text);
+        const utterance = new SpeechSynthesisUtterance(normalizedText);
         activeUtterance = utterance;
         (window as any)._activeUtteranceRef = utterance; // Prevent garbage collection bug in Chromium browsers
 
@@ -241,7 +317,7 @@ export async function speakText(
   }
 
   // Check cache for AI TTS
-  const cacheKey = `${activeEngine}:${ttsConfig?.model}:${ttsConfig?.voice}:${text}`;
+  const cacheKey = `${activeEngine}:${ttsConfig?.model}:${ttsConfig?.voice}:${normalizedText}`;
   let cachedDataUrl = ttsAudioCache.get(cacheKey);
 
   if (cachedDataUrl) {
@@ -284,7 +360,7 @@ export async function speakText(
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        text,
+        text: normalizedText,
         engine: activeEngine,
         model: ttsConfig?.model || 'gemini-3.1-flash-tts-preview',
         voice: ttsConfig?.voice || 'Puck',

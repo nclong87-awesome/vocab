@@ -173,24 +173,11 @@ export default function QuizView({
 
   // Advanced speak helper using configured TTS service with synchronized visual feedback ID tracking
   const speakText = (text: string, customLang?: string, audioId?: string) => {
-    let cleanText = text
-      // Replace any consecutive underscores (1 or more) with a natural paused "blank"
-      .replace(/_{1,}/g, ", blank, ")
-      // Streamline prompt prefixes for fluent audio reading
-      .replace(/^Fill in the blank for the sentence:\s*/i, "Complete sentence: ")
-      // Strip redundant double-quotes so speech synthesis reads cleanly without quotes
-      .replace(/["“”«»]/g, "")
-      // Normalize line breaks and multiple spaces/commas
-      .replace(/\n+/g, ". ")
-      .replace(/,\s*,/g, ",")
-      .replace(/\s+/g, " ")
-      .trim();
-
     const id = audioId || "default";
     const langCode = customLang || getLanguageCode(targetLanguage);
 
     speakTextService(
-      cleanText,
+      text,
       ttsConfig,
       llmConfig,
       langCode,
@@ -383,21 +370,14 @@ export default function QuizView({
 
     setIsAnswered(true);
 
-    // Build natural feedback audio phrase stating user choice and result correctness
-    const userChoiceText = (currentQuestion.type === 'spelling' ? typedAnswer.trim() : (selectedAnswer || "")).trim() || "no answer";
+    // Build concise feedback audio phrase for clear speech synthesis
     const feedbackAudioMessage = isCorrect
-      ? (currentQuestion.type === 'spelling' 
-          ? `You spelled ${userChoiceText}. That is correct!`
-          : `You chose ${userChoiceText}. That is correct!`)
-      : (currentQuestion.type === 'spelling'
-          ? `You spelled ${userChoiceText}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.`
-          : `You chose ${userChoiceText}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.`);
+      ? "Correct!"
+      : `Incorrect! Correct answer: "${currentQuestion.correctAnswer}"`;
 
-    // Auto voice feedback upon answer verification
+    // Speak immediately in the same user gesture; delayed calls can be blocked by autoplay policies.
     if (autoPlayAudio) {
-      setTimeout(() => {
-        speakText(feedbackAudioMessage, "en-US", "feedback");
-      }, 250);
+      speakText(feedbackAudioMessage, "en-US", "feedback");
     }
   };
 
@@ -1116,12 +1096,8 @@ export default function QuizView({
               : selectedAnswer === currentQuestion.correctAnswer;
             const chosenVal = (currentQuestion.type === 'spelling' ? typedAnswer.trim() : (selectedAnswer || "")).trim() || "no response";
             const feedbackTextToSpeak = isAnswerCorrect
-              ? (currentQuestion.type === 'spelling' 
-                  ? `You spelled ${chosenVal}. That is correct!` 
-                  : `You chose ${chosenVal}. That is correct!`)
-              : (currentQuestion.type === 'spelling' 
-                  ? `You spelled ${chosenVal}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.` 
-                  : `You chose ${chosenVal}. That is incorrect. The correct answer is ${currentQuestion.correctAnswer}.`);
+              ? "Correct!"
+              : `Incorrect! Correct answer: "${currentQuestion.correctAnswer}"`;
             const isFeedbackSpeaking = speakingId === "feedback";
 
             return (
