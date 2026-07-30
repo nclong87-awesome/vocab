@@ -176,35 +176,55 @@ export default function TodayFocusHero({
                     Today's Vocabulary <br />
                     <span className="font-bold">Practice Quiz</span>
                   </h1>
-                  <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
-                    "Challenge your memory with {todayPracticeWords?.length || 0} priority words compiled from your target languages. Finish the quiz to secure your daily streak."
-                  </p>
-                  
-                  {/* Word Preview List */}
-                  <div className="pt-2">
-                    <span className="block text-xs font-medium text-stone-500 mb-3">Words in today's session:</span>
-                    <div className="flex flex-wrap gap-2 max-w-xl">
-                      {todayPracticeWords?.map((word) => (
-                        <span 
-                          key={word.id} 
-                          className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-xs text-stone-800 font-semibold tracking-tight hover:border-stone-900 hover:text-stone-950 transition-all cursor-default"
-                          title={`${word.partOfSpeech}: ${word.translation}`}
-                        >
-                          {word.word}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
 
-                  <div className="pt-4">
-                    <button 
-                      onClick={() => setIsQuizActive(true)}
-                      className="px-8 py-4 bg-stone-900 hover:bg-black transition-all text-white font-bold text-xs flex items-center gap-3 cursor-pointer rounded-none shadow-sm hover:shadow"
-                      id="btn-start-daily-quiz"
-                    >
-                      Start Today's Quiz <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {todayPracticeWords && todayPracticeWords.length >= 2 ? (
+                    <>
+                      <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
+                        "Challenge your memory with {todayPracticeWords.length} priority words compiled from your target languages. Finish the quiz to secure your daily streak."
+                      </p>
+                      
+                      {/* Word Preview List */}
+                      <div className="pt-2">
+                        <span className="block text-xs font-medium text-stone-500 mb-3">Words in today's session:</span>
+                        <div className="flex flex-wrap gap-2 max-w-xl">
+                          {todayPracticeWords.map((word) => (
+                            <span 
+                              key={word.id} 
+                              className="px-3 py-1.5 bg-stone-50 border border-stone-200 text-xs text-stone-800 font-semibold tracking-tight hover:border-stone-900 hover:text-stone-950 transition-all cursor-default"
+                              title={`${word.partOfSpeech}: ${word.translation}`}
+                            >
+                              {word.word}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="pt-4">
+                        <button 
+                          onClick={() => setIsQuizActive(true)}
+                          className="px-8 py-4 bg-stone-900 hover:bg-black transition-all text-white font-bold text-xs flex items-center gap-3 cursor-pointer rounded-none shadow-sm hover:shadow"
+                          id="btn-start-daily-quiz"
+                        >
+                          Start Today's Quiz <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-4 pt-1">
+                      <p className="text-stone-600 max-w-lg text-sm font-serif italic leading-relaxed">
+                        "There are no candidate words to practice today! You have reviewed all eligible vocabulary items recently. Please come back later or add new words to keep practicing."
+                      </p>
+                      <div className="pt-2">
+                        <button 
+                          onClick={() => setIsQuizActive(true)}
+                          className="px-6 py-3 border border-stone-300 hover:border-stone-900 bg-stone-50 text-stone-900 font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                          id="btn-check-quiz-status"
+                        >
+                          Check Practice Status
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

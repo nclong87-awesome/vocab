@@ -1,6 +1,92 @@
 import { Word } from "../types";
 
 /**
+ * Calculates hours elapsed since the word was last reviewed or created.
+ */
+export function getHoursSinceLastReview(word: Word, now: Date = new Date()): number {
+  const dateStr = word.lastReviewed;
+  if (!dateStr) return Infinity; // Never reviewed
+
+  const reviewDate = new Date(dateStr);
+  if (isNaN(reviewDate.getTime())) return Infinity;
+
+  const diffMs = now.getTime() - reviewDate.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  return Math.max(0, diffHours);
+}
+
+export interface CandidateWordsOptions {
+  maxCandidates?: number;
+  cooldownHours?: number;
+}
+
+/**
+ * Selects candidate words for a new quiz based on recency, memory decay, and cooldown rules.
+ * Words reviewed within `cooldownHours` (e.g. 12 hours) are excluded to prevent showing
+ * the same words repeatedly.
+ */
+export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
+  if (!words || words.length === 0) return [];
+
+  const { maxCandidates = 10, cooldownHours = 12 } = options;
+  const now = new Date();
+
+  // 1. Filter out words that were reviewed recently (within cooldownHours)
+  const eligibleWords = words.filter(word => {
+    if (!word.lastReviewed) return true; // Never reviewed -> always eligible
+    const hours = getHoursSinceLastReview(word, now);
+    return hours >= cooldownHours;
+  });
+
+  // If fewer than 2 eligible words, return [] to trigger "No words to practice today" state
+  if (eligibleWords.length < 2) {
+    return [];
+  }
+
+  // 2. Categorize eligible words into priority tiers
+  const starred = eligibleWords.filter(w => w.starred);
+
+  const memoryDecay = eligibleWords.filter(w => {
+    if (starred.includes(w)) return false;
+    const days = getDaysSinceLastReview(w, now);
+    return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+  });
+
+  const neverReviewed = eligibleWords.filter(w => 
+    !starred.includes(w) && 
+    !memoryDecay.includes(w) && 
+    !w.lastReviewed
+  );
+
+  const weak = eligibleWords.filter(w => 
+    !starred.includes(w) && 
+    !memoryDecay.includes(w) && 
+    !neverReviewed.includes(w) && 
+    w.strength < 3
+  );
+
+  const rest = eligibleWords.filter(w => 
+    !starred.includes(w) && 
+    !memoryDecay.includes(w) && 
+    !neverReviewed.includes(w) && 
+    !weak.includes(w)
+  );
+
+  // Helper to shuffle an array randomly to provide variety across quiz sessions
+  const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
+
+  const orderedCandidateList = [
+    ...shuffle(starred),
+    ...shuffle(memoryDecay),
+    ...shuffle(neverReviewed),
+    ...shuffle(weak),
+    ...shuffle(rest)
+  ];
+
+  return orderedCandidateList.slice(0, maxCandidates);
+}
+
+/**
  * Calculates days elapsed since the word was last reviewed or created.
  */
 export function getDaysSinceLastReview(word: Word, now: Date = new Date()): number {

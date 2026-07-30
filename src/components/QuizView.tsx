@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   Award,
   AlertCircle,
+  CheckCircle,
   Lightbulb,
   Sparkles,
   Volume2,
@@ -175,7 +176,7 @@ export default function QuizView({
   const speakText = (text: string, customLang?: string, audioId?: string, options?: { forceBrowser?: boolean }) => {
     const id = audioId || "default";
     const langCode = customLang || getLanguageCode(targetLanguage);
-    const resolvedTtsConfig = options?.forceBrowser ? { ...ttsConfig, engine: "browser" } : ttsConfig;
+    const resolvedTtsConfig = options?.forceBrowser ? { ...ttsConfig, engine: "browser" as const } : ttsConfig;
 
     speakTextService(
       text,
@@ -319,16 +320,24 @@ export default function QuizView({
     }
 
     return (
-      <div className="bg-white p-12 border border-stone-200 text-center space-y-6 max-w-md mx-auto rounded-none" id="no-words-for-quiz">
-        <AlertCircle className="w-16 h-16 text-stone-300 mx-auto" />
-        <h3 className="text-sm font-bold text-stone-900">Lacking Vocabulary Items</h3>
-        <p className="text-xs text-stone-400 font-serif italic">"Your vocabulary list needs at least 2 words to generate an interactive practice quiz."</p>
-        <button 
-          onClick={onGoBack}
-          className="px-6 py-3 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer rounded-none"
-        >
-          Go Back
-        </button>
+      <div className="bg-white p-8 sm:p-12 border border-stone-200 text-center space-y-6 max-w-md mx-auto rounded-none shadow-2xs" id="no-words-for-quiz">
+        <div className="w-16 h-16 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center mx-auto text-stone-800">
+          <CheckCircle className="w-8 h-8 text-stone-900" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-base font-bold text-stone-900">No Words to Practice Today</h3>
+          <p className="text-xs text-stone-600 font-serif italic leading-relaxed">
+            "You have reviewed all eligible vocabulary items recently! There are no words due for practice right now. Please come back later or add new words to keep practicing."
+          </p>
+        </div>
+        <div className="pt-2">
+          <button 
+            onClick={onGoBack}
+            className="px-6 py-3 bg-stone-900 text-white font-bold text-xs uppercase tracking-wider hover:bg-black transition-colors cursor-pointer rounded-none"
+          >
+            Go Back
+          </button>
+        </div>
       </div>
     );
   }

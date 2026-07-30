@@ -21,7 +21,7 @@ import {
   saveTTSConfigToDB
 } from "./db/indexedDB";
 import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
-import { recalculateWordsMemoryDecay, getDaysSinceLastReview } from "./utils/spacedRepetition";
+import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords } from "./utils/spacedRepetition";
 
 import Dashboard from "./components/Dashboard";
 import ChatView from "./components/ChatView";
@@ -175,9 +175,16 @@ export default function App() {
       return;
     }
 
-    const quizWords = [...todayPracticeWords].slice(0, 5);
-    if (quizWords.length === 0) {
-      quizWords.push(...words.slice(0, 5));
+    const quizWords = getQuizCandidateWords(words, { maxCandidates: 5, cooldownHours: 12 });
+    if (quizWords.length < 2) {
+      const noCandidateMsg: ChatMessage = {
+        id: `quiz-no-candidates-${Date.now()}`,
+        role: "assistant",
+        content: `🎉 **No words to practice today!**\n\nYou have already reviewed your eligible vocabulary items recently. There are no words due for practice right now.\n\nPlease come back later or add new words to your collection to keep practicing!`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages([noCandidateMsg]);
+      return;
     }
 
     setIsTyping(true);
@@ -1239,23 +1246,9 @@ export default function App() {
     saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB update words error:", e));
   }, []);
 
-  // Memoize Today's Practice words (prioritizing starred, decayed/overdue, unlearned, and weak words)
+  // Memoize Today's Practice words (applying recency cooldown to avoid repeating recently quizzed words)
   const todayPracticeWords = useMemo((): Word[] => {
-    const starred = words.filter(w => w.starred);
-    
-    // Decayed / Needing Refresher words: Words with lastReviewed >= 5 days ago or decayed strength < 3
-    const memoryDecayWords = words.filter(w => {
-      if (starred.includes(w)) return false;
-      const days = getDaysSinceLastReview(w);
-      return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
-    });
-
-    const unlearned = words.filter(w => !w.learned && !w.starred && !memoryDecayWords.includes(w));
-    const weak = words.filter(w => w.strength < 3 && !starred.includes(w) && !memoryDecayWords.includes(w) && !unlearned.includes(w));
-    const rest = words.filter(w => !starred.includes(w) && !memoryDecayWords.includes(w) && !unlearned.includes(w) && !weak.includes(w));
-
-    const orderedWords = [...starred, ...memoryDecayWords, ...unlearned, ...weak, ...rest];
-    return orderedWords.slice(0, 10);
+    return getQuizCandidateWords(words, { maxCandidates: 10, cooldownHours: 12 });
   }, [words]);
 
   // Quiz completion handler
@@ -1438,7 +1431,7 @@ export default function App() {
 
                 {currentView === "quiz" && (
                   <QuizView
-                    words={todayPracticeWords.length > 0 ? todayPracticeWords : words}
+                    words={todayPracticeWords}
                     targetLanguage={targetLanguage}
                     nativeLanguage={nativeLanguage}
                     stats={stats}
