@@ -219,6 +219,26 @@ export default function AnalyticsDashboard({
         </div>
       </div>
 
+      {/* AI PERFORMANCE COACH REPORT CARD */}
+      <AnimatePresence>
+        {(aiReport || isAnalyzing || analysisError) && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <AiPerformanceCoachCard
+              aiReport={aiReport}
+              isAnalyzing={isAnalyzing}
+              analysisError={analysisError}
+              setAiReport={setAiReport}
+              onRunAiAnalysis={handleRunAiAnalysis}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
       {/* Primary KPI Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="kpi-metrics-grid">
         <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2 border-l-4 border-l-emerald-600">
@@ -244,120 +264,8 @@ export default function AnalyticsDashboard({
         </div>
       </div>
 
-      {/* AI PERFORMANCE COACH REPORT CARD */}
-      <AnimatePresence>
-        {(aiReport || isAnalyzing || analysisError) && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <AiPerformanceCoachCard
-              aiReport={aiReport}
-              isAnalyzing={isAnalyzing}
-              analysisError={analysisError}
-              setAiReport={setAiReport}
-              onRunAiAnalysis={handleRunAiAnalysis}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-
-
       {/* DETAILED WORDS ANALYSIS & MANAGEMENT SECTION */}
       <div className="bg-white border border-stone-200 p-6 space-y-6 rounded-none shadow-2xs" id="words-breakdown-section">
-        {/* Navigation Tabs Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 pb-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setActiveTab('improving')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'improving'
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-              }`}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Words to Improve</span>
-              <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'improving' ? "bg-rose-800 text-white" : "bg-stone-200 text-stone-800"}`}>
-                {improvingWords.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('mastered')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'mastered'
-                  ? "bg-emerald-700 text-white shadow-xs"
-                  : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-              }`}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Mastered Words</span>
-              <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'mastered' ? "bg-emerald-900 text-white" : "bg-stone-200 text-stone-800"}`}>
-                {masteredWords.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('decayed')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'decayed'
-                  ? "bg-orange-600 text-white shadow-xs"
-                  : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-              }`}
-              title="Words that had high strength but haven't been reviewed in a while and need memory refresher practice"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Memory Refresher</span>
-              <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'decayed' ? "bg-orange-800 text-white" : "bg-stone-200 text-stone-800"}`}>
-                {decayedWords.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('starred')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'starred'
-                  ? "bg-amber-500 text-stone-950 shadow-xs"
-                  : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-              }`}
-            >
-              <Star className="w-3.5 h-3.5 fill-current" />
-              <span>Starred</span>
-              <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'starred' ? "bg-amber-700 text-white" : "bg-stone-200 text-stone-800"}`}>
-                {starredWords.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
-                activeTab === 'all'
-                  ? "bg-stone-900 text-white shadow-xs"
-                  : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>All Words</span>
-              <span className={`px-1.5 py-0.5 text-[10px] ${activeTab === 'all' ? "bg-stone-700 text-white" : "bg-stone-200 text-stone-800"}`}>
-                {totalWordsCount}
-              </span>
-            </button>
-          </div>
-
-          {activeTab === 'improving' && improvingWords.length > 0 && (
-            <button
-              onClick={() => onStartPracticeWeakWords(improvingWords)}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shrink-0 transition-all"
-            >
-              <Zap className="w-3.5 h-3.5 fill-current" />
-              <span>Start Quiz on Weak Words</span>
-            </button>
-          )}
-        </div>
-
         {/* Search & Sorting Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative">
