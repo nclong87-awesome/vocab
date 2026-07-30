@@ -217,7 +217,7 @@ export default function ChatView({
       label: "Start Quiz",
       category: "study" as const,
       categoryLabel: "Study",
-      icon: <Brain className="w-4 h-4 text-stone-900 group-hover:text-amber-400" />,
+      icon: <Brain className="w-4 h-4 text-amber-600" />,
       title: "Start Today's Quiz",
       description: "Interactive flashcards and recall challenge",
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
@@ -232,11 +232,11 @@ export default function ChatView({
     },
     {
       id: "generate_topic",
-      label: "Generate by Topic",
+      label: "Generate Words",
       category: "vocab" as const,
       categoryLabel: "Vocab",
       icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: "Generate by Topic",
+      title: "Generate Words",
       description: "Build vocabulary around travel, business, or custom topics",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
@@ -253,7 +253,7 @@ export default function ChatView({
       label: "Add Word",
       category: "vocab" as const,
       categoryLabel: "Vocab",
-      icon: <Plus className="w-4 h-4 text-stone-600" />,
+      icon: <Plus className="w-4 h-4 text-green-600" />,
       title: "Add Word to Collection",
       description: "Manually store new words with notes & definitions",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
@@ -913,9 +913,6 @@ export default function ChatView({
               >
                 {item.icon}
                 <span>{item.label}</span>
-                {count > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 ml-0.5" />
-                )}
               </button>
             );
           })}
