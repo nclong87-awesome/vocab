@@ -196,7 +196,7 @@ export default function ChatView({
   const allQuickActionItems = [
     {
       id: "fix_grammar",
-      label: "Fix Grammar & Polish",
+      label: "Fix Grammar",
       category: "writing" as const,
       categoryLabel: "Writing",
       icon: <CheckSquare className="w-4 h-4 text-amber-600" />,
@@ -214,7 +214,7 @@ export default function ChatView({
     },
     {
       id: "start_quiz",
-      label: "Start Today's Quiz",
+      label: "Start Quiz",
       category: "study" as const,
       categoryLabel: "Study",
       icon: <Brain className="w-4 h-4 text-stone-900 group-hover:text-amber-400" />,
