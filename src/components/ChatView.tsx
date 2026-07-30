@@ -155,6 +155,8 @@ export default function ChatView({
   const dockScrollRef = useRef<HTMLDivElement>(null);
 
   const focusInput = () => {
+    // if mobile, skip focusing to avoid keyboard pop-up
+    if (/Mobi|Android/i.test(navigator.userAgent)) return;
     setTimeout(() => {
       inputRef.current?.focus();
     }, 50);

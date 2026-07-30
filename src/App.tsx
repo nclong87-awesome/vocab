@@ -301,7 +301,7 @@ export default function App() {
           audioWord: nextQ.type === 'listening' ? nextQ.word : undefined,
           // Prioritize answer feedback first; otherwise autoplay jumps straight to the next question.
           quizSpeechText: isCorrect
-            ? "Correct!"
+            ? `Correct! The answer is ${currentQ.correctAnswer}`
             : `Incorrect! Correct answer: ${currentQ.correctAnswer}`,
           nextQuestionSpeechText: (nextQ.type === 'listening' || nextQ.type === 'spelling') ? nextQ.word : nextQ.question,
           imageUrl: nextQ.imageUrl,
