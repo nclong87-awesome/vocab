@@ -465,6 +465,21 @@ export default function App() {
 
   // Add individual word directly from chat suggestions (or conversational input)
   const handleConversationalAddWord = async (wordText: string, hint?: string) => {
+    const normalizedWordText = wordText.trim().toLowerCase();
+    const existingMatch = words.find(w => w.word.trim().toLowerCase() === normalizedWordText);
+    if (existingMatch) {
+      setChatMessages(prev => [
+        ...prev,
+        {
+          id: `sys-exists-${Date.now()}`,
+          role: "assistant",
+          content: `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n- **Translation**: ${existingMatch.translation}\n- **Definition**: *${existingMatch.definition}*\n\nSkipped adding duplicate entry.`,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+      return;
+    }
+
     setIsTyping(true);
     const statusMsgId = `add-word-status-${Date.now()}`;
     const contextHintStr = hint ? ` with context *"${hint}"*` : "";
@@ -575,10 +590,28 @@ export default function App() {
 
         const categoryVal = sense?.category || data.category || "General";
         const contextVal = sense?.context || data.context || hint || definitionVal;
+        const targetWordStr = data.word || wordText;
+
+        const finalMatch = words.find(w => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
+        if (finalMatch) {
+          setChatMessages(prev => {
+            const filtered = prev.filter(m => m.id !== statusMsgId);
+            return [
+              ...filtered,
+              {
+                id: `sys-exists-${Date.now()}`,
+                role: "assistant",
+                content: `ℹ️ **"${finalMatch.word}" is already in your vocabulary collection!**\n\nSkipped adding duplicate entry.`,
+                timestamp: new Date().toISOString()
+              }
+            ];
+          });
+          return;
+        }
 
         const newWord: Word = {
           id: `ai-word-${Date.now()}`,
-          word: data.word || wordText,
+          word: targetWordStr,
           pronunciation: pronunciationVal,
           partOfSpeech: partOfSpeechVal,
           definition: definitionVal,
@@ -595,6 +628,9 @@ export default function App() {
         };
 
         setWords(prev => {
+          if (prev.some(w => w.word.trim().toLowerCase() === newWord.word.trim().toLowerCase())) {
+            return prev;
+          }
           const updated = [newWord, ...prev];
           saveAllWordsToDB(updated).catch(e => console.error(e));
           return updated;
@@ -638,6 +674,21 @@ export default function App() {
     
     const sense = pendingWordSenses.senses[senseIndex];
     if (!sense) return;
+
+    const existingMatch = words.find(w => w.word.trim().toLowerCase() === word.trim().toLowerCase());
+    if (existingMatch) {
+      setChatMessages(prev => [
+        ...prev,
+        {
+          id: `sys-exists-${Date.now()}`,
+          role: "assistant",
+          content: `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\nSkipped adding duplicate entry.`,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+      setPendingWordSenses(null);
+      return;
+    }
 
     setIsTyping(true);
     const statusMsgId = `add-word-selected-status-${Date.now()}`;
@@ -788,19 +839,19 @@ export default function App() {
     ]);
 
     try {
-      const existingWordStrings = words.map(w => w.word);
+      const existingWordSet = new Set(words.map(w => w.word.trim().toLowerCase()));
       const res = await generateRandomWordsService({
         topic: topic,
         targetLanguage,
         nativeLanguage,
-        count: count + 2, // Ask for slightly more to ensure unique after filtering
-        existingWords: existingWordStrings,
+        count: count + 5, // Ask for extra to ensure unique after filtering
+        existingWords: Array.from(existingWordSet),
         llmConfig
       });
 
       const generatedList = res.words || [];
       const newUniqueWords = generatedList
-        .filter((item: any) => !existingWordStrings.includes(item.word))
+        .filter((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()))
         .slice(0, count);
 
       if (newUniqueWords.length === 0) {
@@ -1238,16 +1289,22 @@ export default function App() {
       lastReviewed?: string | null;
     }
   ) => {
-    const newWord: Word = {
-      ...wordData,
-      id: `manual-word-${Date.now()}`,
-      learned: false,
-      starred: wordData.starred || false,
-      createdAt: new Date().toISOString(),
-      lastReviewed: null,
-      strength: 0
-    };
+    const normalizedTarget = wordData.word.trim().toLowerCase();
     setWords(prev => {
+      const exists = prev.some(w => w.word.trim().toLowerCase() === normalizedTarget);
+      if (exists) {
+        console.warn(`Word "${wordData.word}" already exists in collection. Skipping duplicate.`);
+        return prev;
+      }
+      const newWord: Word = {
+        ...wordData,
+        id: `manual-word-${Date.now()}`,
+        learned: false,
+        starred: wordData.starred || false,
+        createdAt: new Date().toISOString(),
+        lastReviewed: null,
+        strength: 0
+      };
       const updated = [newWord, ...prev];
       saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add word save error:", e));
       return updated;

@@ -170,18 +170,18 @@ export default function CollectionManager({
   const handleAiSuggestRelatedWord = async () => {
     setAutofilling(true);
     try {
-      const existingWords = words.map(w => w.word);
+      const existingWordSet = new Set(words.map(w => w.word.trim().toLowerCase()));
       const res = await generateRandomWordsService({
         topic: "vocabulary",
         targetLanguage,
         nativeLanguage,
-        count: 5,
-        existingWords,
+        count: 8,
+        existingWords: Array.from(existingWordSet),
         llmConfig
       });
 
       const generatedList = res.words || [];
-      const freshWordObj = generatedList.find((item: any) => !existingWords.includes(item.word)) || generatedList[0];
+      const freshWordObj = generatedList.find((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()));
 
       if (freshWordObj) {
         setWordInput(freshWordObj.word);
@@ -205,6 +205,13 @@ export default function CollectionManager({
   const handleAddWordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!wordInput.trim() || !translationInput.trim()) return;
+
+    const normalizedTarget = wordInput.trim().toLowerCase();
+    const alreadyExists = words.some(w => w.word.trim().toLowerCase() === normalizedTarget);
+    if (alreadyExists) {
+      alert(`The word "${wordInput.trim()}" is already in your vocabulary collection!`);
+      return;
+    }
 
     onAddWord({
       word: wordInput.trim(),
@@ -238,19 +245,26 @@ export default function CollectionManager({
 
     setIsGeneratingRandomWords(true);
     try {
-      const existingWords = words.map(w => w.word);
+      const existingWordSet = new Set(words.map(w => w.word.trim().toLowerCase()));
       const res = await generateRandomWordsService({
         topic: randomWordsTopic.trim() || "vocabulary",
         targetLanguage,
         nativeLanguage,
-        count: randomCount + 2,
-        existingWords,
+        count: randomCount + 5,
+        existingWords: Array.from(existingWordSet),
         llmConfig
       });
 
       const generatedList = res.words || [];
 
-      const newUniqueWords = generatedList.filter((item: any) => !existingWords.includes(item.word)).slice(0, randomCount);
+      const newUniqueWords = generatedList
+        .filter((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()))
+        .slice(0, randomCount);
+
+      if (newUniqueWords.length === 0) {
+        alert(`All generated words for "${randomWordsTopic.trim() || "vocabulary"}" already exist in your collection!`);
+        return;
+      }
 
       newUniqueWords.forEach((item: any) => {
         onAddWord({
