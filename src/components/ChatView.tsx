@@ -429,16 +429,10 @@ export default function ChatView({
     }
   }, [messages, ttsConfig, llmConfig, targetLanguage]);
 
-  // Auto focus textbox on mount and when typing finishes
+  // Auto focus textbox on mount
   useEffect(() => {
     focusInput();
   }, []);
-
-  useEffect(() => {
-    if (!isTyping) {
-      focusInput();
-    }
-  }, [isTyping]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

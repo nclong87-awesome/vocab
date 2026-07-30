@@ -46,6 +46,11 @@ export default function WordCard({
               <span className="text-[10px] font-bold uppercase font-mono bg-stone-900 text-white px-1.5 py-0.5">
                 {word.partOfSpeech || "noun"}
               </span>
+              {word.category && (
+                <span className="text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5">
+                  🏷️ {word.category}
+                </span>
+              )}
             </div>
           </div>
 
@@ -112,6 +117,14 @@ export default function WordCard({
           <span className="text-[10px] font-mono font-bold uppercase text-amber-800 tracking-wider block">Meaning</span>
           <p className="text-xs font-black text-amber-950">{word.translation}</p>
         </div>
+
+        {/* Domain / Context Description */}
+        {word.context && (
+          <div className="text-[11px] text-stone-700 bg-stone-50 border-l-2 border-amber-500 px-2 py-1 space-y-0.5">
+            <span className="font-mono font-bold uppercase text-[9px] text-amber-800 tracking-wider block">Usage Context</span>
+            <p className="text-[11px] leading-tight text-stone-700">{word.context}</p>
+          </div>
+        )}
 
         {/* Definition Text */}
         {word.definition && (

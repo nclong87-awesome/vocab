@@ -61,6 +61,20 @@ export interface Word {
   strength: number; // 0 to 4 (representing levels of familiarity)
   imageUrl?: string;
   imagePrompt?: string;
+  category?: string;
+  context?: string;
+}
+
+export interface WordSense {
+  partOfSpeech: string;
+  definition: string;
+  translation: string;
+  pronunciation: string;
+  example: string;
+  exampleTranslation: string;
+  imagePrompt: string;
+  category?: string;
+  context?: string;
 }
 
 

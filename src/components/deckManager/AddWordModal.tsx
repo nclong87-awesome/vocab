@@ -18,6 +18,10 @@ interface AddWordModalProps {
   setExampleInput: (val: string) => void;
   exampleTranslationInput: string;
   setExampleTranslationInput: (val: string) => void;
+  categoryInput?: string;
+  setCategoryInput?: (val: string) => void;
+  contextInput?: string;
+  setContextInput?: (val: string) => void;
   autofilling: boolean;
   targetLanguage: string;
   nativeLanguage: string;
@@ -43,6 +47,10 @@ export default function AddWordModal({
   setExampleInput,
   exampleTranslationInput,
   setExampleTranslationInput,
+  categoryInput = "",
+  setCategoryInput,
+  contextInput = "",
+  setContextInput,
   autofilling,
   targetLanguage,
   nativeLanguage,
@@ -188,15 +196,39 @@ export default function AddWordModal({
             </div>
           </div>
 
-          {/* Pronunciation */}
+          {/* Pronunciation & Category */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-stone-800">IPA Pronunciation</label>
+              <input 
+                type="text" 
+                value={pronunciationInput}
+                onChange={(e) => setPronunciationInput(e.target.value)}
+                placeholder="e.g., /yoo-BIK-wih-tuss/"
+                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-900"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-stone-800">Topic / Category</label>
+              <input 
+                type="text" 
+                value={categoryInput}
+                onChange={(e) => setCategoryInput && setCategoryInput(e.target.value)}
+                placeholder="e.g., Travel, Business, Daily Life"
+                className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-900"
+              />
+            </div>
+          </div>
+
+          {/* Usage Context / Scenario */}
           <div className="space-y-1">
-            <label className="text-stone-800">IPA / Phonetic Pronunciation</label>
+            <label className="text-stone-800">Domain / Usage Context</label>
             <input 
               type="text" 
-              value={pronunciationInput}
-              onChange={(e) => setPronunciationInput(e.target.value)}
-              placeholder="e.g., yoo-BIK-wih-tuss"
-              className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-900"
+              value={contextInput}
+              onChange={(e) => setContextInput && setContextInput(e.target.value)}
+              placeholder="e.g., Booking hotels, describing unexpected coincidences"
+              className="w-full border border-stone-300 bg-stone-50 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-900 font-sans"
             />
           </div>
 

@@ -61,6 +61,8 @@ export default function CollectionManager({
   const [pronunciationInput, setPronunciationInput] = useState("");
   const [exampleInput, setExampleInput] = useState("");
   const [exampleTranslationInput, setExampleTranslationInput] = useState("");
+  const [categoryInput, setCategoryInput] = useState("");
+  const [contextInput, setContextInput] = useState("");
   const [autofilling, setAutofilling] = useState(false);
 
   // Form input states for generating N random words
@@ -115,7 +117,9 @@ export default function CollectionManager({
               partOfSpeech: details.partOfSpeech || w.partOfSpeech,
               pronunciation: details.pronunciation || w.pronunciation,
               example: details.example || w.example,
-              exampleTranslation: details.exampleTranslation || w.exampleTranslation
+              exampleTranslation: details.exampleTranslation || w.exampleTranslation,
+              category: details.category || w.category,
+              context: details.context || w.context
             };
           }
           return w;
@@ -152,6 +156,8 @@ export default function CollectionManager({
       if (details.pronunciation) setPronunciationInput(details.pronunciation);
       if (details.example) setExampleInput(details.example);
       if (details.exampleTranslation) setExampleTranslationInput(details.exampleTranslation);
+      if (details.category) setCategoryInput(details.category);
+      if (details.context) setContextInput(details.context);
     } catch (err) {
       console.error("Failed to autofill word:", err);
       alert("AI Auto-fill failed. Please verify your LLM Key in Settings.");
@@ -185,6 +191,8 @@ export default function CollectionManager({
         setPronunciationInput(freshWordObj.pronunciation || "");
         setExampleInput(freshWordObj.example || "");
         setExampleTranslationInput(freshWordObj.exampleTranslation || "");
+        if (freshWordObj.category) setCategoryInput(freshWordObj.category);
+        if (freshWordObj.context) setContextInput(freshWordObj.context);
       }
     } catch (err) {
       console.error("AI word suggestion failed:", err);
@@ -206,6 +214,8 @@ export default function CollectionManager({
       pronunciation: pronunciationInput.trim() || undefined,
       example: exampleInput.trim() || undefined,
       exampleTranslation: exampleTranslationInput.trim() || undefined,
+      category: categoryInput.trim() || undefined,
+      context: contextInput.trim() || undefined,
       starred: false
     });
 
@@ -217,6 +227,8 @@ export default function CollectionManager({
     setPronunciationInput("");
     setExampleInput("");
     setExampleTranslationInput("");
+    setCategoryInput("");
+    setContextInput("");
     setIsModalOpen(false);
   };
 
@@ -249,6 +261,8 @@ export default function CollectionManager({
           pronunciation: item.pronunciation,
           example: item.example,
           exampleTranslation: item.exampleTranslation,
+          category: item.category || randomWordsTopic.trim() || "General",
+          context: item.context || item.definition,
           starred: false
         });
       });
@@ -483,6 +497,10 @@ export default function CollectionManager({
         setExampleInput={setExampleInput}
         exampleTranslationInput={exampleTranslationInput}
         setExampleTranslationInput={setExampleTranslationInput}
+        categoryInput={categoryInput}
+        setCategoryInput={setCategoryInput}
+        contextInput={contextInput}
+        setContextInput={setContextInput}
         autofilling={autofilling}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
-import { Word, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from "./types";
+import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from "./types";
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider } from "./utils/llmHelpers";
@@ -137,15 +137,7 @@ export default function App() {
   // Pending word senses for multi-definition disambiguation
   const [pendingWordSenses, setPendingWordSenses] = useState<{
     word: string;
-    senses: {
-      partOfSpeech: string;
-      definition: string;
-      translation: string;
-      pronunciation: string;
-      example: string;
-      exampleTranslation: string;
-      imagePrompt: string;
-    }[];
+    senses: WordSense[];
   } | null>(null);
 
   // In-Chat interactive conversational quiz state
@@ -580,6 +572,9 @@ export default function App() {
           return;
         }
 
+        const categoryVal = sense?.category || data.category || "General";
+        const contextVal = sense?.context || data.context || hint || definitionVal;
+
         const newWord: Word = {
           id: `ai-word-${Date.now()}`,
           word: data.word || wordText,
@@ -589,6 +584,8 @@ export default function App() {
           translation: translationVal,
           example: exampleVal,
           exampleTranslation: exampleTranslationVal,
+          category: categoryVal,
+          context: contextVal,
           learned: false,
           starred: false,
           createdAt: new Date().toISOString(),
@@ -675,6 +672,8 @@ export default function App() {
         translation: sense.translation && sense.translation !== "undefined" ? sense.translation : finalTranslation,
         example: sense.example || undefined,
         exampleTranslation: sense.exampleTranslation || undefined,
+        category: sense.category || "General",
+        context: sense.context || sense.definition,
         learned: false,
         starred: false,
         createdAt: new Date().toISOString(),
@@ -812,6 +811,8 @@ export default function App() {
           translation: item.translation || "Translation",
           example: item.example,
           exampleTranslation: item.exampleTranslation,
+          category: item.category || topic || "General",
+          context: item.context || item.definition,
           learned: false,
           starred: false,
           createdAt: new Date().toISOString(),

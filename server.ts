@@ -319,7 +319,9 @@ CRITICAL MANDATORY REQUIREMENT:
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
 - "example": A realistic, high-quality example sentence in the target language (${userTarget}).
-- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).`;
+- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
+- "category": High-level category or topic classification (e.g. "Travel & Hospitality", "Business & Work", "Technology", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
+- "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.`;
 
     const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).`;
     const schemaDesc = `{
@@ -329,7 +331,9 @@ CRITICAL MANDATORY REQUIREMENT:
   "definition": "string (definition written STRICTLY in ${userTarget})",
   "translation": "string (translation in ${userNative})",
   "example": "string (example in ${userTarget})",
-  "exampleTranslation": "string (example translation in ${userNative})"
+  "exampleTranslation": "string (example translation in ${userNative})",
+  "category": "string (topic/category string)",
+  "context": "string (specific real-world usage context description)"
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
@@ -371,7 +375,9 @@ CRITICAL INSTRUCTIONS:
    - "pronunciation": IPA pronunciation
    - "example": example sentence in "${userTarget}"
    - "exampleTranslation": translation of example sentence in "${userNative}"
-   - "imagePrompt": short English visual description`;
+   - "imagePrompt": short English visual description
+   - "category": high-level category string (e.g. "Travel", "Business", "Daily Life")
+   - "context": concise description of the domain or real-world usage context`;
 
     const systemInstruction = `You are an elite dictionary lookup engine. You analyze target language words and output JSON with exact definitions and translations. If no valid definition exists or cannot be found, set "notFound": true and "senses": [].`;
     const schemaDesc = `{
@@ -386,7 +392,9 @@ CRITICAL INSTRUCTIONS:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imagePrompt": "string (short English visual description)"
+      "imagePrompt": "string (short English visual description)",
+      "category": "string",
+      "context": "string"
     }
   ]
 }`;
@@ -422,7 +430,9 @@ CRITICAL INSTRUCTIONS:
 - "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Realistic example sentence in target language (${userTarget}).
-- "exampleTranslation": Translation of example sentence into user's native language (${userNative}).`;
+- "exampleTranslation": Translation of example sentence into user's native language (${userNative}).
+- "category": High-level category string (e.g. "${topic || "Vocabulary"}").
+- "context": Short description of the real-world situation or domain context where this word is used.`;
 
     const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of new unique vocabulary words.`;
     const schemaDesc = `{
@@ -434,7 +444,9 @@ CRITICAL INSTRUCTIONS:
       "definition": "string (definition written STRICTLY in ${userTarget})",
       "translation": "string (direct translation in ${userNative})",
       "example": "string (sentence in ${userTarget})",
-      "exampleTranslation": "string (sentence translation in ${userNative})"
+      "exampleTranslation": "string (sentence translation in ${userNative})",
+      "category": "string",
+      "context": "string"
     }
   ]
 }`;
@@ -838,6 +850,8 @@ app.post("/api/generate-quiz", async (req, res) => {
         definition: w.definition,
         translation: w.translation,
         example: w.example || "",
+        category: w.category || "General",
+        context: w.context || w.definition,
         strength: w.strength ?? 0,
         learned: Boolean(w.learned),
         starred: Boolean(w.starred),
@@ -880,9 +894,11 @@ STRICT GENERATION RULES & RESTRICTIONS:
      * High Strength / Recently Reviewed Words (strength 3-4): Challenge the learner with nuanced context or subtle distractor choices to ensure long-term mastery.
 4. Question Types (mix across questions):
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
-   - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'"
+   - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded prompt describing target word]?width=500&height=400&nologo=true)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded prompt describing target word in its specific category and real-world usage context]?width=500&height=400&nologo=true)
+5. Context & Category Alignment:
+   - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 
 5. Output Schema:
 Return ONLY a valid JSON array of objects matching this schema:

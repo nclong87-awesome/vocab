@@ -40,6 +40,11 @@ export default function WordRow({
             <span className="text-[10px] font-bold uppercase font-mono bg-stone-900 text-white px-1.5 py-0.2">
               {word.partOfSpeech || "noun"}
             </span>
+            {word.category && (
+              <span className="text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2">
+                🏷️ {word.category}
+              </span>
+            )}
           </div>
           <p className="text-xs font-bold text-amber-950">{word.translation}</p>
           {word.definition && (
