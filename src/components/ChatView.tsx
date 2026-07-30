@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
+import { QuizImage } from "./QuizView";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -527,8 +528,12 @@ export default function ChatView({
 
                         {/* Image for visual picture questions */}
                         {msg.imageUrl && (
-                          <div className="my-2.5 max-w-sm rounded-xl border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
-                            <img src={msg.imageUrl} alt="Quiz clue" className="w-full h-auto object-cover max-h-56" referrerPolicy="no-referrer" />
+                          <div className="my-2.5 max-w-sm rounded-none border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
+                            <QuizImage 
+                              src={msg.imageUrl} 
+                              alt="Quiz visual clue" 
+                              word={msg.audioWord || "Quiz clue"} 
+                            />
                           </div>
                         )}
 
@@ -608,7 +613,6 @@ export default function ChatView({
                                 onSendMessage(act.payload.message);
                               }
                               scrollToBottom("smooth");
-                              focusInput();
                             }}
                             className={`flex items-center justify-between text-left text-xs rounded-xl py-2 px-3.5 font-bold transition-all duration-200 hover:scale-[1.01] shadow-2xs cursor-pointer group ${
                               isNextQ

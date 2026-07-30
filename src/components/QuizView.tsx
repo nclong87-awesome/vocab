@@ -54,28 +54,31 @@ function AudioEqualizer({ active = false }: { active?: boolean }) {
 }
 
 // Sub-component to manage quiz images with loaders, smooth loads and error fallbacks
-function QuizImage({ src, alt, word }: { src?: string; alt: string; word: string }) {
-  const getInitialUrl = (url?: string) => {
+export function QuizImage({ src, alt, word, className = "" }: { src?: string; alt?: string; word?: string; className?: string }) {
+  const getInitialUrl = (url?: string, w?: string) => {
     if (url && url.trim().length > 0) return url;
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(`a photo of ${word}`)}?width=500&height=400&nologo=true&seed=42`;
+    if (w && w.trim().length > 0) {
+      return `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph representing ${w}`)}?width=500&height=400&nologo=true&seed=42`;
+    }
+    return "";
   };
 
-  const [imgSrc, setImgSrc] = useState<string>(() => getInitialUrl(src));
+  const [imgSrc, setImgSrc] = useState<string>(() => getInitialUrl(src, word));
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const nextUrl = getInitialUrl(src);
+    const nextUrl = getInitialUrl(src, word);
     setImgSrc(nextUrl);
     setLoading(true);
     setFailed(false);
   }, [src, word]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-stone-100 min-h-[220px]">
+    <div className={`relative w-full min-h-[220px] flex items-center justify-center bg-stone-100 overflow-hidden ${className}`}>
       {/* Image Loading Placeholder Overlay */}
       {loading && !failed && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-stone-100 border border-stone-200 p-6 text-center animate-pulse">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-stone-100 border border-stone-200 p-6 text-center animate-pulse min-h-[220px]">
           <div className="relative mb-3 flex items-center justify-center">
             <div className="w-12 h-12 bg-stone-200 rounded-full flex items-center justify-center text-stone-500">
               <ImageIcon className="w-6 h-6 text-stone-600" />
@@ -87,7 +90,7 @@ function QuizImage({ src, alt, word }: { src?: string; alt: string; word: string
               Loading Image...
             </span>
             <span className="text-[11px] text-stone-500 font-serif italic block">
-              Preparing visual clue for "{word}"
+              {word ? `Preparing visual clue for "${word}"` : "Preparing visual clue for quiz question"}
             </span>
           </div>
           <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200/80 rounded-none text-[10px] font-mono font-bold text-amber-900">
@@ -97,15 +100,17 @@ function QuizImage({ src, alt, word }: { src?: string; alt: string; word: string
         </div>
       )}
       
-      {!failed ? (
+      {!failed && imgSrc ? (
         <img
           src={imgSrc}
-          alt={alt}
+          alt={alt || "Quiz clue image"}
           referrerPolicy="no-referrer"
           onLoad={() => setLoading(false)}
           onError={() => {
-            const fallbackPollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph representing ${word}`)}?width=500&height=400&nologo=true&seed=99`;
-            if (imgSrc !== fallbackPollinationsUrl) {
+            const fallbackPollinationsUrl = word
+              ? `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph representing ${word}`)}?width=500&height=400&nologo=true&seed=99`
+              : "";
+            if (fallbackPollinationsUrl && imgSrc !== fallbackPollinationsUrl) {
               setImgSrc(fallbackPollinationsUrl);
             } else {
               setFailed(true);
@@ -117,9 +122,11 @@ function QuizImage({ src, alt, word }: { src?: string; alt: string; word: string
           }`}
         />
       ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-stone-100 text-stone-400 p-6 text-center">
+        <div className="w-full min-h-[220px] flex flex-col items-center justify-center bg-stone-100 text-stone-400 p-6 text-center">
           <HelpCircle className="w-8 h-8 text-stone-400 mb-2" />
-          <span className="text-xs font-bold font-mono text-stone-700 uppercase">Visual Clue: {word}</span>
+          <span className="text-xs font-bold font-mono text-stone-700 uppercase">
+            Visual Clue: {word || "Quiz Question"}
+          </span>
           <span className="text-[11px] text-stone-500 font-serif italic mt-1">Image clue preview unavailable</span>
         </div>
       )}
