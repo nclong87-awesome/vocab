@@ -6,6 +6,15 @@ import { LLMProviderOption } from "../types";
  */
 export const PROVIDER_OPTIONS: LLMProviderOption[] = [
   {
+    id: "chatjimmy",
+    name: "ChatJimmy AI",
+    tagline: "ChatJimmy Free API (https://chatjimmy.ai)",
+    defaultModel: "llama3.1-8B",
+    models: ["llama3.1-8B", "llama3.3-70B", "qwen2.5-72B", "gemma2-27B"],
+    defaultBaseUrl: "https://chatjimmy.ai/api/chat",
+    requiresKey: false
+  },
+  {
     id: "ollama",
     name: "Ollama",
     tagline: "Ollama Cloud API (https://ollama.com/v1)",

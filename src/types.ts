@@ -12,7 +12,7 @@ export interface TTSConfig {
   autoPlayAudioInQuiz: boolean;
 }
 
-export type LLMProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'openrouter' | 'custom' | (string & {});
+export type LLMProvider = 'chatjimmy' | 'ollama' | 'openai' | 'anthropic' | 'groq' | 'openrouter' | 'custom' | (string & {});
 
 export interface LLMProviderOption {
   id: LLMProvider;

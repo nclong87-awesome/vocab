@@ -20,12 +20,38 @@ interface LLMRequestConfig {
 
 // Helper to clean JSON response text
 function cleanJsonResponse(rawText: string): string {
+  if (!rawText) return "";
   let cleaned = rawText.trim();
-  if (cleaned.startsWith("```json")) {
-    cleaned = cleaned.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
-  } else if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```\s*/, "").replace(/```$/i, "").trim();
+
+  // Try extracting from markdown code blocks first
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    cleaned = codeBlockMatch[1].trim();
   }
+
+  // If still not starting with [ or {, search for the first [ or { and matching last ] or }
+  if (!cleaned.startsWith("[") && !cleaned.startsWith("{")) {
+    const firstSquare = cleaned.indexOf("[");
+    const lastSquare = cleaned.lastIndexOf("]");
+    const firstCurly = cleaned.indexOf("{");
+    const lastCurly = cleaned.lastIndexOf("}");
+
+    let startIdx = -1;
+    let endIdx = -1;
+
+    if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
+      startIdx = firstSquare;
+      endIdx = lastSquare;
+    } else if (firstCurly !== -1) {
+      startIdx = firstCurly;
+      endIdx = lastCurly;
+    }
+
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      cleaned = cleaned.substring(startIdx, endIdx + 1).trim();
+    }
+  }
+
   return cleaned;
 }
 
@@ -33,12 +59,15 @@ const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-f
 
 // Sanitize model names for provider
 function sanitizeModel(provider: string, model?: string): string {
+  if (provider === "chatjimmy") {
+    return model || "llama3.1-8B";
+  }
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
+  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
 }
 
 // Parse server-side LLM error
@@ -129,7 +158,7 @@ async function callLLM(
   const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "ollama" && provider !== "custom" && provider !== "gemini";
+  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini";
   let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
 
   if (requiresKey && !effectiveApiKey) {
@@ -142,6 +171,43 @@ async function callLLM(
 
   if (!effectiveApiKey) {
     effectiveApiKey = "local-token";
+  }
+
+  if (provider === "chatjimmy") {
+    const endpoint = baseUrl || "https://chatjimmy.ai/api/chat";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Accept": "*/*",
+        "Content-Type": "application/json",
+        "Origin": "https://chatjimmy.ai",
+        "Referer": "https://chatjimmy.ai/",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        chatOptions: {
+          selectedModel: model || "llama3.1-8B",
+          systemPrompt: systemInstruction + "\n\nCRITICAL INSTRUCTION: Output STRICTLY raw valid JSON matching schema:\n" + schemaDescription + "\nDo NOT include any conversational preamble, intro text, markdown code blocks, or explanations.",
+          topK: 8
+        },
+        attachment: null
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`ChatJimmy API Error (${res.status}): ${errText}`);
+    }
+
+    const resText = await res.text();
+    const cleanText = resText.split("<|stats|>")[0];
+    return cleanJsonResponse(cleanText);
   }
 
   if (provider === "gemini") {

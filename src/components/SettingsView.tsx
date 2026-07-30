@@ -722,7 +722,7 @@ export default function SettingsView({
                       <span>
                         {saved?.apiKey 
                           ? `••••${saved.apiKey.slice(-4)}` 
-                          : p.id === "ollama" ? "Default Key" : p.requiresKey ? "None" : "Free / Local"}
+                          : p.id === "chatjimmy" || p.id === "ollama" ? "Default Key" : p.requiresKey ? "None" : "Free / Local"}
                       </span>
                     </div>
                   </div>

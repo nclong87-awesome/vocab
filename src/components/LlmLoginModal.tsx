@@ -75,8 +75,8 @@ export default function LlmLoginModal({
   const [savedProfiles, setSavedProfiles] = useState<SavedProvidersMap>({});
 
   // LLM Config state
-  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "ollama");
-  const [model, setModel] = useState<string>(currentConfig.model || "gemma4:31b");
+  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "chatjimmy");
+  const [model, setModel] = useState<string>(currentConfig.model || "llama3.1-8B");
   const [customModel, setCustomModel] = useState<string>("");
   const [isCustomModelMode, setIsCustomModelMode] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>(currentConfig.apiKey || "");
@@ -93,16 +93,16 @@ export default function LlmLoginModal({
       const profiles = getSavedProvidersMap(currentConfig);
       setSavedProfiles(profiles);
 
-      const activeP = currentConfig.provider || "ollama";
+      const activeP = currentConfig.provider || "chatjimmy";
       setProvider(activeP);
 
       const activeSaved = profiles[activeP];
       if (activeSaved) {
-        setModel(activeSaved.model || currentConfig.model || "gemma4:31b");
+        setModel(activeSaved.model || currentConfig.model || "llama3.1-8B");
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
         setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
       } else {
-        setModel(currentConfig.model || "gemma4:31b");
+        setModel(currentConfig.model || "llama3.1-8B");
         setApiKey(currentConfig.apiKey || "");
         setBaseUrl(currentConfig.baseUrl || "");
       }
@@ -615,7 +615,7 @@ export default function LlmLoginModal({
                   <Key className="w-3.5 h-3.5 text-stone-900" /> 3. API Key
                 </label>
                 <span className="text-[10px] text-stone-400 font-mono">
-                  {currentProviderMeta.id === "ollama" ? "Optional (default key)" : currentProviderMeta.requiresKey ? "Required" : "Optional for local"}
+                  {currentProviderMeta.id === "chatjimmy" || currentProviderMeta.id === "ollama" ? "Optional (default key)" : currentProviderMeta.requiresKey ? "Required" : "Optional for local"}
                 </span>
               </div>
 

@@ -44,10 +44,10 @@ export default function App() {
   
   // LLM Provider Login Config state
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({
-    provider: "ollama",
-    model: "gemma4:31b",
+    provider: "chatjimmy",
+    model: "llama3.1-8B",
     apiKey: "",
-    baseUrl: "https://rough-meadow-47c1.nclong87.workers.dev/v1",
+    baseUrl: "https://chatjimmy.ai/api/chat",
     isLoggedIn: true
   });
 
@@ -1090,15 +1090,15 @@ export default function App() {
       setStats(loadedStats);
 
       const loadedConfig = await getLLMConfigFromDB({
-        provider: "ollama",
-        model: "gemma4:31b",
+        provider: "chatjimmy",
+        model: "llama3.1-8B",
         apiKey: "",
-        baseUrl: "https://rough-meadow-47c1.nclong87.workers.dev/v1",
+        baseUrl: "https://chatjimmy.ai/api/chat",
         isLoggedIn: true
       });
 
-      const sanitizedProvider = loadedConfig.provider || "ollama";
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
+      const sanitizedProvider = loadedConfig.provider || "chatjimmy";
+      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
       const validGeminiModels = [
         "gemini-3.6-flash",
         "gemini-3.6-flash-lite",
@@ -1118,13 +1118,13 @@ export default function App() {
         ...loadedConfig,
         provider: sanitizedProvider as any,
         model: sanitizedModel,
-        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "gemini" || sanitizedProvider === "ollama"
+        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
       };
 
       setLlmConfig(activeConfig);
       await saveLLMConfigToDB(activeConfig);
 
-      if (!activeConfig.isLoggedIn && activeConfig.provider !== "gemini" && activeConfig.provider !== "ollama") {
+      if (!activeConfig.isLoggedIn && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
         setIsLlmModalOpen(true);
       }
 
