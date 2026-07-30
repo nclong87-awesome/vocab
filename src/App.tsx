@@ -22,6 +22,7 @@ import {
 } from "./db/indexedDB";
 import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords } from "./utils/spacedRepetition";
+import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
 
 import Dashboard from "./components/Dashboard";
 import ChatView from "./components/ChatView";
@@ -745,11 +746,30 @@ export default function App() {
     setActiveQuiz(null);
     setPendingWordSenses(null);
     setConversationalState("generating_topic_subject");
+
+    const certTopics = getCertificateTopics(targetLanguage);
+    const genTopics = getGeneralTopics();
+
+    const certList = certTopics.map(t => `- **${t.name}** (${t.badge}): ${t.description}`).join("\n");
+    const genList = genTopics.map(t => `- **${t.name}**: ${t.description}`).join("\n");
+
     const promptMsg: ChatMessage = {
       id: `gen-topic-prompt-${Date.now()}`,
       role: "assistant",
-      content: `🎨 **Generate Vocabulary by Topic/Subject**\n\nWhat topic or subject would you like to generate vocabulary words for? (e.g., *Travel, Dining, Business, Technology, Science, Medical, Sports*)\n\nPlease type the topic or subject below!`,
-      timestamp: new Date().toISOString()
+      content: `🎨 **Generate Vocabulary by Topic/Subject**\n\nChoose a topic below or **type any custom topic** you want to study!\n\n🏆 **Popular ${targetLanguage} Exam / Certificate Topics:**\n${certList}\n\n💡 **General Topics:**\n${genList}\n\n👇 *Select a topic below or type your own topic in the chat!*`,
+      timestamp: new Date().toISOString(),
+      suggestedActions: [
+        ...certTopics.map(t => ({
+          label: `🏆 ${t.name}`,
+          action: "send_message",
+          payload: { message: t.name }
+        })),
+        ...genTopics.map(t => ({
+          label: `🎨 ${t.name}`,
+          action: "send_message",
+          payload: { message: t.name }
+        }))
+      ]
     };
     setChatMessages([promptMsg]);
   };
