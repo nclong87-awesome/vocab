@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import { Sparkles, Wand2, X, BookOpen, Layers } from "lucide-react";
 
 interface AddWordModalProps {
@@ -50,6 +50,16 @@ export default function AddWordModal({
   handleAiSuggestRelatedWord,
   handleAddWordSubmit
 }: AddWordModalProps) {
+  const wordInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      setTimeout(() => {
+        wordInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isModalOpen]);
+
   if (!isModalOpen) return null;
 
   return (
@@ -119,6 +129,7 @@ export default function AddWordModal({
               </div>
             </div>
             <input 
+              ref={wordInputRef}
               type="text" 
               required
               value={wordInput}
@@ -136,7 +147,10 @@ export default function AddWordModal({
                 <button
                   key={sug}
                   type="button"
-                  onClick={() => setWordInput(sug)}
+                  onClick={() => {
+                    setWordInput(sug);
+                    wordInputRef.current?.focus();
+                  }}
                   className="px-2 py-0.5 bg-white border border-stone-200 hover:border-stone-900 text-stone-800 text-[10px] font-semibold transition-all cursor-pointer"
                 >
                   {sug}

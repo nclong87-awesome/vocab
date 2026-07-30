@@ -9,6 +9,14 @@
 }
 
 /* Base style overrides for Clean Minimalism */
+html, body, #root {
+  height: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: #fafaf9; /* stone-50 */

@@ -145,6 +145,13 @@ export default function ChatView({
   const [toast, setToast] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const focusInput = () => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
 
   // Quick Actions Usage Counter (persisted in localStorage)
   const [actionCounts, setActionCounts] = useState<Record<string, number>>(() => {
@@ -184,6 +191,7 @@ export default function ChatView({
         handleIncrementActionCount("fix_grammar");
         onFixGrammar();
         scrollToBottom("smooth");
+        focusInput();
       }
     },
     {
@@ -197,6 +205,7 @@ export default function ChatView({
         handleIncrementActionCount("start_quiz");
         onStartQuiz();
         scrollToBottom("smooth");
+        focusInput();
       }
     },
     {
@@ -210,6 +219,7 @@ export default function ChatView({
         handleIncrementActionCount("generate_topic");
         onGenerateByTopic();
         scrollToBottom("smooth");
+        focusInput();
       }
     },
     {
@@ -223,6 +233,7 @@ export default function ChatView({
         handleIncrementActionCount("add_word");
         onAddWord();
         scrollToBottom("smooth");
+        focusInput();
       }
     },
     {
@@ -237,6 +248,7 @@ export default function ChatView({
         onClearHistory();
         onSendMessage(`What are the top 5 most common useful phrases in ${targetLanguage}?`);
         scrollToBottom("smooth");
+        focusInput();
       }
     },
     {
@@ -250,6 +262,7 @@ export default function ChatView({
         handleIncrementActionCount("new_chat");
         onClearHistory();
         scrollToBottom("smooth");
+        focusInput();
       }
     }
   ].sort((a, b) => {
@@ -330,6 +343,17 @@ export default function ChatView({
     }
   }, [messages, ttsConfig, llmConfig, targetLanguage]);
 
+  // Auto focus textbox on mount and when typing finishes
+  useEffect(() => {
+    focusInput();
+  }, []);
+
+  useEffect(() => {
+    if (!isTyping) {
+      focusInput();
+    }
+  }, [isTyping]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isTyping) return;
@@ -349,7 +373,7 @@ export default function ChatView({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-92px)] sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-300 overflow-hidden shadow-none relative" id="chat-container">
+    <div className="flex flex-col flex-1 min-h-0 h-full sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-300 overflow-hidden shadow-none relative" id="chat-container">
       
       {/* Toast Notification Banner */}
       <AnimatePresence>
@@ -584,6 +608,7 @@ export default function ChatView({
                                 onSendMessage(act.payload.message);
                               }
                               scrollToBottom("smooth");
+                              focusInput();
                             }}
                             className={`flex items-center justify-between text-left text-xs rounded-xl py-2 px-3.5 font-bold transition-all duration-200 hover:scale-[1.01] shadow-2xs cursor-pointer group ${
                               isNextQ
@@ -654,6 +679,7 @@ export default function ChatView({
       <form onSubmit={handleSubmit} className="p-3 bg-white border-t border-stone-200 shrink-0">
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
