@@ -22,6 +22,7 @@ export interface LLMProviderOption {
   models: string[];
   tts_models?: string[];
   defaultBaseUrl?: string;
+  directBaseUrl?: string;
   requiresKey: boolean;
 }
 
@@ -32,6 +33,7 @@ export interface SavedProviderConfig {
   proxyKey?: string;
   baseUrl?: string;
   isLoggedIn: boolean;
+  useProxy?: boolean;
   lastUsedAt?: string;
 }
 
@@ -44,6 +46,7 @@ export interface LLMConfig {
   proxyKey?: string;
   baseUrl?: string;
   isLoggedIn: boolean;
+  useProxy?: boolean;
   savedProviders?: SavedProvidersMap;
 }
 

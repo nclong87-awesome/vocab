@@ -79,6 +79,7 @@ export default function LlmLoginModal({
   const [model, setModel] = useState<string>(currentConfig.model || "gpt-5.4-mini");
   const [customModel, setCustomModel] = useState<string>("");
   const [isCustomModelMode, setIsCustomModelMode] = useState<boolean>(false);
+  const [useProxy, setUseProxy] = useState<boolean>(currentConfig.useProxy !== undefined ? currentConfig.useProxy : true);
   const [apiKey, setApiKey] = useState<string>(currentConfig.apiKey || "");
   const [proxyKey, setProxyKey] = useState<string>(currentConfig.proxyKey || "");
   const [baseUrl, setBaseUrl] = useState<string>(currentConfig.baseUrl || "");
@@ -100,6 +101,11 @@ export default function LlmLoginModal({
       setProvider(activeP);
 
       const activeSaved = profiles[activeP];
+      const initialUseProxy = activeSaved?.useProxy !== undefined 
+        ? activeSaved.useProxy 
+        : (currentConfig.useProxy !== undefined ? currentConfig.useProxy : true);
+      setUseProxy(initialUseProxy);
+
       if (activeSaved) {
         setModel(activeSaved.model || currentConfig.model || "gpt-5.4-mini");
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
@@ -136,10 +142,21 @@ export default function LlmLoginModal({
     const saved = savedProfiles[pId];
     const sharedProxy = proxyKey || currentConfig.proxyKey || Object.values(savedProfiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
 
+    const savedUseProxy = saved?.useProxy !== undefined ? saved.useProxy : useProxy;
+    setUseProxy(savedUseProxy);
+
     if (saved) {
       setApiKey(saved.apiKey || "");
       setProxyKey(saved.proxyKey || sharedProxy);
-      setBaseUrl(saved.baseUrl !== undefined ? saved.baseUrl : (meta?.defaultBaseUrl || ""));
+      
+      const defaultDirectUrl = meta?.directBaseUrl || meta?.defaultBaseUrl || "";
+      const isWorkerUrl = saved.baseUrl && saved.baseUrl.includes("workers.dev");
+      
+      if (!savedUseProxy) {
+        setBaseUrl(saved.baseUrl && !isWorkerUrl ? saved.baseUrl : defaultDirectUrl);
+      } else {
+        setBaseUrl(saved.baseUrl !== undefined ? saved.baseUrl : (meta?.defaultBaseUrl || ""));
+      }
       
       if (meta && meta.models.includes(saved.model)) {
         setModel(saved.model);
@@ -153,7 +170,7 @@ export default function LlmLoginModal({
       setModel(meta.defaultModel);
       setApiKey("");
       setProxyKey(sharedProxy);
-      setBaseUrl(meta.defaultBaseUrl || "");
+      setBaseUrl(savedUseProxy ? (meta.defaultBaseUrl || "") : (meta.directBaseUrl || meta.defaultBaseUrl || ""));
       setIsCustomModelMode(false);
     }
   };
@@ -166,7 +183,7 @@ export default function LlmLoginModal({
       return;
     }
 
-    if (currentProviderMeta.requiresKey && !apiKey.trim()) {
+    if (!useProxy && currentProviderMeta.requiresKey && !apiKey.trim()) {
       setTestingStatus("error");
       setTestMessage(`An API Key is required for ${currentProviderMeta.name}.`);
       return;
@@ -176,14 +193,18 @@ export default function LlmLoginModal({
     setTestMessage("Verifying LLM provider connection...");
 
     const sharedProxy = proxyKey.trim() || currentConfig.proxyKey || Object.values(savedProfiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+    const effectiveBaseUrl = useProxy 
+      ? (currentProviderMeta.defaultBaseUrl || baseUrl.trim() || "")
+      : baseUrl.trim();
 
     try {
       const data = await testLlmConnection({
         provider,
         model: activeModel,
-        apiKey: apiKey.trim(),
+        apiKey: useProxy ? "" : apiKey.trim(),
         proxyKey: proxyKey.trim() || sharedProxy,
-        baseUrl: baseUrl.trim(),
+        baseUrl: effectiveBaseUrl,
+        useProxy,
         isLoggedIn: true,
         savedProviders: savedProfiles
       });
@@ -214,21 +235,26 @@ export default function LlmLoginModal({
       return;
     }
 
-    if (currentProviderMeta.requiresKey && !apiKey.trim()) {
+    if (!useProxy && currentProviderMeta.requiresKey && !apiKey.trim()) {
       setTestingStatus("error");
       setTestMessage(`API key is required to log in with ${currentProviderMeta.name}.`);
       return;
     }
 
     const effectiveProxyKey = proxyKey.trim();
+    const effectiveApiKey = useProxy ? "" : apiKey.trim();
+    const effectiveBaseUrl = useProxy 
+      ? (currentProviderMeta.defaultBaseUrl || baseUrl.trim() || "")
+      : baseUrl.trim();
 
-    // Propagate single shared proxyKey to ALL stored provider profiles
+    // Propagate single shared proxyKey and useProxy to ALL stored provider profiles
     const updatedSavedProfiles: SavedProvidersMap = { ...savedProfiles };
     for (const k of Object.keys(updatedSavedProfiles)) {
       if (updatedSavedProfiles[k]) {
         updatedSavedProfiles[k] = {
           ...updatedSavedProfiles[k],
-          proxyKey: effectiveProxyKey
+          proxyKey: effectiveProxyKey,
+          useProxy
         };
       }
     }
@@ -236,9 +262,10 @@ export default function LlmLoginModal({
     updatedSavedProfiles[provider] = {
       provider,
       model: activeModel,
-      apiKey: apiKey.trim(),
+      apiKey: effectiveApiKey,
       proxyKey: effectiveProxyKey,
-      baseUrl: baseUrl.trim(),
+      baseUrl: effectiveBaseUrl,
+      useProxy,
       isLoggedIn: true,
       lastUsedAt: new Date().toISOString()
     };
@@ -246,9 +273,10 @@ export default function LlmLoginModal({
     const newConfig: LLMConfig = {
       provider,
       model: activeModel,
-      apiKey: apiKey.trim(),
+      apiKey: effectiveApiKey,
       proxyKey: effectiveProxyKey,
-      baseUrl: baseUrl.trim(),
+      baseUrl: effectiveBaseUrl,
+      useProxy,
       isLoggedIn: true,
       savedProviders: updatedSavedProfiles
     };
@@ -633,65 +661,119 @@ export default function LlmLoginModal({
               )}
             </div>
 
-            {/* API Key */}
+            {/* 3. Connection Method Toggle (Use Proxy vs Direct API Key) */}
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
-                  <Key className="w-3.5 h-3.5 text-stone-900" /> 3. API Key
+                  <ShieldCheck className="w-3.5 h-3.5 text-stone-900" /> 3. Connection Method
                 </label>
-                <span className="text-[10px] text-stone-400 font-mono">
-                  {currentProviderMeta.id === "chatjimmy" || currentProviderMeta.id === "ollama" ? "Optional (default key)" : currentProviderMeta.requiresKey ? "Required" : "Optional for local"}
+                <span className="text-[10px] text-stone-500 font-mono">
+                  {useProxy ? "Proxy Gateway (Default)" : "Direct Provider API Key"}
                 </span>
               </div>
 
-              <div className="relative">
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={
-                    provider === "gemini" 
-                      ? "AIzaSy..." 
-                      : provider === "openai" 
-                      ? "sk-proj-..." 
-                      : provider === "anthropic" 
-                      ? "sk-ant-..." 
-                      : "Enter your API key..."
-                  }
-                  className="w-full bg-stone-50 border border-stone-300 p-2.5 pr-10 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
-                />
+              <div className="grid grid-cols-2 gap-2 bg-stone-100 p-1 border border-stone-200">
                 <button
                   type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-800"
-                  title={showApiKey ? "Hide Key" : "Show Key"}
+                  onClick={() => {
+                    setUseProxy(true);
+                    if (currentProviderMeta?.defaultBaseUrl) {
+                      setBaseUrl(currentProviderMeta.defaultBaseUrl);
+                    }
+                  }}
+                  className={`py-2 px-3 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    useProxy
+                      ? "bg-stone-900 text-white shadow-xs"
+                      : "text-stone-600 hover:text-stone-900 hover:bg-stone-200/60"
+                  }`}
                 >
-                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Use Proxy (Default)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseProxy(false);
+                    const defaultDirectUrl = currentProviderMeta.directBaseUrl || currentProviderMeta.defaultBaseUrl || "";
+                    if (!baseUrl || baseUrl.includes("workers.dev") || baseUrl === currentProviderMeta.defaultBaseUrl) {
+                      setBaseUrl(defaultDirectUrl);
+                    }
+                  }}
+                  className={`py-2 px-3 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    !useProxy
+                      ? "bg-stone-900 text-white shadow-xs"
+                      : "text-stone-600 hover:text-stone-900 hover:bg-stone-200/60"
+                  }`}
+                >
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Direct API Key</span>
                 </button>
               </div>
             </div>
 
-            {/* Proxy Secret (X-Proxy-Key) */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
-                  <ShieldCheck className="w-3.5 h-3.5 text-stone-900" /> Proxy Secret (X-Proxy-Key)
-                </label>
-                <span className="text-[10px] text-stone-400 font-mono">
-                  Optional (Sent in X-Proxy-Key header)
-                </span>
+            {/* Conditional Input: Proxy Secret (if Proxy is ON) OR API Key (if Proxy is OFF) */}
+            {useProxy ? (
+              /* Proxy Secret (X-Proxy-Key) */
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
+                    <ShieldCheck className="w-3.5 h-3.5 text-stone-900" /> Proxy Secret (X-Proxy-Key)
+                  </label>
+                  <span className="text-[10px] text-stone-400 font-mono">
+                    Optional (Sent in X-Proxy-Key header)
+                  </span>
+                </div>
+                <input
+                  type="password"
+                  value={proxyKey}
+                  onChange={(e) => setProxyKey(e.target.value)}
+                  placeholder="Enter proxy secret for Cloudflare worker..."
+                  className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
+                />
               </div>
-              <input
-                type="password"
-                value={proxyKey}
-                onChange={(e) => setProxyKey(e.target.value)}
-                placeholder="Enter proxy secret for Cloudflare worker..."
-                className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
-              />
-            </div>
+            ) : (
+              /* API Key */
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-stone-900" /> API Key
+                  </label>
+                  <span className="text-[10px] text-stone-400 font-mono">
+                    {currentProviderMeta.id === "chatjimmy" || currentProviderMeta.id === "ollama" ? "Optional (default key)" : currentProviderMeta.requiresKey ? "Required" : "Optional for local"}
+                  </span>
+                </div>
 
-            {/* Custom Base URL */}
-            {(provider === "custom" || provider === "openrouter" || baseUrl !== "") && (
+                <div className="relative">
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={
+                      provider === "gemini" 
+                        ? "AIzaSy..." 
+                        : provider === "openai" 
+                        ? "sk-proj-..." 
+                        : provider === "anthropic" 
+                        ? "sk-ant-..." 
+                        : "Enter your API key..."
+                    }
+                    className="w-full bg-stone-50 border border-stone-300 p-2.5 pr-10 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-800"
+                    title={showApiKey ? "Hide Key" : "Show Key"}
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Endpoint Base URL (Only shown when Direct API mode is active) */}
+            {!useProxy && (
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
@@ -705,8 +787,8 @@ export default function LlmLoginModal({
                   type="text"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="e.g. https://ollama.com/v1 or https://my-proxy.com/v1"
-                  className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
+                  placeholder={currentProviderMeta.directBaseUrl || currentProviderMeta.defaultBaseUrl || "https://api.openai.com/v1"}
+                  className="w-full bg-stone-50 text-stone-900 border border-stone-300 p-2.5 text-xs font-mono focus:outline-none focus:border-stone-900 transition-all"
                 />
               </div>
             )}

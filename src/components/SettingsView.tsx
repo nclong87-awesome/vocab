@@ -564,8 +564,8 @@ export default function SettingsView({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
-              <div className="sm:col-span-2 space-y-1.5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+              <div className="md:col-span-2 space-y-1.5">
                 <select
                   value={selectedTargetLang}
                   onChange={(e) => setSelectedTargetLang(e.target.value)}
@@ -582,7 +582,7 @@ export default function SettingsView({
                 </p>
               </div>
 
-              <div className="sm:col-span-1 flex items-center h-full">
+              <div className="md:col-span-1 flex items-center h-full">
                 {availableVoices.length > 0 ? (
                   <div className="w-full">
                     {isTargetVoiceMissing ? (
@@ -711,7 +711,7 @@ export default function SettingsView({
 
       {/* Section 1: AI Model Engine Multi-Provider Connections */}
       <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
-        <div className="border-b border-stone-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
               <Bot className="w-4 h-4 text-stone-800" />
@@ -725,7 +725,7 @@ export default function SettingsView({
           <button
             type="button"
             onClick={() => onOpenLlmModal()}
-            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0 self-start md:self-auto"
+            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0 self-start sm:self-auto"
           >
             <Key className="w-3.5 h-3.5" />
             <span>Add / Edit Provider Credentials</span>
@@ -734,51 +734,17 @@ export default function SettingsView({
 
         {/* Active Engine Highlight Box */}
         <div className="bg-stone-50 border border-stone-200 p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-1">
-              <div className="flex items-center gap-1">
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                <span className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">Active AI Engine</span>
-              </div>
-            </div>
-
-            
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Provider</span>
-              <span className="font-mono text-stone-800 font-semibold">
-                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Model</span>
-              <span className="font-mono text-stone-800 font-semibold">
-                {llmConfig.model}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key</span>
-              <span className="font-mono text-stone-800 font-semibold">
-                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "No Key Required / Using Server Default"}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
-              <span className="font-mono text-stone-800 font-semibold truncate block">
-                {llmConfig.baseUrl || "Default API Gateway"}
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-stone-200/80 pb-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${llmConfig.isLoggedIn ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-600">Active AI Engine</span>
             </div>
 
             <button
               type="button"
               onClick={handleTestActiveLLM}
               disabled={testingLlm}
-              className="w-full sm:w-auto justify-center px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+              className="px-3.5 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs shrink-0 self-start sm:self-auto"
             >
               {testingLlm ? (
                 <>
@@ -792,6 +758,36 @@ export default function SettingsView({
                 </>
               )}
             </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+            <div className="bg-white p-2.5 border border-stone-200 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Provider</span>
+              <span className="font-mono text-stone-900 font-bold truncate block">
+                {PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)?.name || llmConfig.provider}
+              </span>
+            </div>
+
+            <div className="bg-white p-2.5 border border-stone-200 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Model</span>
+              <span className="font-mono text-stone-900 font-bold truncate block" title={llmConfig.model}>
+                {llmConfig.model}
+              </span>
+            </div>
+
+            <div className="bg-white p-2.5 border border-stone-200 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">API Key</span>
+              <span className="font-mono text-stone-800 font-semibold truncate block" title={llmConfig.apiKey ? "Custom Key Configured" : "Default Server / Keyless Proxy"}>
+                {llmConfig.apiKey ? `••••••••${llmConfig.apiKey.slice(-4)}` : "Default / Keyless Proxy"}
+              </span>
+            </div>
+
+            <div className="bg-white p-2.5 border border-stone-200 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-stone-400 block">Custom Base URL</span>
+              <span className="font-mono text-stone-800 font-semibold truncate block" title={llmConfig.baseUrl || "Default API Gateway"}>
+                {llmConfig.baseUrl || "Default API Gateway"}
+              </span>
+            </div>
           </div>
 
           {llmTestResult && (
@@ -810,11 +806,12 @@ export default function SettingsView({
             Stored AI Engine Profiles
           </h4>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {PROVIDER_OPTIONS.map((p) => {
               const isActive = llmConfig.provider === p.id;
               const saved = savedProvidersMap[p.id];
               const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
+              const currentModel = saved ? saved.model : p.defaultModel;
 
               return (
                 <div
@@ -828,20 +825,20 @@ export default function SettingsView({
                   }`}
                 >
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs tracking-tight">{p.name}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-xs tracking-tight truncate">{p.name}</span>
                       {isActive ? (
-                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 flex items-center gap-1">
+                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 flex items-center gap-1 shrink-0">
                           <Zap className="w-2.5 h-2.5 fill-current" />
                           ACTIVE
                         </span>
                       ) : isSaved ? (
-                        <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1">
+                        <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1 shrink-0">
                           <BookmarkCheck className="w-2.5 h-2.5" />
                           SAVED
                         </span>
                       ) : (
-                        <span className="text-[10px] font-medium text-stone-400">Not Saved</span>
+                        <span className="text-[10px] font-medium text-stone-400 shrink-0">Not Saved</span>
                       )}
                     </div>
                     <p className={`text-[11px] font-serif italic line-clamp-1 ${isActive ? "text-stone-300" : "text-stone-500"}`}>
@@ -852,13 +849,13 @@ export default function SettingsView({
                   <div className={`p-2 text-[11px] font-mono border space-y-0.5 ${
                     isActive ? "bg-stone-800 border-stone-700 text-stone-200" : "bg-white/80 border-stone-200 text-stone-700"
                   }`}>
-                    <div className="flex justify-between">
-                      <span className="opacity-60">Model:</span>
-                      <span className="font-bold">{saved ? saved.model : p.defaultModel}</span>
+                    <div className="flex justify-between items-center gap-1">
+                      <span className="opacity-60 shrink-0">Model:</span>
+                      <span className="font-bold truncate" title={currentModel}>{currentModel}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="opacity-60">Key:</span>
-                      <span>
+                    <div className="flex justify-between items-center gap-1">
+                      <span className="opacity-60 shrink-0">Key:</span>
+                      <span className="truncate">
                         {saved?.apiKey 
                           ? `••••${saved.apiKey.slice(-4)}` 
                           : p.id === "chatjimmy" || p.id === "ollama" ? "Default Key" : p.requiresKey ? "None" : "Free / Local"}
@@ -961,7 +958,7 @@ export default function SettingsView({
         </div>
 
         {/* Database Action Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Export Database Card */}
           <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
             <div className="space-y-2">

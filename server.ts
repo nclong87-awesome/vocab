@@ -324,7 +324,7 @@ async function callLLM(
   }
 
   const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
-  if (effectiveProxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev")))) {
+  if (effectiveProxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
     headers["X-Proxy-Key"] = effectiveProxyKey || effectiveApiKey;
   }
 

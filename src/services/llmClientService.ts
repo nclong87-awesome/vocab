@@ -70,6 +70,7 @@ export function sanitizeModel(provider: string, model?: string): string {
 export type LLMErrorType =
   | 'INVALID_KEY'
   | 'PERMISSION_DENIED'
+  | 'LOCATION_UNSUPPORTED'
   | 'RATE_LIMIT'
   | 'NOT_FOUND'
   | 'SERVER_ERROR'
@@ -192,6 +193,25 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       statusCode: 403,
       errorType: "PERMISSION_DENIED",
       userMessage: `Access Forbidden (403): Your ${provUpper} API key lacks access permissions or Gemini is restricted in your region/project.`,
+      originalMessage,
+      isRetryable: false,
+      provider
+    };
+  }
+
+  // 2b. Location Not Supported / Failed Precondition (400)
+  if (
+    jsonStatusStr === "FAILED_PRECONDITION" ||
+    lowerMsg.includes("user location is not supported") ||
+    lowerMsg.includes("failed_precondition") ||
+    lowerMsg.includes("location is not supported") ||
+    lowerMsg.includes("not available in your current location") ||
+    lowerMsg.includes("not available in your")
+  ) {
+    return {
+      statusCode: 400,
+      errorType: "LOCATION_UNSUPPORTED",
+      userMessage: `Location Not Supported (400): Gemini API is restricted in your user/proxy location. In your Cloudflare Worker, make sure to delete client IP/country headers (x-forwarded-for, cf-connecting-ip, x-real-ip, cf-ipcountry) before proxying to Google.`,
       originalMessage,
       isRetryable: false,
       provider
@@ -574,7 +594,7 @@ export async function callLLMClientSide(
   }
 
   const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
-  if (proxyKeyToUse || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev")))) {
+  if (proxyKeyToUse || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
     headers["X-Proxy-Key"] = proxyKeyToUse || apiKey || effectiveApiKey;
   }
 
