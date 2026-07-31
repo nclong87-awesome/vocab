@@ -9,8 +9,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "chatjimmy",
     name: "ChatJimmy AI",
     tagline: "ChatJimmy Free API (https://chatjimmy.ai)",
-    defaultModel: "gemma2-27B",
-    models: ["llama3.1-8B", "llama3.3-70B", "qwen2.5-72B", "gemma2-27B"],
+    defaultModel: "llama3.1-8B",
+    models: ["llama3.1-8B"],
     defaultBaseUrl: "https://sparkling-sky-f790.nclong87.workers.dev/api/chat",
     requiresKey: false
   },
