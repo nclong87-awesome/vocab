@@ -6,12 +6,21 @@ import { LLMProviderOption } from "../types";
  */
 export const PROVIDER_OPTIONS: LLMProviderOption[] = [
   {
+    id: "openai",
+    name: "OpenAI",
+    tagline: "GPT series models",
+    defaultModel: "gpt-5.4-mini",
+    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini"],
+    defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
+    requiresKey: false
+  },
+  {
     id: "chatjimmy",
     name: "ChatJimmy AI",
     tagline: "ChatJimmy Free API (https://chatjimmy.ai)",
     defaultModel: "llama3.1-8B",
     models: ["llama3.1-8B"],
-    defaultBaseUrl: "https://sparkling-sky-f790.nclong87.workers.dev/api/chat",
+    defaultBaseUrl: "https://chatjimmy.nclong87.workers.dev/api/chat",
     requiresKey: false
   },
   {
@@ -20,17 +29,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Ollama Cloud API (https://ollama.com/v1)",
     defaultModel: "gemma4:31b",
     models: ["gemma4:31b","gpt-oss:20b","nemotron-3-nano:30b-cloud"],
-    defaultBaseUrl: "https://rough-meadow-47c1.nclong87.workers.dev/v1",
+    defaultBaseUrl: "https://ollama.nclong87.workers.dev/v1",
     requiresKey: false
-  },
-  {
-    id: "openai",
-    name: "OpenAI",
-    tagline: "GPT series models",
-    defaultModel: "gpt-5.4-mini",
-    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini"],
-    defaultBaseUrl: "https://api.openai.com/v1",
-    requiresKey: true
   },
   {
     id: "github",
@@ -38,8 +38,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Inference API via GitHub Personal Access Token",
     defaultModel: "openai/gpt-4o",
     models: ["cohere/cohere-command-a", "openai/gpt-4o", "openai/gpt-4.1"],
-    defaultBaseUrl: "https://models.github.ai/inference/",
-    requiresKey: true
+    defaultBaseUrl: "https://github.nclong87.workers.dev/inference/",
+    requiresKey: false
   },
   {
     id: "gemini",
@@ -48,7 +48,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "gemini-3.6-flash",
     models: ["gemini-3.5-flash-lite",  "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"],
     tts_models: ["gemini-2.5-flash-preview-tts","gemini-3.1-flash-tts-preview"],
-
+    defaultBaseUrl: "https://gemini.nclong87.workers.dev/inference/",
     requiresKey: false
   },
   {

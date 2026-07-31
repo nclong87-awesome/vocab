@@ -15,6 +15,7 @@ interface LLMRequestConfig {
   provider?: string;
   model?: string;
   apiKey?: string;
+  proxyKey?: string;
   baseUrl?: string;
 }
 
@@ -153,20 +154,22 @@ async function callLLM(
   schemaDescription: string,
   llmConfig?: LLMRequestConfig
 ): Promise<string> {
-  const provider = llmConfig?.provider || "gemini";
+  const provider = llmConfig?.provider || "openai";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
+  const proxyKey = llmConfig?.proxyKey || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini";
+  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
   let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
+  const effectiveProxyKey = proxyKey || apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "") || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
 
-  if (requiresKey && !effectiveApiKey) {
-    throw new Error(`API Key is required for provider: ${provider}. Please enter a valid API key in the LLM settings.`);
+  if (requiresKey && !effectiveApiKey && !effectiveProxyKey) {
+    throw new Error(`API Key or Proxy Secret is required for provider: ${provider}. Please enter a valid key in LLM settings.`);
   }
 
-  if (provider === "gemini" && !effectiveApiKey) {
-    throw new Error(`Gemini API Key is missing. Please enter your Gemini API key in LLM settings or configure GEMINI_API_KEY.`);
+  if (provider === "gemini" && !effectiveApiKey && !effectiveProxyKey) {
+    throw new Error(`Gemini API Key or Proxy Secret is missing. Please enter your key in LLM settings or configure GEMINI_API_KEY / PROXY_KEY.`);
   }
 
   if (!effectiveApiKey) {
@@ -182,7 +185,8 @@ async function callLLM(
         "Content-Type": "application/json",
         "Origin": "https://chatjimmy.ai",
         "Referer": "https://chatjimmy.ai/",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+        ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
       },
       body: JSON.stringify({
         messages: [
@@ -212,8 +216,13 @@ async function callLLM(
 
   if (provider === "gemini") {
     const ai = new GoogleGenAI({
-      apiKey: effectiveApiKey,
-      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
+      httpOptions: { 
+        headers: { 
+          'User-Agent': 'aistudio-build',
+          ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
+        } 
+      }
     });
 
     const primaryModel = model || "gemini-3.6-flash";
@@ -258,7 +267,8 @@ async function callLLM(
       headers: {
         "x-api-key": effectiveApiKey,
         "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
       },
       body: JSON.stringify({
         model: model || "claude-3-5-haiku-20241022",
@@ -302,6 +312,10 @@ async function callLLM(
   if (provider === "openrouter") {
     headers["HTTP-Referer"] = "https://aistudio.google.com";
     headers["X-Title"] = "Vocabulary Learner";
+  }
+
+  if (effectiveProxyKey) {
+    headers["X-Proxy-Key"] = effectiveProxyKey;
   }
 
   const reqBody: any = {

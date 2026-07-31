@@ -75,11 +75,12 @@ export default function LlmLoginModal({
   const [savedProfiles, setSavedProfiles] = useState<SavedProvidersMap>({});
 
   // LLM Config state
-  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "chatjimmy");
-  const [model, setModel] = useState<string>(currentConfig.model || "llama3.1-8B");
+  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "openai");
+  const [model, setModel] = useState<string>(currentConfig.model || "gpt-5.4-mini");
   const [customModel, setCustomModel] = useState<string>("");
   const [isCustomModelMode, setIsCustomModelMode] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>(currentConfig.apiKey || "");
+  const [proxyKey, setProxyKey] = useState<string>(currentConfig.proxyKey || "");
   const [baseUrl, setBaseUrl] = useState<string>(currentConfig.baseUrl || "");
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
 
@@ -93,17 +94,19 @@ export default function LlmLoginModal({
       const profiles = getSavedProvidersMap(currentConfig);
       setSavedProfiles(profiles);
 
-      const activeP = currentConfig.provider || "chatjimmy";
+      const activeP = currentConfig.provider || "openai";
       setProvider(activeP);
 
       const activeSaved = profiles[activeP];
       if (activeSaved) {
-        setModel(activeSaved.model || currentConfig.model || "llama3.1-8B");
+        setModel(activeSaved.model || currentConfig.model || "gpt-5.4-mini");
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
+        setProxyKey(activeSaved.proxyKey || currentConfig.proxyKey || "");
         setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
       } else {
-        setModel(currentConfig.model || "llama3.1-8B");
+        setModel(currentConfig.model || "gpt-5.4-mini");
         setApiKey(currentConfig.apiKey || "");
+        setProxyKey(currentConfig.proxyKey || "");
         setBaseUrl(currentConfig.baseUrl || "");
       }
 
@@ -131,6 +134,7 @@ export default function LlmLoginModal({
     const saved = savedProfiles[pId];
     if (saved) {
       setApiKey(saved.apiKey || "");
+      setProxyKey(saved.proxyKey || "");
       setBaseUrl(saved.baseUrl !== undefined ? saved.baseUrl : (meta?.defaultBaseUrl || ""));
       
       if (meta && meta.models.includes(saved.model)) {
@@ -144,6 +148,7 @@ export default function LlmLoginModal({
     } else if (meta) {
       setModel(meta.defaultModel);
       setApiKey("");
+      setProxyKey("");
       setBaseUrl(meta.defaultBaseUrl || "");
       setIsCustomModelMode(false);
     }
@@ -171,6 +176,7 @@ export default function LlmLoginModal({
         provider,
         model: activeModel,
         apiKey: apiKey.trim(),
+        proxyKey: proxyKey.trim(),
         baseUrl: baseUrl.trim(),
         isLoggedIn: true
       });
@@ -213,6 +219,7 @@ export default function LlmLoginModal({
         provider,
         model: activeModel,
         apiKey: apiKey.trim(),
+        proxyKey: proxyKey.trim(),
         baseUrl: baseUrl.trim(),
         isLoggedIn: true,
         lastUsedAt: new Date().toISOString()
@@ -223,6 +230,7 @@ export default function LlmLoginModal({
       provider,
       model: activeModel,
       apiKey: apiKey.trim(),
+      proxyKey: proxyKey.trim(),
       baseUrl: baseUrl.trim(),
       isLoggedIn: true,
       savedProviders: updatedSavedProfiles
@@ -644,6 +652,25 @@ export default function LlmLoginModal({
                   {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            {/* Proxy Secret (X-Proxy-Key) */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-stone-900" /> Proxy Secret (X-Proxy-Key)
+                </label>
+                <span className="text-[10px] text-stone-400 font-mono">
+                  Optional (Sent in X-Proxy-Key header)
+                </span>
+              </div>
+              <input
+                type="password"
+                value={proxyKey}
+                onChange={(e) => setProxyKey(e.target.value)}
+                placeholder="Enter proxy secret for Cloudflare worker..."
+                className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
+              />
             </div>
 
             {/* Custom Base URL */}

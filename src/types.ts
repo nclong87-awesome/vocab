@@ -29,6 +29,7 @@ export interface SavedProviderConfig {
   provider: LLMProvider;
   model: string;
   apiKey: string;
+  proxyKey?: string;
   baseUrl?: string;
   isLoggedIn: boolean;
   lastUsedAt?: string;
@@ -40,6 +41,7 @@ export interface LLMConfig {
   provider: LLMProvider;
   model: string;
   apiKey: string;
+  proxyKey?: string;
   baseUrl?: string;
   isLoggedIn: boolean;
   savedProviders?: SavedProvidersMap;

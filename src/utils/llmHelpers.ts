@@ -9,11 +9,17 @@ export function getSavedProvidersMap(config: LLMConfig): SavedProvidersMap {
   
   // Ensure current active provider is present in map if logged in
   if (config.provider && config.isLoggedIn) {
-    if (!map[config.provider] || config.apiKey !== map[config.provider].apiKey || config.model !== map[config.provider].model) {
+    if (
+      !map[config.provider] || 
+      config.apiKey !== map[config.provider].apiKey || 
+      config.proxyKey !== map[config.provider].proxyKey ||
+      config.model !== map[config.provider].model
+    ) {
       map[config.provider] = {
         provider: config.provider,
         model: config.model,
         apiKey: config.apiKey,
+        proxyKey: config.proxyKey,
         baseUrl: config.baseUrl,
         isLoggedIn: config.isLoggedIn,
         lastUsedAt: new Date().toISOString()
@@ -47,6 +53,7 @@ export function updateProviderProfile(
       provider: profile.provider,
       model: profile.model,
       apiKey: profile.apiKey,
+      proxyKey: profile.proxyKey,
       baseUrl: profile.baseUrl || "",
       isLoggedIn: true,
       savedProviders: savedMap
@@ -82,6 +89,7 @@ export function switchActiveProvider(
       provider: targetProviderId,
       model: targetSaved.model,
       apiKey: targetSaved.apiKey,
+      proxyKey: targetSaved.proxyKey,
       baseUrl: targetSaved.baseUrl || "",
       isLoggedIn: true,
       savedProviders: updatedMap
@@ -95,6 +103,7 @@ export function switchActiveProvider(
     provider: targetProviderId,
     model: providerMeta.defaultModel,
     apiKey: "",
+    proxyKey: "",
     baseUrl: providerMeta.defaultBaseUrl || "",
     isLoggedIn: !providerMeta.requiresKey,
     savedProviders: savedMap
@@ -121,6 +130,7 @@ export function removeProviderProfile(
         provider: nextKey,
         model: nextProfile.model,
         apiKey: nextProfile.apiKey,
+        proxyKey: nextProfile.proxyKey,
         baseUrl: nextProfile.baseUrl || "",
         isLoggedIn: nextProfile.isLoggedIn,
         savedProviders: savedMap
@@ -132,6 +142,7 @@ export function removeProviderProfile(
         provider: defaultMeta.id,
         model: defaultMeta.defaultModel,
         apiKey: "",
+        proxyKey: "",
         baseUrl: defaultMeta.defaultBaseUrl || "",
         isLoggedIn: false,
         savedProviders: {}

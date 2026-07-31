@@ -368,12 +368,13 @@ export async function callLLMClientSide(
   schemaDescription: string,
   llmConfig?: LLMConfig
 ): Promise<string> {
-  const provider = llmConfig?.provider || "gemini";
+  const provider = llmConfig?.provider || "openai";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || "";
+  const proxyKey = llmConfig?.proxyKey || "";
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini";
+  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
   if (requiresKey && !apiKey) {
     throw new LLMConnectionError({
       statusCode: 401,
@@ -386,6 +387,7 @@ export async function callLLMClientSide(
   }
 
   const effectiveApiKey = apiKey || "";
+  const proxyKeyToUse = proxyKey || apiKey || "";
 
   // ChatJimmy API client-side handling
   if (provider === "chatjimmy") {
@@ -399,7 +401,8 @@ export async function callLLMClientSide(
             "Content-Type": "application/json",
             "Origin": "https://chatjimmy.ai",
             "Referer": "https://chatjimmy.ai/",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+            ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
           },
           body: JSON.stringify({
             messages: [
@@ -432,11 +435,11 @@ export async function callLLMClientSide(
 
   // Gemini API client-side handling
   if (provider === "gemini") {
-    if (!effectiveApiKey) {
+    if (!effectiveApiKey && !proxyKeyToUse) {
       throw new LLMConnectionError({
         statusCode: 401,
         errorType: "INVALID_KEY",
-        userMessage: "Gemini API Key is missing. Please enter your API key in LLM settings to use Gemini in the browser.",
+        userMessage: "Gemini API Key or Proxy Secret is missing. Please configure LLM settings.",
         originalMessage: "Missing Gemini API key",
         isRetryable: false,
         provider: "gemini"
@@ -448,7 +451,14 @@ export async function callLLMClientSide(
 
     return callWithRetry(
       async (attempt) => {
-        const ai = new GoogleGenAI({ apiKey: effectiveApiKey });
+        const ai = new GoogleGenAI({ 
+          apiKey: effectiveApiKey || proxyKeyToUse || "dummy-key",
+          httpOptions: {
+            headers: {
+              ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
+            }
+          }
+        });
         let activeModel = primaryModel;
 
         if (attempt > 1 && fallbackModels.length > 0) {
@@ -504,7 +514,8 @@ export async function callLLMClientSide(
             "x-api-key": effectiveApiKey,
             "anthropic-version": "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true",
-            "content-type": "application/json"
+            "content-type": "application/json",
+            ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
           },
           body: JSON.stringify({
             model: model || "claude-3-5-haiku-20241022",
@@ -550,6 +561,10 @@ export async function callLLMClientSide(
 
   if (provider === "openrouter") {
     headers["X-Title"] = "Vocabulary Learner";
+  }
+
+  if (proxyKeyToUse) {
+    headers["X-Proxy-Key"] = proxyKeyToUse;
   }
 
   const reqBody: any = {
@@ -610,7 +625,7 @@ export interface ConnectionTestResult {
 
 // 1. Test LLM Connection with status codes and detailed feedback
 export async function testLlmConnection(llmConfig: LLMConfig): Promise<ConnectionTestResult> {
-  const provider = llmConfig?.provider || "gemini";
+  const provider = llmConfig?.provider || "openai";
   const modelUsed = sanitizeModel(provider, llmConfig?.model);
 
   // Static host (GitHub Pages, Vercel) direct client test

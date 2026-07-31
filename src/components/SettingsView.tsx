@@ -446,17 +446,24 @@ export default function SettingsView({
         // Clear all words and stats
         const { clearAllWordsAndStatsFromDB } = await import("../db/indexedDB");
         await clearAllWordsAndStatsFromDB();
+        try {
+          localStorage.removeItem("vocab_learner_words_backup");
+          localStorage.removeItem("vocab_learner_stats_backup");
+          localStorage.removeItem("vocab_learner_active_quiz_session");
+        } catch (e) {
+          // ignore storage quota errors
+        }
       } else {
-        // Clear everything from the database
+        // Full Factory Reset: Clear all IndexedDB stores and local/session storage
         await resetIndexedDBDatabase();
-      }
 
-      // Clear any cached localStorage backups
-      try {
-        localStorage.removeItem("vocab_learner_words_backup");
-        localStorage.removeItem("vocab_learner_stats_backup");
-      } catch (e) {
-        // ignore storage quota errors
+        // Clear local component states
+        setGistToken("");
+        setGistId("");
+        setSelectedTargetLang("English");
+        setSelectedNativeLang("Vietnamese");
+        setSelectedAppLang("Vietnamese");
+        setLlmTestResult(null);
       }
 
       if (onReloadData) {
@@ -467,7 +474,7 @@ export default function SettingsView({
         type: "success",
         text: resetMode === "defaults" 
           ? "Successfully cleared all vocabulary data and stats."
-          : "Successfully cleared all data (words, stats, config, and settings)."
+          : "Full Factory Reset complete! Cleared all words, stats, config, settings, and local storage."
       });
       setShowResetConfirmModal(false);
     } catch (err: any) {

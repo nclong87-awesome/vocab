@@ -739,9 +739,16 @@ async function clearStores(stores: StoreName[]): Promise<void> {
   lsRemove(LEGACY_KEYS.decksBackup);
 }
 
-// Wipe every store (words, stats, config, settings, deletedWords) without restoring defaults
-export function resetIndexedDBDatabase(): Promise<void> {
-  return clearStores(ALL_STORES);
+// Wipe every store (words, stats, config, settings, deletedWords) and clear all browser local storage
+export async function resetIndexedDBDatabase(): Promise<void> {
+  await clearStores(ALL_STORES);
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (e) {
+    console.error("Error clearing local storage during reset:", e);
+  }
+  await markInitialized();
 }
 
 // Wipe words, stats, and deletedWords tombstones, keeping config and settings intact

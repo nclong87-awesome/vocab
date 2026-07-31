@@ -43,10 +43,10 @@ export default function App() {
   
   // LLM Provider Login Config state
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({
-    provider: "chatjimmy",
-    model: "llama3.1-8B",
+    provider: "openai",
+    model: "gpt-5.4-mini",
     apiKey: "",
-    baseUrl: "https://chatjimmy.ai/api/chat",
+    baseUrl: "https://openai.nclong87.workers.dev/v1",
     isLoggedIn: true
   });
 
@@ -1098,15 +1098,15 @@ export default function App() {
       setStats(loadedStats);
 
       const loadedConfig = await getLLMConfigFromDB({
-        provider: "chatjimmy",
-        model: "llama3.1-8B",
+        provider: "openai",
+        model: "gpt-5.4-mini",
         apiKey: "",
-        baseUrl: "https://chatjimmy.ai/api/chat",
+        baseUrl: "https://openai.nclong87.workers.dev/v1",
         isLoggedIn: true
       });
 
-      const sanitizedProvider = loadedConfig.provider || "chatjimmy";
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
+      const sanitizedProvider = loadedConfig.provider || "openai";
+      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
       const validGeminiModels = [
         "gemini-3.6-flash",
         "gemini-3.6-flash-lite",
@@ -1126,18 +1126,45 @@ export default function App() {
         ...loadedConfig,
         provider: sanitizedProvider as any,
         model: sanitizedModel,
-        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
+        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
       };
 
       setLlmConfig(activeConfig);
       await saveLLMConfigToDB(activeConfig);
 
-      if (!activeConfig.isLoggedIn && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
+      if (!activeConfig.isLoggedIn && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
         setIsLlmModalOpen(true);
       }
 
       const loadedTTS = await getTTSConfigFromDB(DEFAULT_TTS_CONFIG);
       setTtsConfig(loadedTTS);
+
+      // Reload language preferences from localStorage
+      const refreshedTarget = localStorage.getItem("vocab_learner_target_lang") || "English";
+      const refreshedNative = localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
+      const refreshedApp = localStorage.getItem("vocab_learner_app_lang") || refreshedNative;
+      setTargetLanguage(refreshedTarget);
+      setNativeLanguage(refreshedNative);
+      setAppLanguage(refreshedApp);
+
+      // Reload chat messages or reset to default welcome message if cleared
+      const storedChat = localStorage.getItem("vocab_learner_chat_history");
+      if (storedChat) {
+        try {
+          setChatMessages(JSON.parse(storedChat));
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        setChatMessages([
+          {
+            id: "welcome-msg",
+            role: "assistant",
+            content: `¡Hola! Welcome to your interactive AI Language Coach. I'm here to help you master **${refreshedTarget}** from your native language **${refreshedNative}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.\n\nTry asking me: *'What are some common idioms in ${refreshedTarget}?'* or click one of the quick actions below to start learning!`,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+      }
     } catch (e) {
       console.error("IndexedDB load error:", e);
       setWords(DEFAULT_WORDS);
