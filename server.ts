@@ -314,8 +314,8 @@ async function callLLM(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (effectiveProxyKey) {
-    headers["X-Proxy-Key"] = effectiveProxyKey;
+  if (effectiveProxyKey || (baseUrl && baseUrl.includes("worker.dev"))) {
+    headers["X-Proxy-Key"] = effectiveProxyKey || effectiveApiKey;
   }
 
   const reqBody: any = {

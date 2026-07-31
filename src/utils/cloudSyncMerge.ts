@@ -468,13 +468,18 @@ export function sanitizeDataForCloudSync(data: IndexedDBExportData): IndexedDBEx
         recData.apiKey = "";
       }
 
+      if (typeof recData.proxyKey === "string") {
+        recData.proxyKey = "";
+      }
+
       if (recData.savedProviders && typeof recData.savedProviders === "object") {
         const sanitizedProviders: Record<string, any> = {};
         for (const [pKey, pVal] of Object.entries(recData.savedProviders)) {
           if (pVal && typeof pVal === "object") {
             sanitizedProviders[pKey] = {
               ...(pVal as object),
-              apiKey: ""
+              apiKey: "",
+              proxyKey: ""
             };
           } else {
             sanitizedProviders[pKey] = pVal;
@@ -498,6 +503,7 @@ export function sanitizeDataForCloudSync(data: IndexedDBExportData): IndexedDBEx
         lowerKey.includes("apikey") ||
         lowerKey.includes("secret") ||
         lowerKey.includes("password") ||
+        lowerKey.includes("proxy") ||
         lowerKey === "github_gist_token"
       ) {
         return false;

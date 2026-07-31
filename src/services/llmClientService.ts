@@ -563,8 +563,8 @@ export async function callLLMClientSide(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (proxyKeyToUse) {
-    headers["X-Proxy-Key"] = proxyKeyToUse;
+  if (proxyKeyToUse || (baseUrl && baseUrl.includes("worker.dev"))) {
+    headers["X-Proxy-Key"] = proxyKeyToUse || apiKey;
   }
 
   const reqBody: any = {
