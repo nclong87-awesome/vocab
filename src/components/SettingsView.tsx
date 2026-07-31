@@ -29,14 +29,17 @@ import {
   ShieldCheck,
   ExternalLink,
   Cloud,
-  Info
+  Info,
+  Smartphone,
+  DownloadCloud,
+  HelpCircle
 } from "lucide-react";
 import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider, SavedProviderConfig } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
 import { testLlmConnection } from "../services/llmClientService";
-import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
+import { speakText, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode, getVoicesForLanguage, isVoiceInstalledForLanguage } from "../utils/ttsService";
 import { 
   exportIndexedDBDatabase, 
   importIndexedDBDatabase, 
@@ -80,6 +83,27 @@ export default function SettingsView({
   const [selectedTargetLang, setSelectedTargetLang] = useState<string>(targetLanguage);
   const [selectedNativeLang, setSelectedNativeLang] = useState<string>(nativeLanguage);
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
+  const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
+
+  // Target Language Voice Detection logic
+  const targetLangCode = getLanguageCode(selectedTargetLang);
+  const targetVoices = getVoicesForLanguage(selectedTargetLang, availableVoices);
+  const isTargetVoiceMissing = availableVoices.length > 0 && targetVoices.length === 0;
+
+  const handleOpenAndroidTTSSettings = () => {
+    try {
+      window.location.href = "intent:#Intent;action=com.android.settings.TTS_SETTINGS;end";
+    } catch (e) {
+      window.open("https://play.google.com/store/apps/details?id=com.google.android.tts", "_blank");
+    }
+  };
+
+  const handleRescanVoices = () => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      const voices = window.speechSynthesis.getVoices();
+      setAvailableVoices(voices);
+    }
+  };
 
   useEffect(() => {
     setSelectedTargetLang(targetLanguage);
@@ -526,6 +550,26 @@ export default function SettingsView({
             <p className="text-[11px] text-stone-500 font-serif italic">
               Vocabulary words, examples, and quizzes will be generated in this language.
             </p>
+
+            {availableVoices.length > 0 && (
+              <div className="flex items-center gap-1.5 pt-1">
+                {isTargetVoiceMissing ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowVoicePackGuideModal(true)}
+                    className="text-[11px] text-amber-900 font-semibold bg-amber-50 border border-amber-300 px-2 py-1 flex items-center gap-1.5 hover:bg-amber-100 transition-all cursor-pointer"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Missing voice pack for {selectedTargetLang} — Click to install</span>
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-emerald-900 font-medium bg-emerald-50 border border-emerald-200 px-2 py-0.5 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Browser voice ready ({targetVoices.length} available)</span>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Native Language */}
@@ -1149,6 +1193,99 @@ export default function SettingsView({
                 </span>
               </div>
 
+              {/* Target Language Voice Detection Banner */}
+              <div className={`p-4 border text-xs space-y-3 transition-all ${
+                isTargetVoiceMissing
+                  ? "bg-amber-50 border-amber-300 text-amber-950"
+                  : "bg-emerald-50 border-emerald-300 text-emerald-950"
+              }`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 font-bold">
+                    {isTargetVoiceMissing ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    )}
+                    <span>
+                      {isTargetVoiceMissing
+                        ? `Missing Voice Pack for Target Language: ${selectedTargetLang} (${targetLangCode})`
+                        : `System Voice Ready for ${selectedTargetLang} (${targetLangCode})`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 border ${
+                      isTargetVoiceMissing
+                        ? "bg-amber-200 border-amber-300 text-amber-900"
+                        : "bg-emerald-200 border-emerald-300 text-emerald-900"
+                    }`}>
+                      {isTargetVoiceMissing ? "0 Voices Found" : `${targetVoices.length} Voice(s) Available`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRescanVoices}
+                      className="px-2 py-0.5 bg-white border border-stone-300 hover:bg-stone-100 text-[10px] font-semibold text-stone-700 flex items-center gap-1 cursor-pointer"
+                      title="Re-scan system voices"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      <span>Re-scan</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] leading-relaxed text-stone-700">
+                  {isTargetVoiceMissing ? (
+                    <>
+                      Your browser currently has <strong>0 voice packs</strong> installed for <strong className="text-stone-900">{selectedTargetLang}</strong>. 
+                      On Android phones, Chrome browser speech synthesis will be <strong>completely silent</strong> for {selectedTargetLang} until the voice pack is downloaded in system settings or Google Speech Services.
+                    </>
+                  ) : (
+                    <>
+                      Ready! Found {targetVoices.length} native voice(s) matching <strong className="text-stone-900">{selectedTargetLang}</strong>:{" "}
+                      <span className="font-mono text-stone-900">{targetVoices.map(v => v.name).slice(0, 3).join(", ")}</span>.
+                    </>
+                  )}
+                </p>
+
+                {isTargetVoiceMissing && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleOpenAndroidTTSSettings();
+                        setShowVoicePackGuideModal(true);
+                      }}
+                      className="px-3.5 py-2 bg-amber-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Install {selectedTargetLang} Voice Pack (Android Settings)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = { ...config, engine: 'gemini' as TTSEngine };
+                        setConfig(updated);
+                        onSaveTTSConfig(updated);
+                      }}
+                      className="px-3 py-2 bg-white hover:bg-amber-100 border border-amber-400 text-amber-950 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Switch to Gemini AI Voice (No Download Needed)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowVoicePackGuideModal(true)}
+                      className="px-3 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-stone-600" />
+                      <span>Installation Guide</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <select
                   value={config.voiceURI || ""}
@@ -1545,6 +1682,139 @@ export default function SettingsView({
                     <span>Confirm Reset</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voice Pack Installation Guide Modal */}
+      {showVoicePackGuideModal && (
+        <div className="fixed inset-0 bg-stone-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 p-6 sm:p-8 w-full max-w-lg space-y-5 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2.5 text-stone-900 font-bold text-base">
+                <div className="p-2 bg-amber-100 border border-amber-300 text-amber-900">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3>Install Missing Voice Pack on Android</h3>
+                  <p className="text-xs text-stone-500 font-normal mt-0.5">
+                    Target Language: <strong className="text-stone-900">{selectedTargetLang} ({targetLangCode})</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVoicePackGuideModal(false)}
+                className="text-stone-400 hover:text-stone-900 p-1 cursor-pointer text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-stone-700">
+              <div className="bg-amber-50 border border-amber-200 p-3.5 text-amber-950 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block text-stone-900 font-bold mb-0.5">Why is there no sound for {selectedTargetLang}?</strong>
+                  <span>
+                    Android Chrome relies on Android System Text-to-Speech (Google Speech Services). Many Android phones only pre-install English or Spanish. Other languages (like Chinese, Japanese, French, German) must be downloaded once in system settings.
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <h4 className="font-bold text-stone-900 uppercase tracking-wider text-[11px] border-b border-stone-100 pb-1">
+                  Step-by-Step Installation Instructions
+                </h4>
+
+                <ol className="space-y-2.5 text-stone-800">
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-stone-900 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
+                    <div>
+                      <strong className="text-stone-900">Tap "Open Android TTS Settings"</strong> button below to jump directly into device speech settings.
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-stone-900 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
+                    <div>
+                      <strong className="text-stone-900">Tap Preferred engine settings ⚙️</strong> next to <em>Google Speech Services</em> or <em>Speech Recognition & Synthesis</em>.
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-stone-900 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
+                    <div>
+                      <strong className="text-stone-900">Tap "Install voice data"</strong> and scroll to find <strong>{selectedTargetLang}</strong> (e.g. Chinese / 中文).
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-stone-900 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">4</span>
+                    <div>
+                      <strong className="text-stone-900">Tap Download (⬇️)</strong> to install the voice pack (~15-30MB).
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-stone-900 text-white font-mono font-bold text-[10px] flex items-center justify-center shrink-0">5</span>
+                    <div>
+                      Return to Vocabulary Learner and click <strong className="text-stone-900">"Re-scan System Voices"</strong>.
+                    </div>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="pt-3 border-t border-stone-100 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleOpenAndroidTTSSettings}
+                  className="w-full py-2.5 px-4 bg-amber-900 hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                >
+                  <Smartphone className="w-4 h-4 text-amber-400" />
+                  <span>Open Android TTS Settings Directly</span>
+                </button>
+
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.google.android.tts"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-stone-600" />
+                  <span>Open Google Speech Services on Play Store</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = { ...config, engine: 'gemini' as TTSEngine };
+                    setConfig(updated);
+                    onSaveTTSConfig(updated);
+                    setShowVoicePackGuideModal(false);
+                  }}
+                  className="w-full py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer mt-1"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>Alternative: Use Gemini AI Voice (Zero Installation Required)</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={handleRescanVoices}
+                className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Re-scan System Voices</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowVoicePackGuideModal(false)}
+                className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold cursor-pointer"
+              >
+                Done / Close
               </button>
             </div>
           </div>

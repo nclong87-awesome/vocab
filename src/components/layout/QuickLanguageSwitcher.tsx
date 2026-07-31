@@ -78,17 +78,22 @@ export default function QuickLanguageSwitcher({
         <Globe className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-600 shrink-0" />
         
         <div className="flex items-center gap-0.5 sm:gap-1">
-          {/* Mobile view: flags only */}
+          {/* Mobile view (< sm): flags only */}
           <span className="sm:hidden font-bold flex items-center gap-0.5">
             <span>{targetFlag}</span>
             <ArrowRight className="w-2 h-2 opacity-50" />
             <span>{nativeFlag}</span>
           </span>
 
-          {/* Desktop view: flags + language names */}
-          <span className="hidden sm:inline font-bold">{targetFlag} {currentTarget}</span>
-          <ArrowRight className="hidden sm:inline w-2.5 h-2.5 opacity-50" />
-          <span className="hidden sm:inline text-stone-500 font-normal">{nativeFlag} {currentNative}</span>
+          {/* Tablet view (sm -> lg): target flag & name -> native flag */}
+          <span className="hidden sm:inline lg:hidden font-bold">
+            {targetFlag} {currentTarget} <span className="opacity-50">→</span> {nativeFlag}
+          </span>
+
+          {/* Desktop view (>= lg): full names */}
+          <span className="hidden lg:inline font-bold">{targetFlag} {currentTarget}</span>
+          <ArrowRight className="hidden lg:inline w-2.5 h-2.5 opacity-50" />
+          <span className="hidden lg:inline text-stone-500 font-normal">{nativeFlag} {currentNative}</span>
         </div>
 
         <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-60 transition-transform shrink-0 ${isOpen ? "rotate-180" : ""}`} />

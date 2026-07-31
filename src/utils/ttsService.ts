@@ -43,6 +43,20 @@ export function getLanguageCode(langName?: string): string {
   return map[name] || "en-US";
 }
 
+export function getVoicesForLanguage(langNameOrCode: string, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
+  if (!voices || voices.length === 0) return [];
+  const bcp47 = langNameOrCode.includes('-') ? langNameOrCode : getLanguageCode(langNameOrCode);
+  const langPrefix = bcp47.split('-')[0].toLowerCase();
+  return voices.filter(v => {
+    const vLang = (v.lang || "").toLowerCase().replace('_', '-');
+    return vLang.startsWith(langPrefix) || vLang.includes(langPrefix);
+  });
+}
+
+export function isVoiceInstalledForLanguage(langNameOrCode: string, voices: SpeechSynthesisVoice[]): boolean {
+  return getVoicesForLanguage(langNameOrCode, voices).length > 0;
+}
+
 let currentAudioElement: HTMLAudioElement | null = null;
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentSpeechToken: number = 0;

@@ -1440,7 +1440,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-dvh sm:min-h-screen bg-stone-50/40 text-stone-900 flex flex-col antialiased border-0 overflow-hidden sm:overflow-auto">
+    <div className="h-dvh w-full bg-stone-50/40 text-stone-900 flex flex-col antialiased border-0 overflow-hidden">
       
       {/* Visual Top Header */}
       <AppHeader
@@ -1460,11 +1460,11 @@ export default function App() {
       />
 
       {/* Main Viewport Container */}
-      <main className="flex-1 min-h-0 w-full max-w-7xl mx-auto p-0 sm:p-4 md:p-6 pb-0 sm:pb-8 flex flex-col overflow-y-auto sm:overflow-visible">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start flex-1 min-h-0 h-full">
+      <main className="flex-1 min-h-0 w-full max-w-7xl mx-auto p-2 sm:p-4 md:p-5 flex flex-col overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden">
           
           {/* Main workspace section */}
-          <div className="lg:col-span-12 xl:col-span-12 flex flex-col min-w-0 flex-1 min-h-0 h-full">
+          <div className="flex flex-col min-w-0 flex-1 min-h-0 h-full overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentView}

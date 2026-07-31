@@ -117,7 +117,7 @@ export default function QuickAiSwitcher({
           {activeProviderMeta.name}
         </span>
         
-        <span className="text-[10px] opacity-75 font-mono hidden sm:inline">
+        <span className="text-[10px] opacity-75 font-mono hidden xl:inline">
           ({llmConfig.model})
         </span>
 

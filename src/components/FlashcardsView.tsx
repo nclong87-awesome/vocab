@@ -126,7 +126,7 @@ export default function FlashcardsView({
   const masteredCount = useMemo(() => sortedWords.filter(w => w.learned).length, [sortedWords]);
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto" id="flashcard-collection-view">
+    <div className="h-full overflow-y-auto p-2 sm:p-4 space-y-6 sm:space-y-8 max-w-3xl mx-auto w-full" id="flashcard-collection-view">
       {/* Collection Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-stone-200">
         <div>

@@ -355,7 +355,7 @@ export default function ChatView({
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 h-full sm:h-[calc(100vh-180px)] bg-white rounded-none sm:rounded-xl border-0 sm:border border-stone-300 overflow-hidden shadow-none relative" id="chat-container">
+    <div className="flex flex-col flex-1 min-h-0 h-full bg-white rounded-none sm:rounded-xl border border-stone-200 overflow-hidden shadow-none relative" id="chat-container">
       
       {/* Toast Notification Banner */}
       <AnimatePresence>

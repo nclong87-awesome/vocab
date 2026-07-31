@@ -413,7 +413,7 @@ export default function QuizView({
     const perfectScore = score === questions.length;
 
     return (
-      <div className="max-w-3xl mx-auto space-y-8" id="quiz-summary-view">
+      <div className="h-full overflow-y-auto p-2 sm:p-4 max-w-3xl mx-auto space-y-6 sm:space-y-8 w-full" id="quiz-summary-view">
         <motion.div 
           initial={{ scale: 0.98, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -721,7 +721,7 @@ export default function QuizView({
   const wordDetails = words?.find(w => w.id === currentQuestion?.wordId);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 scroll-mt-16 sm:scroll-mt-20" id="quiz-question-view" ref={questionHeaderRef}>
+    <div className="h-full overflow-y-auto p-2 sm:p-4 max-w-2xl mx-auto space-y-6 scroll-mt-16 sm:scroll-mt-20 w-full" id="quiz-question-view" ref={questionHeaderRef}>
       {/* Quiz Progress header */}
       <div className="space-y-3" id="quiz-header">
         {/* Top Navigation & Progress */}
