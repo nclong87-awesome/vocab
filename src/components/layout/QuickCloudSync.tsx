@@ -223,10 +223,10 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         type="button"
         onClick={handleTriggerSync}
         disabled={isCheckingSync || isSyncing}
-        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-3 sm:py-1.5 border text-[11px] sm:text-xs font-medium tracking-normal transition-all cursor-pointer shadow-2xs shrink-0 ${
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
           isCheckingSync || isSyncing
             ? "bg-stone-900 text-white border-stone-900 opacity-90"
-            : "bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-900"
+            : "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900"
         }`}
         title={hasToken ? "Sync latest data with Cloud (GitHub Gist)" : "Configure Cloud Sync (GitHub Gist)"}
         id="quick-cloud-sync-btn"
@@ -238,9 +238,9 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         />
 
         {isCheckingSync || isSyncing ? (
-          <RefreshCw className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin text-amber-400 shrink-0" />
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
         ) : (
-          <Cloud className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-700 shrink-0" />
+          <Cloud className="w-3.5 h-3.5 text-stone-700 shrink-0" />
         )}
 
         <span className="font-bold hidden sm:inline">
@@ -252,7 +252,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
 
       {/* Floating Toast Notification */}
       {syncToast && (
-        <div className={`fixed top-16 left-3 right-3 sm:left-auto sm:right-auto sm:absolute sm:top-full sm:right-0 sm:mt-1 z-50 text-[11px] font-semibold px-3 py-2 border shadow-lg flex items-center justify-center sm:justify-start gap-2 whitespace-nowrap animate-in fade-in slide-in-from-top-1 ${
+        <div className={`fixed top-16 left-3 right-3 sm:left-auto sm:right-auto sm:absolute sm:top-full sm:right-0 sm:mt-1.5 z-50 text-xs font-semibold px-3 py-2 rounded-xl border shadow-xl flex items-center justify-center sm:justify-start gap-2 whitespace-nowrap animate-in fade-in slide-in-from-top-1 ${
           syncToast.type === "success" 
             ? "bg-stone-900 text-white border-stone-800"
             : syncToast.type === "error"
