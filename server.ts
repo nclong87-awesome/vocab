@@ -17,6 +17,7 @@ interface LLMRequestConfig {
   apiKey?: string;
   proxyKey?: string;
   baseUrl?: string;
+  savedProviders?: Record<string, { proxyKey?: string; [key: string]: any }>;
 }
 
 // Helper to clean JSON response text
@@ -157,7 +158,10 @@ async function callLLM(
   const provider = llmConfig?.provider || "openai";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
-  const proxyKey = llmConfig?.proxyKey || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
+  const sharedProxyKey = llmConfig?.proxyKey || 
+    (llmConfig?.savedProviders ? Object.values(llmConfig.savedProviders).find(p => Boolean(p?.proxyKey))?.proxyKey : "") || 
+    process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
+  const proxyKey = sharedProxyKey;
   const baseUrl = llmConfig?.baseUrl || "";
 
   const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
@@ -314,7 +318,7 @@ async function callLLM(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (effectiveProxyKey || (baseUrl && baseUrl.includes("worker.dev"))) {
+  if (effectiveProxyKey || (baseUrl && (baseUrl.includes("workers.dev") || baseUrl.includes("worker.dev")))) {
     headers["X-Proxy-Key"] = effectiveProxyKey || effectiveApiKey;
   }
 

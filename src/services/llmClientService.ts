@@ -371,7 +371,12 @@ export async function callLLMClientSide(
   const provider = llmConfig?.provider || "openai";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || "";
-  const proxyKey = llmConfig?.proxyKey || "";
+  
+  // Single shared proxyKey across providers (checking current config and saved provider map)
+  const sharedProxyKey = llmConfig?.proxyKey || 
+    (llmConfig?.savedProviders ? Object.values(llmConfig.savedProviders).find(p => Boolean(p?.proxyKey))?.proxyKey : "") || 
+    "";
+  const proxyKey = sharedProxyKey;
   const baseUrl = llmConfig?.baseUrl || "";
 
   const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
@@ -563,7 +568,7 @@ export async function callLLMClientSide(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (proxyKeyToUse || (baseUrl && baseUrl.includes("worker.dev"))) {
+  if (proxyKeyToUse || (baseUrl && (baseUrl.includes("workers.dev") || baseUrl.includes("worker.dev")))) {
     headers["X-Proxy-Key"] = proxyKeyToUse || apiKey;
   }
 

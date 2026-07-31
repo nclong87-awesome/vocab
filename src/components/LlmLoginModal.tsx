@@ -94,6 +94,8 @@ export default function LlmLoginModal({
       const profiles = getSavedProvidersMap(currentConfig);
       setSavedProfiles(profiles);
 
+      const sharedProxy = currentConfig.proxyKey || Object.values(profiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+
       const activeP = currentConfig.provider || "openai";
       setProvider(activeP);
 
@@ -101,12 +103,12 @@ export default function LlmLoginModal({
       if (activeSaved) {
         setModel(activeSaved.model || currentConfig.model || "gpt-5.4-mini");
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
-        setProxyKey(activeSaved.proxyKey || currentConfig.proxyKey || "");
+        setProxyKey(activeSaved.proxyKey || sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
       } else {
         setModel(currentConfig.model || "gpt-5.4-mini");
         setApiKey(currentConfig.apiKey || "");
-        setProxyKey(currentConfig.proxyKey || "");
+        setProxyKey(sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(currentConfig.baseUrl || "");
       }
 
@@ -130,11 +132,13 @@ export default function LlmLoginModal({
     setTestingStatus("idle");
     setTestMessage("");
 
-    // Auto-fill from saved profile if available
+    // Auto-fill from saved profile if available, preserving single shared proxyKey
     const saved = savedProfiles[pId];
+    const sharedProxy = proxyKey || currentConfig.proxyKey || Object.values(savedProfiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+
     if (saved) {
       setApiKey(saved.apiKey || "");
-      setProxyKey(saved.proxyKey || "");
+      setProxyKey(saved.proxyKey || sharedProxy);
       setBaseUrl(saved.baseUrl !== undefined ? saved.baseUrl : (meta?.defaultBaseUrl || ""));
       
       if (meta && meta.models.includes(saved.model)) {
@@ -148,7 +152,7 @@ export default function LlmLoginModal({
     } else if (meta) {
       setModel(meta.defaultModel);
       setApiKey("");
-      setProxyKey("");
+      setProxyKey(sharedProxy);
       setBaseUrl(meta.defaultBaseUrl || "");
       setIsCustomModelMode(false);
     }
@@ -213,24 +217,34 @@ export default function LlmLoginModal({
       return;
     }
 
-    const updatedSavedProfiles: SavedProvidersMap = {
-      ...savedProfiles,
-      [provider]: {
-        provider,
-        model: activeModel,
-        apiKey: apiKey.trim(),
-        proxyKey: proxyKey.trim(),
-        baseUrl: baseUrl.trim(),
-        isLoggedIn: true,
-        lastUsedAt: new Date().toISOString()
+    const effectiveProxyKey = proxyKey.trim();
+
+    // Propagate single shared proxyKey to ALL stored provider profiles
+    const updatedSavedProfiles: SavedProvidersMap = { ...savedProfiles };
+    for (const k of Object.keys(updatedSavedProfiles)) {
+      if (updatedSavedProfiles[k]) {
+        updatedSavedProfiles[k] = {
+          ...updatedSavedProfiles[k],
+          proxyKey: effectiveProxyKey
+        };
       }
+    }
+
+    updatedSavedProfiles[provider] = {
+      provider,
+      model: activeModel,
+      apiKey: apiKey.trim(),
+      proxyKey: effectiveProxyKey,
+      baseUrl: baseUrl.trim(),
+      isLoggedIn: true,
+      lastUsedAt: new Date().toISOString()
     };
 
     const newConfig: LLMConfig = {
       provider,
       model: activeModel,
       apiKey: apiKey.trim(),
-      proxyKey: proxyKey.trim(),
+      proxyKey: effectiveProxyKey,
       baseUrl: baseUrl.trim(),
       isLoggedIn: true,
       savedProviders: updatedSavedProfiles

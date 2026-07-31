@@ -3,23 +3,27 @@ import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 /**
  * Gets saved providers map from LLMConfig with safety fallbacks
+ * Automatically shares proxyKey across all providers if present
  */
 export function getSavedProvidersMap(config: LLMConfig): SavedProvidersMap {
   const map: SavedProvidersMap = config.savedProviders ? { ...config.savedProviders } : {};
   
+  // Find single shared proxyKey from config or any saved provider profile
+  const sharedProxyKey = config.proxyKey || Object.values(map).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+
   // Ensure current active provider is present in map if logged in
   if (config.provider && config.isLoggedIn) {
     if (
       !map[config.provider] || 
       config.apiKey !== map[config.provider].apiKey || 
-      config.proxyKey !== map[config.provider].proxyKey ||
+      (sharedProxyKey && config.proxyKey !== map[config.provider].proxyKey) ||
       config.model !== map[config.provider].model
     ) {
       map[config.provider] = {
         provider: config.provider,
         model: config.model,
         apiKey: config.apiKey,
-        proxyKey: config.proxyKey,
+        proxyKey: sharedProxyKey || config.proxyKey || map[config.provider]?.proxyKey || "",
         baseUrl: config.baseUrl,
         isLoggedIn: config.isLoggedIn,
         lastUsedAt: new Date().toISOString()
@@ -27,11 +31,24 @@ export function getSavedProvidersMap(config: LLMConfig): SavedProvidersMap {
     }
   }
 
+  // Synchronize the single proxyKey across all saved provider profiles
+  if (sharedProxyKey) {
+    for (const key of Object.keys(map)) {
+      if (map[key]) {
+        map[key] = {
+          ...map[key],
+          proxyKey: sharedProxyKey
+        };
+      }
+    }
+  }
+
   return map;
 }
 
 /**
- * Updates LLMConfig with a new or updated provider profile
+ * Updates LLMConfig with a new or updated provider profile.
+ * Shares proxyKey across all saved provider entries.
  */
 export function updateProviderProfile(
   currentConfig: LLMConfig,
@@ -40,20 +57,36 @@ export function updateProviderProfile(
 ): LLMConfig {
   const savedMap = getSavedProvidersMap(currentConfig);
   
+  // Determine shared proxyKey: explicit profile proxyKey if set, or existing sharedProxyKey
+  const sharedProxyKey = (profile.proxyKey !== undefined && profile.proxyKey !== "")
+    ? profile.proxyKey 
+    : (currentConfig.proxyKey || Object.values(savedMap).find(p => Boolean(p?.proxyKey))?.proxyKey || "");
+
   const updatedProfile: SavedProviderConfig = {
     ...profile,
+    proxyKey: sharedProxyKey,
     isLoggedIn: true,
     lastUsedAt: new Date().toISOString()
   };
 
   savedMap[profile.provider] = updatedProfile;
 
+  // Propagate single shared proxyKey to ALL stored provider profiles
+  for (const pKey of Object.keys(savedMap)) {
+    if (savedMap[pKey]) {
+      savedMap[pKey] = {
+        ...savedMap[pKey],
+        proxyKey: sharedProxyKey
+      };
+    }
+  }
+
   if (makeActive) {
     return {
       provider: profile.provider,
       model: profile.model,
       apiKey: profile.apiKey,
-      proxyKey: profile.proxyKey,
+      proxyKey: sharedProxyKey,
       baseUrl: profile.baseUrl || "",
       isLoggedIn: true,
       savedProviders: savedMap
@@ -62,25 +95,29 @@ export function updateProviderProfile(
 
   return {
     ...currentConfig,
+    proxyKey: sharedProxyKey,
     savedProviders: savedMap
   };
 }
 
 /**
- * Switch active provider to a saved or default profile
+ * Switch active provider to a saved or default profile while maintaining shared proxyKey
  */
 export function switchActiveProvider(
   currentConfig: LLMConfig,
   targetProviderId: LLMProvider
 ): LLMConfig {
   const savedMap = getSavedProvidersMap(currentConfig);
+  const sharedProxyKey = currentConfig.proxyKey || Object.values(savedMap).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
   const targetSaved = savedMap[targetProviderId];
 
   if (targetSaved) {
+    const effectiveProxyKey = targetSaved.proxyKey || sharedProxyKey;
     const updatedMap = {
       ...savedMap,
       [targetProviderId]: {
         ...targetSaved,
+        proxyKey: effectiveProxyKey,
         lastUsedAt: new Date().toISOString()
       }
     };
@@ -89,7 +126,7 @@ export function switchActiveProvider(
       provider: targetProviderId,
       model: targetSaved.model,
       apiKey: targetSaved.apiKey,
-      proxyKey: targetSaved.proxyKey,
+      proxyKey: effectiveProxyKey,
       baseUrl: targetSaved.baseUrl || "",
       isLoggedIn: true,
       savedProviders: updatedMap
@@ -103,7 +140,7 @@ export function switchActiveProvider(
     provider: targetProviderId,
     model: providerMeta.defaultModel,
     apiKey: "",
-    proxyKey: "",
+    proxyKey: sharedProxyKey,
     baseUrl: providerMeta.defaultBaseUrl || "",
     isLoggedIn: !providerMeta.requiresKey,
     savedProviders: savedMap
