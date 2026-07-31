@@ -59,7 +59,8 @@ interface SettingsViewProps {
   onReloadData?: () => Promise<void>;
   targetLanguage?: string;
   nativeLanguage?: string;
-  onSelectLanguages?: (targetLang: string, nativeLang: string) => void;
+  appLanguage?: string;
+  onSelectLanguages?: (targetLang: string, nativeLang: string, appLang?: string) => void;
 }
 
 export default function SettingsView({
@@ -71,6 +72,7 @@ export default function SettingsView({
   onReloadData,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
+  appLanguage = nativeLanguage || "Vietnamese",
   onSelectLanguages
 }: SettingsViewProps) {
   const [config, setConfig] = useState<TTSConfig>(ttsConfig);
@@ -82,8 +84,29 @@ export default function SettingsView({
   // Language Preferences State
   const [selectedTargetLang, setSelectedTargetLang] = useState<string>(targetLanguage);
   const [selectedNativeLang, setSelectedNativeLang] = useState<string>(nativeLanguage);
+  const [selectedAppLang, setSelectedAppLang] = useState<string>(appLanguage || nativeLanguage);
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
+
+  useEffect(() => {
+    setSelectedTargetLang(targetLanguage);
+  }, [targetLanguage]);
+
+  useEffect(() => {
+    setSelectedNativeLang(nativeLanguage);
+  }, [nativeLanguage]);
+
+  useEffect(() => {
+    setSelectedAppLang(appLanguage || nativeLanguage);
+  }, [appLanguage, nativeLanguage]);
+
+  const handleSaveLanguagePreferences = () => {
+    if (onSelectLanguages) {
+      onSelectLanguages(selectedTargetLang, selectedNativeLang, selectedAppLang);
+    }
+    setLangSaveSuccess("Language preferences saved successfully!");
+    setTimeout(() => setLangSaveSuccess(null), 3000);
+  };
 
   // Target Language Voice Detection logic
   const targetLangCode = getLanguageCode(selectedTargetLang);
@@ -112,14 +135,6 @@ export default function SettingsView({
   useEffect(() => {
     setSelectedNativeLang(nativeLanguage);
   }, [nativeLanguage]);
-
-  const handleSaveLanguagePreferences = () => {
-    if (onSelectLanguages) {
-      onSelectLanguages(selectedTargetLang, selectedNativeLang);
-      setLangSaveSuccess("Global default language preferences updated!");
-      setTimeout(() => setLangSaveSuccess(null), 3000);
-    }
-  };
 
   // LLM Test state
   const [testingLlm, setTestingLlm] = useState(false);
@@ -529,85 +544,158 @@ export default function SettingsView({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Target Language */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              Target Language (Language to Learn)
-            </label>
-            <select
-              value={selectedTargetLang}
-              onChange={(e) => setSelectedTargetLang(e.target.value)}
-              className="w-full border border-stone-300 bg-stone-50 p-3 text-xs font-bold text-stone-900 outline-none focus:border-stone-900 cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={`target-${lang.code}`} value={lang.code}>
-                  {lang.flag} {lang.name} ({lang.nativeName})
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-stone-500 font-serif italic">
-              Vocabulary words, examples, and quizzes will be generated in this language.
-            </p>
+        <div className="space-y-4">
+          {/* Target Language Card */}
+          <div className="bg-stone-50/80 border border-stone-200 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5">
+              <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                <span>Target Language (Language to Learn)</span>
+              </label>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5">
+                To Learn
+              </span>
+            </div>
 
-            {availableVoices.length > 0 && (
-              <div className="flex items-center gap-1.5 pt-1">
-                {isTargetVoiceMissing ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowVoicePackGuideModal(true)}
-                    className="text-[11px] text-amber-900 font-semibold bg-amber-50 border border-amber-300 px-2 py-1 flex items-center gap-1.5 hover:bg-amber-100 transition-all cursor-pointer"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Missing voice pack for {selectedTargetLang} — Click to install</span>
-                  </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+              <div className="sm:col-span-2 space-y-1.5">
+                <select
+                  value={selectedTargetLang}
+                  onChange={(e) => setSelectedTargetLang(e.target.value)}
+                  className="w-full border border-stone-300 bg-white px-3 py-2.5 text-xs font-semibold text-stone-900 focus:border-stone-900 shadow-2xs outline-none cursor-pointer rounded-none truncate"
+                >
+                  {SUPPORTED_LANGUAGES.map((lang) => (
+                    <option key={`target-${lang.code}`} value={lang.code}>
+                      {lang.flag} {lang.name} ({lang.nativeName})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-stone-500 font-serif italic">
+                  Vocabulary words, example sentences, and quizzes will be generated in this language.
+                </p>
+              </div>
+
+              <div className="sm:col-span-1 flex items-center h-full">
+                {availableVoices.length > 0 ? (
+                  <div className="w-full">
+                    {isTargetVoiceMissing ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowVoicePackGuideModal(true)}
+                        className="w-full text-[11px] text-amber-900 font-semibold bg-amber-50 border border-amber-300 p-2 flex items-center justify-between hover:bg-amber-100 transition-all cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="truncate">Missing voice pack</span>
+                        </span>
+                        <span className="underline text-[10px] shrink-0">Install</span>
+                      </button>
+                    ) : (
+                      <div className="w-full text-[11px] text-emerald-900 font-medium bg-emerald-50 border border-emerald-200 p-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="truncate">TTS Voice Ready</span>
+                        </div>
+                        <span className="font-bold text-[10px] bg-emerald-100 text-emerald-900 px-1.5 py-0.5 border border-emerald-200 shrink-0 ml-1">
+                          {targetVoices.length} voices
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <span className="text-[11px] text-emerald-900 font-medium bg-emerald-50 border border-emerald-200 px-2 py-0.5 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Browser voice ready ({targetVoices.length} available)</span>
-                  </span>
+                  <div className="w-full text-[11px] text-stone-400 bg-stone-100 p-2 flex items-center justify-center">
+                    Checking voice packs...
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Native Language */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              User Native Language (Explanations & Translations)
-            </label>
-            <select
-              value={selectedNativeLang}
-              onChange={(e) => setSelectedNativeLang(e.target.value)}
-              className="w-full border border-stone-300 bg-stone-50 p-3 text-xs font-bold text-stone-900 outline-none focus:border-stone-900 cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map((lang) => (
-                <option key={`native-${lang.code}`} value={lang.code}>
-                  {lang.flag} {lang.name} ({lang.nativeName})
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-stone-500 font-serif italic">
-              Definitions, example translations, and hints will be explained in this language.
-            </p>
+          {/* User Native Language Card */}
+          <div className="bg-stone-50/80 border border-stone-200 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5">
+              <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                <span>User Native Language (Explanations & Translations)</span>
+              </label>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5">
+                Explanations
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <select
+                value={selectedNativeLang}
+                onChange={(e) => {
+                  const newNative = e.target.value;
+                  setSelectedNativeLang(newNative);
+                  if (selectedAppLang === selectedNativeLang) {
+                    setSelectedAppLang(newNative);
+                  }
+                }}
+                className="w-full border border-stone-300 bg-white px-3 py-2.5 text-xs font-semibold text-stone-900 focus:border-stone-900 shadow-2xs outline-none cursor-pointer rounded-none truncate"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={`native-${lang.code}`} value={lang.code}>
+                    {lang.flag} {lang.name} ({lang.nativeName})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-stone-500 font-serif italic">
+                Definitions, example translations, and AI tutor hints will be explained in this language.
+              </p>
+            </div>
+          </div>
+
+          {/* App Language Card */}
+          <div className="bg-stone-50/80 border border-stone-200 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-2.5">
+              <label className="text-xs font-bold text-stone-900 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0" />
+                <span>App Language (UI & Quiz Speech)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setSelectedAppLang(selectedNativeLang)}
+                className="text-[11px] font-semibold text-purple-700 hover:text-purple-950 underline cursor-pointer bg-purple-50 border border-purple-200 px-2 py-0.5"
+                title="Set App Language to match your Native Language"
+              >
+                Match Native
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <select
+                value={selectedAppLang}
+                onChange={(e) => setSelectedAppLang(e.target.value)}
+                className="w-full border border-stone-300 bg-white px-3 py-2.5 text-xs font-semibold text-stone-900 focus:border-stone-900 shadow-2xs outline-none cursor-pointer rounded-none truncate"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={`app-${lang.code}`} value={lang.code}>
+                    {lang.flag} {lang.name} ({lang.nativeName})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-stone-500 font-serif italic">
+                App interface labels and speech synthesis for quiz questions follow this language.
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] text-stone-500">
-            Current Defaults: <strong className="text-stone-900">{selectedTargetLang}</strong> (Target) → <strong className="text-stone-900">{selectedNativeLang}</strong> (Native)
+        <div className="pt-3 border-t border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-stone-50/60 p-3.5">
+          <p className="text-xs text-stone-600">
+            Current Active Pair: <strong className="text-stone-900 font-bold">{selectedTargetLang}</strong> (Target) → <strong className="text-stone-900 font-bold">{selectedNativeLang}</strong> (Native)
           </p>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={handleSaveLanguagePreferences}
-              className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              className="w-full sm:w-auto px-5 py-2.5 bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
             >
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
               <span>Save Language Defaults</span>
             </button>
           </div>

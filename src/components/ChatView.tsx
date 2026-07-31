@@ -786,18 +786,6 @@ export default function ChatView({
         <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider shrink-0 ml-1 mr-0.5 select-none hidden sm:inline">
           Quick:
         </span>
-
-        {/* Scroll Left Button */}
-        <button
-          type="button"
-          onClick={() => handleScrollDock("left")}
-          className="w-6 h-6 rounded-lg bg-white border border-stone-200 hover:bg-stone-100 text-stone-600 flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-3xs"
-          title="Scroll left"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Scrollable Container */}
         <div 
           ref={dockScrollRef}
           className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5"
@@ -819,16 +807,6 @@ export default function ChatView({
             );
           })}
         </div>
-
-        {/* Scroll Right Button */}
-        <button
-          type="button"
-          onClick={() => handleScrollDock("right")}
-          className="w-6 h-6 rounded-lg bg-white border border-stone-200 hover:bg-stone-100 text-stone-600 flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-3xs"
-          title="Scroll right"
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
 
         {/* Toggle All Actions Panel Button */}
         <button

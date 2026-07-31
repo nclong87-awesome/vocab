@@ -27,6 +27,7 @@ import { Word, QuizQuestion, TTSConfig, LLMConfig, UserStats } from "../types";
 import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { generateQuizQuestions, containsNonTargetLanguage, getImageSearchTerm } from "../utils/quizGenerator";
 import { generateAiQuizQuestionsService } from "../services/llmClientService";
+import { t } from "../config/i18n";
 
 import AudioEqualizer from "./quiz/AudioEqualizer";
 import QuizImage from "./quiz/QuizImage";
@@ -36,6 +37,7 @@ interface QuizViewProps {
   words: Word[];
   targetLanguage?: string;
   nativeLanguage?: string;
+  appLanguage?: string;
   stats?: UserStats;
   onFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   onToggleStar?: (wordId: string) => void;
@@ -48,6 +50,7 @@ export default function QuizView({
   words,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
+  appLanguage = nativeLanguage || "Vietnamese",
   stats,
   onFinishQuiz,
   onToggleStar,
@@ -232,17 +235,17 @@ export default function QuizView({
       if (currQ) {
         if (currQ.type === 'listening') {
           const timer = setTimeout(() => {
-            speakText(currQ.word);
+            speakText(currQ.word, getLanguageCode(targetLanguage));
           }, 350);
           return () => clearTimeout(timer);
         } else if (currQ.type === 'spelling' && autoPlayAudio) {
           const timer = setTimeout(() => {
-            speakText(currQ.word);
+            speakText(currQ.word, getLanguageCode(targetLanguage));
           }, 300);
           return () => clearTimeout(timer);
         } else if (autoPlayAudio) {
           const timer = setTimeout(() => {
-            speakText(currQ.question);
+            speakText(currQ.question, getLanguageCode(appLanguage));
           }, 300);
           return () => clearTimeout(timer);
         }
@@ -322,14 +325,14 @@ export default function QuizView({
 
     setIsAnswered(true);
 
-    // Build concise feedback audio phrase for clear speech synthesis
+    // Build concise feedback audio phrase for clear speech synthesis in the selected appLanguage
     const feedbackAudioMessage = isCorrect
-      ? "Correct!"
-      : `Incorrect! Correct answer: "${currentQuestion.correctAnswer}"`;
+      ? t("quiz_feedback_correct", appLanguage)
+      : t("quiz_feedback_incorrect", appLanguage, { answer: currentQuestion.correctAnswer });
 
-    // Speak immediately in the same user gesture; delayed calls can be blocked by autoplay policies.
+    // Speak immediately in the selected app language
     if (autoPlayAudio) {
-      speakText(feedbackAudioMessage, "en-US", "feedback", { forceBrowser: true });
+      speakText(feedbackAudioMessage, getLanguageCode(appLanguage), "feedback", { forceBrowser: true });
     }
   };
 

@@ -62,13 +62,22 @@ export default function App() {
   const [nativeLanguage, setNativeLanguage] = useState<string>(() => {
     return localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
   });
+  const [appLanguage, setAppLanguage] = useState<string>(() => {
+    const storedApp = localStorage.getItem("vocab_learner_app_lang");
+    if (storedApp) return storedApp;
+    // Default set to the user's native language
+    return localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
+  });
 
-  const handleSelectLanguages = useCallback((targetLang: string, nativeLang: string) => {
+  const handleSelectLanguages = useCallback((targetLang: string, nativeLang: string, appLang?: string) => {
     setTargetLanguage(targetLang);
     setNativeLanguage(nativeLang);
+    const newAppLang = appLang || nativeLang;
+    setAppLanguage(newAppLang);
     try {
       localStorage.setItem("vocab_learner_target_lang", targetLang);
       localStorage.setItem("vocab_learner_native_lang", nativeLang);
+      localStorage.setItem("vocab_learner_app_lang", newAppLang);
     } catch (e) {
       console.error("Failed to save language preferences to localStorage", e);
     }
@@ -1431,6 +1440,7 @@ export default function App() {
               onReloadData={reloadAllDataFromDB}
               targetLanguage={targetLanguage}
               nativeLanguage={nativeLanguage}
+              appLanguage={appLanguage}
               onSelectLanguages={handleSelectLanguages}
             />
           )}
@@ -1453,6 +1463,7 @@ export default function App() {
         onOpenLlmModal={handleOpenLlmModal}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
         onSelectLanguages={handleSelectLanguages}
         onReloadData={reloadAllDataFromDB}
         sidePanelTab={sidePanelTab}
@@ -1511,6 +1522,7 @@ export default function App() {
                     words={todayPracticeWords}
                     targetLanguage={targetLanguage}
                     nativeLanguage={nativeLanguage}
+                    appLanguage={appLanguage}
                     stats={stats}
                     onFinishQuiz={handleFinishQuiz}
                     onToggleStar={handleToggleStar}

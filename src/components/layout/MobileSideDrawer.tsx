@@ -33,7 +33,7 @@ export default function MobileSideDrawer({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 220 }}
-            className="absolute right-0 top-0 bottom-0 w-full sm:w-[480px] md:w-[560px] max-w-full bg-white shadow-xl flex flex-col h-full overflow-hidden"
+            className="absolute right-0 top-0 bottom-0 w-full sm:w-[520px] md:w-[620px] lg:w-[680px] max-w-full bg-white shadow-2xl flex flex-col h-full overflow-hidden"
             id="mobile-drawer-body"
           >
             {/* Header */}

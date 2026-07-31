@@ -4,6 +4,7 @@ import { LLMConfig, LLMProvider, UserStats } from "../../types";
 import QuickAiSwitcher from "./QuickAiSwitcher";
 import QuickLanguageSwitcher from "./QuickLanguageSwitcher";
 import QuickCloudSync from "./QuickCloudSync";
+import { t } from "../../config/i18n";
 
 interface AppHeaderProps {
   currentView: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings";
@@ -15,7 +16,8 @@ interface AppHeaderProps {
   onOpenLlmModal: (providerId?: LLMProvider) => void;
   targetLanguage?: string;
   nativeLanguage?: string;
-  onSelectLanguages?: (targetLang: string, nativeLang: string) => void;
+  appLanguage?: string;
+  onSelectLanguages?: (targetLang: string, nativeLang: string, appLang?: string) => void;
   onReloadData?: () => Promise<void>;
   sidePanelTab?: "collection" | "analytics" | "settings";
   isSidePanelOpen?: boolean;
@@ -31,6 +33,7 @@ export default function AppHeader({
   onOpenLlmModal,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
+  appLanguage = nativeLanguage || "Vietnamese",
   onSelectLanguages,
   onReloadData,
   sidePanelTab = "collection",
@@ -52,7 +55,7 @@ export default function AppHeader({
         <h1 className="text-xs sm:text-base font-bold text-stone-900 tracking-tight leading-none flex items-center gap-0.5 sm:gap-1.5">
           Vocab
         </h1>
-        <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden sm:block">AI Study Companion</p>
+        <p className="text-[10px] sm:text-[11px] text-stone-500 font-normal tracking-normal mt-0.5 hidden sm:block">{t("ai_coach_title", appLanguage)}</p>
       </div>
     </div>
   );
@@ -63,6 +66,7 @@ export default function AppHeader({
         <QuickLanguageSwitcher
           targetLanguage={targetLanguage}
           nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
           onSelectLanguages={onSelectLanguages}
         />
       )}
@@ -90,7 +94,7 @@ export default function AppHeader({
           isSidePanelOpen && sidePanelTab === "collection" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
         }`}
       >
-        Collection
+        {t("nav_collection", appLanguage)}
       </button>
 
       <button
@@ -102,7 +106,7 @@ export default function AppHeader({
         }`}
         id="nav-analytics-btn"
       >
-        <span>Analytics</span>
+        <span>{t("nav_analytics", appLanguage)}</span>
       </button>
 
       <button
@@ -115,7 +119,7 @@ export default function AppHeader({
         id="nav-settings-btn"
       >
         <Sliders className="w-3.5 h-3.5" />
-        <span>Settings</span>
+        <span>{t("nav_settings", appLanguage)}</span>
       </button>
     </div>
   );

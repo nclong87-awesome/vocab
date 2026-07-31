@@ -5,18 +5,21 @@ import { SUPPORTED_LANGUAGES, getLanguageFlag } from "../../config/languages";
 interface QuickLanguageSwitcherProps {
   targetLanguage: string;
   nativeLanguage: string;
-  onSelectLanguages: (targetLang: string, nativeLang: string) => void;
+  appLanguage?: string;
+  onSelectLanguages: (targetLang: string, nativeLang: string, appLang?: string) => void;
 }
 
 export default function QuickLanguageSwitcher({
   targetLanguage,
   nativeLanguage,
+  appLanguage,
   onSelectLanguages
 }: QuickLanguageSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"target" | "native">("target");
+  const [activeTab, setActiveTab] = useState<"target" | "native" | "app">("target");
   const [currentTarget, setCurrentTarget] = useState(targetLanguage);
   const [currentNative, setCurrentNative] = useState(nativeLanguage);
+  const [currentApp, setCurrentApp] = useState(appLanguage || nativeLanguage);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -28,6 +31,10 @@ export default function QuickLanguageSwitcher({
   useEffect(() => {
     setCurrentNative(nativeLanguage);
   }, [nativeLanguage]);
+
+  useEffect(() => {
+    setCurrentApp(appLanguage || nativeLanguage);
+  }, [appLanguage, nativeLanguage]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -46,20 +53,28 @@ export default function QuickLanguageSwitcher({
 
   const handleChooseTarget = (langCode: string) => {
     setCurrentTarget(langCode);
-    onSelectLanguages(langCode, currentNative);
+    onSelectLanguages(langCode, currentNative, currentApp);
     setToastMessage(`Target language set to ${langCode}`);
     setTimeout(() => setToastMessage(null), 2500);
   };
 
   const handleChooseNative = (langCode: string) => {
     setCurrentNative(langCode);
-    onSelectLanguages(currentTarget, langCode);
+    onSelectLanguages(currentTarget, langCode, currentApp);
     setToastMessage(`Native language set to ${langCode}`);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleChooseApp = (langCode: string) => {
+    setCurrentApp(langCode);
+    onSelectLanguages(currentTarget, currentNative, langCode);
+    setToastMessage(`App UI language set to ${langCode}`);
     setTimeout(() => setToastMessage(null), 2500);
   };
 
   const targetFlag = getLanguageFlag(currentTarget);
   const nativeFlag = getLanguageFlag(currentNative);
+  const appFlag = getLanguageFlag(currentApp);
 
   return (
     <div className="relative inline-block text-left shrink-0" ref={dropdownRef} id="quick-lang-switcher">
@@ -127,29 +142,40 @@ export default function QuickLanguageSwitcher({
               <span className="text-[10px] text-stone-400 hidden xs:inline">AI Explanations</span>
             </div>
 
-            {/* Target vs Native Tab Switch */}
+            {/* Target vs Native vs App UI Tab Switch */}
             <div className="flex border-b border-stone-200 bg-stone-100 p-1 gap-1">
               <button
                 type="button"
                 onClick={() => setActiveTab("target")}
-                className={`flex-1 py-1.5 px-2 text-xs font-bold text-center transition-all cursor-pointer ${
+                className={`flex-1 py-1.5 px-1 sm:px-2 text-[11px] sm:text-xs font-bold text-center transition-all cursor-pointer ${
                   activeTab === "target"
                     ? "bg-white text-stone-900 border border-stone-300 shadow-xs"
                     : "text-stone-600 hover:text-stone-900"
                 }`}
               >
-                Target ({targetFlag} <span className="hidden xs:inline">{currentTarget}</span>)
+                Target ({targetFlag})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("native")}
-                className={`flex-1 py-1.5 px-2 text-xs font-bold text-center transition-all cursor-pointer ${
+                className={`flex-1 py-1.5 px-1 sm:px-2 text-[11px] sm:text-xs font-bold text-center transition-all cursor-pointer ${
                   activeTab === "native"
                     ? "bg-white text-stone-900 border border-stone-300 shadow-xs"
                     : "text-stone-600 hover:text-stone-900"
                 }`}
               >
-                Native ({nativeFlag} <span className="hidden xs:inline">{currentNative}</span>)
+                Native ({nativeFlag})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("app")}
+                className={`flex-1 py-1.5 px-1 sm:px-2 text-[11px] sm:text-xs font-bold text-center transition-all cursor-pointer ${
+                  activeTab === "app"
+                    ? "bg-white text-stone-900 border border-stone-300 shadow-xs"
+                    : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                App UI ({appFlag})
               </button>
             </div>
 
@@ -158,7 +184,9 @@ export default function QuickLanguageSwitcher({
               {SUPPORTED_LANGUAGES.map((lang) => {
                 const isSelected = activeTab === "target" 
                   ? currentTarget.toLowerCase() === lang.code.toLowerCase()
-                  : currentNative.toLowerCase() === lang.code.toLowerCase();
+                  : activeTab === "native"
+                  ? currentNative.toLowerCase() === lang.code.toLowerCase()
+                  : currentApp.toLowerCase() === lang.code.toLowerCase();
 
                 return (
                   <button
@@ -167,8 +195,10 @@ export default function QuickLanguageSwitcher({
                     onClick={() => {
                       if (activeTab === "target") {
                         handleChooseTarget(lang.code);
-                      } else {
+                      } else if (activeTab === "native") {
                         handleChooseNative(lang.code);
+                      } else {
+                        handleChooseApp(lang.code);
                       }
                     }}
                     className={`flex items-center justify-between p-2 text-xs text-left border transition-all cursor-pointer ${
