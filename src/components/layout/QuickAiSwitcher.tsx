@@ -92,7 +92,7 @@ export default function QuickAiSwitcher({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
           isOpen
             ? "bg-stone-900 text-white border-stone-950 ring-2 ring-stone-900/15"
             : "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900"
@@ -101,17 +101,17 @@ export default function QuickAiSwitcher({
         id="llm-auth-badge"
       >
         <span 
-          className={`w-2 h-2 rounded-full shrink-0 ${
+          className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${
             isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
           }`} 
         />
         <Zap className={`w-3.5 h-3.5 shrink-0 ${isOpen ? "text-amber-400 fill-current" : "text-stone-700"}`} />
         
-        <span className="font-bold sm:hidden truncate max-w-[70px]">
+        <span className="font-bold sm:hidden truncate max-w-[50px] xs:max-w-[70px] text-xs">
           {getShortProviderName(activeProviderMeta.name)}
         </span>
         
-        <span className="font-bold hidden sm:inline">
+        <span className="font-bold hidden sm:inline text-xs">
           {activeProviderMeta.name}
         </span>
         
@@ -139,7 +139,7 @@ export default function QuickAiSwitcher({
             onClick={() => setIsOpen(false)}
           />
 
-          <div className="fixed top-16 left-3 right-3 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:mt-2 w-auto sm:w-[460px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-stone-200/90 shadow-2xl shadow-stone-900/15 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+          <div className="fixed top-16 left-3 right-3 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-stone-200/90 shadow-2xl shadow-stone-900/15 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
             
             {/* Popover Header */}
             <div className="bg-stone-50/90 px-4 py-3.5 border-b border-stone-200/80 flex items-center justify-between">

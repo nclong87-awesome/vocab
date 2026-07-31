@@ -141,7 +141,7 @@ export default function AppHeader({
   );
 
   return (
-    <header className="bg-white border-b border-stone-200 py-2 sm:py-2.5 md:py-3 px-3 sm:px-6 md:px-8 sticky top-0 z-40 shrink-0" id="main-header">
+    <header className="bg-white border-b border-stone-200 py-1.5 sm:py-2.5 md:py-3 px-2 sm:px-6 md:px-8 sticky top-0 z-40 shrink-0" id="main-header">
       <div className="max-w-7xl mx-auto">
         
         {/* Desktop Header Layout (>= lg) */}
@@ -157,14 +157,14 @@ export default function AppHeader({
         </div>
 
         {/* Mobile & Tablet Header Layout (< lg, including iPad portrait) */}
-        <div className="flex lg:hidden flex-col gap-2">
-          {/* Row 1: Logo (left) & Switchers (right) */}
-          <div className="flex items-center justify-between gap-2 flex-nowrap min-w-0 w-full">
+        <div className="flex lg:hidden flex-col gap-1.5">
+          {/* Row 1: Logo (left) & Switchers (right) - NO overflow clipping so dropdown popovers can extend vertically */}
+          <div className="flex items-center justify-between gap-1 sm:gap-2 min-w-0 w-full">
             {renderLogo()}
             {renderSwitchers()}
           </div>
           {/* Row 2: Nav Links */}
-          <div className="flex items-center justify-start sm:justify-center gap-6 text-xs font-medium tracking-normal pt-1.5 border-t border-stone-100">
+          <div className="flex items-center justify-start sm:justify-center gap-4 sm:gap-6 text-xs font-medium tracking-normal pt-1 border-t border-stone-100 overflow-x-auto scrollbar-none">
             {renderNavLinks()}
           </div>
         </div>

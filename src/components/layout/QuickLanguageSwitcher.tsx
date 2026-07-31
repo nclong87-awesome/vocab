@@ -90,7 +90,7 @@ export default function QuickLanguageSwitcher({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
           isOpen
             ? "bg-stone-900 text-white border-stone-950 ring-2 ring-stone-900/15"
             : "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900"
@@ -99,11 +99,11 @@ export default function QuickLanguageSwitcher({
       >
         <Globe className="w-3.5 h-3.5 text-blue-600 shrink-0" />
         
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           {/* Mobile view (< sm): flags only */}
-          <span className="sm:hidden font-bold flex items-center gap-1">
+          <span className="sm:hidden font-bold flex items-center gap-0.5 text-xs">
             <span>{targetFlag}</span>
-            <ArrowRight className="w-2.5 h-2.5 opacity-40" />
+            <ArrowRight className="w-2 h-2 opacity-40 shrink-0" />
             <span>{nativeFlag}</span>
           </span>
 
@@ -138,7 +138,7 @@ export default function QuickLanguageSwitcher({
             onClick={() => setIsOpen(false)}
           />
 
-          <div className="fixed top-16 left-3 right-3 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:mt-2 w-auto sm:w-[460px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-stone-200/90 shadow-2xl shadow-stone-900/15 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
+          <div className="fixed top-16 left-3 right-3 sm:absolute sm:top-full sm:left-0 sm:right-auto lg:left-auto lg:right-0 sm:mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-stone-200/90 shadow-2xl shadow-stone-900/15 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
             
             {/* Popover Header */}
             <div className="bg-stone-50/90 px-4 py-3.5 border-b border-stone-200/80 flex items-center justify-between">

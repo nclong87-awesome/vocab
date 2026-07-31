@@ -223,7 +223,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         type="button"
         onClick={handleTriggerSync}
         disabled={isCheckingSync || isSyncing}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
+        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
           isCheckingSync || isSyncing
             ? "bg-stone-900 text-white border-stone-900 opacity-90"
             : "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900"
@@ -232,7 +232,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         id="quick-cloud-sync-btn"
       >
         <span 
-          className={`w-2 h-2 rounded-full shrink-0 ${
+          className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${
             hasToken ? "bg-emerald-500 animate-pulse" : "bg-stone-300"
           }`} 
         />
