@@ -219,7 +219,8 @@ async function callLLM(
   }
 
   if (provider === "gemini") {
-    const isCustomOrProxyUrl = Boolean(baseUrl && !baseUrl.includes("googleapis.com"));
+    const effectiveGeminiUrl = baseUrl || "https://gemini.nclong87.workers.dev/v1beta";
+    const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
 
     if (!isCustomOrProxyUrl) {
       const ai = new GoogleGenAI({
@@ -303,7 +304,7 @@ async function callLLM(
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
   if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
-  if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/inference/";
+  if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/v1beta";
 
   const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
@@ -322,7 +323,8 @@ async function callLLM(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (effectiveProxyKey || (baseUrl && (baseUrl.includes("workers.dev") || baseUrl.includes("worker.dev")))) {
+  const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
+  if (effectiveProxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev")))) {
     headers["X-Proxy-Key"] = effectiveProxyKey || effectiveApiKey;
   }
 

@@ -39,7 +39,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "gemini-3.6-flash",
     models: ["gemini-3.5-flash-lite",  "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"],
     tts_models: ["gemini-2.5-flash-preview-tts","gemini-3.1-flash-tts-preview"],
-    defaultBaseUrl: "https://gemini.nclong87.workers.dev/inference/",
+    defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
     requiresKey: false
   },
   {
