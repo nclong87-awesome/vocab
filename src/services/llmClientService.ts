@@ -531,6 +531,58 @@ export async function callLLMClientSide(
         },
         { maxRetries: 3, provider: "gemini" }
       );
+    } else {
+      // Worker proxy handling for Gemini (uses native generateContent endpoint rather than /chat/completions)
+      const primaryModel = model || "gemini-3.6-flash";
+      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
+
+      return callWithRetry(
+        async (attempt) => {
+          let activeModel = primaryModel;
+          if (attempt > 1 && fallbackModels.length > 0) {
+            activeModel = fallbackModels[(attempt - 2) % fallbackModels.length];
+          }
+          const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
+          const targetEndpoint = `${cleanBaseUrl}/models/${activeModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
+
+          const headers: Record<string, string> = {
+            "Content-Type": "application/json"
+          };
+          if (proxyKeyToUse) {
+            headers["X-Proxy-Key"] = proxyKeyToUse;
+          }
+          if (effectiveApiKey) {
+            headers["x-goog-api-key"] = effectiveApiKey;
+          }
+
+          const payload = {
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+            generationConfig: {
+              responseMimeType: "application/json"
+            }
+          };
+
+          const res = await fetch(targetEndpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload)
+          });
+
+          if (!res.ok) {
+            const errText = await res.text().catch(() => res.statusText);
+            throw new Error(`Gemini Proxy Error (${res.status}): ${errText}`);
+          }
+
+          const data = await res.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (!text) {
+            throw new Error("Empty response from Gemini worker proxy.");
+          }
+          return cleanJsonResponse(text);
+        },
+        { maxRetries: 3, provider: "gemini" }
+      );
     }
   }
 

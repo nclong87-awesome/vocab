@@ -266,6 +266,47 @@ async function callLLM(
         }
       }
       throw lastError;
+    } else {
+      // Worker proxy handling for Gemini (uses native generateContent endpoint rather than /chat/completions)
+      const primaryModel = model || "gemini-3.6-flash";
+      const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
+      const targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      if (effectiveProxyKey) {
+        headers["X-Proxy-Key"] = effectiveProxyKey;
+      }
+      if (effectiveApiKey) {
+        headers["x-goog-api-key"] = effectiveApiKey;
+      }
+
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      };
+
+      const res = await fetch(targetEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Gemini Worker Proxy Error (${res.status}): ${errText}`);
+      }
+
+      const data: any = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!text) {
+        throw new Error("Empty text response from Gemini worker proxy.");
+      }
+      return cleanJsonResponse(text);
     }
   }
 
