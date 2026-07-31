@@ -33,15 +33,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     requiresKey: false
   },
   {
-    id: "github",
-    name: "GitHub Models",
-    tagline: "Inference API via GitHub Personal Access Token",
-    defaultModel: "openai/gpt-4o",
-    models: ["cohere/cohere-command-a", "openai/gpt-4o", "openai/gpt-4.1"],
-    defaultBaseUrl: "https://github.nclong87.workers.dev/inference/",
-    requiresKey: false
-  },
-  {
     id: "gemini",
     name: "Google Gemini",
     tagline: "Fast & highly structured intelligence",

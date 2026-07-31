@@ -718,7 +718,7 @@ export default function SettingsView({
               AI Model Provider Connections & Key Storage
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              Connect and store credentials for multiple LLM providers (Ollama, OpenAI, GitHub Models, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
+              Connect and store credentials for multiple LLM providers (Ollama, OpenAI, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
             </p>
           </div>
 

@@ -547,11 +547,10 @@ export async function callLLMClientSide(
     );
   }
 
-  // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom, gemini (worker proxy)
+  // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (worker proxy)
   let defaultBaseUrl = "https://api.openai.com/v1";
   if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
-  if (provider === "github") defaultBaseUrl = "https://models.github.ai/inference";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
   if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
