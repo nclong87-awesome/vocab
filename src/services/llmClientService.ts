@@ -440,73 +440,77 @@ export async function callLLMClientSide(
 
   // Gemini API client-side handling
   if (provider === "gemini") {
-    if (!effectiveApiKey && !proxyKeyToUse) {
-      throw new LLMConnectionError({
-        statusCode: 401,
-        errorType: "INVALID_KEY",
-        userMessage: "Gemini API Key or Proxy Secret is missing. Please configure LLM settings.",
-        originalMessage: "Missing Gemini API key",
-        isRetryable: false,
-        provider: "gemini"
-      });
-    }
+    const isCustomOrProxyUrl = Boolean(baseUrl && !baseUrl.includes("googleapis.com"));
 
-    const primaryModel = model || "gemini-3.6-flash";
-    const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
-
-    return callWithRetry(
-      async (attempt) => {
-        const ai = new GoogleGenAI({ 
-          apiKey: effectiveApiKey || proxyKeyToUse || "dummy-key",
-          httpOptions: {
-            headers: {
-              ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
-            }
-          }
+    if (!isCustomOrProxyUrl) {
+      if (!effectiveApiKey && !proxyKeyToUse) {
+        throw new LLMConnectionError({
+          statusCode: 401,
+          errorType: "INVALID_KEY",
+          userMessage: "Gemini API Key or Proxy Secret is missing. Please configure LLM settings.",
+          originalMessage: "Missing Gemini API key",
+          isRetryable: false,
+          provider: "gemini"
         });
-        let activeModel = primaryModel;
+      }
 
-        if (attempt > 1 && fallbackModels.length > 0) {
-          activeModel = fallbackModels[(attempt - 2) % fallbackModels.length];
-          console.warn(`[Gemini Fallback] Retrying with model ${activeModel}`);
-        }
+      const primaryModel = model || "gemini-3.6-flash";
+      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
 
-        try {
-          const response = await ai.models.generateContent({
-            model: activeModel,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json"
+      return callWithRetry(
+        async (attempt) => {
+          const ai = new GoogleGenAI({ 
+            apiKey: effectiveApiKey || proxyKeyToUse || "dummy-key",
+            httpOptions: {
+              headers: {
+                ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
+              }
             }
           });
+          let activeModel = primaryModel;
 
-          if (!response.text) {
-            throw new Error("Empty response received from Gemini API.");
+          if (attempt > 1 && fallbackModels.length > 0) {
+            activeModel = fallbackModels[(attempt - 2) % fallbackModels.length];
+            console.warn(`[Gemini Fallback] Retrying with model ${activeModel}`);
           }
-          return cleanJsonResponse(response.text);
-        } catch (err: any) {
-          const parsed = parseLlmError(err, "gemini");
-          // If primary model returns 404 or NOT_FOUND, fallback immediately to default model
-          if ((parsed.statusCode === 404 || parsed.errorType === "NOT_FOUND") && activeModel === primaryModel && fallbackModels.length > 0) {
-            console.warn(`[Gemini Model Fallback] Model ${primaryModel} not found (404), trying ${fallbackModels[0]}`);
-            const fallbackRes = await ai.models.generateContent({
-              model: fallbackModels[0],
+
+          try {
+            const response = await ai.models.generateContent({
+              model: activeModel,
               contents: prompt,
               config: {
                 systemInstruction,
                 responseMimeType: "application/json"
               }
             });
-            if (fallbackRes.text) {
-              return cleanJsonResponse(fallbackRes.text);
+
+            if (!response.text) {
+              throw new Error("Empty response received from Gemini API.");
             }
+            return cleanJsonResponse(response.text);
+          } catch (err: any) {
+            const parsed = parseLlmError(err, "gemini");
+            // If primary model returns 404 or NOT_FOUND, fallback immediately to default model
+            if ((parsed.statusCode === 404 || parsed.errorType === "NOT_FOUND") && activeModel === primaryModel && fallbackModels.length > 0) {
+              console.warn(`[Gemini Model Fallback] Model ${primaryModel} not found (404), trying ${fallbackModels[0]}`);
+              const fallbackRes = await ai.models.generateContent({
+                model: fallbackModels[0],
+                contents: prompt,
+                config: {
+                  systemInstruction,
+                  responseMimeType: "application/json"
+                }
+              });
+              if (fallbackRes.text) {
+                return cleanJsonResponse(fallbackRes.text);
+              }
+            }
+            throw err;
           }
-          throw err;
-        }
-      },
-      { maxRetries: 3, provider: "gemini" }
-    );
+        },
+        { maxRetries: 3, provider: "gemini" }
+      );
+    }
   }
 
   if (provider === "anthropic") {
@@ -543,7 +547,7 @@ export async function callLLMClientSide(
     );
   }
 
-  // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom
+  // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom, gemini (worker proxy)
   let defaultBaseUrl = "https://api.openai.com/v1";
   if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
@@ -551,6 +555,7 @@ export async function callLLMClientSide(
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
   if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/inference/";
 
   const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
@@ -569,18 +574,18 @@ export async function callLLMClientSide(
   }
 
   if (proxyKeyToUse || (baseUrl && (baseUrl.includes("workers.dev") || baseUrl.includes("worker.dev")))) {
-    headers["X-Proxy-Key"] = proxyKeyToUse || apiKey;
+    headers["X-Proxy-Key"] = proxyKeyToUse || apiKey || effectiveApiKey;
   }
 
   const reqBody: any = {
-    model: model || (provider === "ollama" ? "llama3.2" : "gpt-5.4-mini"),
+    model: model || (provider === "gemini" ? "gemini-3.6-flash" : provider === "ollama" ? "llama3.2" : "gpt-5.4-mini"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
     ]
   };
 
-  if (provider === "openai" || provider === "groq" || provider === "openrouter") {
+  if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "gemini" || provider === "9flare") {
     reqBody.response_format = { type: "json_object" };
   }
 

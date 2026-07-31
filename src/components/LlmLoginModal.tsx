@@ -175,14 +175,17 @@ export default function LlmLoginModal({
     setTestingStatus("testing");
     setTestMessage("Verifying LLM provider connection...");
 
+    const sharedProxy = proxyKey.trim() || currentConfig.proxyKey || Object.values(savedProfiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+
     try {
       const data = await testLlmConnection({
         provider,
         model: activeModel,
         apiKey: apiKey.trim(),
-        proxyKey: proxyKey.trim(),
+        proxyKey: proxyKey.trim() || sharedProxy,
         baseUrl: baseUrl.trim(),
-        isLoggedIn: true
+        isLoggedIn: true,
+        savedProviders: savedProfiles
       });
 
       if (data.success) {

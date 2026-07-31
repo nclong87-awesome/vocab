@@ -219,50 +219,54 @@ async function callLLM(
   }
 
   if (provider === "gemini") {
-    const ai = new GoogleGenAI({
-      apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
-      httpOptions: { 
-        headers: { 
-          'User-Agent': 'aistudio-build',
-          ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
-        } 
-      }
-    });
+    const isCustomOrProxyUrl = Boolean(baseUrl && !baseUrl.includes("googleapis.com"));
 
-    const primaryModel = model || "gemini-3.6-flash";
-    const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
+    if (!isCustomOrProxyUrl) {
+      const ai = new GoogleGenAI({
+        apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
+        httpOptions: { 
+          headers: { 
+            'User-Agent': 'aistudio-build',
+            ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
+          } 
+        }
+      });
 
-    let lastError: any = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const activeModel = attempt === 1 ? primaryModel : (fallbackModels[0] || "gemini-2.0-flash");
-      try {
-        const response = await ai.models.generateContent({
-          model: activeModel,
-          contents: prompt,
-          config: {
-            systemInstruction,
-            responseMimeType: "application/json"
+      const primaryModel = model || "gemini-3.6-flash";
+      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
+
+      let lastError: any = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const activeModel = attempt === 1 ? primaryModel : (fallbackModels[0] || "gemini-2.0-flash");
+        try {
+          const response = await ai.models.generateContent({
+            model: activeModel,
+            contents: prompt,
+            config: {
+              systemInstruction,
+              responseMimeType: "application/json"
+            }
+          });
+
+          if (!response.text) {
+            throw new Error("Empty response received from Gemini model.");
           }
-        });
-
-        if (!response.text) {
-          throw new Error("Empty response received from Gemini model.");
-        }
-        return cleanJsonResponse(response.text);
-      } catch (err: any) {
-        lastError = err;
-        const parsed = parseServerError(err, "gemini");
-        if (!parsed.isRetryable && parsed.statusCode !== 404) {
-          throw err;
-        }
-        console.warn(`[Gemini Server Retry ${attempt}/3] Model ${activeModel} failed: ${err?.message}`);
-        if (attempt < 3) {
-          await new Promise((r) => setTimeout(r, 1000 * attempt));
+          return cleanJsonResponse(response.text);
+        } catch (err: any) {
+          lastError = err;
+          const parsed = parseServerError(err, "gemini");
+          if (!parsed.isRetryable && parsed.statusCode !== 404) {
+            throw err;
+          }
+          console.warn(`[Gemini Server Retry ${attempt}/3] Model ${activeModel} failed: ${err?.message}`);
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+          }
         }
       }
+      throw lastError;
     }
-    throw lastError;
-  } 
+  }
 
   if (provider === "anthropic") {
     const endpoint = (baseUrl || "https://api.anthropic.com") + "/v1/messages";
@@ -292,7 +296,7 @@ async function callLLM(
     return cleanJsonResponse(contentText);
   }
 
-  // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom
+  // OpenAI-compatible providers: openai, github, 9flare, ollama, groq, openrouter, custom, gemini (when using worker/proxy)
   let defaultBaseUrl = "https://api.openai.com/v1";
   if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
@@ -300,6 +304,7 @@ async function callLLM(
   if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
   if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/inference/";
 
   const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
 
@@ -323,7 +328,7 @@ async function callLLM(
   }
 
   const reqBody: any = {
-    model: model || "gpt-5.4-mini",
+    model: model || (provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
@@ -331,7 +336,7 @@ async function callLLM(
   };
 
   // Many OpenAI compatible endpoints accept response_format: { type: "json_object" }
-  if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "9flare") {
+  if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "9flare" || provider === "gemini") {
     reqBody.response_format = { type: "json_object" };
   }
 
