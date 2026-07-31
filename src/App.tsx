@@ -24,7 +24,6 @@ import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords } from "./utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
 
-import Dashboard from "./components/Dashboard";
 import ChatView from "./components/ChatView";
 import FlashcardsView from "./components/FlashcardsView";
 import QuizView from "./components/QuizView";
@@ -34,7 +33,7 @@ import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
 
 import AppHeader from "./components/layout/AppHeader";
-import { Sparkles, Sliders, BookOpen, Brain, X, Menu, Settings } from "lucide-react";
+import MobileSideDrawer from "./components/layout/MobileSideDrawer";
 
 export default function App() {
   const [words, setWords] = useState<Word[]>([]);
@@ -1527,48 +1526,13 @@ export default function App() {
       </main>
 
       {/* Mobile Drawer Slide Panel */}
-      <AnimatePresence>
-        {isSidePanelOpen && (
-          <div className="fixed inset-0 z-50" id="mobile-drawer-overlay">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.4 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSidePanelOpen(false)}
-              className="absolute inset-0 bg-stone-900/60"
-            />
-            {/* Drawer */}
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="absolute right-0 top-0 bottom-0 w-full bg-white shadow-xl flex flex-col h-full overflow-hidden"
-              id="mobile-drawer-body"
-            >
-              {/* Header */}
-              <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 bg-stone-900 text-white font-black text-xs">V</span>
-                  <span className="font-bold text-sm tracking-tight capitalize">{sidePanelTab === "collection" ? "My Collection" : sidePanelTab}</span>
-                </div>
-                <button
-                  onClick={() => setIsSidePanelOpen(false)}
-                  className="p-1 text-stone-500 hover:text-stone-950 hover:bg-stone-100 rounded transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Side Panel Body */}
-              <div className="flex-1 overflow-hidden">
-                {renderSidePanelContent()}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <MobileSideDrawer
+        isOpen={isSidePanelOpen}
+        onClose={() => setIsSidePanelOpen(false)}
+        title={sidePanelTab}
+      >
+        {renderSidePanelContent()}
+      </MobileSideDrawer>
 
       {/* LLM Login & Onboarding Modal */}
       <LlmLoginModal
