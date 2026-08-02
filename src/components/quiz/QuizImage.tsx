@@ -4,12 +4,13 @@ import { fetchWorkerImageUrl, getImagePrompt } from "../../utils/quizGenerator";
 
 interface QuizImageProps {
   src?: string;
+  imagePrompt?: string;
   alt?: string;
   word?: string;
   className?: string;
 }
 
-export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
+export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizImageProps) {
   const [imgSrc, setImgSrc] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -20,18 +21,40 @@ export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
     setFailed(false);
 
     async function loadVisualClue() {
-      // If src is already a direct valid image URL (e.g. Unsplash or direct HTTP image)
-      if (src && src.trim().length > 0 && (src.startsWith("http://") || src.startsWith("https://")) && !src.includes("pollinations.ai")) {
+      // Direct valid image URL that is not a worker prompt endpoint
+      if (
+        src && 
+        src.trim().length > 0 && 
+        (src.startsWith("http://") || src.startsWith("https://")) && 
+        !src.includes("image.nclong87.workers.dev") && 
+        !src.includes("pollinations.ai")
+      ) {
         if (isMounted) {
           setImgSrc(src);
         }
         return;
       }
 
-      // Construct prompt from word or src
-      const promptToUse = word
-        ? getImagePrompt(word)
-        : (src && !src.startsWith("http") ? src : "a clear realistic photograph for vocabulary learning");
+      // Determine prompt to pass to image worker
+      let promptToUse = imagePrompt || "";
+      if (!promptToUse && src) {
+        if (src.includes("image.nclong87.workers.dev")) {
+          try {
+            const urlObj = new URL(src);
+            promptToUse = urlObj.searchParams.get("prompt") || "";
+          } catch (e) {
+            promptToUse = src.split("prompt=")[1] || "";
+          }
+        } else if (!src.startsWith("http")) {
+          promptToUse = src;
+        }
+      }
+
+      if (!promptToUse) {
+        promptToUse = word
+          ? getImagePrompt(word)
+          : "a clear realistic photograph for vocabulary learning";
+      }
 
       const resolvedUrl = await fetchWorkerImageUrl(promptToUse);
       if (isMounted) {
@@ -49,7 +72,7 @@ export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
     return () => {
       isMounted = false;
     };
-  }, [src, word]);
+  }, [src, imagePrompt, word]);
 
   return (
     <div className={`relative w-full min-h-[220px] flex items-center justify-center bg-stone-100 overflow-hidden ${className}`}>

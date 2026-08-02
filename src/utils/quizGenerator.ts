@@ -140,6 +140,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     let hintText = word.pronunciation;
     let imageUrl: string | undefined = undefined;
 
+    let imagePrompt: string | undefined = undefined;
+
     if (type === 'definition') {
       correctAnswer = word.word;
       questionText = `Which word matches the following definition?\n"${word.definition}"`;
@@ -175,7 +177,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     else if (type === 'picture') {
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
-      imageUrl = getImagePrompt(word);
+      imagePrompt = getImagePrompt(word);
+      imageUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(imagePrompt)}`;
 
       let potentialWrongs = allWords
         .filter(w => w.id !== word.id)
@@ -218,6 +221,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options,
       correctAnswer,
       hint: hintText,
+      imagePrompt,
       imageUrl
     });
   });

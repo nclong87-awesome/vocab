@@ -1520,7 +1520,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to a clear English visual prompt description strongly highlighting the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
+   - 'picture': "Which word matches the visual concept shown below?" (set imagePrompt to a clear English visual prompt description strongly illustrating the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 
@@ -1536,7 +1536,7 @@ Return ONLY a valid JSON array of objects matching this schema:
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imageUrl": "string"
+    "imagePrompt": "string (descriptive image generation prompt for picture questions)"
   }
 ]`;
 
@@ -1544,7 +1544,7 @@ Return ONLY a valid JSON array of objects matching this schema:
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageUrl.`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imagePrompt.`;
 
   try {
     let rawResultText = "";
@@ -1583,6 +1583,9 @@ Return ONLY a valid JSON array of objects matching this schema:
           }
         }
 
+        const promptText = q.imagePrompt || (q.imageUrl && !q.imageUrl.startsWith("http") ? q.imageUrl : (q.type === 'picture' ? getImagePrompt(matchingWord) : undefined));
+        const imgUrl = q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : (promptText ? `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}` : undefined);
+
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
@@ -1592,7 +1595,8 @@ Return ONLY a valid JSON array of objects matching this schema:
           options: options.sort(() => 0.5 - Math.random()),
           correctAnswer: q.correctAnswer || matchingWord.word,
           hint: q.hint || matchingWord.pronunciation,
-          imageUrl: q.type === 'picture' ? (q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : getImagePrompt(matchingWord)) : ((q.imageUrl && !q.imageUrl.includes("loremflickr")) ? q.imageUrl : undefined)
+          imagePrompt: promptText,
+          imageUrl: imgUrl
         };
       });
 

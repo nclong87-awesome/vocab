@@ -1264,7 +1264,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to a clear English visual prompt description strongly highlighting the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
+   - 'picture': "Which word matches the visual concept shown below?" (set imagePrompt to a clear English visual prompt description strongly illustrating the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 
@@ -1280,14 +1280,14 @@ Return ONLY a valid JSON array of objects matching this schema:
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imageUrl": "string (optional)"
+    "imagePrompt": "string (visual prompt description for picture questions)"
   }
 ]`;
 
     const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats:\n\n` +
       (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
       `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
-    const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageUrl.`;
+    const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imagePrompt.`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```$/i, "").trim();
@@ -1301,14 +1301,17 @@ Return ONLY a valid JSON array of objects matching this schema:
 
       await Promise.all(
         result.map(async (q: any) => {
-          if (q.type === "picture" || q.imageUrl) {
-            const promptText = q.imageUrl && !q.imageUrl.startsWith("http")
+          if (q.type === "picture" || q.imagePrompt || q.imageUrl) {
+            const promptText = q.imagePrompt || (q.imageUrl && !q.imageUrl.startsWith("http")
               ? q.imageUrl
-              : `a clear photograph strongly highlighting the concept of "${q.word}", clear subject focus on ${q.word}, realistic photograph`;
+              : `a clear photograph strongly highlighting the concept of "${q.word}", clear subject focus on ${q.word}, realistic photograph`);
             
+            q.imagePrompt = promptText;
             const imgUrl = await generateWorkerImage(promptText, effectiveProxyKey);
             if (imgUrl) {
               q.imageUrl = imgUrl;
+            } else {
+              q.imageUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
             }
           }
         })

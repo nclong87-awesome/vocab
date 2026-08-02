@@ -94,6 +94,7 @@ export interface QuizQuestion {
   options?: string[]; // For multiple choice
   correctAnswer: string;
   hint?: string;
+  imagePrompt?: string;
   imageUrl?: string;
 }
 
