@@ -40,7 +40,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "google/gemma-4-31b-it", 
       "openai/gpt-oss-20b"
     ],
-    defaultBaseUrl: "https://openrouter.nclong87.workers.dev",
+    defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://openrouter.ai/api/v1",
     requiresKey: false
   },

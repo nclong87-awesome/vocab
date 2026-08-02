@@ -637,6 +637,7 @@ export async function callLLMClientSide(
 
   if (provider === "openrouter") {
     headers["X-Title"] = "Vocabulary Learner";
+    headers["Model"] = model || "openrouter/free";
   }
 
   const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
