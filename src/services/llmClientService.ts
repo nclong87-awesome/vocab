@@ -116,10 +116,23 @@ export class LLMConnectionError extends Error {
   with status codes, retry flags, and user-friendly messages.
  */
 export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmError {
-  const originalMessage =
+  let originalMessage =
     err?.userMessage ||
     err?.message ||
     (typeof err === "string" ? err : JSON.stringify(err || {}));
+
+  // Clean HTML error bodies (e.g. 404 page from wrong endpoints)
+  if (originalMessage.includes("<!DOCTYPE") || originalMessage.includes("<html") || originalMessage.includes("<body")) {
+    const titleMatch = originalMessage.match(/<title>([^<]+)<\/title>/i);
+    const h1Match = originalMessage.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+    if (titleMatch && titleMatch[1].trim()) {
+      originalMessage = `HTML Error Response (${titleMatch[1].trim()})`;
+    } else if (h1Match && h1Match[1].trim()) {
+      originalMessage = `HTML Error Response (${h1Match[1].trim()})`;
+    } else {
+      originalMessage = "HTML Error Response (404/500) from server endpoint";
+    }
+  }
 
   const provUpper = provider.toUpperCase();
 
@@ -131,8 +144,13 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     err?.code ||
     0;
 
-  if (typeof statusCode !== "number" || isNaN(statusCode)) {
-    statusCode = 0;
+  if (typeof statusCode !== "number" || isNaN(statusCode) || !statusCode) {
+    const statusMatch = originalMessage.match(/\((\d{3})\)/);
+    if (statusMatch) {
+      statusCode = parseInt(statusMatch[1], 10);
+    } else {
+      statusCode = 0;
+    }
   }
 
   // Attempt to parse nested JSON error objects from GoogleGenAI SDK error strings
@@ -615,15 +633,24 @@ export async function callLLMClientSide(
   }
 
   // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (worker proxy)
-  let defaultBaseUrl = "https://api.openai.com/v1";
-  if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
-  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
-  if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
+  let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
+  if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
+  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
+  if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
+  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
   if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/v1beta";
 
-  const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
+  let effectiveTargetBaseUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : defaultBaseUrl;
+  effectiveTargetBaseUrl = effectiveTargetBaseUrl.replace(/\/+$/, "");
+  if (effectiveTargetBaseUrl.endsWith("/chat/completions")) {
+    effectiveTargetBaseUrl = effectiveTargetBaseUrl.slice(0, -"/chat/completions".length).replace(/\/+$/, "");
+  }
+  if (provider === "9flare" && effectiveTargetBaseUrl === "https://9flare.com") {
+    effectiveTargetBaseUrl = "https://9flare.com/v1";
+  }
+
+  const targetUrl = effectiveTargetBaseUrl + "/chat/completions";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -640,7 +667,6 @@ export async function callLLMClientSide(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
   if (proxyKeyToUse || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
     headers["X-Proxy-Key"] = proxyKeyToUse || apiKey || effectiveApiKey;
   }
@@ -692,6 +718,42 @@ export async function callLLMClientSide(
   );
 }
 
+function extractTextFromContentClient(content: any): string {
+  if (!content) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map(item => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        return item.text || item.content || item.value || "";
+      }
+      return "";
+    }).join("");
+  }
+  if (typeof content === "object") {
+    return content.text || content.value || content.content || "";
+  }
+  return String(content);
+}
+
+function extractTextFromChoiceClient(choice: any): string {
+  if (!choice) return "";
+  if (choice.message) {
+    const msg = choice.message;
+    const txt = extractTextFromContentClient(msg.content) || extractTextFromContentClient(msg.reasoning_content) || extractTextFromContentClient(msg.text);
+    if (txt) return txt;
+  }
+  if (choice.delta) {
+    const delta = choice.delta;
+    const txt = extractTextFromContentClient(delta.content) || extractTextFromContentClient(delta.reasoning_content) || extractTextFromContentClient(delta.text);
+    if (txt) return txt;
+  }
+  if (choice.text) {
+    return extractTextFromContentClient(choice.text);
+  }
+  return "";
+}
+
 // Helper to parse OpenAI/OpenRouter style responses (supporting both standard JSON objects and SSE/streaming lines)
 async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   const contentType = res.headers.get("content-type") || "";
@@ -714,11 +776,10 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
 
       try {
         const parsed = JSON.parse(dataStr);
-        const delta = parsed.choices?.[0]?.delta?.content || 
-                      parsed.choices?.[0]?.message?.content || 
-                      parsed.choices?.[0]?.text || 
-                      "";
-        accumulatedText += delta;
+        const chunkText = extractTextFromChoiceClient(parsed.choices?.[0]);
+        if (chunkText) {
+          accumulatedText += chunkText;
+        }
       } catch {
         // Ignore unparseable chunk lines
       }
@@ -732,10 +793,7 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   // 2. Try parsing as standard JSON response
   try {
     const data = JSON.parse(rawText);
-    const content = data.choices?.[0]?.message?.content || 
-                    data.choices?.[0]?.delta?.content || 
-                    data.choices?.[0]?.text || 
-                    "";
+    const content = extractTextFromChoiceClient(data.choices?.[0]);
     if (content) {
       return cleanJsonResponse(content);
     }

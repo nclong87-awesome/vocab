@@ -85,11 +85,32 @@ function parseServerError(err: any, provider: string = "gemini"): {
   userMessage: string;
   isRetryable: boolean;
 } {
-  const originalMessage = err?.message || (typeof err === "string" ? err : JSON.stringify(err || {}));
+  let originalMessage = err?.message || (typeof err === "string" ? err : JSON.stringify(err || {}));
+  
+  // Clean HTML error bodies (e.g. 404 page from wrong endpoints)
+  if (originalMessage.includes("<!DOCTYPE") || originalMessage.includes("<html") || originalMessage.includes("<body")) {
+    const titleMatch = originalMessage.match(/<title>([^<]+)<\/title>/i);
+    const h1Match = originalMessage.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+    if (titleMatch && titleMatch[1].trim()) {
+      originalMessage = `HTML Error Response (${titleMatch[1].trim()})`;
+    } else if (h1Match && h1Match[1].trim()) {
+      originalMessage = `HTML Error Response (${h1Match[1].trim()})`;
+    } else {
+      originalMessage = "HTML Error Response (404/500) from server endpoint";
+    }
+  }
+
   const lowerMsg = originalMessage.toLowerCase();
   const provUpper = provider.toUpperCase();
 
   let statusCode = err?.statusCode || err?.status || err?.code || 0;
+
+  if (!statusCode) {
+    const statusMatch = originalMessage.match(/\((\d{3})\)/);
+    if (statusMatch) {
+      statusCode = parseInt(statusMatch[1], 10);
+    }
+  }
 
   try {
     const jsonMatch = originalMessage.match(/\{[\s\S]*\}/);
@@ -345,15 +366,24 @@ async function callLLM(
   }
 
   // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (when using worker/proxy)
-  let defaultBaseUrl = "https://api.openai.com/v1";
-  if (provider === "groq") defaultBaseUrl = "https://api.groq.com/openai/v1";
-  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.ai/api/v1";
-  if (provider === "9flare") defaultBaseUrl = "https://9flare.com/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "https://ollama.com/v1";
+  let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
+  if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
+  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
+  if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
+  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
   if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/v1beta";
 
-  const targetUrl = (baseUrl || defaultBaseUrl).replace(/\/$/, "") + "/chat/completions";
+  let effectiveTargetBaseUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : defaultBaseUrl;
+  effectiveTargetBaseUrl = effectiveTargetBaseUrl.replace(/\/+$/, "");
+  if (effectiveTargetBaseUrl.endsWith("/chat/completions")) {
+    effectiveTargetBaseUrl = effectiveTargetBaseUrl.slice(0, -"/chat/completions".length).replace(/\/+$/, "");
+  }
+  if (provider === "9flare" && effectiveTargetBaseUrl === "https://9flare.com") {
+    effectiveTargetBaseUrl = "https://9flare.com/v1";
+  }
+
+  const targetUrl = effectiveTargetBaseUrl + "/chat/completions";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -370,7 +400,6 @@ async function callLLM(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
   if (effectiveProxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
     headers["X-Proxy-Key"] = effectiveProxyKey || effectiveApiKey;
   }
@@ -417,6 +446,42 @@ async function callLLM(
   return await parseOpenAiStyleResponse(res);
 }
 
+function extractTextFromContent(content: any): string {
+  if (!content) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map(item => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        return item.text || item.content || item.value || "";
+      }
+      return "";
+    }).join("");
+  }
+  if (typeof content === "object") {
+    return content.text || content.value || content.content || "";
+  }
+  return String(content);
+}
+
+function extractTextFromChoice(choice: any): string {
+  if (!choice) return "";
+  if (choice.message) {
+    const msg = choice.message;
+    const txt = extractTextFromContent(msg.content) || extractTextFromContent(msg.reasoning_content) || extractTextFromContent(msg.text);
+    if (txt) return txt;
+  }
+  if (choice.delta) {
+    const delta = choice.delta;
+    const txt = extractTextFromContent(delta.content) || extractTextFromContent(delta.reasoning_content) || extractTextFromContent(delta.text);
+    if (txt) return txt;
+  }
+  if (choice.text) {
+    return extractTextFromContent(choice.text);
+  }
+  return "";
+}
+
 // Helper to parse OpenAI/OpenRouter style responses (supporting both standard JSON objects and SSE/streaming lines)
 async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   const contentType = res.headers.get("content-type") || "";
@@ -439,11 +504,10 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
 
       try {
         const parsed = JSON.parse(dataStr);
-        const delta = parsed.choices?.[0]?.delta?.content || 
-                      parsed.choices?.[0]?.message?.content || 
-                      parsed.choices?.[0]?.text || 
-                      "";
-        accumulatedText += delta;
+        const chunkText = extractTextFromChoice(parsed.choices?.[0]);
+        if (chunkText) {
+          accumulatedText += chunkText;
+        }
       } catch {
         // Ignore unparseable chunk lines
       }
@@ -457,10 +521,7 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   // 2. Try parsing as standard JSON response
   try {
     const data = JSON.parse(rawText);
-    const content = data.choices?.[0]?.message?.content || 
-                    data.choices?.[0]?.delta?.content || 
-                    data.choices?.[0]?.text || 
-                    "";
+    const content = extractTextFromChoice(data.choices?.[0]);
     if (content) {
       return cleanJsonResponse(content);
     }
