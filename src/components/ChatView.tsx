@@ -7,8 +7,8 @@ import {
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
-import { QuizImage } from "./QuizView";
 import FormattedMessage from "./chat/FormattedMessage";
+import QuizImage from "./quiz/QuizImage";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -510,7 +510,7 @@ export default function ChatView({
                         {/* Image for visual picture questions */}
                         {msg.imageUrl && (
                           <div className="my-2.5 max-w-sm rounded-none border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
-                            <QuizImage 
+                            <QuizImage
                               src={msg.imageUrl} 
                               alt="Quiz visual clue" 
                               word={msg.audioWord || "Quiz clue"} 

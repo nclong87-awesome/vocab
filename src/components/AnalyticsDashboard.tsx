@@ -29,7 +29,7 @@ interface AnalyticsDashboardProps {
   onStartPracticeWeakWords: (weakWords: Word[]) => void;
   onToggleLearnedWord: (wordId: string) => void;
   onToggleStarWord: (wordId: string) => void;
-  onNavigateToView: (view: 'dashboard' | 'learn' | 'quiz' | 'manage' | 'analytics' | 'settings') => void;
+  onNavigateToView: (view: 'chatview' | 'manage' | 'analytics' | 'settings') => void;
 }
 
 export default function AnalyticsDashboard({

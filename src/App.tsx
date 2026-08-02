@@ -26,7 +26,6 @@ import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestion
 
 import ChatView from "./components/ChatView";
 import FlashcardsView from "./components/FlashcardsView";
-import QuizView from "./components/QuizView";
 import CollectionManager from "./components/CollectionManager";
 import SettingsView from "./components/SettingsView";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
@@ -38,7 +37,7 @@ import MobileSideDrawer from "./components/layout/MobileSideDrawer";
 
 export default function App() {
   const [words, setWords] = useState<Word[]>([]);
-  const [currentView, setCurrentView] = useState<"dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings">("dashboard");
+  const [currentView, setCurrentView] = useState<"chatview" | "manage" | "analytics" | "settings">("chatview");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   
@@ -419,7 +418,7 @@ export default function App() {
   }, [chatMessages, targetLanguage, nativeLanguage]);
 
   // Unified setter to map old page views to side panel operations
-  const handleSetView = (view: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings") => {
+  const handleSetView = (view: "chatview" | "manage" | "analytics" | "settings") => {
     if (view === "manage") {
       setSidePanelTab("collection");
       setIsSidePanelOpen(true);
@@ -1526,7 +1525,7 @@ export default function App() {
               llmConfig={llmConfig}
               ttsConfig={ttsConfig}
               onStartPracticeWeakWords={(weakWords) => {
-                setCurrentView("quiz");
+                setCurrentView("chatview");
               }}
               onToggleLearnedWord={(wordId) => handleToggleLearned(wordId)}
               onToggleStarWord={(wordId) => handleToggleStar(wordId)}
@@ -1590,7 +1589,7 @@ export default function App() {
                 transition={{ duration: 0.2 }}
                 className="w-full flex flex-col flex-1 min-h-0 h-full"
               >
-                {currentView === "dashboard" && (
+                {currentView === "chatview" && (
                   <ChatView
                     messages={chatMessages}
                     isTyping={isTyping}
@@ -1606,34 +1605,6 @@ export default function App() {
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}
-                  />
-                )}
-
-                {currentView === "learn" && (
-                  <FlashcardsView
-                    words={words}
-                    targetLanguage={targetLanguage}
-                    onToggleStar={handleToggleStar}
-                    onToggleLearned={handleToggleLearned}
-                    onGoBack={() => handleSetView("dashboard")}
-                    onStartQuiz={startChatQuiz}
-                    ttsConfig={ttsConfig}
-                    llmConfig={llmConfig}
-                  />
-                )}
-
-                {currentView === "quiz" && (
-                  <QuizView
-                    words={todayPracticeWords}
-                    targetLanguage={targetLanguage}
-                    nativeLanguage={nativeLanguage}
-                    appLanguage={appLanguage}
-                    stats={stats}
-                    onFinishQuiz={handleFinishQuiz}
-                    onToggleStar={handleToggleStar}
-                    onGoBack={() => handleSetView("dashboard")}
-                    ttsConfig={ttsConfig}
-                    llmConfig={llmConfig}
                   />
                 )}
               </motion.div>

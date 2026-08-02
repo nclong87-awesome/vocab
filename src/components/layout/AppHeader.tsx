@@ -7,8 +7,8 @@ import QuickCloudSync from "./QuickCloudSync";
 import { t } from "../../config/i18n";
 
 interface AppHeaderProps {
-  currentView: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings";
-  setCurrentView: (view: "dashboard" | "learn" | "quiz" | "manage" | "analytics" | "settings") => void;
+  currentView: "chatview" | "manage" | "analytics" | "settings";
+  setCurrentView: (view: "chatview" | "manage" | "analytics" | "settings") => void;
   setIsLlmModalOpen: (open: boolean) => void;
   llmConfig: LLMConfig;
   stats: UserStats;
@@ -43,7 +43,7 @@ export default function AppHeader({
   const renderLogo = () => (
     <div 
       onClick={() => {
-        setCurrentView("dashboard");
+        setCurrentView("chatview");
       }} 
       className="flex items-center gap-1 sm:gap-2 cursor-pointer group shrink-0"
       id="brand-logo"
