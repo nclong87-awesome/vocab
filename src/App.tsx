@@ -275,6 +275,7 @@ export default function App() {
         audioWord: firstQ.type === 'listening' ? firstQ.word : undefined,
         quizSpeechText: (firstQ.type === 'listening' || firstQ.type === 'spelling') ? firstQ.word : firstQ.question,
         imageUrl: firstQ.imageUrl,
+        imagePrompt: firstQ.imagePrompt,
         suggestedActions: firstQ.options?.map(opt => ({
           label: opt,
           action: "quiz_answer",
@@ -371,6 +372,7 @@ export default function App() {
             : `Incorrect! Correct answer: ${currentQ.correctAnswer}`,
           nextQuestionSpeechText: (nextQ.type === 'listening' || nextQ.type === 'spelling') ? nextQ.word : nextQ.question,
           imageUrl: nextQ.imageUrl,
+          imagePrompt: nextQ.imagePrompt,
           suggestedActions: nextQ.options?.map(opt => ({
             label: opt,
             action: "quiz_answer",

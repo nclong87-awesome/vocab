@@ -39,11 +39,33 @@ export function getPollinationsImageUrl(word: Word | string, definition?: string
 // Helper function to fetch image URL from Cloudflare Worker endpoint
 export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string): Promise<string> {
   if (!promptText) return "";
+
+  let effectiveProxyKey = proxyKey || "";
+  if (!effectiveProxyKey) {
+    try {
+      const rawConfig = localStorage.getItem("vocab_learner_llm_config");
+      if (rawConfig) {
+        const parsed = JSON.parse(rawConfig);
+        effectiveProxyKey = parsed.proxyKey || "";
+        if (!effectiveProxyKey && parsed.savedProviders) {
+          const found = Object.values(parsed.savedProviders).find((p: any) => Boolean(p?.proxyKey)) as any;
+          if (found) effectiveProxyKey = found.proxyKey;
+        }
+      }
+    } catch (e) {}
+  }
+  if (!effectiveProxyKey) {
+    effectiveProxyKey = localStorage.getItem("llm_proxy_key") || localStorage.getItem("proxy_key") || "";
+  }
+
   try {
     const res = await fetch("/api/generate-image", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: promptText, proxyKey })
+      headers: {
+        "Content-Type": "application/json",
+        ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
+      },
+      body: JSON.stringify({ prompt: promptText, proxyKey: effectiveProxyKey })
     });
     if (res.ok) {
       const data = await res.json();
@@ -56,8 +78,8 @@ export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string)
   try {
     const workerUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
     const headers: Record<string, string> = {};
-    if (proxyKey) {
-      headers["X-Proxy-Key"] = proxyKey;
+    if (effectiveProxyKey) {
+      headers["X-Proxy-Key"] = effectiveProxyKey;
     }
     const directRes = await fetch(workerUrl, {
       method: "GET",
@@ -69,7 +91,7 @@ export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string)
       if (url.startsWith("{")) {
         try {
           const p = JSON.parse(url);
-          url = p.url || p.imageUrl || url;
+          url = p.url || p.imageUrl || p.image || url;
         } catch (e) {}
       }
       if (url && (url.startsWith("http://") || url.startsWith("https://"))) {

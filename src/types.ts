@@ -120,6 +120,7 @@ export interface ChatMessage {
   suggestedActions?: { label: string; action: string; payload?: any }[];
   audioWord?: string;
   imageUrl?: string;
+  imagePrompt?: string;
   quizSpeechText?: string;
   nextQuestionSpeechText?: string;
   fixedSentence?: string;

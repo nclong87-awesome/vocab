@@ -508,10 +508,11 @@ export default function ChatView({
                         )}
 
                         {/* Image for visual picture questions */}
-                        {msg.imageUrl && (
+                        {(msg.imageUrl || msg.imagePrompt) && (
                           <div className="my-2.5 max-w-sm rounded-none border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
                             <QuizImage
                               src={msg.imageUrl} 
+                              imagePrompt={msg.imagePrompt}
                               alt="Quiz visual clue" 
                               word={msg.audioWord || "Quiz clue"} 
                             />
