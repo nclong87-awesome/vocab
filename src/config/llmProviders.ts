@@ -16,6 +16,35 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     requiresKey: false
   },
   {
+    id: "groq",
+    name: "Groq",
+    tagline: "Ultra-fast Llama 3 & DeepSeek inference",
+    defaultModel: "openai/gpt-oss-20b",
+    models: [
+      "openai/gpt-oss-120b", 
+      "openai/gpt-oss-20b", 
+      "groq/compound"
+    ],
+    defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
+    directBaseUrl: "https://api.groq.com/openai/v1",
+    requiresKey: false
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    tagline: "Unified API gateway for 100+ AI models",
+    defaultModel: "openai/gpt-oss-20b",
+    models: [
+      "openrouter/free", 
+      "google/gemma-4-26b-a4b-it", 
+      "google/gemma-4-31b-it", 
+      "openai/gpt-oss-20b"
+    ],
+    defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
+    directBaseUrl: "https://openrouter.ai/api/v1",
+    requiresKey: false
+  },
+  {
     id: "chatjimmy",
     name: "ChatJimmy AI",
     tagline: "ChatJimmy Free API (https://chatjimmy.ai)",
@@ -52,9 +81,9 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "High performance API gateway",
     defaultModel: "pro/claude-haiku-4-5",
     models: ["pro/minimax-m2.5", "pro/claude-haiku-4-5", "pro/glm-5", ],
-    defaultBaseUrl: "https://9flare.com/api/v1",
+    defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://9flare.com/api/v1",
-    requiresKey: true
+    requiresKey: false
   },
   {
     id: "custom",

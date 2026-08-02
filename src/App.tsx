@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from "./types";
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
-import { switchActiveProvider } from "./utils/llmHelpers";
+import { switchActiveProvider, getSavedProvidersMap } from "./utils/llmHelpers";
 import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService } from "./services/llmClientService";
 import { generateQuizQuestions } from "./utils/quizGenerator";
 import { QuizQuestion } from "./types";
@@ -31,6 +31,7 @@ import CollectionManager from "./components/CollectionManager";
 import SettingsView from "./components/SettingsView";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
+import OnboardingModal from "./components/OnboardingModal";
 
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
@@ -54,6 +55,7 @@ export default function App() {
   const [ttsConfig, setTtsConfig] = useState<TTSConfig>(DEFAULT_TTS_CONFIG);
 
   const [isLlmModalOpen, setIsLlmModalOpen] = useState<boolean>(false);
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState<boolean>(false);
 
   // Global Language Preferences
   const [targetLanguage, setTargetLanguage] = useState<string>(() => {
@@ -82,6 +84,63 @@ export default function App() {
       console.error("Failed to save language preferences to localStorage", e);
     }
   }, []);
+
+  const handleCompleteOnboarding = useCallback(async (data: {
+    accessCode: string;
+    targetLanguage: string;
+    nativeLanguage: string;
+    appLanguage: string;
+  }) => {
+    // 1. Save Target & Native Language selections
+    handleSelectLanguages(data.targetLanguage, data.nativeLanguage, data.appLanguage);
+
+    // 2. Assign Access Code as Proxy Key across all saved provider configs
+    const newProxyKey = data.accessCode.trim();
+    setLlmConfig(prevConfig => {
+      const savedMap = getSavedProvidersMap(prevConfig);
+      const updatedSavedMap: Record<string, any> = {};
+      for (const k of Object.keys(savedMap)) {
+        if (savedMap[k]) {
+          updatedSavedMap[k] = {
+            ...savedMap[k],
+            proxyKey: newProxyKey
+          };
+        }
+      }
+
+      const updatedConfig: LLMConfig = {
+        ...prevConfig,
+        proxyKey: newProxyKey,
+        savedProviders: updatedSavedMap
+      };
+
+      saveLLMConfigToDB(updatedConfig);
+      return updatedConfig;
+    });
+
+    // 3. Set onboarding completed flag in localStorage
+    try {
+      localStorage.setItem("vocab_learner_onboarding_completed", "true");
+    } catch (e) {
+      console.error("Failed to save onboarding completion state", e);
+    }
+
+    // 4. Update chat welcome message for newly selected languages
+    const welcomeMsg: ChatMessage = {
+      id: `welcome-msg-${Date.now()}`,
+      role: "assistant",
+      content: `¡Hola! Welcome to your interactive AI Language Coach. I'm here to help you master **${data.targetLanguage}** from your native language **${data.nativeLanguage}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.\n\nTry asking me: *'What are some common idioms in ${data.targetLanguage}?'* or click one of the quick actions below to start learning!`,
+      timestamp: new Date().toISOString()
+    };
+    setChatMessages([welcomeMsg]);
+    try {
+      localStorage.setItem("vocab_learner_chat_history", JSON.stringify([welcomeMsg]));
+    } catch (e) {
+      // ignore
+    }
+
+    setIsOnboardingModalOpen(false);
+  }, [handleSelectLanguages]);
 
   const [stats, setStats] = useState<UserStats>({
     totalWordsStudied: 0,
@@ -1147,6 +1206,12 @@ export default function App() {
       setNativeLanguage(refreshedNative);
       setAppLanguage(refreshedApp);
 
+      // Trigger Onboarding Modal if app opened for first time or after factory reset
+      const onboardingCompleted = localStorage.getItem("vocab_learner_onboarding_completed") === "true";
+      if (!onboardingCompleted) {
+        setIsOnboardingModalOpen(true);
+      }
+
       // Reload chat messages or reset to default welcome message if cleared
       const storedChat = localStorage.getItem("vocab_learner_chat_history");
       if (storedChat) {
@@ -1464,6 +1529,7 @@ export default function App() {
               onSaveTTSConfig={handleSaveTTSConfig}
               onSaveLLMConfig={handleSaveLlmConfig}
               onOpenLlmModal={handleOpenLlmModal}
+              onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
               onReloadData={reloadAllDataFromDB}
               targetLanguage={targetLanguage}
               nativeLanguage={nativeLanguage}
@@ -1573,7 +1639,7 @@ export default function App() {
         {renderSidePanelContent()}
       </MobileSideDrawer>
 
-      {/* LLM Login & Onboarding Modal */}
+      {/* LLM Login Modal */}
       <LlmLoginModal
         isOpen={isLlmModalOpen}
         currentConfig={llmConfig}
@@ -1581,6 +1647,18 @@ export default function App() {
         onSaveOnboarding={handleSaveOnboarding}
         onClose={() => setIsLlmModalOpen(false)}
         canDismiss={Boolean(llmConfig.isLoggedIn && llmConfig.provider)}
+      />
+
+      {/* Onboarding Setup & Access Code Modal */}
+      <OnboardingModal
+        isOpen={isOnboardingModalOpen}
+        initialProxyKey={llmConfig.proxyKey || ""}
+        initialTargetLanguage={targetLanguage}
+        initialNativeLanguage={nativeLanguage}
+        initialAppLanguage={appLanguage}
+        onCompleteOnboarding={handleCompleteOnboarding}
+        onClose={() => setIsOnboardingModalOpen(false)}
+        canDismiss={localStorage.getItem("vocab_learner_onboarding_completed") === "true"}
       />
 
     </div>

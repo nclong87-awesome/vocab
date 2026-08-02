@@ -56,6 +56,7 @@ interface SettingsViewProps {
   onSaveTTSConfig: (newConfig: TTSConfig) => void;
   onSaveLLMConfig?: (newConfig: LLMConfig) => void;
   onOpenLlmModal: (initialProvider?: LLMProvider) => void;
+  onOpenOnboarding?: () => void;
   onReloadData?: () => Promise<void>;
   targetLanguage?: string;
   nativeLanguage?: string;
@@ -69,6 +70,7 @@ export default function SettingsView({
   onSaveTTSConfig,
   onSaveLLMConfig,
   onOpenLlmModal,
+  onOpenOnboarding,
   onReloadData,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
@@ -722,14 +724,27 @@ export default function SettingsView({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onOpenLlmModal()}
-            className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0 self-start sm:self-auto"
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span>Add / Edit Provider Credentials</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {onOpenOnboarding && (
+              <button
+                type="button"
+                onClick={onOpenOnboarding}
+                className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-stone-950 shrink-0" />
+                <span>Onboarding & Access Code Wizard</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onOpenLlmModal()}
+              className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>Add / Edit Provider Credentials</span>
+            </button>
+          </div>
         </div>
 
         {/* Active Engine Highlight Box */}

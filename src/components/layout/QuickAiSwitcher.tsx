@@ -29,6 +29,8 @@ function getShortProviderName(name: string): string {
   if (name.includes("Custom")) return "Custom";
   if (name.includes("Ollama")) return "Ollama";
   if (name.includes("OpenAI")) return "OpenAI";
+  if (name.includes("Groq")) return "Groq";
+  if (name.includes("OpenRouter")) return "OpenRouter";
   if (name.includes("9Flare")) return "9Flare";
   return name.split(" ")[0];
 }

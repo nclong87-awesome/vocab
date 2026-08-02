@@ -64,12 +64,18 @@ function sanitizeModel(provider: string, model?: string): string {
   if (provider === "chatjimmy") {
     return model || "llama3.1-8B";
   }
+  if (provider === "groq") {
+    return model || "llama-3.3-70b-versatile";
+  }
+  if (provider === "openrouter") {
+    return model || "meta-llama/llama-3.3-70b-instruct";
+  }
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
+  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "llama-3.3-70b-versatile" : provider === "openrouter" ? "meta-llama/llama-3.3-70b-instruct" : provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
 }
 
 // Parse server-side LLM error
