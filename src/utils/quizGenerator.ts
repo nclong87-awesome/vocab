@@ -26,8 +26,9 @@ export function getPollinationsImageUrl(word: Word | string, definition?: string
   const wordText = typeof word === 'string' ? word : word.word;
   const defText = typeof word === 'object' ? (definition || word.definition || "") : (definition || "");
   const categoryText = typeof word === 'object' && word.category ? `, category: ${word.category}` : '';
-  const contextText = typeof word === 'object' && word.context ? `, context: ${word.context}` : '';
-  const promptText = `a clear visual representation of ${wordText}${defText ? `, ${defText}` : ''}${categoryText}${contextText}, realistic photograph, clean background`;
+
+  // Focus strongly on the target word itself and its definition, rather than example sentence details
+  const promptText = `a clear, realistic photograph strongly emphasizing and clearly illustrating the target concept of "${wordText}" (${defText || 'target concept'})${categoryText}, clear subject focus on ${wordText}, high quality, clean background`;
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?width=500&height=400&nologo=true`;
 }
 

@@ -1080,28 +1080,23 @@ CRITICAL INSTRUCTIONS:
   }
 }
 
-// 3.5. Generate Random Words for Collection (Deduplicated)
+// 3.5. Generate Random Words for Collection
 export async function generateRandomWordsService(params: {
   topic: string;
   targetLanguage?: string;
   nativeLanguage?: string;
   count?: number;
-  existingWords?: string[];
   llmConfig?: LLMConfig;
 }): Promise<{ words: any[] }> {
-  const { topic, targetLanguage, nativeLanguage, count = 5, existingWords = [], llmConfig } = params;
+  const { topic, targetLanguage, nativeLanguage, count = 5, llmConfig } = params;
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
 
-  const avoidText = Array.isArray(existingWords) && existingWords.length > 0
-    ? `\n\nCRITICAL DEDUPLICATION RULE: Do NOT generate any of the following words that ALREADY exist in the collection:\n[ ${existingWords.slice(0, 100).join(", ")} ]`
-    : "";
-
-  const prompt = `Generate ${count} new, unique, practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the topic "${topic || "Vocabulary"}".
-The user's native language is "${userNative}".${avoidText}
+  const prompt = `Generate ${count} practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the topic "${topic || "Vocabulary"}".
+The user's native language is "${userNative}".
 
 CRITICAL INSTRUCTIONS:
-- Every word generated MUST BE UNIQUE and NOT present in the existing list above.
+- Every word generated SHOULD BE unique and practical for a language learner.
 - "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Realistic example sentence in target language (${userTarget}).
@@ -1109,7 +1104,7 @@ CRITICAL INSTRUCTIONS:
 - "category": High-level category string (e.g. "${topic || "Vocabulary"}").
 - "context": Short description of the real-world situation or domain context where this word is used.`;
 
-  const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of new unique vocabulary words.`;
+  const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of vocabulary words.`;
   const schemaDesc = `{
   "words": [
     {
@@ -1135,7 +1130,7 @@ CRITICAL INSTRUCTIONS:
     const res = await fetch("/api/generate-random-words", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, existingWords, llmConfig })
+      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, llmConfig })
     });
 
     if (res.ok) {
@@ -1498,7 +1493,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded description of target word in its specific category and real-world usage context]?width=500&height=400&nologo=true)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded prompt strongly highlighting the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph"]?width=500&height=400&nologo=true)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 
@@ -1570,7 +1565,7 @@ Return ONLY a valid JSON array of objects matching this schema:
           options: options.sort(() => 0.5 - Math.random()),
           correctAnswer: q.correctAnswer || matchingWord.word,
           hint: q.hint || matchingWord.pronunciation,
-          imageUrl: (q.imageUrl && !q.imageUrl.includes("loremflickr")) ? q.imageUrl : (q.type === 'picture' ? getPollinationsImageUrl(matchingWord) : undefined)
+          imageUrl: q.type === 'picture' ? getPollinationsImageUrl(matchingWord) : ((q.imageUrl && !q.imageUrl.includes("loremflickr")) ? q.imageUrl : undefined)
         };
       });
 

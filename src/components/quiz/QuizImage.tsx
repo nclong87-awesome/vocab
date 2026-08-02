@@ -12,7 +12,7 @@ export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
   const getInitialUrl = (url?: string, w?: string) => {
     if (url && url.trim().length > 0) return url;
     if (w && w.trim().length > 0) {
-      return `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph representing ${w}`)}?width=500&height=400&nologo=true&seed=42`;
+      return `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph strongly highlighting the concept of "${w}", clear subject focus on ${w}, realistic photograph`)}?width=500&height=400&nologo=true&seed=42`;
     }
     return "";
   };
@@ -62,7 +62,7 @@ export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
           onLoad={() => setLoading(false)}
           onError={() => {
             const fallbackPollinationsUrl = word
-              ? `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph representing ${word}`)}?width=500&height=400&nologo=true&seed=99`
+              ? `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph strongly highlighting the concept of "${word}", clear subject focus on ${word}, realistic photograph`)}?width=500&height=400&nologo=true&seed=99`
               : "";
             if (fallbackPollinationsUrl && imgSrc !== fallbackPollinationsUrl) {
               setImgSrc(fallbackPollinationsUrl);

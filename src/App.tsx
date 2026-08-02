@@ -911,15 +911,13 @@ export default function App() {
         topic: topic,
         targetLanguage,
         nativeLanguage,
-        count: count + 5, // Ask for extra to ensure unique after filtering
-        existingWords: Array.from(existingWordSet),
+        count,
         llmConfig
       });
 
       const generatedList = res.words || [];
       const newUniqueWords = generatedList
-        .filter((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()))
-        .slice(0, count);
+        .filter((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()));
 
       if (newUniqueWords.length === 0) {
         setChatMessages(prev => {
