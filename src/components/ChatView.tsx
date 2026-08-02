@@ -595,21 +595,50 @@ export default function ChatView({
                               }
                               scrollToBottom("smooth");
                             }}
-                            className={`flex items-center justify-between text-left text-xs rounded-xl py-2 px-3.5 font-bold transition-all duration-200 hover:scale-[1.01] shadow-2xs cursor-pointer group ${
+                            className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 hover:scale-[1.005] shadow-2xs cursor-pointer group ${
                               isNextQ
-                                ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900"
+                                ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold"
                                 : "bg-white hover:bg-stone-50 border border-stone-200 text-stone-900 hover:border-stone-300"
                             }`}
                           >
-                            <span className="flex items-center gap-2">
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
                               {isNextQ ? (
-                                <ChevronRight className="w-3.5 h-3.5 text-amber-400" />
+                                <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                               ) : (
-                                <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0 mt-0.5" />
                               )}
-                              {act.label}
-                            </span>
-                            <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform ${isNextQ ? "text-stone-300" : "text-stone-400"}`} />
+
+                              {act.action === "select_definition" && act.payload?.definition ? (
+                                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase bg-amber-100/80 text-amber-900 rounded border border-amber-200/60 shrink-0">
+                                      {act.payload.partOfSpeech || "sense"}
+                                    </span>
+                                    <span className="font-bold text-stone-900 text-xs sm:text-sm">
+                                      {act.payload.targetWord || act.payload.word}
+                                      {act.payload.translation && (
+                                        <span className="text-stone-600 font-medium ml-1">
+                                          ({act.payload.translation})
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-stone-700 leading-snug font-normal break-words line-clamp-3">
+                                    {act.payload.definition}
+                                  </p>
+                                  {act.payload.example && (
+                                    <p className="text-[11px] text-stone-500 italic line-clamp-1 mt-0.5 font-normal">
+                                      Ex: "{act.payload.example}"
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="whitespace-normal break-words leading-relaxed font-semibold min-w-0 flex-1">
+                                  {act.label}
+                                </span>
+                              )}
+                            </div>
+                            <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform shrink-0 mt-1 ml-2 ${isNextQ ? "text-stone-300" : "text-stone-400"}`} />
                           </button>
                         );
                       })}

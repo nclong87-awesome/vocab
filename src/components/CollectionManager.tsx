@@ -86,6 +86,7 @@ export default function CollectionManager({
           if (w.id === word.id) {
             return {
               ...w,
+              word: details.word || w.word,
               translation: details.translation || w.translation,
               definition: details.definition || w.definition,
               partOfSpeech: details.partOfSpeech || w.partOfSpeech,

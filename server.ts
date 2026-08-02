@@ -68,14 +68,14 @@ function sanitizeModel(provider: string, model?: string): string {
     return model || "llama-3.3-70b-versatile";
   }
   if (provider === "openrouter") {
-    return model || "meta-llama/llama-3.3-70b-instruct";
+    return model || "deepseek/deepseek-chat";
   }
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "llama-3.3-70b-versatile" : provider === "openrouter" ? "meta-llama/llama-3.3-70b-instruct" : provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini");
+  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "llama-3.3-70b-versatile" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat");
 }
 
 // Parse server-side LLM error
@@ -182,7 +182,7 @@ async function callLLM(
   schemaDescription: string,
   llmConfig?: LLMRequestConfig
 ): Promise<string> {
-  const provider = llmConfig?.provider || "openai";
+  const provider = llmConfig?.provider || "openrouter";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
   const sharedProxyKey = llmConfig?.proxyKey || 
@@ -405,7 +405,7 @@ async function callLLM(
   }
 
   const reqBody: any = {
-    model: model || (provider === "openrouter" ? "openrouter/free" : provider === "gemini" ? "gemini-3.6-flash" : "gpt-5.4-mini"),
+    model: model || (provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
@@ -533,9 +533,87 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   return cleanJsonResponse(rawText);
 }
 
+// Helper function to generate image URL via Cloudflare Worker
+async function generateWorkerImage(promptText: string, effectiveProxyKey: string): Promise<string> {
+  if (!promptText) return "";
+  try {
+    const workerUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
+    const response = await fetch(workerUrl, {
+      method: "GET",
+      headers: {
+        "X-Proxy-Key": effectiveProxyKey || ""
+      }
+    });
+    if (!response.ok) {
+      console.warn(`Image worker returned status ${response.status}`);
+      return "";
+    }
+    const responseText = await response.text();
+    let url = responseText.trim();
+    if (url.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(url);
+        url = parsed.url || parsed.imageUrl || parsed.image || url;
+      } catch (e) {
+        // ignore
+      }
+    }
+    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      return url;
+    }
+  } catch (err) {
+    console.warn("Failed to fetch image from worker:", err);
+  }
+  return "";
+}
+
 // 1. Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
+});
+
+// Image Generation Endpoint via worker https://image.nclong87.workers.dev
+app.post("/api/generate-image", async (req, res) => {
+  try {
+    const { prompt, proxyKey, llmConfig } = req.body || {};
+    const promptText = prompt || req.query.prompt || "";
+    if (!promptText) {
+      return res.status(400).json({ error: "Prompt parameter is required" });
+    }
+    const sharedProxyKey = llmConfig?.proxyKey ||
+      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
+      "";
+    const effectiveProxyKey = proxyKey || sharedProxyKey || (req.headers["x-proxy-key"] as string) || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
+
+    const imageUrl = await generateWorkerImage(promptText, effectiveProxyKey);
+    if (!imageUrl) {
+      return res.status(500).json({ error: "Failed to generate image from worker" });
+    }
+    res.json({ imageUrl, prompt: promptText });
+  } catch (error: any) {
+    console.error("Error generating image via worker:", error);
+    res.status(500).json({ error: error.message || "Failed to generate image" });
+  }
+});
+
+app.get("/api/generate-image", async (req, res) => {
+  try {
+    const promptText = (req.query.prompt as string) || "";
+    const clientProxyKey = (req.query.proxyKey as string) || (req.headers["x-proxy-key"] as string) || "";
+    if (!promptText) {
+      return res.status(400).json({ error: "Prompt query parameter is required" });
+    }
+    const effectiveProxyKey = clientProxyKey || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
+
+    const imageUrl = await generateWorkerImage(promptText, effectiveProxyKey);
+    if (!imageUrl) {
+      return res.status(500).json({ error: "Failed to generate image from worker" });
+    }
+    res.json({ imageUrl, prompt: promptText });
+  } catch (error: any) {
+    console.error("Error generating image via worker GET:", error);
+    res.status(500).json({ error: error.message || "Failed to generate image" });
+  }
 });
 
 // 2. Test LLM Connection endpoint
@@ -566,7 +644,7 @@ app.post("/api/test-llm", async (req, res) => {
 // 4. Auto-fill a single word
 app.post("/api/autofill-word", async (req, res) => {
   try {
-    const { word, targetLanguage, nativeLanguage, llmConfig } = req.body;
+    const { word, hint, targetLanguage, nativeLanguage, llmConfig } = req.body;
 
     if (!word) {
       return res.status(400).json({ error: "Word is required" });
@@ -575,27 +653,35 @@ app.post("/api/autofill-word", async (req, res) => {
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
-    const prompt = `Provide detailed vocabulary learning material for the word or expression "${word}".
+    const prompt = `Provide detailed vocabulary learning material for the input word or expression "${word}".
+${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL: Generate the definition, translation, and example sentence matching this exact scope/context hint.` : ""}
 Target language being learned: "${userTarget}".
 User's native language: "${userNative}".
 
-CRITICAL MANDATORY REQUIREMENT:
-- "definition": You MUST write the definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion. Do NOT write the definition in the native language (${userNative}).
-- "translation": Provide the direct, accurate translation of "${word}" into the user's native language (${userNative}).
-- "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide.
-- "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression.
-- "example": A realistic, high-quality example sentence in the target language (${userTarget}).
-- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}).
+CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
+- AUTOMATIC LANGUAGE DETECTION: The user input string "${word}" could be entered in EITHER the Target Language ("${userTarget}") OR the Native Language ("${userNative}").
+  * If "${word}" is in the user's Native Language ("${userNative}"), e.g. "xin chào" in Vietnamese:
+    - Translate it into the Target Language ("${userTarget}"), e.g. "hello".
+    - Set the "word" field strictly to the Target Language word (e.g. "hello").
+    - Set "translation" strictly to the Native Language term (e.g. "xin chào").
+  * If "${word}" is already in the Target Language ("${userTarget}"), e.g. "hello":
+    - Set "word" strictly to "${word}" (or its canonical Target Language form).
+    - Set "translation" strictly to its direct translation in the user's Native Language ("${userNative}"), e.g. "xin chào".
+- "definition": Write clear, concise definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion.
+- "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide for the target language word.
+- "partOfSpeech": noun, verb, adjective, adverb, idiom, interjection, or expression.
+- "example": A realistic, high-quality example sentence in the target language (${userTarget}), e.g. "Hello, how are you?".
+- "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Travel & Hospitality", "Business & Work", "Technology", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.`;
 
-    const systemInstruction = `You are a professional multilingual dictionary database engine. Always output definitions in the target language (${userTarget}) and translations in the user's native language (${userNative}).`;
+    const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, map native language inputs to the target language, and output target language vocabulary details with native language translations.`;
     const schemaDesc = `{
-  "word": "string",
+  "word": "string (the word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "pronunciation": "string",
   "partOfSpeech": "string",
   "definition": "string (definition written STRICTLY in ${userTarget})",
-  "translation": "string (translation in ${userNative})",
+  "translation": "string (translation in ${userNative}, e.g. 'xin chào')",
   "example": "string (example in ${userTarget})",
   "exampleTranslation": "string (example translation in ${userNative})",
   "category": "string (topic/category string)",
@@ -625,33 +711,53 @@ app.post("/api/check-word-definitions", async (req, res) => {
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
-    const prompt = `Analyze the word or expression "${word}".
+    const prompt = `Analyze the input word or expression "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL MANDATORY REQUIREMENT: The user wants to add "${word}" specifically in the scope/context described above.` : ""}
 Target language: "${userTarget}".
 User's native language: "${userNative}".
 
-CRITICAL INSTRUCTIONS:
-1. ${hint ? `Use the provided Scope/Context Hint ("${hint}") to generate the exact definition, translation, pronunciation, and example sentence for "${word}" matching that specific scope/context.` : "Analyze the word or expression and provide its definition and translation."}
-2. If no valid definition, translation, or meaning can be found or generated for "${word}" (or if "${word}" is invalid, unrecognized, or cannot be matched with a definition in the given context), set "notFound": true, "hasMultipleSenses": false, and "senses": [].
-3. ${hint ? `Since a specific Scope/Context Hint was provided ("${hint}"), set "hasMultipleSenses": false and return ONLY 1 exact matching sense in "senses".` : `If there is only 1 dominant or common definition, set "hasMultipleSenses": false. If there are 2 to 4 distinct meanings or parts of speech in "${userTarget}", set "hasMultipleSenses": true.`}
-4. Provide the matching sense(s) in "senses". For each sense, provide:
-   - "partOfSpeech": noun, verb, adjective, adverb, idiom, or expression
-   - "definition": clear definition written STRICTLY in the target language ("${userTarget}")
-   - "translation": direct translation in the user's native language ("${userNative}")
-   - "pronunciation": IPA pronunciation
-   - "example": example sentence in "${userTarget}"
-   - "exampleTranslation": translation of example sentence in "${userNative}"
-   - "imagePrompt": short English visual description
-   - "category": high-level category string (e.g. "Travel", "Business", "Daily Life")
-   - "context": concise description of the domain or real-world usage context`;
+CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
+1. AUTOMATIC LANGUAGE DETECTION: The user input string "${word}" could be entered in EITHER the Target Language ("${userTarget}") OR the Native Language ("${userNative}").
+   - If "${word}" is in the user's Native Language ("${userNative}"), e.g. "xin chào" in Vietnamese:
+     * Translate it into the Target Language ("${userTarget}"), e.g. "hello".
+     * Set the top-level "word" field and the "word" field inside each sense strictly to the Target Language word (e.g. "hello").
+     * Set "translation" strictly to the Native Language term (e.g. "xin chào").
+   - If "${word}" is already in the Target Language ("${userTarget}"), e.g. "hello":
+     * Set "word" strictly to "${word}" (or its canonical Target Language form).
+     * Set "translation" strictly to its direct translation in the user's Native Language ("${userNative}"), e.g. "xin chào".
 
-    const systemInstruction = `You are an elite dictionary lookup engine. You analyze target language words and output JSON with exact definitions and translations. If no valid definition exists or cannot be found, set "notFound": true and "senses": [].`;
+2. DEFINITIONS & EXAMPLES:
+   - "definition": Write clear, concise definition(s) STRICTLY in the Target Language ("${userTarget}") for language immersion.
+   - "example": Provide example sentence(s) written STRICTLY in the Target Language ("${userTarget}"), e.g. "Hello, how are you?".
+   - "exampleTranslation": Provide full translation of the example sentence into the user's Native Language ("${userNative}"), e.g. "Xin chào, bạn khỏe không?".
+   - "partOfSpeech": noun, verb, adjective, adverb, idiom, interjection, or expression.
+   - "pronunciation": IPA pronunciation guide for the Target Language word (e.g. "/həˈloʊ/").
+
+3. INVALID INPUT HANDLING:
+   - If no valid definition or meaning can be found or generated for "${word}" (or if "${word}" is invalid or unrecognized), set "notFound": true, "hasMultipleSenses": false, and "senses": [].
+
+4. MULTIPLE SENSES DISAMBIGUATION:
+   - ${hint ? `Since a specific Scope/Context Hint was provided ("${hint}"), set "hasMultipleSenses": false and return ONLY 1 exact matching sense in "senses".` : `If there is only 1 dominant definition or translation, set "hasMultipleSenses": false. If there are 2 to 4 distinct meanings or parts of speech in "${userTarget}", set "hasMultipleSenses": true.`}
+   - Provide the matching sense(s) in "senses". For each sense, include:
+     "word": string (Target Language word in "${userTarget}"),
+     "partOfSpeech": string,
+     "definition": string (written in "${userTarget}"),
+     "translation": string (written in "${userNative}"),
+     "pronunciation": string,
+     "example": string (written in "${userTarget}"),
+     "exampleTranslation": string (written in "${userNative}"),
+     "imagePrompt": string,
+     "category": string,
+     "context": string`;
+
+    const systemInstruction = `You are an elite multilingual dictionary lookup engine. You automatically detect input language, map native language inputs to the target language, and output structured JSON with target language words, definitions, and native language translations. If no valid definition exists or cannot be found, set "notFound": true and "senses": [].`;
     const schemaDesc = `{
-  "word": "string",
+  "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
   "hasMultipleSenses": boolean,
   "senses": [
     {
+      "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
       "partOfSpeech": "string (e.g. noun, verb, adjective, expression)",
       "definition": "string (definition written STRICTLY in ${userTarget})",
       "translation": "string (translation in ${userNative})",
@@ -1158,7 +1264,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to https://image.pollinations.ai/prompt/[encoded prompt strongly highlighting the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph"]?width=500&height=400&nologo=true)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageUrl to a clear English visual prompt description strongly highlighting the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 
@@ -1186,6 +1292,29 @@ Return ONLY a valid JSON array of objects matching this schema:
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```$/i, "").trim();
     const result = JSON.parse(cleaned);
+
+    if (Array.isArray(result)) {
+      const sharedProxyKey = llmConfig?.proxyKey ||
+        (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
+        "";
+      const effectiveProxyKey = sharedProxyKey || (req.headers["x-proxy-key"] as string) || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
+
+      await Promise.all(
+        result.map(async (q: any) => {
+          if (q.type === "picture" || q.imageUrl) {
+            const promptText = q.imageUrl && !q.imageUrl.startsWith("http")
+              ? q.imageUrl
+              : `a clear photograph strongly highlighting the concept of "${q.word}", clear subject focus on ${q.word}, realistic photograph`;
+            
+            const imgUrl = await generateWorkerImage(promptText, effectiveProxyKey);
+            if (imgUrl) {
+              q.imageUrl = imgUrl;
+            }
+          }
+        })
+      );
+    }
+
     res.json(result);
   } catch (error: any) {
     console.error("Error generating AI quiz:", error);

@@ -44,10 +44,10 @@ export default function App() {
   
   // LLM Provider Login Config state
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({
-    provider: "openai",
-    model: "gpt-5.4-mini",
+    provider: "openrouter",
+    model: "deepseek/deepseek-chat",
     apiKey: "",
-    baseUrl: "https://openai.nclong87.workers.dev/v1",
+    baseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     isLoggedIn: true
   });
 
@@ -598,19 +598,32 @@ export default function App() {
         });
 
         const actions = validSenses.map((sense: any, idx: number) => {
+          const targetWord = sense.word || data.word || wordText;
           const partOfSpeech = sense.partOfSpeech || "word";
           const translation = sense.translation && sense.translation !== "undefined" ? sense.translation : "";
-          const translationPart = translation ? `${translation}: ` : "";
-          const shortDef = sense.definition 
-            ? (sense.definition.slice(0, 45) + (sense.definition.length > 45 ? "..." : ""))
-            : "";
+          const definition = sense.definition || "";
+          const example = sense.example || "";
+
+          let header = `[${partOfSpeech}]`;
+          if (targetWord && targetWord.toLowerCase() !== wordText.toLowerCase()) {
+            header += ` ${targetWord}${translation ? ` (${translation})` : ''}`;
+          } else if (translation) {
+            header += ` ${translation}`;
+          }
+
+          const fullLabel = `${header}: ${definition}${example ? ` — Ex: "${example}"` : ''}`;
+
           return {
-            label: `[${partOfSpeech}] ${translationPart}${shortDef}`,
+            label: fullLabel,
             action: "select_definition",
             payload: { 
               word: wordText, 
               senseIndex: idx, 
-              translation: translation || data.translation || wordText 
+              translation: translation || data.translation || wordText,
+              targetWord: targetWord,
+              partOfSpeech: partOfSpeech,
+              definition: definition,
+              example: example
             }
           };
         });
@@ -782,9 +795,10 @@ export default function App() {
     ]);
 
     try {
+      const targetWord = sense.word || word;
       const newWord: Word = {
         id: `ai-word-${Date.now()}`,
-        word: word,
+        word: targetWord,
         pronunciation: sense.pronunciation || "/.../",
         partOfSpeech: sense.partOfSpeech || "noun",
         definition: sense.definition,
@@ -1155,15 +1169,15 @@ export default function App() {
       setStats(loadedStats);
 
       const loadedConfig = await getLLMConfigFromDB({
-        provider: "openai",
-        model: "gpt-5.4-mini",
+        provider: "openrouter",
+        model: "deepseek/deepseek-chat",
         apiKey: "",
-        baseUrl: "https://openai.nclong87.workers.dev/v1",
+        baseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
         isLoggedIn: true
       });
 
-      const sanitizedProvider = loadedConfig.provider || "openai";
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
+      const sanitizedProvider = loadedConfig.provider || "openrouter";
+      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "openrouter" ? "deepseek/deepseek-chat" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
       const validGeminiModels = [
         "gemini-3.6-flash",
         "gemini-3.6-flash-lite",
@@ -1183,13 +1197,13 @@ export default function App() {
         ...loadedConfig,
         provider: sanitizedProvider as any,
         model: sanitizedModel,
-        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
+        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "openrouter" || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
       };
 
       setLlmConfig(activeConfig);
       await saveLLMConfigToDB(activeConfig);
 
-      if (!activeConfig.isLoggedIn && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
+      if (!activeConfig.isLoggedIn && activeConfig.provider !== "openrouter" && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
         setIsLlmModalOpen(true);
       }
 

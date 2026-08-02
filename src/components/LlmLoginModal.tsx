@@ -75,8 +75,8 @@ export default function LlmLoginModal({
   const [savedProfiles, setSavedProfiles] = useState<SavedProvidersMap>({});
 
   // LLM Config state
-  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "openai");
-  const [model, setModel] = useState<string>(currentConfig.model || "gpt-5.4-mini");
+  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "openrouter");
+  const [model, setModel] = useState<string>(currentConfig.model || "deepseek/deepseek-chat");
   const [customModel, setCustomModel] = useState<string>("");
   const [isCustomModelMode, setIsCustomModelMode] = useState<boolean>(false);
   const [useProxy, setUseProxy] = useState<boolean>(currentConfig.useProxy !== undefined ? currentConfig.useProxy : true);
@@ -97,7 +97,7 @@ export default function LlmLoginModal({
 
       const sharedProxy = currentConfig.proxyKey || Object.values(profiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
 
-      const activeP = currentConfig.provider || "openai";
+      const activeP = currentConfig.provider || "openrouter";
       setProvider(activeP);
 
       const activeSaved = profiles[activeP];
@@ -107,12 +107,12 @@ export default function LlmLoginModal({
       setUseProxy(initialUseProxy);
 
       if (activeSaved) {
-        setModel(activeSaved.model || currentConfig.model || "gpt-5.4-mini");
+        setModel(activeSaved.model || currentConfig.model || "deepseek/deepseek-chat");
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
         setProxyKey(activeSaved.proxyKey || sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
       } else {
-        setModel(currentConfig.model || "gpt-5.4-mini");
+        setModel(currentConfig.model || "deepseek/deepseek-chat");
         setApiKey(currentConfig.apiKey || "");
         setProxyKey(sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(currentConfig.baseUrl || "");

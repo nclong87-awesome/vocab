@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { HelpCircle, Sparkles, ImageIcon, Loader2 } from "lucide-react";
+import { fetchWorkerImageUrl, getImagePrompt } from "../../utils/quizGenerator";
 
 interface QuizImageProps {
   src?: string;
@@ -9,23 +10,45 @@ interface QuizImageProps {
 }
 
 export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
-  const getInitialUrl = (url?: string, w?: string) => {
-    if (url && url.trim().length > 0) return url;
-    if (w && w.trim().length > 0) {
-      return `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph strongly highlighting the concept of "${w}", clear subject focus on ${w}, realistic photograph`)}?width=500&height=400&nologo=true&seed=42`;
-    }
-    return "";
-  };
-
-  const [imgSrc, setImgSrc] = useState<string>(() => getInitialUrl(src, word));
+  const [imgSrc, setImgSrc] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const nextUrl = getInitialUrl(src, word);
-    setImgSrc(nextUrl);
+    let isMounted = true;
     setLoading(true);
     setFailed(false);
+
+    async function loadVisualClue() {
+      // If src is already a direct valid image URL (e.g. Unsplash or direct HTTP image)
+      if (src && src.trim().length > 0 && (src.startsWith("http://") || src.startsWith("https://")) && !src.includes("pollinations.ai")) {
+        if (isMounted) {
+          setImgSrc(src);
+        }
+        return;
+      }
+
+      // Construct prompt from word or src
+      const promptToUse = word
+        ? getImagePrompt(word)
+        : (src && !src.startsWith("http") ? src : "a clear realistic photograph for vocabulary learning");
+
+      const resolvedUrl = await fetchWorkerImageUrl(promptToUse);
+      if (isMounted) {
+        if (resolvedUrl) {
+          setImgSrc(resolvedUrl);
+        } else {
+          setFailed(true);
+          setLoading(false);
+        }
+      }
+    }
+
+    loadVisualClue();
+
+    return () => {
+      isMounted = false;
+    };
   }, [src, word]);
 
   return (
@@ -61,15 +84,8 @@ export function QuizImage({ src, alt, word, className = "" }: QuizImageProps) {
           referrerPolicy="no-referrer"
           onLoad={() => setLoading(false)}
           onError={() => {
-            const fallbackPollinationsUrl = word
-              ? `https://image.pollinations.ai/prompt/${encodeURIComponent(`a clear photograph strongly highlighting the concept of "${word}", clear subject focus on ${word}, realistic photograph`)}?width=500&height=400&nologo=true&seed=99`
-              : "";
-            if (fallbackPollinationsUrl && imgSrc !== fallbackPollinationsUrl) {
-              setImgSrc(fallbackPollinationsUrl);
-            } else {
-              setFailed(true);
-              setLoading(false);
-            }
+            setFailed(true);
+            setLoading(false);
           }}
           className={`w-full h-full object-cover transition-opacity duration-300 hover:scale-105 ${
             loading ? "opacity-0" : "opacity-100"

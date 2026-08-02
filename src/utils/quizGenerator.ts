@@ -21,15 +21,66 @@ export function getImageSearchTerm(word: Word): string {
   return word.word;
 }
 
-// Helper function to generate relevant Pollinations AI image URL
-export function getPollinationsImageUrl(word: Word | string, definition?: string): string {
+// Helper function to generate relevant visual concept prompt
+export function getImagePrompt(word: Word | string, definition?: string): string {
   const wordText = typeof word === 'string' ? word : word.word;
   const defText = typeof word === 'object' ? (definition || word.definition || "") : (definition || "");
   const categoryText = typeof word === 'object' && word.category ? `, category: ${word.category}` : '';
 
-  // Focus strongly on the target word itself and its definition, rather than example sentence details
-  const promptText = `a clear, realistic photograph strongly emphasizing and clearly illustrating the target concept of "${wordText}" (${defText || 'target concept'})${categoryText}, clear subject focus on ${wordText}, high quality, clean background`;
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?width=500&height=400&nologo=true`;
+  // Focus strongly on the target word itself and its definition
+  return `a clear, realistic photograph strongly emphasizing and clearly illustrating the target concept of "${wordText}" (${defText || 'target concept'})${categoryText}, clear subject focus on ${wordText}, high quality, clean background`;
+}
+
+// Backward compatible helper
+export function getPollinationsImageUrl(word: Word | string, definition?: string): string {
+  return getImagePrompt(word, definition);
+}
+
+// Helper function to fetch image URL from Cloudflare Worker endpoint
+export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string): Promise<string> {
+  if (!promptText) return "";
+  try {
+    const res = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: promptText, proxyKey })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.imageUrl) return data.imageUrl;
+    }
+  } catch (err) {
+    // server API call failed
+  }
+
+  try {
+    const workerUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
+    const headers: Record<string, string> = {};
+    if (proxyKey) {
+      headers["X-Proxy-Key"] = proxyKey;
+    }
+    const directRes = await fetch(workerUrl, {
+      method: "GET",
+      headers
+    });
+    if (directRes.ok) {
+      const text = await directRes.text();
+      let url = text.trim();
+      if (url.startsWith("{")) {
+        try {
+          const p = JSON.parse(url);
+          url = p.url || p.imageUrl || url;
+        } catch (e) {}
+      }
+      if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+        return url;
+      }
+    }
+  } catch (e) {
+    console.warn("Direct image worker call failed:", e);
+  }
+
+  return "";
 }
 
 // Helper to generate confusing sound-alike or misspelling distractors
@@ -124,7 +175,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     else if (type === 'picture') {
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
-      imageUrl = getPollinationsImageUrl(word);
+      imageUrl = getImagePrompt(word);
 
       let potentialWrongs = allWords
         .filter(w => w.id !== word.id)

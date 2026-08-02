@@ -6,6 +6,21 @@ import { LLMProviderOption } from "../types";
  */
 export const PROVIDER_OPTIONS: LLMProviderOption[] = [
   {
+    id: "openrouter",
+    name: "OpenRouter",
+    tagline: "Unified API gateway for 100+ AI models",
+    defaultModel: "deepseek/deepseek-chat",
+    models: [
+      "deepseek/deepseek-chat",
+      "openrouter/free", 
+      "meta-llama/llama-3.3-70b-instruct",
+      "google/gemma-2-9b-it"
+    ],
+    defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
+    directBaseUrl: "https://openrouter.ai/api/v1",
+    requiresKey: false
+  },
+  {
     id: "openai",
     name: "OpenAI",
     tagline: "GPT series models",
@@ -27,21 +42,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     ],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
     directBaseUrl: "https://api.groq.com/openai/v1",
-    requiresKey: false
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    tagline: "Unified API gateway for 100+ AI models",
-    defaultModel: "openrouter/free",
-    models: [
-      "openrouter/free", 
-      "meta-llama/llama-3.3-70b-instruct",
-      "google/gemma-2-9b-it",
-      "deepseek/deepseek-chat"
-    ],
-    defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
-    directBaseUrl: "https://openrouter.ai/api/v1",
     requiresKey: false
   },
   {

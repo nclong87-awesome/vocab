@@ -71,6 +71,7 @@ export interface Word {
 }
 
 export interface WordSense {
+  word?: string;
   partOfSpeech: string;
   definition: string;
   translation: string;
