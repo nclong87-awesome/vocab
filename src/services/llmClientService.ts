@@ -653,6 +653,7 @@ export async function callLLMClientSide(
   };
 
   if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "gemini" || provider === "9flare") {
+    reqBody.stream = false;
     reqBody.response_format = { type: "json_object" };
   }
 

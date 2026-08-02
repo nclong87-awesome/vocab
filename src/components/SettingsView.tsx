@@ -16,7 +16,6 @@ import {
   Bot,
   Globe,
   Database,
-  ArrowRight,
   Download,
   Upload,
   HardDrive,
@@ -26,20 +25,17 @@ import {
   CheckCircle2,
   Zap,
   BookmarkCheck,
-  ShieldCheck,
   ExternalLink,
   Cloud,
-  Info,
   Smartphone,
-  DownloadCloud,
   HelpCircle
 } from "lucide-react";
 import { APP_VERSION } from "../config/appVersion";
-import { TTSConfig, TTSEngine, LLMConfig, LLMProvider, SavedProviderConfig } from "../types";
+import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
 import { testLlmConnection } from "../services/llmClientService";
-import { speakText, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode, getVoicesForLanguage, isVoiceInstalledForLanguage } from "../utils/ttsService";
+import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage } from "../utils/ttsService";
 import { 
   exportIndexedDBDatabase, 
   importIndexedDBDatabase, 
