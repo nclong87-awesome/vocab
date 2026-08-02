@@ -405,18 +405,6 @@ export async function callLLMClientSide(
   const proxyKey = sharedProxyKey;
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
-  if (requiresKey && !apiKey) {
-    throw new LLMConnectionError({
-      statusCode: 401,
-      errorType: "INVALID_KEY",
-      userMessage: `API Key is required for ${provider.toUpperCase()}. Please enter a valid API key in LLM settings.`,
-      originalMessage: "Missing API key",
-      isRetryable: false,
-      provider
-    });
-  }
-
   const effectiveApiKey = apiKey || "";
   const proxyKeyToUse = proxyKey || apiKey || "";
 
