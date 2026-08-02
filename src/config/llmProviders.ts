@@ -33,12 +33,12 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "openrouter",
     name: "OpenRouter",
     tagline: "Unified API gateway for 100+ AI models",
-    defaultModel: "openai/gpt-oss-20b",
+    defaultModel: "openrouter/free",
     models: [
       "openrouter/free", 
-      "google/gemma-4-26b-a4b-it", 
-      "google/gemma-4-31b-it", 
-      "openai/gpt-oss-20b"
+      "meta-llama/llama-3.3-70b-instruct",
+      "google/gemma-2-9b-it",
+      "deepseek/deepseek-chat"
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://openrouter.ai/api/v1",

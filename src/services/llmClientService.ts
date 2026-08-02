@@ -636,8 +636,8 @@ export async function callLLMClientSide(
   }
 
   if (provider === "openrouter") {
+    headers["HTTP-Referer"] = typeof window !== "undefined" ? window.location.origin : "https://aistudio.google.com";
     headers["X-Title"] = "Vocabulary Learner";
-    headers["Model"] = model || "openrouter/free";
   }
 
   const effectiveTargetBaseUrl = baseUrl || defaultBaseUrl;
@@ -646,37 +646,105 @@ export async function callLLMClientSide(
   }
 
   const reqBody: any = {
-    model: model || (provider === "gemini" ? "gemini-3.6-flash" : provider === "ollama" ? "llama3.2" : "gpt-5.4-mini"),
+    model: model || (provider === "openrouter" ? "openrouter/free" : provider === "gemini" ? "gemini-3.6-flash" : provider === "ollama" ? "llama3.2" : "gpt-5.4-mini"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
       { role: "user", content: prompt }
-    ]
+    ],
+    stream: false
   };
 
-  if (provider === "openai" || provider === "groq" || provider === "openrouter" || provider === "gemini" || provider === "9flare") {
-    reqBody.stream = false;
+  // OpenRouter models often return 400 "JSON mode is not supported for this model". Only pass response_format for other supported providers.
+  if (provider === "openai" || provider === "groq" || provider === "gemini" || provider === "9flare") {
     reqBody.response_format = { type: "json_object" };
   }
 
   return callWithRetry(
     async () => {
-      const res = await fetch(targetUrl, {
+      let res = await fetch(targetUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(reqBody)
       });
+
+      // If request failed with 400 due to response_format or JSON mode incompatibility, retry once without response_format
+      if (!res.ok && reqBody.response_format) {
+        const errClone = res.clone();
+        const errText = await errClone.text().catch(() => "");
+        if (errText.includes("JSON mode") || errText.includes("response_format") || res.status === 400) {
+          delete reqBody.response_format;
+          res = await fetch(targetUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(reqBody)
+          });
+        }
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
         throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
       }
 
-      const data: any = await res.json();
-      const text = data.choices?.[0]?.message?.content || "";
-      return cleanJsonResponse(text);
+      return await parseOpenAiStyleResponse(res);
     },
     { maxRetries: 3, provider }
   );
+}
+
+// Helper to parse OpenAI/OpenRouter style responses (supporting both standard JSON objects and SSE/streaming lines)
+async function parseOpenAiStyleResponse(res: Response): Promise<string> {
+  const contentType = res.headers.get("content-type") || "";
+  const rawText = await res.text();
+
+  if (!rawText || !rawText.trim()) {
+    throw new Error("Empty response received from API.");
+  }
+
+  // 1. If content-type is event-stream or text contains SSE data lines ("data: {...}")
+  if (contentType.includes("event-stream") || rawText.includes("data: ")) {
+    let accumulatedText = "";
+    const lines = rawText.split("\n");
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || !line.startsWith("data:")) continue;
+      
+      const dataStr = line.slice(5).trim();
+      if (dataStr === "[DONE]") continue;
+
+      try {
+        const parsed = JSON.parse(dataStr);
+        const delta = parsed.choices?.[0]?.delta?.content || 
+                      parsed.choices?.[0]?.message?.content || 
+                      parsed.choices?.[0]?.text || 
+                      "";
+        accumulatedText += delta;
+      } catch {
+        // Ignore unparseable chunk lines
+      }
+    }
+
+    if (accumulatedText) {
+      return cleanJsonResponse(accumulatedText);
+    }
+  }
+
+  // 2. Try parsing as standard JSON response
+  try {
+    const data = JSON.parse(rawText);
+    const content = data.choices?.[0]?.message?.content || 
+                    data.choices?.[0]?.delta?.content || 
+                    data.choices?.[0]?.text || 
+                    "";
+    if (content) {
+      return cleanJsonResponse(content);
+    }
+  } catch {
+    // Not standard JSON object
+  }
+
+  // 3. Fallback to cleanJsonResponse on rawText
+  return cleanJsonResponse(rawText);
 }
 
 // Helper to check if running in a pure static client host (e.g. GitHub Pages)
