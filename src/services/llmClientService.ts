@@ -41,17 +41,10 @@ export function cleanJsonResponse(rawText: string): string {
 }
 
 const VALID_GEMINI_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-pro",
-  "gemini-2.5-flash-lite",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
   "gemini-3.6-flash",
   "gemini-3.6-flash-lite",
   "gemini-3.5-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-2.5-flash-preview-tts",
-  "gemini-3.1-flash-tts-preview"
+  "gemini-3.5-flash-lite"
 ];
 
 // Sanitize model names for provider
@@ -488,7 +481,7 @@ export async function callLLMClientSide(
       }
 
       const primaryModel = model || "gemini-3.6-flash";
-      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
+      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
 
       return callWithRetry(
         async (attempt) => {
@@ -544,9 +537,8 @@ export async function callLLMClientSide(
         { maxRetries: 3, provider: "gemini" }
       );
     } else {
-      // Worker proxy handling for Gemini (uses native generateContent endpoint rather than /chat/completions)
       const primaryModel = model || "gemini-3.6-flash";
-      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
+      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
 
       return callWithRetry(
         async (attempt) => {

@@ -4,7 +4,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   engine: 'browser',
   speed: 1.0,
   pitch: 1.0,
-  model: 'gemini-3.1-flash-tts-preview',
+  model: 'gemini-3.6-flash',
   voice: 'Puck',
   autoPlayAudioInQuiz: true
 };
@@ -372,7 +372,7 @@ export async function speakText(
       body: JSON.stringify({
         text: normalizedText,
         engine: activeEngine,
-        model: ttsConfig?.model || 'gemini-3.1-flash-tts-preview',
+        model: ttsConfig?.model || 'gemini-3.6-flash',
         voice: ttsConfig?.voice || 'Puck',
         apiKey: ttsConfig?.apiKey,
         customEndpoint: ttsConfig?.customEndpoint,

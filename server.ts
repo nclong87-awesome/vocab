@@ -57,7 +57,7 @@ function cleanJsonResponse(rawText: string): string {
   return cleaned;
 }
 
-const VALID_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash", "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"];
+const VALID_GEMINI_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
 
 // Sanitize model names for provider
 function sanitizeModel(provider: string, model?: string): string {
@@ -261,11 +261,11 @@ async function callLLM(
       });
 
       const primaryModel = model || "gemini-3.6-flash";
-      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"].filter(m => m !== primaryModel);
+      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
 
       let lastError: any = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
-        const activeModel = attempt === 1 ? primaryModel : (fallbackModels[0] || "gemini-2.0-flash");
+        const activeModel = attempt === 1 ? primaryModel : (fallbackModels[0] || "gemini-3.6-flash");
         try {
           const response = await ai.models.generateContent({
             model: activeModel,
@@ -1038,10 +1038,7 @@ app.post("/api/tts", async (req, res) => {
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
       });
 
-      let targetTtsModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-3.1-flash-tts-preview";
-      if (targetTtsModel.startsWith("gemini-") && !targetTtsModel.endsWith("-tts-preview")) {
-        targetTtsModel = "gemini-3.1-flash-tts-preview";
-      }
+      const targetTtsModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-3.6-flash";
       const response = await ai.models.generateContent({
         model: targetTtsModel,
         contents: `Pronounce the following text clearly for a language learner: "${text}"`,
