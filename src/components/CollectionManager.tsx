@@ -30,6 +30,7 @@ interface CollectionManagerProps {
   ttsConfig?: TTSConfig;
   targetLanguage?: string;
   nativeLanguage?: string;
+  onLlmApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
 }
 
 export default function CollectionManager({
@@ -43,6 +44,7 @@ export default function CollectionManager({
   ttsConfig = DEFAULT_TTS_CONFIG,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
+  onLlmApiError
 }: CollectionManagerProps) {
   // Re-generate individual word loading states
   const [regeneratingWordId, setRegeneratingWordId] = useState<string | null>(null);
@@ -69,16 +71,21 @@ export default function CollectionManager({
   };
 
   // Re-generate details for an existing word using AI
-  const handleRegenerateWord = async (word: Word) => {
+  const handleRegenerateWord = async (word: Word, overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     setRegeneratingWordId(word.id);
     setRegeneratedSuccessWordId(null);
 
     try {
+      if (!configToUse) {
+        throw new Error("No LLM configuration available.");
+      }
+
       const details = await autofillWordService({
         word: word.word,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig: configToUse
       });
 
       if (onUpdateWords) {
@@ -105,9 +112,13 @@ export default function CollectionManager({
         setRegeneratedSuccessWordId(word.id);
         setTimeout(() => setRegeneratedSuccessWordId(null), 4000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to re-generate word details:", err);
-      alert("Unable to re-generate word details. Please verify your AI Key.");
+      if (onLlmApiError && configToUse) {
+        onLlmApiError(err, configToUse, (newConfig) => handleRegenerateWord(word, newConfig));
+      } else {
+        alert("Unable to re-generate word details. Please verify your AI Key.");
+      }
     } finally {
       setRegeneratingWordId(null);
     }

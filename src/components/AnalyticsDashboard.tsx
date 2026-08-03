@@ -30,6 +30,7 @@ interface AnalyticsDashboardProps {
   onToggleLearnedWord: (wordId: string) => void;
   onToggleStarWord: (wordId: string) => void;
   onNavigateToView: (view: 'chatview' | 'manage' | 'analytics' | 'settings') => void;
+  onLlmApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
 }
 
 export default function AnalyticsDashboard({
@@ -40,6 +41,7 @@ export default function AnalyticsDashboard({
   onStartPracticeWeakWords,
   onToggleLearnedWord,
   onToggleStarWord,
+  onLlmApiError
 }: AnalyticsDashboardProps) {
   // AI analysis state
   const [aiReport, setAiReport] = useState<PerformanceAnalysisResult | null>(null);
@@ -89,22 +91,31 @@ export default function AnalyticsDashboard({
   }, [stats]);
 
   // Run AI Analysis
-  const handleRunAiAnalysis = async () => {
+  const handleRunAiAnalysis = async (overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     setIsAnalyzing(true);
     setAnalysisError(null);
     try {
+      if (!configToUse) {
+        throw new Error("No LLM configuration available.");
+      }
+
       const result = await analyzePerformanceService({
         stats,
         totalWords: totalWordsCount,
         masteredWords,
         improvingWords,
-        llmConfig
+        llmConfig: configToUse
       });
 
       setAiReport(result);
     } catch (err: any) {
       console.error("AI Performance Analysis failed:", err);
-      setAnalysisError(err.message || "Unable to generate AI analysis. Please verify your LLM key or connection.");
+      if (onLlmApiError && configToUse) {
+        onLlmApiError(err, configToUse, (newConfig) => handleRunAiAnalysis(newConfig));
+      } else {
+        setAnalysisError(err.message || "Unable to generate AI analysis. Please verify your LLM key or connection.");
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -200,7 +211,7 @@ export default function AnalyticsDashboard({
           )}
 
           <button
-            onClick={handleRunAiAnalysis}
+            onClick={() => handleRunAiAnalysis()}
             disabled={isAnalyzing}
             className="px-5 py-3 bg-stone-800 hover:bg-stone-700 text-stone-100 border border-stone-700 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer"
           >

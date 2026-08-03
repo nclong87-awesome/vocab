@@ -33,6 +33,7 @@ import OnboardingModal from "./components/OnboardingModal";
 
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
+import AiErrorFallbackModal from "./components/layout/AiErrorFallbackModal";
 
 export default function App() {
   const [words, setWords] = useState<Word[]>([]);
@@ -54,6 +55,59 @@ export default function App() {
 
   const [isLlmModalOpen, setIsLlmModalOpen] = useState<boolean>(false);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState<boolean>(false);
+
+  // AI Error Fallback Modal State
+  const [aiErrorModal, setAiErrorModal] = useState<{
+    isOpen: boolean;
+    errorMessage: string;
+    failedProvider: LLMProvider;
+    retryAction: ((newConfig: LLMConfig) => void) | null;
+  }>({
+    isOpen: false,
+    errorMessage: "",
+    failedProvider: "openrouter",
+    retryAction: null
+  });
+
+  const handleAiApiError = useCallback((
+    err: any, 
+    currentConfig: LLMConfig, 
+    retryAction: (newConfig: LLMConfig) => void
+  ) => {
+    const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to communicate with AI provider.");
+    const provider = currentConfig.provider || "openrouter";
+
+    setAiErrorModal({
+      isOpen: true,
+      errorMessage: rawMsg,
+      failedProvider: provider,
+      retryAction
+    });
+  }, []);
+
+  const handleConfirmSwitchAndRetry = useCallback((newProvider: LLMProvider) => {
+    const retryFn = aiErrorModal.retryAction;
+
+    // 1. Switch active provider using switchActiveProvider
+    const updatedConfig = switchActiveProvider(llmConfig, newProvider);
+    setLlmConfig(updatedConfig);
+    saveLLMConfigToDB(updatedConfig).catch(e => console.error("Error saving updated LLM config:", e));
+
+    // 2. Close modal
+    setAiErrorModal({
+      isOpen: false,
+      errorMessage: "",
+      failedProvider: "openrouter",
+      retryAction: null
+    });
+
+    // 3. Re-trigger the API call with updated config
+    if (retryFn) {
+      setTimeout(() => {
+        retryFn(updatedConfig);
+      }, 50);
+    }
+  }, [aiErrorModal.retryAction, llmConfig]);
 
   // Global Language Preferences
   const [targetLanguage, setTargetLanguage] = useState<string>(() => {
@@ -216,7 +270,8 @@ export default function App() {
   } | null>(null);
 
   // Start the conversational in-chat quiz
-  const startChatQuiz = async () => {
+  const startChatQuiz = async (overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
     setConversationalState("none");
     setPendingWordSenses(null);
@@ -252,7 +307,7 @@ export default function App() {
         words: quizWords,
         targetLanguage,
         nativeLanguage,
-        llmConfig,
+        llmConfig: configToUse,
         stats
       });
 
@@ -285,8 +340,9 @@ export default function App() {
       };
 
       setChatMessages([introMsg]);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error starting chat quiz:", e);
+      handleAiApiError(e, configToUse, (newConfig) => startChatQuiz(newConfig));
     } finally {
       setIsTyping(false);
     }
@@ -435,17 +491,26 @@ export default function App() {
   };
 
   // Send message to AI Tutor
-  const handleSendChatMessage = async (text: string) => {
+  const handleSendChatMessage = async (text: string, overrideConfig?: LLMConfig) => {
     if (!text.trim()) return;
 
-    const newUserMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      role: "user",
-      content: text,
-      timestamp: new Date().toISOString()
-    };
+    const configToUse = overrideConfig || llmConfig;
 
-    setChatMessages(prev => [...prev, newUserMessage]);
+    let newUserMessage: ChatMessage | null = null;
+    setChatMessages(prev => {
+      const last = prev[prev.length - 1];
+      if (last && last.role === "user" && last.content === text.trim()) {
+        newUserMessage = last;
+        return prev;
+      }
+      newUserMessage = {
+        id: `msg-${Date.now()}`,
+        role: "user",
+        content: text.trim(),
+        timestamp: new Date().toISOString()
+      };
+      return [...prev, newUserMessage];
+    });
 
     if (activeQuiz) {
       handleQuizAnswer(text.trim());
@@ -454,7 +519,7 @@ export default function App() {
 
     if (conversationalState === "adding_word") {
       setConversationalState("none");
-      await handleConversationalAddWord(text.trim());
+      await handleConversationalAddWord(text.trim(), undefined, configToUse);
       return;
     }
 
@@ -480,29 +545,35 @@ export default function App() {
     if (conversationalState === "generating_topic_count") {
       setConversationalState("none");
       const count = parseInt(text.trim(), 10) || 5;
-      await handleConversationalGenerateWords(pendingTopicSubject, count);
+      await handleConversationalGenerateWords(pendingTopicSubject, count, configToUse);
       return;
     }
 
     if (conversationalState === "fixing_grammar") {
       setConversationalState("none");
-      await handleConversationalFixGrammar(text.trim());
+      await handleConversationalFixGrammar(text.trim(), configToUse);
       return;
     }
 
     setIsTyping(true);
 
     try {
-      const payloadMessages = [...chatMessages, newUserMessage].map(m => ({
+      const payloadMessages = chatMessages.map(m => ({
         role: m.role,
         content: m.content
       }));
+
+      // Ensure latest user message is in payload
+      const lastPayloadMsg = payloadMessages[payloadMessages.length - 1];
+      if (!lastPayloadMsg || lastPayloadMsg.role !== "user" || lastPayloadMsg.content !== text.trim()) {
+        payloadMessages.push({ role: "user", content: text.trim() });
+      }
 
       const result = await sendChatMessageService({
         messages: payloadMessages,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig: configToUse
       });
 
       const newAssistantMessage: ChatMessage = {
@@ -516,22 +587,18 @@ export default function App() {
       setChatMessages(prev => [...prev, newAssistantMessage]);
     } catch (err: any) {
       console.error("Chat error:", err);
-      setChatMessages(prev => [
-        ...prev,
-        {
-          id: `msg-err-${Date.now()}`,
-          role: "assistant",
-          content: `⚠️ **Oops, I hit a snag communicating with the AI!**\n\n*Error details:* ${err.message || "Failed to reach LLM provider"}.\n\nPlease check your internet connection or verify your API key settings in the Settings side panel.`,
-          timestamp: new Date().toISOString()
-        }
-      ]);
+      // DO NOT show the error in the chat view! Show fallback modal & provider picker instead.
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleSendChatMessage(text, newConfig);
+      });
     } finally {
       setIsTyping(false);
     }
   };
 
   // Add individual word directly from chat suggestions (or conversational input)
-  const handleConversationalAddWord = async (wordText: string, hint?: string) => {
+  const handleConversationalAddWord = async (wordText: string, hint?: string, overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     const normalizedWordText = wordText.trim().toLowerCase();
     const existingMatch = words.find(w => w.word.trim().toLowerCase() === normalizedWordText);
     if (existingMatch) {
@@ -568,7 +635,7 @@ export default function App() {
         hint: hint,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig: configToUse
       });
 
       // Filter valid senses that contain a definition or translation
@@ -723,17 +790,9 @@ export default function App() {
       }
     } catch (err: any) {
       console.error(err);
-      setChatMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-add-err-${Date.now()}`,
-            role: "assistant",
-            content: `⚠️ **Failed to add word:** ${err.message || "Unknown error"}. Nothing was added to your database collection.`,
-            timestamp: new Date().toISOString()
-          }
-        ];
+      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleConversationalAddWord(wordText, hint, newConfig);
       });
     } finally {
       setIsTyping(false);
@@ -741,7 +800,8 @@ export default function App() {
   };
 
   // Analyze conversation history to detect candidate words for user confirmation
-  const handleAnalyzeChatWords = async () => {
+  const handleAnalyzeChatWords = async (overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `analyze-chat-status-${Date.now()}`;
 
@@ -760,7 +820,7 @@ export default function App() {
         messages: chatMessages,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig: configToUse
       });
 
       const wordsFound = res.detectedWords || [];
@@ -831,17 +891,9 @@ export default function App() {
       });
     } catch (err: any) {
       console.error(err);
-      setChatMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-chat-words-err-${Date.now()}`,
-            role: "assistant",
-            content: `⚠️ **Failed to analyze chat conversation:** ${err.message || "Unknown error"}`,
-            timestamp: new Date().toISOString()
-          }
-        ];
+      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleAnalyzeChatWords(newConfig);
       });
     } finally {
       setIsTyping(false);
@@ -849,11 +901,10 @@ export default function App() {
   };
 
   // Analyze image uploaded by user using selected AI model to extract vocabulary
-  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string) => {
+  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string, overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     const userMsgId = `user-img-${Date.now()}`;
     const statusMsgId = `status-img-${Date.now()}`;
-
-    const providerName = getProviderDisplayName(llmConfig.provider);
 
     // Append user message with image thumbnail
     const userPromptText = customPrompt ? customPrompt : "Analyzed photo for vocabulary";
@@ -882,7 +933,7 @@ export default function App() {
         customPrompt,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig: configToUse
       });
 
       const items = res.vocabularyItems || [];
@@ -936,17 +987,9 @@ export default function App() {
       });
     } catch (err: any) {
       console.error(err);
-      setChatMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-img-err-${Date.now()}`,
-            role: "assistant",
-            content: `⚠️ **Failed to analyze image:** ${err.message || "Unknown error"}. Make sure your image is clear and under 5MB.`,
-            timestamp: new Date().toISOString()
-          }
-        ];
+      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleAnalyzeImageVocab(imageDataUrl, customPrompt, newConfig);
       });
     } finally {
       setIsTyping(false);
@@ -1179,7 +1222,8 @@ export default function App() {
     setChatMessages([promptMsg]);
   };
 
-  const handleConversationalGenerateWords = async (topic: string, count: number) => {
+  const handleConversationalGenerateWords = async (topic: string, count: number, overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `gen-words-status-${Date.now()}`;
     setChatMessages(prev => [
@@ -1199,7 +1243,7 @@ export default function App() {
         targetLanguage,
         nativeLanguage,
         count,
-        llmConfig
+        llmConfig: configToUse
       });
 
       const generatedList = res.words || [];
@@ -1273,17 +1317,9 @@ export default function App() {
       });
     } catch (err: any) {
       console.error("Failed to generate words from topic:", err);
-      setChatMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `gen-words-fail-${Date.now()}`,
-            role: "assistant",
-            content: `❌ **Unable to generate words for "${topic}".**\n\n*Error details:* ${err.message || "Please verify your AI connection or API key in Settings."}`,
-            timestamp: new Date().toISOString()
-          }
-        ];
+      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleConversationalGenerateWords(topic, count, newConfig);
       });
     } finally {
       setIsTyping(false);
@@ -1304,7 +1340,8 @@ export default function App() {
     setChatMessages([promptMsg]);
   };
 
-  const handleConversationalFixGrammar = async (userText: string) => {
+  const handleConversationalFixGrammar = async (userText: string, overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
     setChatMessages(prev => [
@@ -1322,7 +1359,7 @@ export default function App() {
         userText,
         targetLanguage,
         nativeLanguage,
-        llmConfig
+        llmConfig: configToUse
       });
 
       const fixedSentence = res.fixedSentence || userText;
@@ -1386,17 +1423,9 @@ export default function App() {
       });
     } catch (err: any) {
       console.error("Fix Grammar Error:", err);
-      setChatMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-grammar-err-${Date.now()}`,
-            role: "assistant",
-            content: `⚠️ **Failed to analyze sentence:** ${err.message || "Unknown error"}. Please check your AI configuration in Settings.`,
-            timestamp: new Date().toISOString()
-          }
-        ];
+      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleConversationalFixGrammar(userText, newConfig);
       });
     } finally {
       setIsTyping(false);
@@ -1784,6 +1813,7 @@ export default function App() {
               onUpdateWords={handleUpdateWords}
               targetLanguage={targetLanguage}
               nativeLanguage={nativeLanguage}
+              onLlmApiError={handleAiApiError}
             />
           )}
 
@@ -1799,6 +1829,7 @@ export default function App() {
               onToggleLearnedWord={(wordId) => handleToggleLearned(wordId)}
               onToggleStarWord={(wordId) => handleToggleStar(wordId)}
               onNavigateToView={(view) => handleSetView(view)}
+              onLlmApiError={handleAiApiError}
             />
           )}
 
@@ -1914,6 +1945,16 @@ export default function App() {
         onCompleteOnboarding={handleCompleteOnboarding}
         onClose={() => setIsOnboardingModalOpen(false)}
         canDismiss={localStorage.getItem("vocab_learner_onboarding_completed") === "true"}
+      />
+
+      {/* AI Error & Provider Switch Fallback Modal */}
+      <AiErrorFallbackModal
+        isOpen={aiErrorModal.isOpen}
+        errorMessage={aiErrorModal.errorMessage}
+        currentProvider={aiErrorModal.failedProvider}
+        llmConfig={llmConfig}
+        onConfirmSwitchAndRetry={handleConfirmSwitchAndRetry}
+        onClose={() => setAiErrorModal(prev => ({ ...prev, isOpen: false }))}
       />
 
     </div>
