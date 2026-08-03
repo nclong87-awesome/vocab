@@ -580,7 +580,7 @@ export default function SettingsView({
                 </p>
               </div>
 
-              <div className="md:col-span-1 flex items-center h-full">
+              <div className="md:col-span-1 flex h-full">
                 {availableVoices.length > 0 ? (
                   <div className="w-full">
                     {isTargetVoiceMissing ? (
@@ -820,9 +820,17 @@ export default function SettingsView({
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {PROVIDER_OPTIONS.map((p) => {
               const isActive = llmConfig.provider === p.id;
+              const isCustom = p.id === "custom";
               const saved = savedProvidersMap[p.id];
-              const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
-              const currentModel = saved ? saved.model : p.defaultModel;
+              
+              // Direct API Key is present if saved profile has a non-empty apiKey, or if active config uses a direct API key
+              const hasDirectKey = Boolean(
+                (saved?.apiKey && saved.apiKey.trim() !== "") ||
+                (isActive && !llmConfig.useProxy && llmConfig.apiKey && llmConfig.apiKey.trim() !== "")
+              );
+
+              const isCustomSaved = isCustom && Boolean(saved && (saved.baseUrl || saved.apiKey || saved.model));
+              const currentModel = saved?.model || (isActive ? llmConfig.model : p.defaultModel);
 
               return (
                 <div
@@ -830,8 +838,10 @@ export default function SettingsView({
                   className={`p-4 border flex flex-col justify-between space-y-3 transition-all ${
                     isActive 
                       ? "bg-stone-900 text-white border-stone-900 shadow-sm" 
-                      : isSaved 
-                      ? "bg-amber-50/40 border-amber-200 text-stone-900" 
+                      : hasDirectKey
+                      ? "bg-blue-50/40 border-blue-200 text-stone-900" 
+                      : isCustomSaved
+                      ? "bg-amber-50/40 border-amber-200 text-stone-900"
                       : "bg-white border-stone-200 text-stone-800"
                   }`}
                 >
@@ -843,13 +853,25 @@ export default function SettingsView({
                           <Zap className="w-2.5 h-2.5 fill-current" />
                           ACTIVE
                         </span>
-                      ) : isSaved ? (
-                        <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1 shrink-0">
-                          <BookmarkCheck className="w-2.5 h-2.5" />
-                          SAVED
+                      ) : hasDirectKey ? (
+                        <span className="text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300 px-2 py-0.5 flex items-center gap-1 shrink-0">
+                          <Key className="w-2.5 h-2.5" />
+                          DIRECT KEY
                         </span>
+                      ) : isCustom ? (
+                        isCustomSaved ? (
+                          <span className="text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1 shrink-0">
+                            <BookmarkCheck className="w-2.5 h-2.5" />
+                            SAVED
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-stone-400 shrink-0">Not Saved</span>
+                        )
                       ) : (
-                        <span className="text-[10px] font-medium text-stone-400 shrink-0">Not Saved</span>
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 flex items-center gap-1 shrink-0">
+                          <BookmarkCheck className="w-2.5 h-2.5" />
+                          PROXY WORKER
+                        </span>
                       )}
                     </div>
                     <p className={`text-[11px] font-serif italic line-clamp-1 ${isActive ? "text-stone-300" : "text-stone-500"}`}>
@@ -866,48 +888,76 @@ export default function SettingsView({
                     </div>
                     <div className="flex justify-between items-center gap-1">
                       <span className="opacity-60 shrink-0">Key:</span>
-                      <span className="truncate">
-                        {saved?.apiKey 
-                          ? `••••${saved.apiKey.slice(-4)}` 
-                          : p.id === "chatjimmy" || p.id === "ollama" ? "Default Key" : p.requiresKey ? "None" : "Free / Local"}
+                      <span className="truncate font-medium">
+                        {hasDirectKey && (saved?.apiKey || llmConfig.apiKey)
+                          ? `••••${(saved?.apiKey || llmConfig.apiKey).slice(-4)} (Direct)`
+                          : isCustom
+                          ? isCustomSaved ? "Custom Endpoint" : "None"
+                          : "Default Key (Proxy Worker)"}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 pt-1">
-                    {!isActive && isSaved && (
+                    {/* Switch button: shown for non-active providers */}
+                    {!isActive && (
+                      isCustom ? (
+                        isCustomSaved && (
+                          <button
+                            type="button"
+                            onClick={() => handleSwitchProvider(p.id)}
+                            className="flex-1 py-1.5 px-2 bg-stone-900 hover:bg-black text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            title="Switch to custom endpoint"
+                          >
+                            <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                            <span>Switch</span>
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchProvider(p.id)}
+                          className="flex-1 py-1.5 px-2 bg-stone-900 hover:bg-black text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                          title="Switch to this provider profile"
+                        >
+                          <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                          <span>Switch</span>
+                        </button>
+                      )
+                    )}
+
+                    {/* Edit or Configure button */}
+                    {isCustom && !isCustomSaved ? (
                       <button
                         type="button"
-                        onClick={() => handleSwitchProvider(p.id)}
-                        className="flex-1 py-1.5 px-2 bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer"
-                        title="Switch to this provider profile"
+                        onClick={() => onOpenLlmModal("custom")}
+                        className="w-full py-1.5 px-2.5 bg-stone-900 hover:bg-black text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
                       >
-                        <Zap className="w-3 h-3 text-amber-400 fill-current" />
-                        <span>Switch</span>
+                        <Key className="w-3 h-3 text-amber-400" />
+                        <span>Configure</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onOpenLlmModal(p.id)}
+                        className={`py-1.5 px-2.5 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                          isActive && !hasDirectKey
+                            ? "w-full bg-white text-stone-900 hover:bg-stone-100 border border-stone-200" 
+                            : "bg-white border border-stone-300 text-stone-900 hover:bg-stone-100"
+                        }`}
+                      >
+                        <Key className="w-3 h-3" />
+                        <span>Edit</span>
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => onOpenLlmModal(p.id)}
-                      className={`py-1.5 px-2.5 text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                        isActive 
-                          ? "w-full bg-white text-stone-900 hover:bg-stone-100" 
-                          : isSaved 
-                          ? "bg-white border border-stone-300 text-stone-900 hover:bg-stone-100" 
-                          : "w-full bg-stone-900 hover:bg-black text-white"
-                      }`}
-                    >
-                      <Key className="w-3 h-3" />
-                      <span>{isSaved ? "Edit" : "Configure"}</span>
-                    </button>
-
-                    {isSaved && !isActive && (
+                    {/* Remove button: only for Custom (if saved) or Non-Custom if Direct API Key is set */}
+                    {((isCustom && isCustomSaved) || (!isCustom && hasDirectKey)) && (
                       <button
                         type="button"
                         onClick={() => handleRemoveProvider(p.id)}
                         className="p-1.5 bg-white hover:bg-red-50 border border-stone-200 hover:border-red-300 text-stone-400 hover:text-red-600 transition-all cursor-pointer"
-                        title="Remove stored credentials for this provider"
+                        title={isCustom ? "Remove custom endpoint configuration" : "Remove direct API key (falls back to default proxy worker)"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

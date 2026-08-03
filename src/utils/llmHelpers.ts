@@ -1,5 +1,5 @@
 import { LLMConfig, LLMProvider, SavedProviderConfig, SavedProvidersMap } from "../types";
-import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 
 /**
  * Gets saved providers map from LLMConfig with safety fallbacks
@@ -124,16 +124,17 @@ export function switchActiveProvider(
 
     return {
       provider: targetProviderId,
-      model: targetSaved.model,
-      apiKey: targetSaved.apiKey,
+      model: targetSaved.model || PROVIDER_OPTIONS.find(p => p.id === targetProviderId)?.defaultModel || "openai/gpt-oss-120b",
+      apiKey: targetSaved.apiKey || "",
       proxyKey: effectiveProxyKey,
       baseUrl: targetSaved.baseUrl || "",
+      useProxy: targetSaved.useProxy !== undefined ? targetSaved.useProxy : true,
       isLoggedIn: true,
       savedProviders: updatedMap
     };
   }
 
-  // Fallback to provider defaults
+  // Fallback to provider defaults (proxy worker)
   const providerMeta = PROVIDER_OPTIONS.find(p => p.id === targetProviderId) || PROVIDER_OPTIONS[0];
 
   return {
@@ -142,49 +143,65 @@ export function switchActiveProvider(
     apiKey: "",
     proxyKey: sharedProxyKey,
     baseUrl: providerMeta.defaultBaseUrl || "",
-    isLoggedIn: !providerMeta.requiresKey,
+    useProxy: true,
+    isLoggedIn: true,
     savedProviders: savedMap
   };
 }
 
 /**
- * Remove a saved provider profile from LLMConfig
+ * Removes custom/direct API key configuration for a provider, falling back to proxy worker.
+ * For 'custom' provider, completely deletes the custom profile.
  */
 export function removeProviderProfile(
   currentConfig: LLMConfig,
   targetProviderId: LLMProvider
 ): LLMConfig {
   const savedMap = getSavedProvidersMap(currentConfig);
-  delete savedMap[targetProviderId];
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === targetProviderId);
 
-  // If we just deleted the active provider, switch active to another saved one or default
-  if (currentConfig.provider === targetProviderId) {
-    const remainingKeys = Object.keys(savedMap) as LLMProvider[];
-    if (remainingKeys.length > 0) {
-      const nextKey = remainingKeys[0];
-      const nextProfile = savedMap[nextKey];
-      return {
-        provider: nextKey,
-        model: nextProfile.model,
-        apiKey: nextProfile.apiKey,
-        proxyKey: nextProfile.proxyKey,
-        baseUrl: nextProfile.baseUrl || "",
-        isLoggedIn: nextProfile.isLoggedIn,
-        savedProviders: savedMap
-      };
-    } else {
-      // Return default unconfigured
-      const defaultMeta = PROVIDER_OPTIONS[0];
+  if (targetProviderId === "custom") {
+    delete savedMap["custom"];
+    if (currentConfig.provider === "custom") {
+      const defaultMeta = PROVIDER_OPTIONS.find(p => p.id === DEFAULT_PROVIDER_ID) || PROVIDER_OPTIONS[0];
       return {
         provider: defaultMeta.id,
         model: defaultMeta.defaultModel,
         apiKey: "",
-        proxyKey: "",
+        proxyKey: currentConfig.proxyKey || "",
         baseUrl: defaultMeta.defaultBaseUrl || "",
-        isLoggedIn: false,
-        savedProviders: {}
+        useProxy: true,
+        isLoggedIn: true,
+        savedProviders: savedMap
       };
     }
+    return {
+      ...currentConfig,
+      savedProviders: savedMap
+    };
+  }
+
+  // Non-custom provider: remove direct API key and fall back to default proxy worker
+  if (savedMap[targetProviderId]) {
+    savedMap[targetProviderId] = {
+      ...savedMap[targetProviderId],
+      apiKey: "",
+      useProxy: true,
+      baseUrl: providerMeta?.defaultBaseUrl || "",
+      isLoggedIn: true,
+      lastUsedAt: new Date().toISOString()
+    };
+  }
+
+  if (currentConfig.provider === targetProviderId) {
+    return {
+      ...currentConfig,
+      apiKey: "",
+      useProxy: true,
+      baseUrl: providerMeta?.defaultBaseUrl || "",
+      isLoggedIn: true,
+      savedProviders: savedMap
+    };
   }
 
   return {

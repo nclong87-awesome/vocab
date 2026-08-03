@@ -69,7 +69,7 @@ export default function QuickAiSwitcher({
 
     onSwitchProvider(pId);
 
-    if (targetMeta.requiresKey && (!saved || !saved.apiKey)) {
+    if (pId === 'custom' && (!saved || (!saved.baseUrl && !saved.apiKey))) {
       onOpenLlmModal(pId);
       setIsOpen(false);
     } else {
@@ -298,12 +298,8 @@ export default function QuickAiSwitcher({
                           <Check className="w-3.5 h-3.5" />
                         </div>
                       ) : (
-                        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
-                          isSaved 
-                            ? "bg-stone-900 text-white border-stone-950 hover:bg-black" 
-                            : "bg-white text-stone-700 border-stone-200/90 hover:bg-stone-100"
-                        }`}>
-                          {isSaved ? "Switch" : p.requiresKey ? "Key Req" : "Free"}
+                        <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border bg-stone-900 text-white border-stone-950 hover:bg-black transition-colors">
+                          {p.id === 'custom' && (!saved || (!saved.baseUrl && !saved.apiKey)) ? "Configure" : "Switch"}
                         </span>
                       )}
                     </div>
