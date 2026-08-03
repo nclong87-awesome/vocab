@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
 import { generateQuizQuestions, generateConfusers, getImagePrompt } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
+import { isVisionSupported, getProviderDisplayName } from "../utils/llmHelpers";
 
 // Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
 function sanitizeUnescapedJsonStrings(str: string): string {
@@ -1821,6 +1822,9 @@ export async function analyzeImageVocabService(params: {
 }> {
   const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
 
+  const provider = llmConfig?.provider || "gemini";
+  const model = llmConfig?.model || (provider === "gemini" ? "gemini-3.6-flash" : provider === "openai" ? "gpt-4o-mini" : "");
+
   if (!isStaticHost()) {
     try {
       const res = await fetch("/api/analyze-image-vocab", {
@@ -1831,8 +1835,15 @@ export async function analyzeImageVocabService(params: {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {
-      console.warn("Server API analyze-image-vocab failed, using client fallback:", e);
+      const errorJson = await res.json().catch(() => null);
+      if (errorJson?.error) {
+        throw new Error(errorJson.error);
+      }
+    } catch (e: any) {
+      if (e?.message && !e.message.includes("fetch")) {
+        throw e;
+      }
+      console.warn("Server API analyze-image-vocab failed, attempting client fallback:", e);
     }
   }
 
@@ -1858,41 +1869,80 @@ ${customPrompt ? `Specific focus/instruction from user: "${customPrompt}"` : ""}
   ]
 }`;
 
-  // Client-side fallback using Gemini API SDK if available
-  const apiKey = llmConfig?.apiKey || "";
-  const sharedProxyKey = llmConfig?.proxyKey || "";
-  const effectiveKey = apiKey || sharedProxyKey;
+  // Client-side fallback using selected provider
+  if (provider === "gemini" || model.includes("gemini")) {
+    const geminiSaved = llmConfig?.savedProviders?.gemini;
+    const apiKey = geminiSaved?.apiKey || llmConfig?.apiKey || "";
+    const sharedProxyKey = llmConfig?.proxyKey || "";
+    const effectiveKey = apiKey || sharedProxyKey;
 
-  let mimeType = "image/jpeg";
-  let base64Data = imageDataUrl;
-  if (imageDataUrl.startsWith("data:")) {
-    const parts = imageDataUrl.split(";base64,");
-    mimeType = parts[0].replace("data:", "") || "image/jpeg";
-    base64Data = parts[1] || "";
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey: effectiveKey || "local-key"
-  });
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3.6-flash",
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { inlineData: { mimeType, data: base64Data } },
-          { text: prompt }
-        ]
-      }
-    ],
-    config: {
-      systemInstruction,
-      responseMimeType: "application/json"
+    let mimeType = "image/jpeg";
+    let base64Data = imageDataUrl;
+    if (imageDataUrl.startsWith("data:")) {
+      const parts = imageDataUrl.split(";base64,");
+      mimeType = parts[0].replace("data:", "") || "image/jpeg";
+      base64Data = parts[1] || "";
     }
-  });
 
-  const cleaned = cleanJsonResponse(response.text || "");
-  return JSON.parse(cleaned);
+    const ai = new GoogleGenAI({
+      apiKey: effectiveKey || "local-key"
+    });
+
+    const response = await ai.models.generateContent({
+      model: model || "gemini-3.6-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: prompt }
+          ]
+        }
+      ],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const cleaned = cleanJsonResponse(response.text || "");
+    return JSON.parse(cleaned);
+  } else {
+    // OpenAI-compatible client fallback for vision models
+    const apiKey = llmConfig?.apiKey || "";
+    const baseUrl = llmConfig?.baseUrl || "https://openai.nclong87.workers.dev/v1";
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
+    const targetUrl = cleanBaseUrl + "/chat/completions";
+
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDesc },
+          {
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: imageDataUrl } },
+              { type: "text", text: prompt }
+            ]
+          }
+        ]
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`${getProviderDisplayName(provider)} Vision Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content || "";
+    return JSON.parse(cleanJsonResponse(content));
+  }
 }
 

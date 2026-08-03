@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from "./types";
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
-import { switchActiveProvider, getSavedProvidersMap } from "./utils/llmHelpers";
+import { switchActiveProvider, getSavedProvidersMap, getProviderDisplayName, isVisionSupported } from "./utils/llmHelpers";
 import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeChatWordsService, analyzeImageVocabService } from "./services/llmClientService";
 import { generateQuizQuestions } from "./utils/quizGenerator";
 import { QuizQuestion } from "./types";
@@ -849,10 +849,12 @@ export default function App() {
     }
   };
 
-  // Analyze image uploaded by user using Gemini Vision to extract vocabulary
+  // Analyze image uploaded by user using selected AI model to extract vocabulary
   const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string) => {
     const userMsgId = `user-img-${Date.now()}`;
     const statusMsgId = `status-img-${Date.now()}`;
+
+    const providerName = getProviderDisplayName(llmConfig.provider);
 
     // Append user message with image thumbnail
     const userPromptText = customPrompt ? customPrompt : "Analyzed photo for vocabulary";
@@ -868,7 +870,7 @@ export default function App() {
       {
         id: statusMsgId,
         role: "assistant",
-        content: `📷 *Analyzing your picture with Gemini Vision to extract vocabulary in ${targetLanguage}...*`,
+        content: `📷 *Analyzing your picture with ${providerName} to extract vocabulary in ${targetLanguage}...*`,
         timestamp: new Date().toISOString()
       }
     ]);

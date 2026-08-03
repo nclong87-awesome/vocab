@@ -9,7 +9,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.APP_PORT ? parseInt(process.env.APP_PORT, 10) : 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 interface LLMRequestConfig {
   provider?: string;
@@ -104,7 +105,7 @@ function sanitizeModel(provider: string, model?: string): string {
     return model || "llama3.1-8B";
   }
   if (provider === "groq") {
-    return model || "llama-3.3-70b-versatile";
+    return model || "openai/gpt-oss-20b";
   }
   if (provider === "openrouter") {
     return model || "deepseek/deepseek-chat";
@@ -114,7 +115,61 @@ function sanitizeModel(provider: string, model?: string): string {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "llama-3.3-70b-versatile" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat");
+  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "openai/gpt-oss-20b" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat");
+}
+
+function getProviderDisplayName(provider?: string): string {
+  if (!provider) return "Selected AI";
+  if (provider === "gemini") return "Google Gemini";
+  if (provider === "openai") return "OpenAI";
+  if (provider === "groq") return "Groq";
+  if (provider === "openrouter") return "OpenRouter";
+  if (provider === "chatjimmy") return "ChatJimmy AI";
+  if (provider === "ollama") return "Ollama";
+  if (provider === "9flare") return "9Flare";
+  if (provider === "custom") return "Custom Endpoint";
+  return provider;
+}
+
+function isVisionSupported(provider?: string, model?: string): boolean {
+  const p = (provider || "").toLowerCase().trim();
+  const m = (model || "").toLowerCase().trim();
+
+  // Gemini provider & Gemini models always support vision
+  if (p === "gemini" || m.includes("gemini")) {
+    return true;
+  }
+
+  // OpenAI models: gpt-4o, gpt-4o-mini, gpt-4.1, gpt-5, gpt-4-turbo, gpt-4-vision
+  if (p === "openai") {
+    if (
+      m.includes("gpt-4o") || 
+      m.includes("gpt-4.1") || 
+      m.includes("gpt-5") || 
+      m.includes("turbo") || 
+      m.includes("vision")
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // Keyword match for vision capabilities across OpenRouter, Ollama, Groq, 9Flare, Custom, etc.
+  if (
+    m.includes("vision") ||
+    m.includes("gpt-4o") ||
+    m.includes("claude-3") ||
+    m.includes("claude-haiku") ||
+    m.includes("llava") ||
+    m.includes("minicpm") ||
+    m.includes("multimodal") ||
+    m.includes("llama-3.2-11b-vision") ||
+    m.includes("llama-3.2-90b-vision")
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 // Parse server-side LLM error
@@ -685,15 +740,6 @@ async function callLLMWithImage(
 ): Promise<string> {
   const provider = llmConfig?.provider || "gemini";
   const model = sanitizeModel(provider, llmConfig?.model);
-  const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
-  const sharedProxyKey = llmConfig?.proxyKey ||
-    (llmConfig?.savedProviders ? Object.values(llmConfig.savedProviders).find(p => Boolean(p?.proxyKey))?.proxyKey : "") ||
-    process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
-  const proxyKey = sharedProxyKey;
-  const baseUrl = llmConfig?.baseUrl || "";
-
-  let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
-  const effectiveProxyKey = proxyKey || apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "") || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
 
   // Parse image Data URL into mimeType and raw base64 data
   let mimeType = "image/jpeg";
@@ -704,92 +750,194 @@ async function callLLMWithImage(
     base64Data = parts[1] || "";
   }
 
-  const effectiveGeminiUrl = baseUrl || "https://gemini.nclong87.workers.dev/v1beta";
-  const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
+  // Provider 1: Gemini or Gemini models
+  if (provider === "gemini" || model.includes("gemini")) {
+    const geminiConfig = llmConfig?.savedProviders?.gemini;
+    const apiKey = geminiConfig?.apiKey || (llmConfig?.provider === "gemini" ? llmConfig?.apiKey : "") || process.env.GEMINI_API_KEY || "";
+    const sharedProxyKey = llmConfig?.proxyKey ||
+      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
+      process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
+    const proxyKey = geminiConfig?.proxyKey || sharedProxyKey;
+    
+    let effectiveGeminiUrl = geminiConfig?.baseUrl || (llmConfig?.provider === "gemini" ? llmConfig?.baseUrl : "") || "https://gemini.nclong87.workers.dev/v1beta";
+    if (effectiveGeminiUrl && !effectiveGeminiUrl.includes("gemini") && !effectiveGeminiUrl.includes("googleapis.com")) {
+      effectiveGeminiUrl = "https://gemini.nclong87.workers.dev/v1beta";
+    }
 
-  if (!isCustomOrProxyUrl) {
-    const ai = new GoogleGenAI({
-      apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
-      httpOptions: { 
-        headers: { 
-          'User-Agent': 'aistudio-build',
-          ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
-        } 
-      }
-    });
+    let effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || "";
+    const effectiveProxyKey = proxyKey || effectiveApiKey || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
 
-    const activeModel = model || "gemini-3.6-flash";
-    const response = await ai.models.generateContent({
-      model: activeModel,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType, data: base64Data } },
-            { text: prompt }
-          ]
+    const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
+
+    if (!isCustomOrProxyUrl) {
+      const ai = new GoogleGenAI({
+        apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
+        httpOptions: { 
+          headers: { 
+            'User-Agent': 'aistudio-build',
+            ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
+          } 
         }
-      ],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
+      });
 
-    if (!response.text) {
-      throw new Error("Empty response received from Gemini Vision model.");
-    }
-    return cleanJsonResponse(response.text);
-  } else {
-    // Worker proxy endpoint for Gemini generateContent
-    const activeModel = model || "gemini-3.6-flash";
-    const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
-    const targetEndpoint = `${cleanBaseUrl}/models/${activeModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    };
-    if (effectiveProxyKey) {
-      headers["X-Proxy-Key"] = effectiveProxyKey;
-    }
-    if (effectiveApiKey) {
-      headers["x-goog-api-key"] = effectiveApiKey;
-    }
-
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType, data: base64Data } },
-            { text: prompt }
-          ]
+      const activeModel = model || "gemini-3.6-flash";
+      const response = await ai.models.generateContent({
+        model: activeModel,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: base64Data } },
+              { text: prompt }
+            ]
+          }
+        ],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json"
         }
-      ],
-      systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-      generationConfig: {
-        responseMimeType: "application/json"
+      });
+
+      if (!response.text) {
+        throw new Error("Empty response received from Gemini Vision model.");
       }
-    };
+      return cleanJsonResponse(response.text);
+    } else {
+      const activeModel = model || "gemini-3.6-flash";
+      const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
+      const targetEndpoint = `${cleanBaseUrl}/models/${activeModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
 
-    const res = await fetch(targetEndpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload)
-    });
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+      if (effectiveProxyKey) {
+        headers["X-Proxy-Key"] = effectiveProxyKey;
+      }
+      if (effectiveApiKey) {
+        headers["x-goog-api-key"] = effectiveApiKey;
+      }
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error(`Gemini Vision Worker Proxy Error (${res.status}): ${errText}`);
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType, data: base64Data } },
+              { text: prompt }
+            ]
+          }
+        ],
+        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      };
+
+      const res = await fetch(targetEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Gemini Vision Worker Proxy Error (${res.status}): ${errText}`);
+      }
+
+      const data: any = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!text) {
+        throw new Error("Empty text response from Gemini Vision worker proxy.");
+      }
+      return cleanJsonResponse(text);
     }
-
-    const data: any = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    if (!text) {
-      throw new Error("Empty text response from Gemini Vision worker proxy.");
-    }
-    return cleanJsonResponse(text);
   }
+
+  // Provider 2: OpenAI / OpenRouter / Groq / Ollama / 9Flare / Custom Vision model
+  let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
+  if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
+  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
+  if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
+  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
+
+  const providerSavedConfig = llmConfig?.savedProviders?.[provider];
+  const apiKey = providerSavedConfig?.apiKey || llmConfig?.apiKey || "";
+  const baseUrl = providerSavedConfig?.baseUrl || llmConfig?.baseUrl || "";
+  const sharedProxyKey = llmConfig?.proxyKey ||
+    (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
+    process.env.PROXY_KEY || process.env.PROXY_SECRET || "";
+  const proxyKey = providerSavedConfig?.proxyKey || sharedProxyKey;
+
+  let effectiveTargetBaseUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : defaultBaseUrl;
+  effectiveTargetBaseUrl = effectiveTargetBaseUrl.replace(/\/+$/, "");
+  if (effectiveTargetBaseUrl.endsWith("/chat/completions")) {
+    effectiveTargetBaseUrl = effectiveTargetBaseUrl.slice(0, -"/chat/completions".length).replace(/\/+$/, "");
+  }
+
+  const targetUrl = effectiveTargetBaseUrl + "/chat/completions";
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  };
+
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  } else if (provider !== "ollama" && proxyKey) {
+    headers["Authorization"] = `Bearer ${proxyKey}`;
+  }
+
+  if (provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://aistudio.google.com";
+    headers["X-Title"] = "Vocabulary Learner";
+  }
+
+  if (proxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
+    headers["X-Proxy-Key"] = proxyKey || apiKey || "";
+  }
+
+  const reqBody = {
+    model: model,
+    messages: [
+      {
+        role: "system",
+        content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON."
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            "image_url": {
+              url: imageDataUrl
+            }
+          },
+          {
+            type: "text",
+            text: prompt
+          }
+        ]
+      }
+    ]
+  };
+
+  const res = await fetch(targetUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(reqBody)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => res.statusText);
+    throw new Error(`${getProviderDisplayName(provider)} Vision Error (${res.status}): ${errText}`);
+  }
+
+  const data: any = await res.json();
+  const content = data.choices?.[0]?.message?.content || "";
+  if (!content) {
+    throw new Error(`Empty text response from ${getProviderDisplayName(provider)} Vision model.`);
+  }
+  return cleanJsonResponse(content);
 }
 
 // 1. Health check endpoint

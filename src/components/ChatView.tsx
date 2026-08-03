@@ -52,6 +52,7 @@ export default function ChatView({
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat">("all");
@@ -71,48 +72,135 @@ export default function ChatView({
     }, 50);
   };
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processImageFile = (file: File, defaultName?: string) => {
     if (!file.type.startsWith("image/")) {
-      showToast("⚠️ Please select an image file (PNG, JPG, WEBP)");
+      showToast("⚠️ Please select or paste a valid image file (PNG, JPG, WEBP)");
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
-        setSelectedImage({
-          dataUrl: reader.result,
-          name: file.name
-        });
-        showToast("📷 Image attached! Click Send to analyze with AI Vision.");
+        const name = defaultName || file.name || "Attached Photo";
+        const rawDataUrl = reader.result;
+        
+        // Compress / resize large images to max 1600px dimension for fast & reliable AI Vision analysis
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const optimizedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+            setSelectedImage({
+              dataUrl: optimizedDataUrl,
+              name
+            });
+          } else {
+            setSelectedImage({
+              dataUrl: rawDataUrl,
+              name
+            });
+          }
+          showToast("📷 Image attached! Click Send or press Enter to analyze with AI Vision.");
+        };
+        img.onerror = () => {
+          setSelectedImage({
+            dataUrl: rawDataUrl,
+            name
+          });
+          showToast("📷 Image attached! Click Send or press Enter to analyze with AI Vision.");
+        };
+        img.src = rawDataUrl;
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processImageFile(file);
     e.target.value = "";
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setSelectedImage({
-            dataUrl: reader.result,
-            name: file.name
-          });
-          showToast("📷 Image dropped! Hit Send to analyze.");
-        }
-      };
-      reader.readAsDataURL(file);
+    if (file) {
+      processImageFile(file, `Dropped Image (${file.name})`);
     }
   };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          processImageFile(file, `Pasted Image (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`);
+        }
+        break;
+      }
+    }
+  };
+
+  // Listen for global window paste events when chat is active
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            processImageFile(file, `Pasted Image (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`);
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => {
+      window.removeEventListener("paste", handleGlobalPaste);
+    };
+  }, []);
 
   const handleScrollDock = (direction: "left" | "right") => {
     if (dockScrollRef.current) {
@@ -455,8 +543,38 @@ export default function ChatView({
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 h-full bg-white rounded-none sm:rounded-xl border border-stone-200 overflow-hidden shadow-none relative" id="chat-container">
+    <div 
+      className="flex flex-col flex-1 min-h-0 h-full bg-white rounded-none sm:rounded-xl border border-stone-200 overflow-hidden shadow-none relative" 
+      id="chat-container"
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onPaste={handlePaste}
+    >
       
+      {/* Drag & Drop Visual Overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="absolute inset-0 z-50 bg-blue-900/65 backdrop-blur-xs border-2 border-dashed border-blue-400 rounded-xl flex flex-col items-center justify-center text-white p-6 text-center space-y-3 pointer-events-none"
+          >
+            <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg animate-bounce">
+              <Upload className="w-8 h-8 text-white" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold">Drop Image to Extract Vocabulary</h3>
+              <p className="text-xs text-blue-100 max-w-xs font-medium">
+                Gemini Vision will analyze the image and extract key vocabulary items in {targetLanguage}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Toast Notification Banner */}
       <AnimatePresence>
         {toast && (
@@ -1017,7 +1135,7 @@ export default function ChatView({
                 ? "bg-blue-600 text-white shadow-xs scale-102"
                 : "bg-stone-100 hover:bg-stone-200/80 text-stone-700 hover:scale-105"
             }`}
-            title="Scan picture for vocabulary with AI Vision (Upload PNG/JPG)"
+            title="Paste image (Ctrl+V), drop photo, or pick file to extract vocabulary with AI Vision"
             id="chat-upload-photo-btn"
           >
             <Camera className="w-5 h-5" />
@@ -1031,8 +1149,8 @@ export default function ChatView({
             disabled={isTyping}
             placeholder={
               selectedImage
-                ? "Add an optional focus note (e.g. 'Focus on food items')..."
-                : `Chat with your AI Coach in ${targetLanguage} or ${nativeLanguage}...`
+                ? "Add an optional focus note (e.g. 'Focus on food items') or press Enter to analyze..."
+                : `Chat or paste an image (Ctrl+V) / pick photo to extract vocabulary...`
             }
             className="flex-1 bg-stone-50 hover:bg-stone-100/50 focus:bg-white text-stone-900 border border-stone-200 focus:border-stone-400 focus:ring-0 rounded-xl px-4 py-3 text-sm sm:text-base transition-colors placeholder:text-stone-400 font-medium"
             id="chat-text-input"
