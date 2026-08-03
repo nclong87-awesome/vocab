@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
+import { resizeImageDataUrl } from "../utils/llmHelpers";
 import FormattedMessage from "./chat/FormattedMessage";
 import QuizImage from "./quiz/QuizImage";
 
@@ -72,61 +73,31 @@ export default function ChatView({
     }, 50);
   };
 
-  const processImageFile = (file: File, defaultName?: string) => {
+  const processImageFile = async (file: File, defaultName?: string) => {
     if (!file.type.startsWith("image/")) {
       showToast("⚠️ Please select or paste a valid image file (PNG, JPG, WEBP)");
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       if (typeof reader.result === "string") {
         const name = defaultName || file.name || "Attached Photo";
         const rawDataUrl = reader.result;
         
         // Compress / resize large images to max 1600px dimension for fast & reliable AI Vision analysis
-        const img = new Image();
-        img.onload = () => {
-          const MAX_DIM = 1600;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > MAX_DIM || height > MAX_DIM) {
-            if (width > height) {
-              height = Math.round((height * MAX_DIM) / width);
-              width = MAX_DIM;
-            } else {
-              width = Math.round((width * MAX_DIM) / height);
-              height = MAX_DIM;
-            }
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const optimizedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-            setSelectedImage({
-              dataUrl: optimizedDataUrl,
-              name
-            });
-          } else {
-            setSelectedImage({
-              dataUrl: rawDataUrl,
-              name
-            });
-          }
-          showToast("📷 Image attached! Click Send or press Enter to analyze with AI Vision.");
-        };
-        img.onerror = () => {
+        try {
+          const optimizedDataUrl = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
+          setSelectedImage({
+            dataUrl: optimizedDataUrl,
+            name
+          });
+        } catch (err) {
           setSelectedImage({
             dataUrl: rawDataUrl,
             name
           });
-          showToast("📷 Image attached! Click Send or press Enter to analyze with AI Vision.");
-        };
-        img.src = rawDataUrl;
+        }
+        showToast("📷 Image attached! Click Send or press Enter to analyze with AI Vision.");
       }
     };
     reader.readAsDataURL(file);

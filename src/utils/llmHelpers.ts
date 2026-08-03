@@ -210,3 +210,62 @@ export function getProviderDisplayName(provider?: string): string {
   if (provider === "custom") return "Custom Endpoint";
   return provider;
 }
+
+/**
+ * Resizes a base64 image Data URL on the client side using HTML5 Canvas
+ * to limit maximum dimension (default 1600px) and compress JPEG quality (0.85).
+ */
+export function resizeImageDataUrl(dataUrl: string, maxDimension = 1600, quality = 0.85): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !dataUrl || !dataUrl.startsWith("data:image")) {
+      return resolve(dataUrl);
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      if (width <= maxDimension && height <= maxDimension && dataUrl.length < 500000) {
+        // Already within acceptable bounds
+        return resolve(dataUrl);
+      }
+
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        return resolve(dataUrl);
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      try {
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressedDataUrl);
+      } catch (err) {
+        console.warn("Client-side image resize failed, using original:", err);
+        resolve(dataUrl);
+      }
+    };
+
+    img.onerror = () => {
+      resolve(dataUrl);
+    };
+
+    img.src = dataUrl;
+  });
+}

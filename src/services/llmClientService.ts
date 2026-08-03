@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
 import { generateQuizQuestions, generateConfusers, getImagePrompt } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
-import { getProviderDisplayName } from "../utils/llmHelpers";
+import { getProviderDisplayName, resizeImageDataUrl } from "../utils/llmHelpers";
 
 // Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
 function sanitizeUnescapedJsonStrings(str: string): string {
@@ -1820,7 +1820,16 @@ export async function analyzeImageVocabService(params: {
     context?: string;
   }>;
 }> {
-  const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
+  let { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
+
+  // Resize client-side before sending to server or worker if image is large
+  if (typeof window !== "undefined" && imageDataUrl && imageDataUrl.startsWith("data:image")) {
+    try {
+      imageDataUrl = await resizeImageDataUrl(imageDataUrl, 1600, 0.85);
+    } catch (resizeErr) {
+      console.warn("Client side image resize warning:", resizeErr);
+    }
+  }
 
   const provider = llmConfig?.provider || "gemini";
   const model = llmConfig?.model || (provider === "gemini" ? "gemini-3.6-flash" : provider === "openai" ? "gpt-4o-mini" : "");
