@@ -758,8 +758,6 @@ export default function LlmLoginModal({
                         ? "gsk_..."
                         : provider === "openrouter"
                         ? "sk-or-v1-..."
-                        : provider === "anthropic" 
-                        ? "sk-ant-..." 
                         : "Enter your API key..."
                     }
                     className="w-full bg-stone-50 border border-stone-300 p-2.5 pr-10 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"

@@ -395,40 +395,12 @@ async function callLLM(
     }
   }
 
-  if (provider === "anthropic") {
-    const endpoint = (baseUrl || "https://api.anthropic.com") + "/v1/messages";
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "x-api-key": effectiveApiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-        ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
-      },
-      body: JSON.stringify({
-        model: model || "claude-3-5-haiku-20241022",
-        max_tokens: 2048,
-        system: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only complying with schema:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON.",
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Anthropic Error (${res.status}): ${errText}`);
-    }
-
-    const data: any = await res.json();
-    const contentText = data.content?.[0]?.text || "";
-    return cleanJsonResponse(contentText);
-  }
-
   // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (when using worker/proxy)
   let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
   if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
+  if (provider === "ollama") defaultBaseUrl = "https://ollama.nclong87.workers.dev/v1";
   if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
   if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/v1beta";
 
