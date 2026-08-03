@@ -636,6 +636,123 @@ async function generateWorkerImage(promptText: string, effectiveProxyKey: string
   return "";
 }
 
+// Multimodal LLM invocation (for Vision / Image analysis)
+async function callLLMWithImage(
+  prompt: string,
+  imageDataUrl: string,
+  systemInstruction: string,
+  schemaDescription: string,
+  llmConfig?: LLMRequestConfig
+): Promise<string> {
+  const provider = llmConfig?.provider || "gemini";
+  const model = sanitizeModel(provider, llmConfig?.model);
+  const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
+  const sharedProxyKey = llmConfig?.proxyKey ||
+    (llmConfig?.savedProviders ? Object.values(llmConfig.savedProviders).find(p => Boolean(p?.proxyKey))?.proxyKey : "") ||
+    process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
+  const proxyKey = sharedProxyKey;
+  const baseUrl = llmConfig?.baseUrl || "";
+
+  let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
+  const effectiveProxyKey = proxyKey || apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "") || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
+
+  // Parse image Data URL into mimeType and raw base64 data
+  let mimeType = "image/jpeg";
+  let base64Data = imageDataUrl;
+  if (imageDataUrl.startsWith("data:")) {
+    const parts = imageDataUrl.split(";base64,");
+    mimeType = parts[0].replace("data:", "") || "image/jpeg";
+    base64Data = parts[1] || "";
+  }
+
+  const effectiveGeminiUrl = baseUrl || "https://gemini.nclong87.workers.dev/v1beta";
+  const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
+
+  if (!isCustomOrProxyUrl) {
+    const ai = new GoogleGenAI({
+      apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
+      httpOptions: { 
+        headers: { 
+          'User-Agent': 'aistudio-build',
+          ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
+        } 
+      }
+    });
+
+    const activeModel = model || "gemini-3.6-flash";
+    const response = await ai.models.generateContent({
+      model: activeModel,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: prompt }
+          ]
+        }
+      ],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json"
+      }
+    });
+
+    if (!response.text) {
+      throw new Error("Empty response received from Gemini Vision model.");
+    }
+    return cleanJsonResponse(response.text);
+  } else {
+    // Worker proxy endpoint for Gemini generateContent
+    const activeModel = model || "gemini-3.6-flash";
+    const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
+    const targetEndpoint = `${cleanBaseUrl}/models/${activeModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (effectiveProxyKey) {
+      headers["X-Proxy-Key"] = effectiveProxyKey;
+    }
+    if (effectiveApiKey) {
+      headers["x-goog-api-key"] = effectiveApiKey;
+    }
+
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: base64Data } },
+            { text: prompt }
+          ]
+        }
+      ],
+      systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    };
+
+    const res = await fetch(targetEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`Gemini Vision Worker Proxy Error (${res.status}): ${errText}`);
+    }
+
+    const data: any = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!text) {
+      throw new Error("Empty text response from Gemini Vision worker proxy.");
+    }
+    return cleanJsonResponse(text);
+  }
+}
+
 // 1. Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
@@ -710,41 +827,42 @@ app.post("/api/test-llm", async (req, res) => {
   }
 });
 
-// 4. Auto-fill a single word
+// 4. Auto-fill a single word or deduce word from natural language description
 app.post("/api/autofill-word", async (req, res) => {
   try {
     const { word, hint, targetLanguage, nativeLanguage, llmConfig } = req.body;
 
     if (!word) {
-      return res.status(400).json({ error: "Word is required" });
+      return res.status(400).json({ error: "Word or description is required" });
     }
 
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
-    const prompt = `Provide detailed vocabulary learning material for the input word or expression "${word}".
+    const prompt = `Provide detailed vocabulary learning material for the input string "${word}".
 ${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL: Generate the definition, translation, and example sentence matching this exact scope/context hint.` : ""}
 Target language being learned: "${userTarget}".
 User's native language: "${userNative}".
 
-CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
-- AUTOMATIC LANGUAGE DETECTION: The user input string "${word}" could be entered in EITHER the Target Language ("${userTarget}") OR the Native Language ("${userNative}").
-  * If "${word}" is in the user's Native Language ("${userNative}"), e.g. "xin chào" in Vietnamese:
-    - Translate it into the Target Language ("${userTarget}"), e.g. "hello".
-    - Set the "word" field strictly to the Target Language word (e.g. "hello").
-    - Set "translation" strictly to the Native Language term (e.g. "xin chào").
-  * If "${word}" is already in the Target Language ("${userTarget}"), e.g. "hello":
-    - Set "word" strictly to "${word}" (or its canonical Target Language form).
-    - Set "translation" strictly to its direct translation in the user's Native Language ("${userNative}"), e.g. "xin chào".
+CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
+1. NATURAL LANGUAGE REQUEST OR DESCRIPTION:
+   - If "${word}" is a descriptive sentence, phrase, or request asking for a word (e.g., "i want to add a word in programming, related to if condition simplify", "word for feeling persistent", "how to say thank you formally"):
+     * DEDUCE and IDENTIFY the exact single best vocabulary term or expression in "${userTarget}" (e.g. "Ternary operator", "Perseverance", "Much obliged").
+     * Set the "word" field strictly to this deduced Target Language word/expression.
+     * Set "translation" strictly to its direct translation in "${userNative}".
+2. SINGLE WORD / EXPRESSION ENTRY:
+   - If "${word}" is in the user's Native Language ("${userNative}"), e.g. "xin chào": translate it into "${userTarget}" (e.g. "hello"). Set "word" to "${userTarget}" term and "translation" to "${userNative}" term.
+   - If "${word}" is already in "${userTarget}" (e.g. "hello"): set "word" strictly to "${word}" and "translation" to "${userNative}".
+
 - "definition": Write clear, concise definition/explanation STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide for the target language word.
 - "partOfSpeech": noun, verb, adjective, adverb, idiom, interjection, or expression.
 - "example": A realistic, high-quality example sentence in the target language (${userTarget}), e.g. "Hello, how are you?".
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
-- "category": High-level category or topic classification (e.g. "Travel & Hospitality", "Business & Work", "Technology", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
+- "category": High-level category or topic classification (e.g. "Technology & Programming", "Travel & Hospitality", "Business & Work", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.`;
 
-    const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, map native language inputs to the target language, and output target language vocabulary details with native language translations.`;
+    const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations.`;
     const schemaDesc = `{
   "word": "string (the word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "pronunciation": "string",
@@ -768,45 +886,45 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   }
 });
 
-// 4.1. Check multiple definitions or exact definition with context hint of a word
+// 4.1. Check multiple definitions or deduce vocabulary word from natural language request
 app.post("/api/check-word-definitions", async (req, res) => {
   try {
     const { word, hint, targetLanguage, nativeLanguage, llmConfig } = req.body;
 
     if (!word) {
-      return res.status(400).json({ error: "Word is required" });
+      return res.status(400).json({ error: "Word or description is required" });
     }
 
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
-    const prompt = `Analyze the input word or expression "${word}".
-${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL MANDATORY REQUIREMENT: The user wants to add "${word}" specifically in the scope/context described above.` : ""}
+    const prompt = `Analyze the input word, phrase, or natural language request: "${word}".
+${hint ? `Scope / Context Hint: "${hint}"\n` : ""}
 Target language: "${userTarget}".
 User's native language: "${userNative}".
 
-CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
-1. AUTOMATIC LANGUAGE DETECTION: The user input string "${word}" could be entered in EITHER the Target Language ("${userTarget}") OR the Native Language ("${userNative}").
-   - If "${word}" is in the user's Native Language ("${userNative}"), e.g. "xin chào" in Vietnamese:
-     * Translate it into the Target Language ("${userTarget}"), e.g. "hello".
-     * Set the top-level "word" field and the "word" field inside each sense strictly to the Target Language word (e.g. "hello").
-     * Set "translation" strictly to the Native Language term (e.g. "xin chào").
-   - If "${word}" is already in the Target Language ("${userTarget}"), e.g. "hello":
-     * Set "word" strictly to "${word}" (or its canonical Target Language form).
-     * Set "translation" strictly to its direct translation in the user's Native Language ("${userNative}"), e.g. "xin chào".
+CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
+1. NATURAL LANGUAGE REQUEST / CONCEPT DESCRIPTION:
+   - The user input "${word}" might be a sentence, description, or request asking for a word (e.g., "i want to add a word in programming, related to if condition simplify", "a word for persistent in Spanish", "how to say thank you formally").
+   - If "${word}" is a description, request, or question:
+     * DEDUCE and IDENTIFY 1 to 3 candidate vocabulary words or expressions in "${userTarget}" that best match the described concept (e.g. "Ternary operator", "Guard clause", "Short-circuit evaluation").
+     * Set the top-level "word" field to the primary deduced Target Language word.
+     * Set "translation" strictly to its translation in "${userNative}".
+2. DIRECT WORD / EXPRESSION LOOKUP:
+   - If "${word}" is in "${userNative}" (e.g. "xin chào"): translate to "${userTarget}" (e.g. "hello"). Set "word" strictly to "${userTarget}" word and "translation" to "${userNative}".
+   - If "${word}" is in "${userTarget}" (e.g. "hello"): set "word" strictly to "${word}" and "translation" to "${userNative}".
 
-2. DEFINITIONS & EXAMPLES:
-   - "definition": Write clear, concise definition(s) STRICTLY in the Target Language ("${userTarget}") for language immersion.
-   - "example": Provide example sentence(s) written STRICTLY in the Target Language ("${userTarget}"), e.g. "Hello, how are you?".
-   - "exampleTranslation": Provide full translation of the example sentence into the user's Native Language ("${userNative}"), e.g. "Xin chào, bạn khỏe không?".
-   - "partOfSpeech": noun, verb, adjective, adverb, idiom, interjection, or expression.
-   - "pronunciation": IPA pronunciation guide for the Target Language word (e.g. "/həˈloʊ/").
+3. DEFINITIONS & EXAMPLES:
+   - "definition": Write clear, concise definition(s) STRICTLY in "${userTarget}" for language immersion.
+   - "example": Provide example sentence(s) written STRICTLY in "${userTarget}".
+   - "exampleTranslation": Provide full translation of example sentence into "${userNative}".
+   - "partOfSpeech": noun, verb, adjective, adverb, expression, or idiom.
+   - "pronunciation": IPA pronunciation guide for "${userTarget}" word.
 
-3. INVALID INPUT HANDLING:
-   - If no valid definition or meaning can be found or generated for "${word}" (or if "${word}" is invalid or unrecognized), set "notFound": true, "hasMultipleSenses": false, and "senses": [].
-
-4. MULTIPLE SENSES DISAMBIGUATION:
-   - ${hint ? `Since a specific Scope/Context Hint was provided ("${hint}"), set "hasMultipleSenses": false and return ONLY 1 exact matching sense in "senses".` : `If there is only 1 dominant definition or translation, set "hasMultipleSenses": false. If there are 2 to 4 distinct meanings or parts of speech in "${userTarget}", set "hasMultipleSenses": true.`}
+4. MULTIPLE SENSES / CANDIDATES DISAMBIGUATION:
+   - If there are 2 to 4 distinct matching terms or meanings (e.g. "Ternary operator" vs "Guard clause"), set "hasMultipleSenses": true and include each candidate in "senses".
+   - If only 1 dominant matching term exists, set "hasMultipleSenses": false and return 1 matching sense in "senses".
+   - Set "notFound": false unless the input is complete gibberish with zero semantic meaning.
    - Provide the matching sense(s) in "senses". For each sense, include:
      "word": string (Target Language word in "${userTarget}"),
      "partOfSpeech": string,
@@ -819,14 +937,14 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
      "category": string,
      "context": string`;
 
-    const systemInstruction = `You are an elite multilingual dictionary lookup engine. You automatically detect input language, map native language inputs to the target language, and output structured JSON with target language words, definitions, and native language translations. If no valid definition exists or cannot be found, set "notFound": true and "senses": [].`;
+    const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations.`;
     const schemaDesc = `{
-  "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
+  "word": "string (the primary target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
   "hasMultipleSenses": boolean,
   "senses": [
     {
-      "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
+      "word": "string (the target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
       "partOfSpeech": "string (e.g. noun, verb, adjective, expression)",
       "definition": "string (definition written STRICTLY in ${userTarget})",
       "translation": "string (translation in ${userNative})",
@@ -1387,6 +1505,122 @@ Return ONLY a valid JSON array of objects matching this schema:
     res.json(result);
   } catch (error: any) {
     console.error("Error generating AI quiz:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
+// 9. Analyze conversation history to auto-detect candidate words to add
+app.post("/api/analyze-chat-words", async (req, res) => {
+  try {
+    const { messages, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "Messages array is required" });
+    }
+
+    const chatHistoryStr = messages
+      .slice(-12)
+      .map((m: any) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
+      .join("\n\n");
+
+    const prompt = `Analyze the following recent conversation thread between the user and their AI language coach:
+
+${chatHistoryStr}
+
+TASK: Identify candidate vocabulary words or expressions in "${targetLanguage}" (or native terms translated into "${targetLanguage}") that were discussed, introduced, used, or that the user wants to add to their vocabulary collection.
+
+For each candidate word detected:
+- Target word in "${targetLanguage}"
+- Translation in "${nativeLanguage}"
+- International Phonetic Alphabet (IPA) pronunciation guide
+- Part of speech (noun, verb, adjective, adverb, idiom, expression, etc.)
+- Clear definition in "${targetLanguage}"
+- Natural example sentence in "${targetLanguage}"
+- Translation of example sentence in "${nativeLanguage}"
+- Suitable category (e.g. Daily Life, Travel, Business, Academic, Emotions, etc.)
+- Short reason why this word was detected from the conversation.`;
+
+    const systemInstruction = `You are an expert AI Vocabulary Analyzer. You examine conversation transcripts and detect the most valuable vocabulary words the user should add to their learning collection.`;
+
+    const schemaDesc = `{
+  "summary": "string (Short 1-2 sentence overview of discovered words from the chat)",
+  "detectedWords": [
+    {
+      "word": "string (word in target language ${targetLanguage})",
+      "translation": "string (translation in native language ${nativeLanguage})",
+      "pronunciation": "string (IPA pronunciation)",
+      "partOfSpeech": "string",
+      "definition": "string",
+      "example": "string",
+      "exampleTranslation": "string",
+      "category": "string",
+      "context": "string",
+      "reason": "string (Short reason why this word was extracted from conversation)"
+    }
+  ]
+}`;
+
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error analyzing chat words:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
+// 10. Multimodal Image Vocabulary Analysis endpoint
+app.post("/api/analyze-image-vocab", async (req, res) => {
+  try {
+    const { imageDataUrl, customPrompt, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+
+    if (!imageDataUrl) {
+      return res.status(400).json({ error: "Image Data URL (imageDataUrl) is required" });
+    }
+
+    const prompt = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.
+Identify key objects, text, signs, items, actions, or scenes present in the image.
+${customPrompt ? `Specific focus/instruction from user: "${customPrompt}"` : ""}
+
+For each item found (provide 3 to 8 rich, practical items):
+- Target word/expression in "${targetLanguage}"
+- Direct translation in "${nativeLanguage}"
+- Part of speech (noun, verb, adjective, phrase, etc.)
+- International Phonetic Alphabet (IPA) pronunciation guide
+- Clear definition in "${targetLanguage}"
+- Sample sentence in "${targetLanguage}" using the word
+- Full translation of sample sentence in "${nativeLanguage}"
+- Suitable category (e.g., Food & Dining, City & Signs, Travel, Daily Life, Nature, Work, etc.)
+- Brief context note explaining what or where in the picture this item was identified.`;
+
+    const systemInstruction = `You are a high-level Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners.`;
+
+    const schemaDesc = `{
+  "imageDescription": "string (A concise 1-2 sentence description of what is depicted in the photograph)",
+  "vocabularyItems": [
+    {
+      "word": "string (word in target language ${targetLanguage})",
+      "translation": "string (translation in native language ${nativeLanguage})",
+      "partOfSpeech": "string",
+      "pronunciation": "string",
+      "definition": "string",
+      "example": "string",
+      "exampleTranslation": "string",
+      "category": "string",
+      "context": "string (Description of where or what in the image this item refers to)"
+    }
+  ]
+}`;
+
+    const text = await callLLMWithImage(prompt, imageDataUrl, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error analyzing image vocabulary:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
     const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
     res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });

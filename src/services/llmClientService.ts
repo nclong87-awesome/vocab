@@ -1669,3 +1669,190 @@ Return ONLY a valid JSON array of objects matching this schema:
 
   return fallbackQuestions;
 }
+
+/**
+ * Service to analyze chat messages and detect vocabulary words to add
+ */
+export async function analyzeChatWordsService(params: {
+  messages: Array<{ role: string; content: string }>;
+  targetLanguage: string;
+  nativeLanguage: string;
+  llmConfig?: LLMConfig;
+}): Promise<{
+  summary: string;
+  detectedWords: Array<{
+    word: string;
+    translation: string;
+    pronunciation?: string;
+    partOfSpeech?: string;
+    definition: string;
+    example?: string;
+    exampleTranslation?: string;
+    category?: string;
+    context?: string;
+    reason?: string;
+  }>;
+}> {
+  const { messages, targetLanguage, nativeLanguage, llmConfig } = params;
+
+  const chatHistoryStr = messages
+    .slice(-12)
+    .map(m => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
+    .join("\n\n");
+
+  const prompt = `Analyze the following recent conversation thread between the user and their AI language coach:
+
+${chatHistoryStr}
+
+TASK: Identify candidate vocabulary words or expressions in "${targetLanguage}" (or native terms translated into "${targetLanguage}") that were discussed, introduced, used, or that the user wants to add to their vocabulary collection.
+
+For each candidate word detected:
+- Target word in "${targetLanguage}"
+- Translation in "${nativeLanguage}"
+- International Phonetic Alphabet (IPA) pronunciation guide
+- Part of speech (noun, verb, adjective, adverb, idiom, expression, etc.)
+- Clear definition in "${targetLanguage}"
+- Natural example sentence in "${targetLanguage}"
+- Translation of example sentence in "${nativeLanguage}"
+- Suitable category (e.g. Daily Life, Travel, Business, Academic, Emotions, etc.)
+- Short reason why this word was detected from the conversation.`;
+
+  const systemInstruction = `You are an expert AI Vocabulary Analyzer. You examine conversation transcripts and detect the most valuable vocabulary words the user should add to their learning collection.`;
+  const schemaDesc = `{
+  "summary": "string (Short overview of discovered words from the chat)",
+  "detectedWords": [
+    {
+      "word": "string",
+      "translation": "string",
+      "pronunciation": "string",
+      "partOfSpeech": "string",
+      "definition": "string",
+      "example": "string",
+      "exampleTranslation": "string",
+      "category": "string",
+      "context": "string",
+      "reason": "string"
+    }
+  ]
+}`;
+
+  if (!isStaticHost()) {
+    try {
+      const res = await fetch("/api/analyze-chat-words", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Server API analyze-chat-words failed, using client fallback:", e);
+    }
+  }
+
+  const rawText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+  const cleaned = cleanJsonResponse(rawText);
+  return JSON.parse(cleaned);
+}
+
+/**
+ * Service to analyze image for vocabulary using Gemini Vision AI
+ */
+export async function analyzeImageVocabService(params: {
+  imageDataUrl: string;
+  customPrompt?: string;
+  targetLanguage: string;
+  nativeLanguage: string;
+  llmConfig?: LLMConfig;
+}): Promise<{
+  imageDescription: string;
+  vocabularyItems: Array<{
+    word: string;
+    translation: string;
+    partOfSpeech?: string;
+    pronunciation?: string;
+    definition: string;
+    example?: string;
+    exampleTranslation?: string;
+    category?: string;
+    context?: string;
+  }>;
+}> {
+  const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
+
+  if (!isStaticHost()) {
+    try {
+      const res = await fetch("/api/analyze-image-vocab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Server API analyze-image-vocab failed, using client fallback:", e);
+    }
+  }
+
+  const prompt = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.
+Identify key objects, text, signs, items, actions, or scenes present in the image.
+${customPrompt ? `Specific focus/instruction from user: "${customPrompt}"` : ""}`;
+
+  const systemInstruction = `You are a Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners.`;
+  const schemaDesc = `{
+  "imageDescription": "string",
+  "vocabularyItems": [
+    {
+      "word": "string",
+      "translation": "string",
+      "partOfSpeech": "string",
+      "pronunciation": "string",
+      "definition": "string",
+      "example": "string",
+      "exampleTranslation": "string",
+      "category": "string",
+      "context": "string"
+    }
+  ]
+}`;
+
+  // Client-side fallback using Gemini API SDK if available
+  const apiKey = llmConfig?.apiKey || "";
+  const sharedProxyKey = llmConfig?.proxyKey || "";
+  const effectiveKey = apiKey || sharedProxyKey;
+
+  let mimeType = "image/jpeg";
+  let base64Data = imageDataUrl;
+  if (imageDataUrl.startsWith("data:")) {
+    const parts = imageDataUrl.split(";base64,");
+    mimeType = parts[0].replace("data:", "") || "image/jpeg";
+    base64Data = parts[1] || "";
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: effectiveKey || "local-key"
+  });
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3.6-flash",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType, data: base64Data } },
+          { text: prompt }
+        ]
+      }
+    ],
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json"
+    }
+  });
+
+  const cleaned = cleanJsonResponse(response.text || "");
+  return JSON.parse(cleaned);
+}
+

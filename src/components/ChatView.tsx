@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Send, Sparkles, Plus, Volume2, 
   Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
-  ChevronLeft, LayoutGrid, X, Search, Languages, FileText
+  ChevronLeft, LayoutGrid, X, Search, Languages, FileText,
+  Camera, Image as ImageIcon, Wand2, Upload
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
@@ -18,9 +19,12 @@ interface ChatViewProps {
   targetLanguage: string;
   nativeLanguage: string;
   onAddWord: (word?: string, hint?: string) => void;
+  onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic: () => void;
   onStartQuiz: () => void;
   onFixGrammar: () => void;
+  onAnalyzeChatWords?: () => void;
+  onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSelectDefinition?: (word: string, senseIndex: number, translation: string) => void;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
@@ -35,15 +39,19 @@ export default function ChatView({
   targetLanguage,
   nativeLanguage,
   onAddWord,
+  onAddMultipleWords,
   onGenerateByTopic,
   onStartQuiz,
   onFixGrammar,
+  onAnalyzeChatWords,
+  onAnalyzeImageVocab,
   onSelectDefinition,
   ttsConfig,
   llmConfig,
   words
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
+  const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat">("all");
@@ -52,6 +60,7 @@ export default function ChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const dockScrollRef = useRef<HTMLDivElement>(null);
 
   const focusInput = () => {
@@ -60,6 +69,49 @@ export default function ChatView({
     setTimeout(() => {
       inputRef.current?.focus();
     }, 50);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("⚠️ Please select an image file (PNG, JPG, WEBP)");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setSelectedImage({
+          dataUrl: reader.result,
+          name: file.name
+        });
+        showToast("📷 Image attached! Click Send to analyze with AI Vision.");
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setSelectedImage({
+            dataUrl: reader.result,
+            name: file.name
+          });
+          showToast("📷 Image dropped! Hit Send to analyze.");
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleScrollDock = (direction: "left" | "right") => {
@@ -166,6 +218,44 @@ export default function ChatView({
         setIsActionsPanelOpen(false);
         scrollToBottom("smooth");
         focusInput();
+      }
+    },
+    {
+      id: "detect_chat_words",
+      label: "Detect Chat Words",
+      category: "vocab" as const,
+      categoryLabel: "Vocab",
+      icon: <Wand2 className="w-4 h-4 text-purple-600" />,
+      title: "🪄 Auto-Detect Words from Chat",
+      description: "AI analyzes recent conversation to identify vocabulary words to confirm & add",
+      className: "bg-purple-50/90 hover:bg-purple-100 text-purple-950 border border-purple-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 4,
+      onClick: () => {
+        handleIncrementActionCount("detect_chat_words");
+        setIsActionsPanelOpen(false);
+        if (onAnalyzeChatWords) {
+          onAnalyzeChatWords();
+        } else {
+          onSendMessage(`Can you analyze our recent chat history and suggest vocabulary candidate words I should add to my collection?`);
+        }
+        scrollToBottom("smooth");
+        focusInput();
+      }
+    },
+    {
+      id: "scan_picture_vocab",
+      label: "Scan Picture Vocab",
+      category: "vocab" as const,
+      categoryLabel: "Vocab",
+      icon: <Camera className="w-4 h-4 text-blue-600" />,
+      title: "📷 Scan Picture for Vocab",
+      description: "Upload a photo or image to extract and translate real-world vocabulary with AI Vision",
+      className: "bg-blue-50/90 hover:bg-blue-100 text-blue-950 border border-blue-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 5,
+      onClick: () => {
+        handleIncrementActionCount("scan_picture_vocab");
+        setIsActionsPanelOpen(false);
+        fileInputRef.current?.click();
       }
     },
     {
@@ -338,6 +428,16 @@ export default function ChatView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedImage && onAnalyzeImageVocab) {
+      const imgData = selectedImage.dataUrl;
+      const promptText = inputText.trim();
+      setSelectedImage(null);
+      setInputText("");
+      onAnalyzeImageVocab(imgData, promptText);
+      scrollToBottom("smooth");
+      return;
+    }
+
     if (!inputText.trim() || isTyping) return;
     const txt = inputText.trim();
     setInputText("");
@@ -577,9 +677,17 @@ export default function ChatView({
                               } else if (act.action === "fix_another") {
                                 handleIncrementActionCount("fix_grammar");
                                 onFixGrammar();
+                              } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
+                                onAddMultipleWords([act.payload]);
+                                showToast(`🎉 Added "${act.payload.word}" to collection!`);
                               } else if (act.action === "add_word" && act.payload?.word) {
                                 handleIncrementActionCount("add_word");
                                 onAddWord(act.payload.word, act.payload?.hint);
+                              } else if (act.action === "add_multiple_words" && act.payload?.words && onAddMultipleWords) {
+                                onAddMultipleWords(act.payload.words);
+                                showToast(`🎉 Added ${act.payload.words.length} vocabulary words to collection!`);
+                              } else if (act.action === "analyze_chat_words" && onAnalyzeChatWords) {
+                                onAnalyzeChatWords();
                               } else if (act.action === "start_quiz") {
                                 handleIncrementActionCount("start_quiz");
                                 onStartQuiz();
@@ -862,22 +970,78 @@ export default function ChatView({
 
       {/* Input Message Footer Form */}
       <form onSubmit={handleSubmit} className="p-3 bg-white border-t border-stone-200 shrink-0">
-        <div className="flex gap-2">
+        {/* Attached image preview banner */}
+        {selectedImage && (
+          <div className="mb-2.5 p-2 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={selectedImage.dataUrl}
+                alt="Upload preview"
+                className="w-10 h-10 object-cover rounded-lg border border-blue-300 shrink-0 shadow-2xs"
+              />
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-blue-950 truncate block flex items-center gap-1">
+                  <Camera className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  Photo Attached: {selectedImage.name}
+                </span>
+                <span className="text-[10px] text-blue-700/80 block">
+                  Gemini Vision will extract & translate vocabulary items when submitted
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedImage(null)}
+              className="p-1 rounded-full bg-blue-200/80 hover:bg-blue-300 text-blue-900 transition-colors cursor-pointer shrink-0"
+              title="Remove attached photo"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-2 items-center">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageFileChange}
+            className="hidden"
+            id="chat-file-input"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs ${
+              selectedImage
+                ? "bg-blue-600 text-white shadow-xs scale-102"
+                : "bg-stone-100 hover:bg-stone-200/80 text-stone-700 hover:scale-105"
+            }`}
+            title="Scan picture for vocabulary with AI Vision (Upload PNG/JPG)"
+            id="chat-upload-photo-btn"
+          >
+            <Camera className="w-5 h-5" />
+          </button>
+
           <input
             ref={inputRef}
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             disabled={isTyping}
-            placeholder={`Chat with your AI Coach in ${targetLanguage} or ${nativeLanguage}...`}
+            placeholder={
+              selectedImage
+                ? "Add an optional focus note (e.g. 'Focus on food items')..."
+                : `Chat with your AI Coach in ${targetLanguage} or ${nativeLanguage}...`
+            }
             className="flex-1 bg-stone-50 hover:bg-stone-100/50 focus:bg-white text-stone-900 border border-stone-200 focus:border-stone-400 focus:ring-0 rounded-xl px-4 py-3 text-sm sm:text-base transition-colors placeholder:text-stone-400 font-medium"
             id="chat-text-input"
           />
           <button
             type="submit"
-            disabled={!inputText.trim() || isTyping}
+            disabled={(!inputText.trim() && !selectedImage) || isTyping}
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 ${
-              inputText.trim() && !isTyping
+              (inputText.trim() || selectedImage) && !isTyping
                 ? "bg-stone-900 hover:bg-stone-800 text-white cursor-pointer hover:scale-102"
                 : "bg-stone-100 text-stone-400 cursor-not-allowed"
             }`}

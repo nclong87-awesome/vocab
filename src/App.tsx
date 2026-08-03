@@ -5,7 +5,7 @@ import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMess
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider, getSavedProvidersMap } from "./utils/llmHelpers";
-import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService } from "./services/llmClientService";
+import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeChatWordsService, analyzeImageVocabService } from "./services/llmClientService";
 import { generateQuizQuestions } from "./utils/quizGenerator";
 import { QuizQuestion } from "./types";
 import { 
@@ -690,8 +690,7 @@ export default function App() {
           return;
         }
 
-        const newWord: Word = {
-          id: `ai-word-${Date.now()}`,
+        const candidateWordObj = {
           word: targetWordStr,
           pronunciation: pronunciationVal,
           partOfSpeech: partOfSpeechVal,
@@ -700,32 +699,25 @@ export default function App() {
           example: exampleVal,
           exampleTranslation: exampleTranslationVal,
           category: categoryVal,
-          context: contextVal,
-          learned: false,
-          starred: false,
-          createdAt: new Date().toISOString(),
-          lastReviewed: null,
-          strength: 0
+          context: contextVal
         };
-
-        setWords(prev => {
-          if (prev.some(w => w.word.trim().toLowerCase() === newWord.word.trim().toLowerCase())) {
-            return prev;
-          }
-          const updated = [newWord, ...prev];
-          saveAllWordsToDB(updated).catch(e => console.error(e));
-          return updated;
-        });
 
         setChatMessages(prev => {
           const filtered = prev.filter(m => m.id !== statusMsgId);
           return [
             ...filtered,
             {
-              id: `sys-add-${Date.now()}`,
+              id: `sys-add-candidate-${Date.now()}`,
               role: "assistant",
-              content: `🎉 **Successfully added "${newWord.word}" to your collection!**\n\n- **Translation**: ${newWord.translation}\n- **Pronunciation**: \`${newWord.pronunciation}\`\n- **Definition**: *${newWord.definition}*${newWord.example ? `\n- **Example**: "${newWord.example}"` : ""}${newWord.exampleTranslation ? `\n- **Example Translation**: "${newWord.exampleTranslation}"` : ""}\n\nI generated the exact definition for this word context and saved it to your database collection!`,
-              timestamp: new Date().toISOString()
+              content: `💡 **Deduced Vocabulary Candidate for "${wordText}":**\n\n### **${targetWordStr}** \`${pronunciationVal}\`\n- **Translation**: ${translationVal} (${partOfSpeechVal})\n- **Definition**: *${definitionVal}*${exampleVal ? `\n- **Example**: "${exampleVal}"` : ""}${exampleTranslationVal ? `\n- **Example Translation**: "${exampleTranslationVal}"` : ""}\n\n*Click below to confirm and save to your collection:*`,
+              timestamp: new Date().toISOString(),
+              suggestedActions: [
+                {
+                  label: `➕ Confirm & Add "${targetWordStr}" (${translationVal})`,
+                  action: "confirm_save_word",
+                  payload: candidateWordObj
+                }
+              ]
             }
           ];
         });
@@ -749,6 +741,285 @@ export default function App() {
     }
   };
 
+  // Analyze conversation history to detect candidate words for user confirmation
+  const handleAnalyzeChatWords = async () => {
+    setIsTyping(true);
+    const statusMsgId = `analyze-chat-status-${Date.now()}`;
+
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: statusMsgId,
+        role: "assistant",
+        content: `🪄 *Analyzing our conversation history to detect candidate vocabulary words for your collection...*`,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
+    try {
+      const res = await analyzeChatWordsService({
+        messages: chatMessages,
+        targetLanguage,
+        nativeLanguage,
+        llmConfig
+      });
+
+      const wordsFound = res.detectedWords || [];
+
+      if (wordsFound.length === 0) {
+        setChatMessages(prev => {
+          const filtered = prev.filter(m => m.id !== statusMsgId);
+          return [
+            ...filtered,
+            {
+              id: `sys-no-chat-words-${Date.now()}`,
+              role: "assistant",
+              content: `💡 **No new candidate vocabulary words detected in recent chat.**\n\nTry chatting with me about a new topic, asking for definitions, or using the **"Generate Words"** quick action!`,
+              timestamp: new Date().toISOString()
+            }
+          ];
+        });
+        return;
+      }
+
+      // Build candidate cards and suggested actions
+      const actions: any[] = [];
+      const formattedItems: string[] = [];
+
+      wordsFound.forEach((w: any, idx: number) => {
+        const isAlreadySaved = words.some(existing => existing.word.toLowerCase().trim() === w.word.toLowerCase().trim());
+        const statusBadge = isAlreadySaved ? " *(Already in collection)*" : "";
+
+        formattedItems.push(
+          `### ${idx + 1}. **${w.word}** \`${w.pronunciation || ""}\`${statusBadge}\n` +
+          `- **Translation**: ${w.translation} (${w.partOfSpeech || "word"})\n` +
+          `- **Definition**: *${w.definition}*\n` +
+          (w.example ? `- **Example**: "${w.example}"\n` : "") +
+          (w.reason ? `- **Context from Chat**: *${w.reason}*\n` : "")
+        );
+
+        if (!isAlreadySaved) {
+          actions.push({
+            label: `➕ Confirm & Add "${w.word}" (${w.translation})`,
+            action: "add_word",
+            payload: { word: w.word, hint: w.definition }
+          });
+        }
+      });
+
+      const unsavedWordsCount = wordsFound.filter(w => !words.some(e => e.word.toLowerCase().trim() === w.word.toLowerCase().trim())).length;
+
+      if (unsavedWordsCount > 1) {
+        actions.unshift({
+          label: `✨ Add All (${unsavedWordsCount}) Discovered Words`,
+          action: "add_multiple_words",
+          payload: { words: wordsFound }
+        });
+      }
+
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-chat-words-res-${Date.now()}`,
+            role: "assistant",
+            content: `💡 **Discovered ${wordsFound.length} vocabulary candidate(s) from our conversation:**\n\n${formattedItems.join("\n")}\n\n*Click a confirmation button below to save to your collection:*`,
+            timestamp: new Date().toISOString(),
+            suggestedActions: actions
+          }
+        ];
+      });
+    } catch (err: any) {
+      console.error(err);
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-chat-words-err-${Date.now()}`,
+            role: "assistant",
+            content: `⚠️ **Failed to analyze chat conversation:** ${err.message || "Unknown error"}`,
+            timestamp: new Date().toISOString()
+          }
+        ];
+      });
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Analyze image uploaded by user using Gemini Vision to extract vocabulary
+  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string) => {
+    const userMsgId = `user-img-${Date.now()}`;
+    const statusMsgId = `status-img-${Date.now()}`;
+
+    // Append user message with image thumbnail
+    const userPromptText = customPrompt ? customPrompt : "Analyzed photo for vocabulary";
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: userMsgId,
+        role: "user",
+        content: `📷 **Uploaded Photo**: ${userPromptText}`,
+        imageUrl: imageDataUrl,
+        timestamp: new Date().toISOString()
+      },
+      {
+        id: statusMsgId,
+        role: "assistant",
+        content: `📷 *Analyzing your picture with Gemini Vision to extract vocabulary in ${targetLanguage}...*`,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
+    setIsTyping(true);
+
+    try {
+      const res = await analyzeImageVocabService({
+        imageDataUrl,
+        customPrompt,
+        targetLanguage,
+        nativeLanguage,
+        llmConfig
+      });
+
+      const items = res.vocabularyItems || [];
+      const actions: any[] = [];
+      const formattedItems: string[] = [];
+
+      items.forEach((item: any, idx: number) => {
+        const isAlreadySaved = words.some(existing => existing.word.toLowerCase().trim() === item.word.toLowerCase().trim());
+        const statusBadge = isAlreadySaved ? " *(Already in collection)*" : "";
+
+        formattedItems.push(
+          `### ${idx + 1}. **${item.word}** \`${item.pronunciation || ""}\`${statusBadge}\n` +
+          `- **Translation**: ${item.translation} (${item.partOfSpeech || "item"})\n` +
+          `- **Definition**: *${item.definition}*\n` +
+          (item.example ? `- **Example**: "${item.example}"\n` : "") +
+          (item.context ? `- **In Photo**: *${item.context}*\n` : "")
+        );
+
+        if (!isAlreadySaved) {
+          actions.push({
+            label: `➕ Confirm & Add "${item.word}" (${item.translation})`,
+            action: "add_word",
+            payload: { word: item.word, hint: item.definition }
+          });
+        }
+      });
+
+      const unsavedItems = items.filter(item => !words.some(e => e.word.toLowerCase().trim() === item.word.toLowerCase().trim()));
+
+      if (unsavedItems.length > 1) {
+        actions.unshift({
+          label: `✨ Add All (${unsavedItems.length}) Discovered Photo Words`,
+          action: "add_multiple_words",
+          payload: { words: items }
+        });
+      }
+
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-img-res-${Date.now()}`,
+            role: "assistant",
+            content: `🔍 **Photo Analysis**: *"${res.imageDescription || "Visual scene"}"*\n\nFound **${items.length}** vocabulary items:\n\n${formattedItems.join("\n")}\n\n*Click below to confirm and add items to your collection:*`,
+            imageUrl: imageDataUrl,
+            timestamp: new Date().toISOString(),
+            suggestedActions: actions
+          }
+        ];
+      });
+    } catch (err: any) {
+      console.error(err);
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-img-err-${Date.now()}`,
+            role: "assistant",
+            content: `⚠️ **Failed to analyze image:** ${err.message || "Unknown error"}. Make sure your image is clear and under 5MB.`,
+            timestamp: new Date().toISOString()
+          }
+        ];
+      });
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  // Batch add multiple confirmed words (from image or chat analysis)
+  const handleAddMultipleWords = async (candidateWords: any[]) => {
+    if (!candidateWords || !Array.isArray(candidateWords) || candidateWords.length === 0) return;
+
+    const newWordsToAdd: Word[] = [];
+    const skippedNames: string[] = [];
+
+    candidateWords.forEach((c: any) => {
+      const targetWord = (c.word || "").trim();
+      if (!targetWord) return;
+
+      const exists = words.some(w => w.word.toLowerCase().trim() === targetWord.toLowerCase());
+      if (exists) {
+        skippedNames.push(targetWord);
+        return;
+      }
+
+      const wordObj: Word = {
+        id: `ai-word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        word: targetWord,
+        pronunciation: c.pronunciation || "/.../",
+        partOfSpeech: c.partOfSpeech || "word",
+        definition: c.definition || "Extracted vocabulary item",
+        translation: c.translation || targetWord,
+        example: c.example || undefined,
+        exampleTranslation: c.exampleTranslation || undefined,
+        category: c.category || "General",
+        context: c.context || c.reason || c.definition,
+        learned: false,
+        starred: false,
+        createdAt: new Date().toISOString(),
+        lastReviewed: null,
+        strength: 0
+      };
+
+      newWordsToAdd.push(wordObj);
+    });
+
+    if (newWordsToAdd.length === 0) {
+      setChatMessages(prev => [
+        ...prev,
+        {
+          id: `sys-batch-skipped-${Date.now()}`,
+          role: "assistant",
+          content: `ℹ️ All candidate words (${skippedNames.join(", ")}) are already saved in your vocabulary collection!`,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+      return;
+    }
+
+    setWords(prev => {
+      const updated = [...newWordsToAdd, ...prev];
+      saveAllWordsToDB(updated).catch(e => console.error(e));
+      return updated;
+    });
+
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: `sys-batch-success-${Date.now()}`,
+        role: "assistant",
+        content: `🎉 **Successfully added ${newWordsToAdd.length} new words to your collection!**\n\n- **Added**: ${newWordsToAdd.map(w => `**${w.word}** (${w.translation})`).join(", ")}${skippedNames.length > 0 ? `\n- *Skipped duplicates*: ${skippedNames.join(", ")}` : ""}`,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+  };
+
   // Handle selected definition sense for a multi-definition word
   const handleSelectDefinition = async (word: string, senseIndex: number, translation: string) => {
     if (!pendingWordSenses || pendingWordSenses.word !== word) return;
@@ -756,7 +1027,8 @@ export default function App() {
     const sense = pendingWordSenses.senses[senseIndex];
     if (!sense) return;
 
-    const existingMatch = words.find(w => w.word.trim().toLowerCase() === word.trim().toLowerCase());
+    const targetWord = (sense.word || word).trim();
+    const existingMatch = words.find(w => w.word.trim().toLowerCase() === targetWord.toLowerCase());
     if (existingMatch) {
       setChatMessages(prev => [
         ...prev,
@@ -775,12 +1047,12 @@ export default function App() {
     const statusMsgId = `add-word-selected-status-${Date.now()}`;
     
     // Add user selection message to chat
-    const finalTranslation = translation && translation !== "undefined" ? translation : (sense.translation && sense.translation !== "undefined" ? sense.translation : word);
+    const finalTranslation = translation && translation !== "undefined" ? translation : (sense.translation && sense.translation !== "undefined" ? sense.translation : targetWord);
     const partOfSpeech = sense.partOfSpeech || "word";
     const newUserMsg: ChatMessage = {
       id: `user-select-def-${Date.now()}`,
       role: "user",
-      content: `I want to add the definition: "${finalTranslation}" (${partOfSpeech})`,
+      content: `I want to add: "${targetWord}" (${finalTranslation})`,
       timestamp: new Date().toISOString()
     };
 
@@ -790,13 +1062,12 @@ export default function App() {
       {
         id: statusMsgId,
         role: "assistant",
-        content: `🔍 *Generating a custom card for **"${word}"** specifying this meaning...*`,
+        content: `🔍 *Saving custom card for **"${targetWord}"** to your collection...*`,
         timestamp: new Date().toISOString()
       }
     ]);
 
     try {
-      const targetWord = sense.word || word;
       const newWord: Word = {
         id: `ai-word-${Date.now()}`,
         word: targetWord,
@@ -1602,6 +1873,9 @@ export default function App() {
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}
+                    onAnalyzeChatWords={handleAnalyzeChatWords}
+                    onAnalyzeImageVocab={handleAnalyzeImageVocab}
+                    onAddMultipleWords={handleAddMultipleWords}
                   />
                 )}
               </motion.div>
