@@ -267,7 +267,7 @@ async function callLLM(
         ],
         chatOptions: {
           selectedModel: model || "llama3.1-8B",
-          systemPrompt: systemInstruction + "\n\nCRITICAL INSTRUCTION: Output STRICTLY raw valid JSON matching schema:\n" + schemaDescription + "\nDo NOT include any conversational preamble, intro text, markdown code blocks, or explanations.",
+          systemPrompt: systemInstruction + "\n\nCRITICAL INSTRUCTION: Output STRICTLY raw valid JSON-only matching schema:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON.",
           topK: 8
         },
         attachment: null
@@ -389,7 +389,7 @@ async function callLLM(
       body: JSON.stringify({
         model: model || "claude-3-5-haiku-20241022",
         max_tokens: 2048,
-        system: systemInstruction + "\nOutput MUST be strictly valid raw JSON complying with schema:\n" + schemaDescription,
+        system: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only complying with schema:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON.",
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -446,7 +446,7 @@ async function callLLM(
   const reqBody: any = {
     model: model || (provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat"),
     messages: [
-      { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON matching:\n" + schemaDescription },
+      { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
       { role: "user", content: prompt }
     ],
     stream: false
@@ -847,7 +847,7 @@ app.post("/api/test-llm", async (req, res) => {
     const { llmConfig } = req.body;
     const text = await callLLM(
       "Respond with a short json object: {\"status\": \"connected\", \"message\": \"LLM provider connection successful!\"}",
-      "You are a helpful dictionary test assistant.",
+      "You are a helpful dictionary test assistant. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.",
       "{\n  \"status\": \"string\",\n  \"message\": \"string\"\n}",
       llmConfig
     );
@@ -901,7 +901,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 - "category": High-level category or topic classification (e.g. "Technology & Programming", "Travel & Hospitality", "Business & Work", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.`;
 
-    const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations.`;
+    const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "word": "string (the word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "pronunciation": "string",
@@ -976,7 +976,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "category": string,
      "context": string`;
 
-    const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations.`;
+    const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "word": "string (the primary target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
@@ -1028,7 +1028,7 @@ CRITICAL INSTRUCTIONS:
 - "category": High-level category string (e.g. "${topic || "Vocabulary"}").
 - "context": Short description of the real-world situation or domain context where this word is used.`;
 
-    const systemInstruction = `You are an expert language teacher. Output strictly a JSON object containing an array of vocabulary words.`;
+    const systemInstruction = `You are an expert language teacher. Output strictly valid JSON-only output when requested containing an array of vocabulary words. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "words": [
     {
@@ -1086,7 +1086,7 @@ CRITICAL INSTRUCTIONS:
    - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
 `;
 
-    const systemInstruction = `You are a friendly, natural AI Language Coach. Fix grammar & spelling with a casual tone and suggest candidate vocabulary words for the user's collection. Output strictly raw valid JSON matching the schema.`;
+    const systemInstruction = `You are a friendly, natural AI Language Coach. Fix grammar & spelling with a casual tone and suggest candidate vocabulary words for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "fixedSentence": "string",
   "explanation": "string (markdown formatted casual explanation)",
@@ -1336,7 +1336,7 @@ ${improvingSampleStr}
 
 Provide a structured AI analysis with constructive insights, memory retention strategies, and actionable guidance for the learner.`;
 
-    const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly structured JSON analytics.`;
+    const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly valid JSON-only analytics when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "overallAssessment": "string (Empowering 2-3 sentence overview of learner's trajectory)",
   "strengthsSummary": "string (Key strengths and patterns where the learner excels)",
@@ -1389,7 +1389,8 @@ CRITICAL INSTRUCTIONS:
 - If you explain, introduce, or define a vocabulary word that the user might want to study, always suggest adding it to their collection using the "add_word" action.
 - If the user indicates they want to take a test, quiz, practice, or study their flashcards, suggest starting a quiz using the "start_quiz" action.
 - If you ask or offer the user to move on to the next question or topic (e.g., "Shall we move on to Question 4?"), you MUST include a "send_message" action in suggestedActions with label "Move on to Question X" or "Continue to Next Question".
-- You MUST respond with a valid JSON object matching the schema below.`;
+- You MUST strictly output valid JSON-only output when requested matching the schema below.
+- Do not include any conversational filler outside the JSON.`;
 
     const schemaDesc = `{
   "text": "string (the main conversation response in markdown format. Keep it beautifully styled, use bolding, bullet points, etc. where helpful)",
@@ -1492,7 +1493,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 
 5. Output Schema:
-Return ONLY a valid JSON array of objects matching this schema:
+Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
 [
   {
     "id": "string",
@@ -1581,7 +1582,7 @@ For each candidate word detected:
 - Suitable category (e.g. Daily Life, Travel, Business, Academic, Emotions, etc.)
 - Short reason why this word was detected from the conversation.`;
 
-    const systemInstruction = `You are an expert AI Vocabulary Analyzer. You examine conversation transcripts and detect the most valuable vocabulary words the user should add to their learning collection.`;
+    const systemInstruction = `You are an expert AI Vocabulary Analyzer. You examine conversation transcripts and detect the most valuable vocabulary words the user should add to their learning collection. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
 
     const schemaDesc = `{
   "summary": "string (Short 1-2 sentence overview of discovered words from the chat)",
@@ -1636,7 +1637,7 @@ For each item found (provide 3 to 8 rich, practical items):
 - Suitable category (e.g., Food & Dining, City & Signs, Travel, Daily Life, Nature, Work, etc.)
 - Brief context note explaining what or where in the picture this item was identified.`;
 
-    const systemInstruction = `You are a high-level Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners.`;
+    const systemInstruction = `You are a high-level Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
 
     const schemaDesc = `{
   "imageDescription": "string (A concise 1-2 sentence description of what is depicted in the photograph)",
