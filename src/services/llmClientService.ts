@@ -3,41 +3,80 @@ import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
 import { generateQuizQuestions, generateConfusers, getImagePrompt } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 
+// Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
+function sanitizeUnescapedJsonStrings(str: string): string {
+  return str.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
+    return match
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
+  });
+}
+
 // Clean raw JSON strings
 export function cleanJsonResponse(rawText: string): string {
   if (!rawText) return "";
   let cleaned = rawText.trim();
 
-  // Try extracting from markdown code blocks first
-  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (codeBlockMatch && codeBlockMatch[1]) {
-    cleaned = codeBlockMatch[1].trim();
+  // 1. If raw string is ALREADY valid JSON, return it immediately
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    // Continue cleaning
   }
 
-  // If still not starting with [ or {, search for the first [ or { and matching last ] or }
-  if (!cleaned.startsWith("[") && !cleaned.startsWith("{")) {
-    const firstSquare = cleaned.indexOf("[");
-    const lastSquare = cleaned.lastIndexOf("]");
-    const firstCurly = cleaned.indexOf("{");
-    const lastCurly = cleaned.lastIndexOf("}");
-
-    let startIdx = -1;
-    let endIdx = -1;
-
-    if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
-      startIdx = firstSquare;
-      endIdx = lastSquare;
-    } else if (firstCurly !== -1) {
-      startIdx = firstCurly;
-      endIdx = lastCurly;
-    }
-
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      cleaned = cleaned.substring(startIdx, endIdx + 1).trim();
+  // 2. Handle markdown code fences wrapping the entire output
+  // e.g. ```json\n{ ... }\n``` or ```\n{ ... }\n```
+  if (cleaned.startsWith("```")) {
+    const unquoted = cleaned
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+    try {
+      JSON.parse(unquoted);
+      return unquoted;
+    } catch {
+      cleaned = unquoted;
     }
   }
 
-  return cleaned;
+  // 3. Extract JSON object/array from surrounding conversational text or preambles
+  const firstSquare = cleaned.indexOf("[");
+  const lastSquare = cleaned.lastIndexOf("]");
+  const firstCurly = cleaned.indexOf("{");
+  const lastCurly = cleaned.lastIndexOf("}");
+
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
+    startIdx = firstSquare;
+    endIdx = lastSquare;
+  } else if (firstCurly !== -1) {
+    startIdx = firstCurly;
+    endIdx = lastCurly;
+  }
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const candidate = cleaned.substring(startIdx, endIdx + 1).trim();
+    try {
+      JSON.parse(candidate);
+      return candidate;
+    } catch {
+      cleaned = candidate;
+    }
+  }
+
+  // 4. Try fixing unescaped control characters inside JSON strings
+  try {
+    const sanitized = sanitizeUnescapedJsonStrings(cleaned);
+    JSON.parse(sanitized);
+    return sanitized;
+  } catch {
+    // Return best effort candidate string
+    return cleaned;
+  }
 }
 
 const VALID_GEMINI_MODELS = [
