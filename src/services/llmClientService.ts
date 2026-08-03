@@ -615,7 +615,8 @@ export async function callLLMClientSide(
           }
 
           const data = await res.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const parts = data.candidates?.[0]?.content?.parts || [];
+          const text = parts.map((p: any) => p.text || "").join("").trim() || data.text || data.candidates?.[0]?.output || "";
           if (!text) {
             throw new Error("Empty response from Gemini worker proxy.");
           }
@@ -1379,6 +1380,95 @@ export interface PerformanceAnalysisResult {
   motivationQuote: string;
 }
 
+export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResult {
+  if (!raw || typeof raw !== "object") {
+    return {
+      overallAssessment: "Great progress on your vocabulary learning journey! Keep practicing regularly to strengthen retention.",
+      strengthsSummary: "Building consistency across studied terms and flashcard reviews.",
+      weaknessesSummary: "Focus on lower strength terms and newly added words.",
+      actionableTips: ["Review weak terms daily", "Take quick practice quizzes", "Use spaced repetition"],
+      recommendedFocusTopics: ["Core Vocabulary"],
+      motivationQuote: "Consistency in practice builds lasting language fluency."
+    };
+  }
+
+  let overallAssessment = 
+    raw.overallAssessment ||
+    raw.overall_assessment ||
+    raw.coach_note ||
+    raw.coachNote ||
+    raw.summary ||
+    raw.overview ||
+    raw.assessment ||
+    "";
+
+  if (!overallAssessment && raw.analytics_summary) {
+    const s = raw.analytics_summary;
+    overallAssessment = typeof s === "string" ? s : `Student level: ${s.student_level || "Active Learner"}. Streak: ${s.active_streak_days || 0} days. Quizzes completed: ${s.quizzes_completed || 0}.`;
+  }
+
+  let strengthsSummary = "";
+  if (typeof raw.strengthsSummary === "string" && raw.strengthsSummary) {
+    strengthsSummary = raw.strengthsSummary;
+  } else if (typeof raw.strengths_summary === "string" && raw.strengths_summary) {
+    strengthsSummary = raw.strengths_summary;
+  } else if (Array.isArray(raw.strengths)) {
+    strengthsSummary = raw.strengths.join(" ");
+  } else if (raw.performance_insights && Array.isArray(raw.performance_insights.strengths)) {
+    strengthsSummary = raw.performance_insights.strengths.join(" ");
+  } else if (raw.performance_insights && typeof raw.performance_insights.strengths === "string") {
+    strengthsSummary = raw.performance_insights.strengths;
+  } else if (Array.isArray(raw.key_strengths)) {
+    strengthsSummary = raw.key_strengths.join(" ");
+  }
+
+  let weaknessesSummary = "";
+  if (typeof raw.weaknessesSummary === "string" && raw.weaknessesSummary) {
+    weaknessesSummary = raw.weaknessesSummary;
+  } else if (typeof raw.weaknesses_summary === "string" && raw.weaknesses_summary) {
+    weaknessesSummary = raw.weaknesses_summary;
+  } else if (Array.isArray(raw.weaknesses)) {
+    weaknessesSummary = raw.weaknesses.join(" ");
+  } else if (Array.isArray(raw.areas_for_growth)) {
+    weaknessesSummary = raw.areas_for_growth.join(" ");
+  } else if (raw.performance_insights && Array.isArray(raw.performance_insights.areas_for_growth)) {
+    weaknessesSummary = raw.performance_insights.areas_for_growth.join(" ");
+  } else if (raw.performance_insights && Array.isArray(raw.performance_insights.weaknesses)) {
+    weaknessesSummary = raw.performance_insights.weaknesses.join(" ");
+  } else if (raw.performance_insights && typeof raw.performance_insights.areas_for_growth === "string") {
+    weaknessesSummary = raw.performance_insights.areas_for_growth;
+  }
+
+  let actionableTips: string[] = [];
+  const tipsRaw = raw.actionableTips || raw.actionable_tips || raw.actionable_next_steps || raw.retention_strategies || raw.tips || raw.strategies;
+  if (Array.isArray(tipsRaw)) {
+    actionableTips = tipsRaw.map((item: any) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        return item.description ? `${item.strategy_name ? item.strategy_name + ": " : ""}${item.description}` : (item.text || item.tip || JSON.stringify(item));
+      }
+      return String(item);
+    });
+  }
+
+  let recommendedFocusTopics: string[] = [];
+  const topicsRaw = raw.recommendedFocusTopics || raw.recommended_focus_topics || raw.focus_topics || raw.suggested_topics || raw.recommended_topics || raw.topics;
+  if (Array.isArray(topicsRaw)) {
+    recommendedFocusTopics = topicsRaw.map((t: any) => typeof t === "string" ? t : (t.name || t.topic || String(t)));
+  }
+
+  let motivationQuote = raw.motivationQuote || raw.motivation_quote || raw.quote || raw.motivational_quote || "";
+
+  return {
+    overallAssessment: overallAssessment || "Your vocabulary practice shows steady progress and active momentum.",
+    strengthsSummary: strengthsSummary || "Demonstrating solid recall on core vocabulary terms.",
+    weaknessesSummary: weaknessesSummary || "Focus on terms with lower strength scores and terms needing review.",
+    actionableTips: actionableTips.length > 0 ? actionableTips : ["Review weak terms daily", "Practice with active quizzes", "Focus on spaced repetition"],
+    recommendedFocusTopics: recommendedFocusTopics.length > 0 ? recommendedFocusTopics : ["Core Vocabulary"],
+    motivationQuote: motivationQuote || "Consistency in practice builds lasting language fluency."
+  };
+}
+
 export async function analyzePerformanceService(params: PerformanceAnalysisRequest): Promise<PerformanceAnalysisResult> {
   const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig } = params;
 
@@ -1403,7 +1493,7 @@ ${improvingSampleStr}
 
 Provide a structured AI analysis with constructive insights, memory retention strategies, and actionable guidance for the learner.`;
 
-  const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly valid JSON-only analytics when requested. Do not include any conversational filler outside the JSON.`;
+  const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly valid JSON-only analytics matching the schema below. CRITICAL: Use the exact JSON field names specified in schemaDesc. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
   "overallAssessment": "string (Empowering 2-3 sentence overview of learner's trajectory)",
   "strengthsSummary": "string (Key strengths and patterns where the learner excels)",
@@ -1422,7 +1512,8 @@ Provide a structured AI analysis with constructive insights, memory retention st
 
   if (isStaticHost()) {
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const parsedRaw = JSON.parse(text);
+    return normalizePerformanceAnalysis(parsedRaw);
   }
 
   try {
@@ -1433,12 +1524,14 @@ Provide a structured AI analysis with constructive insights, memory retention st
     });
 
     if (res.ok) {
-      return await res.json();
+      const rawJson = await res.json();
+      return normalizePerformanceAnalysis(rawJson);
     }
 
     if (res.status === 405 || res.status === 404) {
       const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      return JSON.parse(text);
+      const parsedRaw = JSON.parse(text);
+      return normalizePerformanceAnalysis(parsedRaw);
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1448,7 +1541,8 @@ Provide a structured AI analysis with constructive insights, memory retention st
       throw err;
     }
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const parsedRaw = JSON.parse(text);
+    return normalizePerformanceAnalysis(parsedRaw);
   }
 }
 
