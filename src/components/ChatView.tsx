@@ -11,6 +11,7 @@ import { speakText, getLanguageCode } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
 import FormattedMessage from "./chat/FormattedMessage";
 import QuizImage from "./quiz/QuizImage";
+import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -53,6 +54,7 @@ export default function ChatView({
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
@@ -308,13 +310,13 @@ export default function ChatView({
       categoryLabel: "Vocab",
       icon: <Camera className="w-4 h-4 text-blue-600" />,
       title: "📷 Scan Picture for Vocab",
-      description: "Upload a photo or image to extract and translate real-world vocabulary with AI Vision",
+      description: "Upload a photo or take a live picture to extract and translate real-world vocabulary with AI Vision",
       className: "bg-blue-50/90 hover:bg-blue-100 text-blue-950 border border-blue-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
       onClick: () => {
         handleIncrementActionCount("scan_picture_vocab");
         setIsActionsPanelOpen(false);
-        fileInputRef.current?.click();
+        setIsPhotoModalOpen(true);
       }
     },
     {
@@ -1119,13 +1121,13 @@ export default function ChatView({
           />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setIsPhotoModalOpen(true)}
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs ${
               selectedImage
                 ? "bg-blue-600 text-white shadow-xs scale-102"
                 : "bg-stone-100 hover:bg-stone-200/80 text-stone-700 hover:scale-105"
             }`}
-            title="Paste image (Ctrl+V), drop photo, or pick file to extract vocabulary with AI Vision"
+            title="Take a picture, upload photo, or paste image to extract vocabulary with AI Vision"
             id="chat-upload-photo-btn"
           >
             <Camera className="w-5 h-5" />
@@ -1159,6 +1161,16 @@ export default function ChatView({
         </div>
       </form>
 
+      {/* Photo Capture & Upload Modal */}
+      <PhotoCaptureModal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        onImageSelected={(dataUrl, name) => {
+          setSelectedImage({ dataUrl, name });
+          showToast("📷 Photo attached! Click Send or press Enter to analyze with AI Vision.");
+        }}
+        targetLanguage={targetLanguage}
+      />
     </div>
   );
 }
