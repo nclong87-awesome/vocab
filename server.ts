@@ -1756,7 +1756,6 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
         nativeLanguage,
         targetLanguage,
         imageData: base64Data,
-        imageDataUrl,
         customPrompt
       })
     });

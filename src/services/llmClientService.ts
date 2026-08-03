@@ -1881,7 +1881,6 @@ export async function analyzeImageVocabService(params: {
       nativeLanguage,
       targetLanguage,
       imageData: base64Data,
-      imageDataUrl,
       customPrompt
     })
   });
