@@ -131,47 +131,6 @@ function getProviderDisplayName(provider?: string): string {
   return provider;
 }
 
-function isVisionSupported(provider?: string, model?: string): boolean {
-  const p = (provider || "").toLowerCase().trim();
-  const m = (model || "").toLowerCase().trim();
-
-  // Gemini provider & Gemini models always support vision
-  if (p === "gemini" || m.includes("gemini")) {
-    return true;
-  }
-
-  // OpenAI models: gpt-4o, gpt-4o-mini, gpt-4.1, gpt-5, gpt-4-turbo, gpt-4-vision
-  if (p === "openai") {
-    if (
-      m.includes("gpt-4o") || 
-      m.includes("gpt-4.1") || 
-      m.includes("gpt-5") || 
-      m.includes("turbo") || 
-      m.includes("vision")
-    ) {
-      return true;
-    }
-    return false;
-  }
-
-  // Keyword match for vision capabilities across OpenRouter, Ollama, Groq, 9Flare, Custom, etc.
-  if (
-    m.includes("vision") ||
-    m.includes("gpt-4o") ||
-    m.includes("claude-3") ||
-    m.includes("claude-haiku") ||
-    m.includes("llava") ||
-    m.includes("minicpm") ||
-    m.includes("multimodal") ||
-    m.includes("llama-3.2-11b-vision") ||
-    m.includes("llama-3.2-90b-vision")
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
 // Parse server-side LLM error
 function parseServerError(err: any, provider: string = "gemini"): {
   statusCode: number;
@@ -866,8 +825,12 @@ async function callLLMWithImage(
   const baseUrl = providerSavedConfig?.baseUrl || llmConfig?.baseUrl || "";
   const sharedProxyKey = llmConfig?.proxyKey ||
     (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
-    process.env.PROXY_KEY || process.env.PROXY_SECRET || "";
+    process.env.X_PROXY_KEY || process.env.PROXY_KEY || process.env.PROXY_SECRET || "";
   const proxyKey = providerSavedConfig?.proxyKey || sharedProxyKey;
+
+  const effectiveApiKey = apiKey;
+  const effectiveProxyKey = proxyKey || process.env.X_PROXY_KEY || process.env.PROXY_KEY || process.env.PROXY_SECRET || "";
+  const activeKey = effectiveApiKey || effectiveProxyKey;
 
   let effectiveTargetBaseUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : defaultBaseUrl;
   effectiveTargetBaseUrl = effectiveTargetBaseUrl.replace(/\/+$/, "");
@@ -881,10 +844,8 @@ async function callLLMWithImage(
     "Content-Type": "application/json"
   };
 
-  if (apiKey) {
-    headers["Authorization"] = `Bearer ${apiKey}`;
-  } else if (provider !== "ollama" && proxyKey) {
-    headers["Authorization"] = `Bearer ${proxyKey}`;
+  if (activeKey) {
+    headers["Authorization"] = `Bearer ${activeKey}`;
   }
 
   if (provider === "openrouter") {
@@ -892,8 +853,8 @@ async function callLLMWithImage(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (proxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
-    headers["X-Proxy-Key"] = proxyKey || apiKey || "";
+  if (effectiveProxyKey || activeKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
+    headers["X-Proxy-Key"] = effectiveProxyKey || activeKey || "";
   }
 
   const reqBody = {

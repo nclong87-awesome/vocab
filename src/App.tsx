@@ -4,9 +4,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from "./types";
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
-import { switchActiveProvider, getSavedProvidersMap, getProviderDisplayName, isVisionSupported } from "./utils/llmHelpers";
+import { switchActiveProvider, getSavedProvidersMap, getProviderDisplayName } from "./utils/llmHelpers";
 import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeChatWordsService, analyzeImageVocabService } from "./services/llmClientService";
-import { generateQuizQuestions } from "./utils/quizGenerator";
 import { QuizQuestion } from "./types";
 import { 
   getAllWordsFromDB, 

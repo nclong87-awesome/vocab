@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
 import { generateQuizQuestions, generateConfusers, getImagePrompt } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
-import { isVisionSupported, getProviderDisplayName } from "../utils/llmHelpers";
+import { getProviderDisplayName } from "../utils/llmHelpers";
 
 // Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
 function sanitizeUnescapedJsonStrings(str: string): string {
@@ -1909,17 +1909,44 @@ ${customPrompt ? `Specific focus/instruction from user: "${customPrompt}"` : ""}
     return JSON.parse(cleaned);
   } else {
     // OpenAI-compatible client fallback for vision models
-    const apiKey = llmConfig?.apiKey || "";
-    const baseUrl = llmConfig?.baseUrl || "https://openai.nclong87.workers.dev/v1";
+    const providerSaved = llmConfig?.savedProviders?.[provider];
+    const apiKey = providerSaved?.apiKey || llmConfig?.apiKey || "";
+    const sharedProxyKey = llmConfig?.proxyKey ||
+      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") || "";
+    const proxyKey = providerSaved?.proxyKey || sharedProxyKey;
+    const activeKey = apiKey || proxyKey;
+
+    let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
+    if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
+    if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
+    if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
+    if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
+    if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
+
+    const baseUrl = providerSaved?.baseUrl || llmConfig?.baseUrl || defaultBaseUrl;
     const cleanBaseUrl = baseUrl.replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
     const targetUrl = cleanBaseUrl + "/chat/completions";
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+
+    if (activeKey) {
+      headers["Authorization"] = `Bearer ${activeKey}`;
+    }
+
+    if (proxyKey || activeKey || (cleanBaseUrl && (cleanBaseUrl.includes("workers.dev") || cleanBaseUrl.includes("worker.dev") || cleanBaseUrl.includes("cloudflare.com")))) {
+      headers["X-Proxy-Key"] = proxyKey || activeKey || "";
+    }
+
+    if (provider === "openrouter") {
+      headers["HTTP-Referer"] = "https://aistudio.google.com";
+      headers["X-Title"] = "Vocabulary Learner";
+    }
+
     const res = await fetch(targetUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages: [
