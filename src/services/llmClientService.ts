@@ -1625,8 +1625,11 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'picture': "Which word matches the visual concept shown below?" (set imagePrompt to a clear English visual prompt description strongly illustrating the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
+6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
+   - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
+   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imagePrompt' to a clear English visual prompt description strongly illustrating the target word itself and definition.
 
-5. Output Schema:
+7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
 [
   {
@@ -1642,7 +1645,9 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
   }
 ]`;
 
-  const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats:\n\n` +
+  const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
+
+CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with a descriptive 'imagePrompt' visual prompt.\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
@@ -1701,6 +1706,17 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
           imageUrl: imgUrl
         };
       });
+
+      // Guarantee at least one picture or image-based question in the generated quiz
+      const hasPictureQuestion = validQuestions.some(q => q.type === 'picture');
+      if (!hasPictureQuestion && validQuestions.length > 0) {
+        const targetQ = validQuestions[0];
+        const matchingWord = words.find(w => w.id === targetQ.wordId || w.word.toLowerCase() === targetQ.word.toLowerCase()) || words[0];
+        targetQ.type = 'picture';
+        targetQ.question = "Which word matches the visual concept shown below?";
+        targetQ.imagePrompt = getImagePrompt(matchingWord);
+        targetQ.imageUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(targetQ.imagePrompt)}`;
+      }
 
       return validQuestions;
     }

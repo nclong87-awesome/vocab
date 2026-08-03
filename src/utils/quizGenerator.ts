@@ -142,14 +142,17 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
   const allWords = wordList;
   const generated: QuizQuestion[] = [];
 
-  allWords.forEach((word) => {
+  // Guarantee at least one picture/image-based question in the generated quiz
+  const pictureQuestionIndex = Math.floor(Math.random() * allWords.length);
+
+  allWords.forEach((word, index) => {
     const types: ('definition' | 'sentence' | 'listening' | 'picture')[] = [
       'definition', 
       'sentence',
       'listening',
       'picture'
     ];
-    let type = types[Math.floor(Math.random() * types.length)];
+    let type = index === pictureQuestionIndex ? 'picture' : types[Math.floor(Math.random() * types.length)];
 
     // If definition contains native non-target language, avoid definition type to preserve target language restriction
     if (type === 'definition' && containsNonTargetLanguage(word.definition, targetLanguage)) {
