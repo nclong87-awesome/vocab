@@ -1597,12 +1597,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to the most relevant keywords for the target word, e.g. "volunteer, community service, helping hands")
+   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to ONE single search term only, with no comma, and it MUST be relevant to that word's context and category)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to the most relevant keywords for the target word.
+   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to ONE single comma-free search term that is directly relevant to the word's context and category.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:

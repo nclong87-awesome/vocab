@@ -1622,12 +1622,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to the most relevant keywords for the target word, e.g. "volunteer, community service, helping hands")
+  - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to ONE single search term only, with no comma, and it MUST be relevant to that word's context and category)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to the most relevant keywords for the target word.
+  - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to ONE single comma-free search term that is directly relevant to the word's context and category.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
@@ -1641,17 +1641,17 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imageKeyword": "string (most relevant keywords for picture questions)"
+    "imageKeyword": "string (ONE single comma-free search term for picture questions, directly relevant to the word's context and category)"
   }
 ]`;
 
   const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
-CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with relevant 'imageKeyword' keywords.\n\n` +
+CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is ONE single comma-free search term and is directly relevant to the word's context and category.\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword.`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (ONE single comma-free search term relevant to the word's context and category).`;
 
   try {
     let rawResultText = "";
