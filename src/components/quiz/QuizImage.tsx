@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { HelpCircle, Sparkles, ImageIcon, Loader2 } from "lucide-react";
+import { HelpCircle, ImageIcon, Loader2 } from "lucide-react";
 import { fetchWorkerImageUrl, getImageKeyword } from "../../utils/quizGenerator";
 
 interface QuizImageProps {
-  src?: string;
   imageKeyword?: string;
   alt?: string;
   word?: string;
   className?: string;
 }
 
-export function QuizImage({ src, imageKeyword, alt, word, className = "" }: QuizImageProps) {
+export function QuizImage({ imageKeyword, alt, word, className = "" }: QuizImageProps) {
   const [imgSrc, setImgSrc] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -21,42 +20,8 @@ export function QuizImage({ src, imageKeyword, alt, word, className = "" }: Quiz
     setFailed(false);
 
     async function loadVisualClue() {
-      // Direct valid image URL that is not a worker query endpoint
-      if (
-        src && 
-        src.trim().length > 0 && 
-        (
-          src.startsWith("data:") || 
-          src.startsWith("blob:") || 
-          src.startsWith("http://") || 
-          src.startsWith("https://")
-        ) && 
-        !src.includes("image.nclong87.workers.dev")
-      ) {
-        if (isMounted) {
-          setImgSrc(src);
-          if (src.startsWith("data:") || src.startsWith("blob:")) {
-            setLoading(false);
-          }
-        }
-        return;
-      }
-
       // Determine keyword to pass to image worker
       let keywordToUse = imageKeyword || "";
-      if (!keywordToUse && src) {
-        if (src.includes("image.nclong87.workers.dev")) {
-          try {
-            const urlObj = new URL(src);
-            keywordToUse = urlObj.searchParams.get("query") || urlObj.searchParams.get("prompt") || "";
-          } catch (e) {
-            keywordToUse = src.split("query=")[1] || src.split("prompt=")[1] || "";
-          }
-        } else if (!src.startsWith("http")) {
-          keywordToUse = src;
-        }
-      }
-
       if (!keywordToUse) {
         keywordToUse = word ? getImageKeyword(word) : "";
       }
@@ -77,7 +42,7 @@ export function QuizImage({ src, imageKeyword, alt, word, className = "" }: Quiz
     return () => {
       isMounted = false;
     };
-  }, [src, imageKeyword, word]);
+  }, [imageKeyword, word]);
 
   return (
     <div className={`relative w-full min-h-[220px] flex items-center justify-center bg-stone-100 overflow-hidden ${className}`}>
@@ -94,13 +59,6 @@ export function QuizImage({ src, imageKeyword, alt, word, className = "" }: Quiz
             <span className="text-xs font-bold text-stone-900 tracking-widest uppercase font-mono block">
               Loading Image...
             </span>
-            <span className="text-[11px] text-stone-500 font-serif italic block">
-              {word ? `Preparing visual clue for "${word}"` : "Preparing visual clue for quiz question"}
-            </span>
-          </div>
-          <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200/80 rounded-none text-[10px] font-mono font-bold text-amber-900">
-            <Sparkles className="w-3 h-3 text-amber-600 animate-spin" />
-            <span>AI Visual Rendering</span>
           </div>
         </div>
       )}

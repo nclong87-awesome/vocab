@@ -720,7 +720,6 @@ export default function ChatView({
                               />
                             ) : (
                               <QuizImage
-                                src={msg.imageUrl} 
                                 imageKeyword={msg.imageKeyword}
                                 alt="Quiz visual clue" 
                                 word={msg.audioWord || "Quiz clue"} 
