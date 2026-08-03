@@ -869,7 +869,7 @@ export default function App() {
       {
         id: statusMsgId,
         role: "assistant",
-        content: `📷 *Analyzing your picture with ${providerName} to extract vocabulary in ${targetLanguage}...*`,
+        content: `📷 *Analyzing your photo to extract vocabulary in ${targetLanguage}...*`,
         timestamp: new Date().toISOString()
       }
     ]);

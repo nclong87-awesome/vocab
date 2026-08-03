@@ -25,12 +25,20 @@ export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizI
       if (
         src && 
         src.trim().length > 0 && 
-        (src.startsWith("http://") || src.startsWith("https://")) && 
+        (
+          src.startsWith("data:") || 
+          src.startsWith("blob:") || 
+          src.startsWith("http://") || 
+          src.startsWith("https://")
+        ) && 
         !src.includes("image.nclong87.workers.dev") && 
         !src.includes("pollinations.ai")
       ) {
         if (isMounted) {
           setImgSrc(src);
+          if (src.startsWith("data:") || src.startsWith("blob:")) {
+            setLoading(false);
+          }
         }
         return;
       }

@@ -665,7 +665,18 @@ export default function ChatView({
                   >
                     {/* Format standard Markdown */}
                     {isUser ? (
-                      <p className="text-sm sm:text-base leading-relaxed font-medium break-words">{msg.content}</p>
+                      <div className="space-y-2">
+                        <p className="text-sm sm:text-base leading-relaxed font-medium break-words">{msg.content}</p>
+                        {msg.imageUrl && (
+                          <div className="mt-2 max-w-sm rounded-xl overflow-hidden border border-stone-200 bg-stone-900/5 shadow-2xs">
+                            <img 
+                              src={msg.imageUrl} 
+                              alt="Uploaded photo" 
+                              className="w-full max-h-64 object-cover rounded-xl"
+                            />
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <>
                         <FormattedMessage text={msg.content} />
@@ -696,15 +707,23 @@ export default function ChatView({
                           </div>
                         )}
 
-                        {/* Image for visual picture questions */}
+                        {/* Image for visual picture questions or photo analysis */}
                         {(msg.imageUrl || msg.imagePrompt) && (
-                          <div className="my-2.5 max-w-sm rounded-none border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
-                            <QuizImage
-                              src={msg.imageUrl} 
-                              imagePrompt={msg.imagePrompt}
-                              alt="Quiz visual clue" 
-                              word={msg.audioWord || "Quiz clue"} 
-                            />
+                          <div className="my-2.5 max-w-md rounded-xl border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
+                            {msg.imageUrl && (msg.imageUrl.startsWith("data:") || msg.imageUrl.startsWith("blob:")) ? (
+                              <img 
+                                src={msg.imageUrl} 
+                                alt={msg.audioWord || "Uploaded photo"} 
+                                className="w-full max-h-80 object-cover rounded-xl"
+                              />
+                            ) : (
+                              <QuizImage
+                                src={msg.imageUrl} 
+                                imagePrompt={msg.imagePrompt}
+                                alt="Quiz visual clue" 
+                                word={msg.audioWord || "Quiz clue"} 
+                              />
+                            )}
                           </div>
                         )}
 
