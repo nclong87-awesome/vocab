@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
-import { generateQuizQuestions, generateConfusers, getImagePrompt } from "../utils/quizGenerator";
+import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import { getProviderDisplayName, resizeImageDataUrl } from "../utils/llmHelpers";
 
@@ -1151,7 +1151,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
-     "imagePrompt": string,
+     "imageKeyword": string,
      "category": string,
      "context": string`;
 
@@ -1169,7 +1169,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imagePrompt": "string (short English visual description)",
+      "imageKeyword": "string (concise relevant keywords)",
       "category": "string",
       "context": "string"
     }
@@ -1622,12 +1622,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imagePrompt to a clear English visual prompt description strongly illustrating the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
+   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to the most relevant keywords for the target word, e.g. "volunteer, community service, helping hands")
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imagePrompt' to a clear English visual prompt description strongly illustrating the target word itself and definition.
+   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to the most relevant keywords for the target word.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
@@ -1641,17 +1641,17 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imagePrompt": "string (descriptive image generation prompt for picture questions)"
+    "imageKeyword": "string (most relevant keywords for picture questions)"
   }
 ]`;
 
   const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
-CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with a descriptive 'imagePrompt' visual prompt.\n\n` +
+CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with relevant 'imageKeyword' keywords.\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imagePrompt.`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword.`;
 
   try {
     let rawResultText = "";
@@ -1690,8 +1690,8 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
           }
         }
 
-        const promptText = q.imagePrompt || (q.imageUrl && !q.imageUrl.startsWith("http") ? q.imageUrl : (q.type === 'picture' ? getImagePrompt(matchingWord) : undefined));
-        const imgUrl = q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : (promptText ? `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}` : undefined);
+        const keywordText = q.imageKeyword || (q.type === 'picture' ? getImageKeyword(matchingWord) : undefined);
+        const imgUrl = q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : (keywordText ? `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}` : undefined);
 
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
@@ -1702,7 +1702,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
           options: options.sort(() => 0.5 - Math.random()),
           correctAnswer: q.correctAnswer || matchingWord.word,
           hint: q.hint || matchingWord.pronunciation,
-          imagePrompt: promptText,
+          imageKeyword: keywordText,
           imageUrl: imgUrl
         };
       });
@@ -1714,8 +1714,8 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
         const matchingWord = words.find(w => w.id === targetQ.wordId || w.word.toLowerCase() === targetQ.word.toLowerCase()) || words[0];
         targetQ.type = 'picture';
         targetQ.question = "Which word matches the visual concept shown below?";
-        targetQ.imagePrompt = getImagePrompt(matchingWord);
-        targetQ.imageUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(targetQ.imagePrompt)}`;
+        targetQ.imageKeyword = getImageKeyword(matchingWord);
+        targetQ.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(targetQ.imageKeyword)}`;
       }
 
       return validQuestions;

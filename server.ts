@@ -656,10 +656,10 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
 }
 
 // Helper function to generate image URL via Cloudflare Worker
-async function generateWorkerImage(promptText: string, effectiveProxyKey: string): Promise<string> {
-  if (!promptText) return "";
+async function generateWorkerImage(keyword: string, effectiveProxyKey: string): Promise<string> {
+  if (!keyword) return "";
   try {
-    const workerUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
+    const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;
     const response = await fetch(workerUrl, {
       method: "GET",
       headers: {
@@ -909,21 +909,21 @@ app.get("/api/health", (req, res) => {
 // Image Generation Endpoint via worker https://image.nclong87.workers.dev
 app.post("/api/generate-image", async (req, res) => {
   try {
-    const { prompt, proxyKey, llmConfig } = req.body || {};
-    const promptText = prompt || req.query.prompt || "";
-    if (!promptText) {
-      return res.status(400).json({ error: "Prompt parameter is required" });
+    const { query, keyword, prompt, proxyKey, llmConfig } = req.body || {};
+    const queryText = query || keyword || prompt || (req.query.query as string) || (req.query.keyword as string) || (req.query.prompt as string) || "";
+    if (!queryText) {
+      return res.status(400).json({ error: "Query parameter is required" });
     }
     const sharedProxyKey = llmConfig?.proxyKey ||
       (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
       "";
     const effectiveProxyKey = proxyKey || sharedProxyKey || (req.headers["x-proxy-key"] as string) || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
 
-    const imageUrl = await generateWorkerImage(promptText, effectiveProxyKey);
+    const imageUrl = await generateWorkerImage(queryText, effectiveProxyKey);
     if (!imageUrl) {
       return res.status(500).json({ error: "Failed to generate image from worker" });
     }
-    res.json({ imageUrl, prompt: promptText });
+    res.json({ imageUrl, query: queryText });
   } catch (error: any) {
     console.error("Error generating image via worker:", error);
     res.status(500).json({ error: error.message || "Failed to generate image" });
@@ -932,18 +932,18 @@ app.post("/api/generate-image", async (req, res) => {
 
 app.get("/api/generate-image", async (req, res) => {
   try {
-    const promptText = (req.query.prompt as string) || "";
+    const queryText = (req.query.query as string) || (req.query.keyword as string) || (req.query.prompt as string) || "";
     const clientProxyKey = (req.query.proxyKey as string) || (req.headers["x-proxy-key"] as string) || "";
-    if (!promptText) {
-      return res.status(400).json({ error: "Prompt query parameter is required" });
+    if (!queryText) {
+      return res.status(400).json({ error: "Query parameter is required" });
     }
     const effectiveProxyKey = clientProxyKey || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
 
-    const imageUrl = await generateWorkerImage(promptText, effectiveProxyKey);
+    const imageUrl = await generateWorkerImage(queryText, effectiveProxyKey);
     if (!imageUrl) {
       return res.status(500).json({ error: "Failed to generate image from worker" });
     }
-    res.json({ imageUrl, prompt: promptText });
+    res.json({ imageUrl, query: queryText });
   } catch (error: any) {
     console.error("Error generating image via worker GET:", error);
     res.status(500).json({ error: error.message || "Failed to generate image" });
@@ -1081,7 +1081,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
-     "imagePrompt": string,
+     "imageKeyword": string,
      "category": string,
      "context": string`;
 
@@ -1099,7 +1099,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imagePrompt": "string (short English visual description)",
+      "imageKeyword": "string (concise relevant keywords)",
       "category": "string",
       "context": "string"
     }
@@ -1597,12 +1597,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imagePrompt to a clear English visual prompt description strongly illustrating the target word itself and definition, e.g. "a clear photograph strongly highlighting the concept of 'VOLUNTEER' (a person freely offering help), clear subject focus, realistic photograph")
+   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to the most relevant keywords for the target word, e.g. "volunteer, community service, helping hands")
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imagePrompt' to a clear English visual prompt description strongly illustrating the target word itself and definition.
+   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to the most relevant keywords for the target word.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
@@ -1616,16 +1616,16 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imagePrompt": "string (visual prompt description for picture questions)"
+    "imageKeyword": "string (most relevant keywords for picture questions)"
   }
 ]`;
 
     const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
-CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with a descriptive 'imagePrompt' visual description.\n\n` +
+CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with relevant 'imageKeyword' keywords.\n\n` +
       (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
       `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
-    const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imagePrompt.`;
+    const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword.`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const cleaned = cleanJsonResponse(text);
@@ -1637,7 +1637,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
       if (!hasPicture) {
         result[0].type = "picture";
         result[0].question = "Which word matches the visual concept shown below?";
-        result[0].imagePrompt = `a clear photograph strongly highlighting the concept of "${result[0].word}", clear subject focus on ${result[0].word}, realistic photograph`;
+        result[0].imageKeyword = result[0].word;
       }
 
       const sharedProxyKey = llmConfig?.proxyKey ||
@@ -1647,17 +1647,14 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 
       await Promise.all(
         result.map(async (q: any) => {
-          if (q.type === "picture" || q.imagePrompt || q.imageUrl) {
-            const promptText = q.imagePrompt || (q.imageUrl && !q.imageUrl.startsWith("http")
-              ? q.imageUrl
-              : `a clear photograph strongly highlighting the concept of "${q.word}", clear subject focus on ${q.word}, realistic photograph`);
-            
-            q.imagePrompt = promptText;
-            const imgUrl = await generateWorkerImage(promptText, effectiveProxyKey);
+          if (q.type === "picture" || q.imageKeyword || q.imageUrl) {
+            const keywordText = q.imageKeyword || q.word;
+            q.imageKeyword = keywordText;
+            const imgUrl = await generateWorkerImage(keywordText, effectiveProxyKey);
             if (imgUrl) {
               q.imageUrl = imgUrl;
             } else {
-              q.imageUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
+              q.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
             }
           }
         })

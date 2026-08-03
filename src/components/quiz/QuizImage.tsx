@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { HelpCircle, Sparkles, ImageIcon, Loader2 } from "lucide-react";
-import { fetchWorkerImageUrl, getImagePrompt } from "../../utils/quizGenerator";
+import { fetchWorkerImageUrl, getImageKeyword } from "../../utils/quizGenerator";
 
 interface QuizImageProps {
   src?: string;
-  imagePrompt?: string;
+  imageKeyword?: string;
   alt?: string;
   word?: string;
   className?: string;
 }
 
-export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizImageProps) {
+export function QuizImage({ src, imageKeyword, alt, word, className = "" }: QuizImageProps) {
   const [imgSrc, setImgSrc] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -21,7 +21,7 @@ export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizI
     setFailed(false);
 
     async function loadVisualClue() {
-      // Direct valid image URL that is not a worker prompt endpoint
+      // Direct valid image URL that is not a worker query endpoint
       if (
         src && 
         src.trim().length > 0 && 
@@ -31,8 +31,7 @@ export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizI
           src.startsWith("http://") || 
           src.startsWith("https://")
         ) && 
-        !src.includes("image.nclong87.workers.dev") && 
-        !src.includes("pollinations.ai")
+        !src.includes("image.nclong87.workers.dev")
       ) {
         if (isMounted) {
           setImgSrc(src);
@@ -43,28 +42,26 @@ export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizI
         return;
       }
 
-      // Determine prompt to pass to image worker
-      let promptToUse = imagePrompt || "";
-      if (!promptToUse && src) {
+      // Determine keyword to pass to image worker
+      let keywordToUse = imageKeyword || "";
+      if (!keywordToUse && src) {
         if (src.includes("image.nclong87.workers.dev")) {
           try {
             const urlObj = new URL(src);
-            promptToUse = urlObj.searchParams.get("prompt") || "";
+            keywordToUse = urlObj.searchParams.get("query") || urlObj.searchParams.get("prompt") || "";
           } catch (e) {
-            promptToUse = src.split("prompt=")[1] || "";
+            keywordToUse = src.split("query=")[1] || src.split("prompt=")[1] || "";
           }
         } else if (!src.startsWith("http")) {
-          promptToUse = src;
+          keywordToUse = src;
         }
       }
 
-      if (!promptToUse) {
-        promptToUse = word
-          ? getImagePrompt(word)
-          : "a clear realistic photograph for vocabulary learning";
+      if (!keywordToUse) {
+        keywordToUse = word ? getImageKeyword(word) : "";
       }
 
-      const resolvedUrl = await fetchWorkerImageUrl(promptToUse);
+      const resolvedUrl = await fetchWorkerImageUrl(keywordToUse);
       if (isMounted) {
         if (resolvedUrl) {
           setImgSrc(resolvedUrl);
@@ -80,7 +77,7 @@ export function QuizImage({ src, imagePrompt, alt, word, className = "" }: QuizI
     return () => {
       isMounted = false;
     };
-  }, [src, imagePrompt, word]);
+  }, [src, imageKeyword, word]);
 
   return (
     <div className={`relative w-full min-h-[220px] flex items-center justify-center bg-stone-100 overflow-hidden ${className}`}>

@@ -710,7 +710,7 @@ export default function ChatView({
                         )}
 
                         {/* Image for visual picture questions or photo analysis */}
-                        {(msg.imageUrl || msg.imagePrompt) && (
+                        {(msg.imageUrl || msg.imageKeyword) && (
                           <div className="my-2.5 max-w-md rounded-xl border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
                             {msg.imageUrl && (msg.imageUrl.startsWith("data:") || msg.imageUrl.startsWith("blob:")) ? (
                               <img 
@@ -721,7 +721,7 @@ export default function ChatView({
                             ) : (
                               <QuizImage
                                 src={msg.imageUrl} 
-                                imagePrompt={msg.imagePrompt}
+                                imageKeyword={msg.imageKeyword}
                                 alt="Quiz visual clue" 
                                 word={msg.audioWord || "Quiz clue"} 
                               />

@@ -21,24 +21,15 @@ export function getImageSearchTerm(word: Word): string {
   return word.word;
 }
 
-// Helper function to generate relevant visual concept prompt
-export function getImagePrompt(word: Word | string, definition?: string): string {
-  const wordText = typeof word === 'string' ? word : word.word;
-  const defText = typeof word === 'object' ? (definition || word.definition || "") : (definition || "");
-  const categoryText = typeof word === 'object' && word.category ? `, category: ${word.category}` : '';
-
-  // Focus strongly on the target word itself and its definition
-  return `a clear, realistic photograph strongly emphasizing and clearly illustrating the target concept of "${wordText}" (${defText || 'target concept'})${categoryText}, clear subject focus on ${wordText}, high quality, clean background`;
+// Helper function to generate relevant visual concept keywords
+export function getImageKeyword(word: Word | string): string {
+  if (typeof word === 'string') return word;
+  return word.category ? `${word.word}, ${word.category}` : word.word;
 }
 
-// Backward compatible helper
-export function getPollinationsImageUrl(word: Word | string, definition?: string): string {
-  return getImagePrompt(word, definition);
-}
-
-// Helper function to fetch image URL from Cloudflare Worker endpoint
-export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string): Promise<string> {
-  if (!promptText) return "";
+// Helper function to fetch image URL from Cloudflare Worker endpoint using keyword query
+export async function fetchWorkerImageUrl(keyword: string, proxyKey?: string): Promise<string> {
+  if (!keyword) return "";
 
   let effectiveProxyKey = proxyKey || "";
   if (!effectiveProxyKey) {
@@ -65,7 +56,7 @@ export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string)
         "Content-Type": "application/json",
         ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
       },
-      body: JSON.stringify({ prompt: promptText, proxyKey: effectiveProxyKey })
+      body: JSON.stringify({ query: keyword, proxyKey: effectiveProxyKey })
     });
     if (res.ok) {
       const data = await res.json();
@@ -76,7 +67,7 @@ export async function fetchWorkerImageUrl(promptText: string, proxyKey?: string)
   }
 
   try {
-    const workerUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(promptText)}`;
+    const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;
     const headers: Record<string, string> = {};
     if (effectiveProxyKey) {
       headers["X-Proxy-Key"] = effectiveProxyKey;
@@ -165,7 +156,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     let hintText = word.pronunciation;
     let imageUrl: string | undefined = undefined;
 
-    let imagePrompt: string | undefined = undefined;
+    let imageKeyword: string | undefined = undefined;
 
     if (type === 'definition') {
       correctAnswer = word.word;
@@ -202,8 +193,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     else if (type === 'picture') {
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
-      imagePrompt = getImagePrompt(word);
-      imageUrl = `https://image.nclong87.workers.dev?prompt=${encodeURIComponent(imagePrompt)}`;
+      imageKeyword = getImageKeyword(word);
+      imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(imageKeyword)}`;
 
       let potentialWrongs = allWords
         .filter(w => w.id !== word.id)
@@ -246,7 +237,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options,
       correctAnswer,
       hint: hintText,
-      imagePrompt,
+      imageKeyword,
       imageUrl
     });
   });

@@ -65,7 +65,7 @@ export interface Word {
   lastReviewed: string | null;
   strength: number; // 0 to 4 (representing levels of familiarity)
   imageUrl?: string;
-  imagePrompt?: string;
+  imageKeyword?: string;
   category?: string;
   context?: string;
 }
@@ -78,7 +78,7 @@ export interface WordSense {
   pronunciation: string;
   example: string;
   exampleTranslation: string;
-  imagePrompt: string;
+  imageKeyword: string;
   category?: string;
   context?: string;
 }
@@ -94,7 +94,7 @@ export interface QuizQuestion {
   options?: string[]; // For multiple choice
   correctAnswer: string;
   hint?: string;
-  imagePrompt?: string;
+  imageKeyword?: string;
   imageUrl?: string;
 }
 
@@ -120,7 +120,7 @@ export interface ChatMessage {
   suggestedActions?: { label: string; action: string; payload?: any }[];
   audioWord?: string;
   imageUrl?: string;
-  imagePrompt?: string;
+  imageKeyword?: string;
   quizSpeechText?: string;
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
