@@ -740,13 +740,19 @@ function extractTextFromChoiceClient(choice: any): string {
   if (!choice) return "";
   if (choice.message) {
     const msg = choice.message;
-    const txt = extractTextFromContentClient(msg.content) || extractTextFromContentClient(msg.reasoning_content) || extractTextFromContentClient(msg.text);
+    const txt = extractTextFromContentClient(msg.content) || extractTextFromContentClient(msg.text);
     if (txt) return txt;
+    if (msg.reasoning_content && !msg.content) {
+      return extractTextFromContentClient(msg.reasoning_content);
+    }
   }
   if (choice.delta) {
     const delta = choice.delta;
-    const txt = extractTextFromContentClient(delta.content) || extractTextFromContentClient(delta.reasoning_content) || extractTextFromContentClient(delta.text);
+    const txt = extractTextFromContentClient(delta.content) || extractTextFromContentClient(delta.text);
     if (txt) return txt;
+    if (delta.reasoning_content && delta.content === undefined) {
+      return extractTextFromContentClient(delta.reasoning_content);
+    }
   }
   if (choice.text) {
     return extractTextFromContentClient(choice.text);
@@ -756,49 +762,112 @@ function extractTextFromChoiceClient(choice: any): string {
 
 // Helper to parse OpenAI/OpenRouter style responses (supporting both standard JSON objects and SSE/streaming lines)
 async function parseOpenAiStyleResponse(res: Response): Promise<string> {
-  const contentType = res.headers.get("content-type") || "";
   const rawText = await res.text();
 
   if (!rawText || !rawText.trim()) {
     throw new Error("Empty response received from API.");
   }
 
-  // 1. If content-type is event-stream or text contains SSE data lines ("data: {...}")
-  if (contentType.includes("event-stream") || rawText.includes("data: ")) {
-    let accumulatedText = "";
-    const lines = rawText.split("\n");
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      if (!line || !line.startsWith("data:")) continue;
-      
-      const dataStr = line.slice(5).trim();
-      if (dataStr === "[DONE]") continue;
+  const trimmedText = rawText.trim();
 
-      try {
-        const parsed = JSON.parse(dataStr);
-        const chunkText = extractTextFromChoiceClient(parsed.choices?.[0]);
-        if (chunkText) {
-          accumulatedText += chunkText;
-        }
-      } catch {
-        // Ignore unparseable chunk lines
+  // 1. Try parsing directly as a standard JSON response object
+  try {
+    const data = JSON.parse(trimmedText);
+    if (data && typeof data === "object") {
+      const content = extractTextFromChoiceClient(data.choices?.[0]) ||
+                      data.output ||
+                      data.text ||
+                      data.content ||
+                      "";
+      if (content) {
+        return cleanJsonResponse(content);
       }
     }
+  } catch {
+    // Not a single valid JSON object; proceed to parse as SSE / chunked event stream
+  }
 
-    if (accumulatedText) {
-      return cleanJsonResponse(accumulatedText);
+  // 2. Parse as SSE streaming event lines ("data: {...}") or chunked stream
+  let accumulatedText = "";
+  let dataBuffer = "";
+
+  const processChunk = (str: string): boolean => {
+    if (!str) return false;
+    const trimmed = str.trim();
+    if (!trimmed || trimmed === "[DONE]") return true;
+    try {
+      const parsed = JSON.parse(trimmed);
+      const chunkText = extractTextFromChoiceClient(parsed.choices?.[0]) ||
+                        parsed.choices?.[0]?.delta?.content ||
+                        parsed.choices?.[0]?.message?.content ||
+                        parsed.choices?.[0]?.text ||
+                        "";
+      if (chunkText) {
+        accumulatedText += chunkText;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const lines = trimmedText.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      if (dataBuffer) {
+        processChunk(dataBuffer);
+        dataBuffer = "";
+      }
+      continue;
+    }
+
+    if (line.startsWith(":")) {
+      // SSE comment / ping
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      const payload = line.slice(5).trim();
+      if (payload === "[DONE]") {
+        if (dataBuffer) {
+          processChunk(dataBuffer);
+          dataBuffer = "";
+        }
+        continue;
+      }
+
+      if (dataBuffer) {
+        if (!processChunk(dataBuffer)) {
+          // Unparsed buffer: append new payload line
+          dataBuffer += "\n" + payload;
+        } else {
+          dataBuffer = payload;
+        }
+      } else {
+        dataBuffer = payload;
+      }
+
+      if (processChunk(dataBuffer)) {
+        dataBuffer = "";
+      }
+    } else if (dataBuffer) {
+      // Continuation line (e.g. unescaped newline inside a string in SSE payload)
+      dataBuffer += "\n" + line;
+      if (processChunk(dataBuffer)) {
+        dataBuffer = "";
+      }
     }
   }
 
-  // 2. Try parsing as standard JSON response
-  try {
-    const data = JSON.parse(rawText);
-    const content = extractTextFromChoiceClient(data.choices?.[0]);
-    if (content) {
-      return cleanJsonResponse(content);
-    }
-  } catch {
-    // Not standard JSON object
+  if (dataBuffer) {
+    processChunk(dataBuffer);
+  }
+
+  if (accumulatedText) {
+    return cleanJsonResponse(accumulatedText);
   }
 
   // 3. Fallback to cleanJsonResponse on rawText
