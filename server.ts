@@ -1722,57 +1722,63 @@ For each candidate word detected:
   }
 });
 
-// 10. Multimodal Image Vocabulary Analysis endpoint
+// 10. Multimodal Image Vocabulary Analysis endpoint using Cloudflare Worker
 app.post("/api/analyze-image-vocab", async (req, res) => {
   try {
     const { imageDataUrl, customPrompt, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
 
     if (!imageDataUrl) {
-      return res.status(400).json({ error: "Image Data URL (imageDataUrl) is required" });
+      return res.status(400).json({ error: "Image Data (imageDataUrl) is required" });
     }
 
-    const prompt = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.
-Identify key objects, text, signs, items, actions, or scenes present in the image.
-${customPrompt ? `Specific focus/instruction from user: "${customPrompt}"` : ""}
-
-For each item found (provide 3 to 8 rich, practical items):
-- Target word/expression in "${targetLanguage}"
-- Direct translation in "${nativeLanguage}"
-- Part of speech (noun, verb, adjective, phrase, etc.)
-- International Phonetic Alphabet (IPA) pronunciation guide
-- Clear definition in "${targetLanguage}"
-- Sample sentence in "${targetLanguage}" using the word
-- Full translation of sample sentence in "${nativeLanguage}"
-- Suitable category (e.g., Food & Dining, City & Signs, Travel, Daily Life, Nature, Work, etc.)
-- Brief context note explaining what or where in the picture this item was identified.`;
-
-    const systemInstruction = `You are a high-level Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
-
-    const schemaDesc = `{
-  "imageDescription": "string (A concise 1-2 sentence description of what is depicted in the photograph)",
-  "vocabularyItems": [
-    {
-      "word": "string (word in target language ${targetLanguage})",
-      "translation": "string (translation in native language ${nativeLanguage})",
-      "partOfSpeech": "string",
-      "pronunciation": "string",
-      "definition": "string",
-      "example": "string",
-      "exampleTranslation": "string",
-      "category": "string",
-      "context": "string (Description of where or what in the image this item refers to)"
+    let base64Data = imageDataUrl;
+    if (imageDataUrl.startsWith("data:")) {
+      const parts = imageDataUrl.split(";base64,");
+      base64Data = parts[1] || imageDataUrl;
     }
-  ]
-}`;
 
-    const text = await callLLMWithImage(prompt, imageDataUrl, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const sharedProxyKey = llmConfig?.proxyKey || 
+      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") || 
+      llmConfig?.apiKey ||
+      process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (sharedProxyKey) {
+      headers["X-Proxy-Key"] = sharedProxyKey;
+    }
+
+    const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        nativeLanguage,
+        targetLanguage,
+        imageData: base64Data,
+        imageDataUrl,
+        customPrompt
+      })
+    });
+
+    if (!workerRes.ok) {
+      const errText = await workerRes.text().catch(() => workerRes.statusText);
+      throw new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
+    }
+
+    const rawText = await workerRes.text();
+    let result;
+    try {
+      result = JSON.parse(rawText);
+    } catch {
+      const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      result = JSON.parse(cleaned);
+    }
+
     res.json(result);
   } catch (error: any) {
-    console.error("Error analyzing image vocabulary:", error);
-    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
-    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
-    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+    console.error("Error analyzing image vocabulary via worker:", error);
+    res.status(500).json({ error: error.message || "Failed to analyze image vocabulary via Cloudflare worker" });
   }
 });
 

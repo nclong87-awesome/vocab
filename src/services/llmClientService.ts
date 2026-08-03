@@ -1798,7 +1798,7 @@ For each candidate word detected:
 }
 
 /**
- * Service to analyze image for vocabulary using Gemini Vision AI
+ * Service to analyze image for vocabulary using Cloudflare worker (https://image-analysis.nclong87.workers.dev/)
  */
 export async function analyzeImageVocabService(params: {
   imageDataUrl: string;
@@ -1831,9 +1831,7 @@ export async function analyzeImageVocabService(params: {
     }
   }
 
-  const provider = llmConfig?.provider || "gemini";
-  const model = llmConfig?.model || (provider === "gemini" ? "gemini-3.6-flash" : provider === "openai" ? "gpt-4o-mini" : "");
-
+  // 1. Attempt call through Node server API route if not running on static host
   if (!isStaticHost()) {
     try {
       const res = await fetch("/api/analyze-image-vocab", {
@@ -1852,133 +1850,56 @@ export async function analyzeImageVocabService(params: {
       if (e?.message && !e.message.includes("fetch")) {
         throw e;
       }
-      console.warn("Server API analyze-image-vocab failed, attempting client fallback:", e);
+      console.warn("Server API analyze-image-vocab failed, falling back to direct worker call:", e);
     }
   }
 
-  const prompt = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.
-Identify key objects, text, signs, items, actions, or scenes present in the image.
-${customPrompt ? `Specific focus/instruction from user: "${customPrompt}"` : ""}`;
-
-  const systemInstruction = `You are a Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
-  const schemaDesc = `{
-  "imageDescription": "string",
-  "vocabularyItems": [
-    {
-      "word": "string",
-      "translation": "string",
-      "partOfSpeech": "string",
-      "pronunciation": "string",
-      "definition": "string",
-      "example": "string",
-      "exampleTranslation": "string",
-      "category": "string",
-      "context": "string"
-    }
-  ]
-}`;
-
-  // Client-side fallback using selected provider
-  if (provider === "gemini" || model.includes("gemini")) {
-    const geminiSaved = llmConfig?.savedProviders?.gemini;
-    const apiKey = geminiSaved?.apiKey || llmConfig?.apiKey || "";
-    const sharedProxyKey = llmConfig?.proxyKey || "";
-    const effectiveKey = apiKey || sharedProxyKey;
-
-    let mimeType = "image/jpeg";
-    let base64Data = imageDataUrl;
-    if (imageDataUrl.startsWith("data:")) {
-      const parts = imageDataUrl.split(";base64,");
-      mimeType = parts[0].replace("data:", "") || "image/jpeg";
-      base64Data = parts[1] || "";
-    }
-
-    const ai = new GoogleGenAI({
-      apiKey: effectiveKey || "local-key"
-    });
-
-    const response = await ai.models.generateContent({
-      model: model || "gemini-3.6-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType, data: base64Data } },
-            { text: prompt }
-          ]
-        }
-      ],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json"
-      }
-    });
-
-    const cleaned = cleanJsonResponse(response.text || "");
-    return JSON.parse(cleaned);
-  } else {
-    // OpenAI-compatible client fallback for vision models
-    const providerSaved = llmConfig?.savedProviders?.[provider];
-    const apiKey = providerSaved?.apiKey || llmConfig?.apiKey || "";
-    const sharedProxyKey = llmConfig?.proxyKey ||
-      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") || "";
-    const proxyKey = providerSaved?.proxyKey || sharedProxyKey;
-    const activeKey = apiKey || proxyKey;
-
-    let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
-    if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
-    if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
-    if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
-    if (provider === "ollama") defaultBaseUrl = "http://localhost:11434/v1";
-    if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
-
-    const baseUrl = providerSaved?.baseUrl || llmConfig?.baseUrl || defaultBaseUrl;
-    const cleanBaseUrl = baseUrl.replace(/\/+$/, "").replace(/\/chat\/completions$/, "");
-    const targetUrl = cleanBaseUrl + "/chat/completions";
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    };
-
-    if (activeKey) {
-      headers["Authorization"] = `Bearer ${activeKey}`;
-    }
-
-    if (proxyKey || activeKey || (cleanBaseUrl && (cleanBaseUrl.includes("workers.dev") || cleanBaseUrl.includes("worker.dev") || cleanBaseUrl.includes("cloudflare.com")))) {
-      headers["X-Proxy-Key"] = proxyKey || activeKey || "";
-    }
-
-    if (provider === "openrouter") {
-      headers["HTTP-Referer"] = "https://aistudio.google.com";
-      headers["X-Title"] = "Vocabulary Learner";
-    }
-
-    const res = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDesc },
-          {
-            role: "user",
-            content: [
-              { type: "image_url", image_url: { url: imageDataUrl } },
-              { type: "text", text: prompt }
-            ]
-          }
-        ]
-      })
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error(`${getProviderDisplayName(provider)} Vision Error (${res.status}): ${errText}`);
-    }
-
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || "";
-    return JSON.parse(cleanJsonResponse(content));
+  // 2. Direct client-side call to Cloudflare Worker (https://image-analysis.nclong87.workers.dev/)
+  let base64Data = imageDataUrl;
+  if (imageDataUrl.startsWith("data:")) {
+    const parts = imageDataUrl.split(";base64,");
+    base64Data = parts[1] || imageDataUrl;
   }
+
+  const sharedProxyKey = llmConfig?.proxyKey ||
+    (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
+    llmConfig?.apiKey ||
+    "";
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  };
+
+  if (sharedProxyKey) {
+    headers["X-Proxy-Key"] = sharedProxyKey;
+  }
+
+  const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      nativeLanguage,
+      targetLanguage,
+      imageData: base64Data,
+      imageDataUrl,
+      customPrompt
+    })
+  });
+
+  if (!workerRes.ok) {
+    const errText = await workerRes.text().catch(() => workerRes.statusText);
+    throw new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
+  }
+
+  const rawText = await workerRes.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    const cleaned = cleanJsonResponse(rawText);
+    data = JSON.parse(cleaned);
+  }
+
+  return data;
 }
 
