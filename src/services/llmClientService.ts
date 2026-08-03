@@ -283,7 +283,7 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     return {
       statusCode: 429,
       errorType: "RATE_LIMIT",
-      userMessage: `Rate Limit Exceeded (429): ${provUpper} API quota or rate limit reached. Retrying automatically...`,
+      userMessage: `Rate Limit Exceeded (429): ${provUpper} API quota or rate limit reached.`,
       originalMessage,
       isRetryable: true,
       provider
