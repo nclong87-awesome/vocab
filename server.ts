@@ -105,7 +105,7 @@ function sanitizeModel(provider: string, model?: string): string {
     return model || "llama3.1-8B";
   }
   if (provider === "groq") {
-    return model || "openai/gpt-oss-20b";
+    return model || "openai/gpt-oss-120b";
   }
   if (provider === "openrouter") {
     return model || "deepseek/deepseek-chat";
@@ -115,7 +115,7 @@ function sanitizeModel(provider: string, model?: string): string {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "openai/gpt-oss-20b" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat");
+  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "openai/gpt-oss-120b" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "openai/gpt-oss-120b");
 }
 
 function getProviderDisplayName(provider?: string): string {

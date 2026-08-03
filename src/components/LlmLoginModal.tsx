@@ -23,7 +23,7 @@ import {
   BookmarkCheck
 } from "lucide-react";
 import { LLMConfig, LLMProvider, SavedProviderConfig, SavedProvidersMap } from "../types";
-import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 import { getSavedProvidersMap } from "../utils/llmHelpers";
 import { testLlmConnection } from "../services/llmClientService";
 
@@ -75,7 +75,7 @@ export default function LlmLoginModal({
   const [savedProfiles, setSavedProfiles] = useState<SavedProvidersMap>({});
 
   // LLM Config state
-  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || "groq");
+  const [provider, setProvider] = useState<LLMProvider>(currentConfig.provider || DEFAULT_PROVIDER_ID);
   const [model, setModel] = useState<string>(currentConfig.model || "openai/gpt-oss-120b");
   const [customModel, setCustomModel] = useState<string>("");
   const [isCustomModelMode, setIsCustomModelMode] = useState<boolean>(false);
@@ -97,7 +97,7 @@ export default function LlmLoginModal({
 
       const sharedProxy = currentConfig.proxyKey || Object.values(profiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
 
-      const activeP = currentConfig.provider || "groq";
+      const activeP = currentConfig.provider || DEFAULT_PROVIDER_ID;
       setProvider(activeP);
 
       const activeSaved = profiles[activeP];

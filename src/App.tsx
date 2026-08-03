@@ -22,6 +22,7 @@ import {
 import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords } from "./utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
+import { DEFAULT_PROVIDER_ID, getDefaultLLMConfig } from "./config/llmProviders";
 
 import ChatView from "./components/ChatView";
 import FlashcardsView from "./components/FlashcardsView";
@@ -42,13 +43,7 @@ export default function App() {
   const [loadingMessage, setLoadingMessage] = useState("");
   
   // LLM Provider Login Config state
-  const [llmConfig, setLlmConfig] = useState<LLMConfig>({
-    provider: "groq",
-    model: "openai/gpt-oss-120b",
-    apiKey: "",
-    baseUrl: "https://groq.nclong87.workers.dev/openai/v1",
-    isLoggedIn: true
-  });
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(getDefaultLLMConfig());
 
   // TTS Config state
   const [ttsConfig, setTtsConfig] = useState<TTSConfig>(DEFAULT_TTS_CONFIG);
@@ -65,7 +60,7 @@ export default function App() {
   }>({
     isOpen: false,
     errorMessage: "",
-    failedProvider: "groq",
+    failedProvider: DEFAULT_PROVIDER_ID,
     retryAction: null
   });
 
@@ -1470,16 +1465,11 @@ export default function App() {
       });
       setStats(loadedStats);
 
-      const loadedConfig = await getLLMConfigFromDB({
-        provider: "openrouter",
-        model: "deepseek/deepseek-chat",
-        apiKey: "",
-        baseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
-        isLoggedIn: true
-      });
+      const defaultConfig = getDefaultLLMConfig();
+      const loadedConfig = await getLLMConfigFromDB(defaultConfig);
 
-      const sanitizedProvider = loadedConfig.provider || "openrouter";
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "openrouter" ? "deepseek/deepseek-chat" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
+      const sanitizedProvider = loadedConfig.provider || DEFAULT_PROVIDER_ID;
+      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "groq" ? "openai/gpt-oss-120b" : sanitizedProvider === "openrouter" ? "deepseek/deepseek-chat" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
       const validGeminiModels = [
         "gemini-3.6-flash",
         "gemini-3.6-flash-lite",
@@ -1494,13 +1484,13 @@ export default function App() {
         ...loadedConfig,
         provider: sanitizedProvider as any,
         model: sanitizedModel,
-        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "openrouter" || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
+        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "groq" || sanitizedProvider === "openrouter" || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
       };
 
       setLlmConfig(activeConfig);
       await saveLLMConfigToDB(activeConfig);
 
-      if (!activeConfig.isLoggedIn && activeConfig.provider !== "openrouter" && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
+      if (!activeConfig.isLoggedIn && activeConfig.provider !== "groq" && activeConfig.provider !== "openrouter" && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
         setIsLlmModalOpen(true);
       }
 

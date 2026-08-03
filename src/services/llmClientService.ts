@@ -3,6 +3,7 @@ import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
 import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import { getProviderDisplayName, resizeImageDataUrl } from "../utils/llmHelpers";
+import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 
 // Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
 function sanitizeUnescapedJsonStrings(str: string): string {
@@ -89,21 +90,16 @@ const VALID_GEMINI_MODELS = [
 
 // Sanitize model names for provider
 export function sanitizeModel(provider: string, model?: string): string {
-  if (provider === "chatjimmy") {
-    return model || "llama3.1-8B";
-  }
-  if (provider === "groq") {
-    return model || "llama-3.3-70b-versatile";
-  }
-  if (provider === "openrouter") {
-    return model || "deepseek/deepseek-chat";
-  }
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "llama-3.3-70b-versatile" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat");
+  if (model) return model;
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
+  if (providerMeta?.defaultModel) return providerMeta.defaultModel;
+  const defaultMeta = PROVIDER_OPTIONS.find(p => p.id === DEFAULT_PROVIDER_ID) || PROVIDER_OPTIONS[0];
+  return defaultMeta.defaultModel;
 }
 
 export type LLMErrorType =

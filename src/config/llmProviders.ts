@@ -1,4 +1,10 @@
-import { LLMProviderOption } from "../types";
+import { LLMConfig, LLMProvider, LLMProviderOption } from "../types";
+
+/**
+ * Default AI Provider ID.
+ * To change the default provider across the app, simply update DEFAULT_PROVIDER_ID here!
+ */
+export const DEFAULT_PROVIDER_ID: LLMProvider = "groq";
 
 /**
  * Configuration file for LLM Providers.
@@ -96,5 +102,19 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     requiresKey: false
   }
 ];
+
+/**
+ * Gets the default LLMConfig based on DEFAULT_PROVIDER_ID.
+ */
+export function getDefaultLLMConfig(): LLMConfig {
+  const defaultMeta = PROVIDER_OPTIONS.find(p => p.id === DEFAULT_PROVIDER_ID) || PROVIDER_OPTIONS[0];
+  return {
+    provider: defaultMeta.id,
+    model: defaultMeta.defaultModel,
+    apiKey: "",
+    baseUrl: defaultMeta.defaultBaseUrl || "",
+    isLoggedIn: true
+  };
+}
 
 export default PROVIDER_OPTIONS;
