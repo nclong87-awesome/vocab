@@ -27,7 +27,7 @@ export default function AiErrorFallbackModal({
 
   // Default selected provider to the first available alternative
   const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(() => {
-    return alternativeProviders[0]?.id || "openrouter";
+    return alternativeProviders[0]?.id || "groq";
   });
 
   // Whenever modal opens or currentProvider changes, reset selectedProvider to first available option

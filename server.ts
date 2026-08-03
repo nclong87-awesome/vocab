@@ -314,38 +314,42 @@ async function callLLM(
       });
 
       const primaryModel = model || "gemini-3.6-flash";
-      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
+      try {
+        const response = await ai.models.generateContent({
+          model: primaryModel,
+          contents: prompt,
+          config: {
+            systemInstruction,
+            responseMimeType: "application/json"
+          }
+        });
 
-      let lastError: any = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const activeModel = attempt === 1 ? primaryModel : (fallbackModels[0] || "gemini-3.6-flash");
-        try {
-          const response = await ai.models.generateContent({
-            model: activeModel,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json"
+        if (!response.text) {
+          throw new Error("Empty response received from Gemini model.");
+        }
+        return cleanJsonResponse(response.text);
+      } catch (err: any) {
+        const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
+        const parsed = parseServerError(err, "gemini");
+        if ((parsed.statusCode === 404 || parsed.errorType === "NOT_FOUND") && fallbackModels.length > 0) {
+          try {
+            const fallbackRes = await ai.models.generateContent({
+              model: fallbackModels[0],
+              contents: prompt,
+              config: {
+                systemInstruction,
+                responseMimeType: "application/json"
+              }
+            });
+            if (fallbackRes.text) {
+              return cleanJsonResponse(fallbackRes.text);
             }
-          });
-
-          if (!response.text) {
-            throw new Error("Empty response received from Gemini model.");
-          }
-          return cleanJsonResponse(response.text);
-        } catch (err: any) {
-          lastError = err;
-          const parsed = parseServerError(err, "gemini");
-          if (!parsed.isRetryable && parsed.statusCode !== 404) {
-            throw err;
-          }
-          console.warn(`[Gemini Server Retry ${attempt}/3] Model ${activeModel} failed: ${err?.message}`);
-          if (attempt < 3) {
-            await new Promise((r) => setTimeout(r, 1000 * attempt));
+          } catch {
+            // throw original error
           }
         }
+        throw err;
       }
-      throw lastError;
     } else {
       // Worker proxy handling for Gemini (uses native generateContent endpoint rather than /chat/completions)
       const primaryModel = model || "gemini-3.6-flash";

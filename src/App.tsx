@@ -43,10 +43,10 @@ export default function App() {
   
   // LLM Provider Login Config state
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({
-    provider: "openrouter",
-    model: "deepseek/deepseek-chat",
+    provider: "groq",
+    model: "openai/gpt-oss-120b",
     apiKey: "",
-    baseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
+    baseUrl: "https://groq.nclong87.workers.dev/openai/v1",
     isLoggedIn: true
   });
 
@@ -65,7 +65,7 @@ export default function App() {
   }>({
     isOpen: false,
     errorMessage: "",
-    failedProvider: "openrouter",
+    failedProvider: "groq",
     retryAction: null
   });
 
@@ -75,7 +75,7 @@ export default function App() {
     retryAction: (newConfig: LLMConfig) => void
   ) => {
     const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to communicate with AI provider.");
-    const provider = currentConfig.provider || "openrouter";
+    const provider = currentConfig.provider || "groq";
 
     setAiErrorModal({
       isOpen: true,
@@ -97,7 +97,7 @@ export default function App() {
     setAiErrorModal({
       isOpen: false,
       errorMessage: "",
-      failedProvider: "openrouter",
+      failedProvider: "groq",
       retryAction: null
     });
 

@@ -144,34 +144,42 @@ export default function QuickAiSwitcher({
           <div className="fixed top-16 left-3 right-3 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl border border-stone-200/90 shadow-2xl shadow-stone-900/15 z-50 animate-in fade-in slide-in-from-top-2 duration-200 overflow-hidden">
             
             {/* Popover Header */}
-            <div className="bg-stone-50/90 px-4 py-3.5 border-b border-stone-200/80 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shrink-0 shadow-2xs">
-                  <Zap className="w-4 h-4 fill-current" />
+            <div className="bg-stone-50/90 px-4 py-3 border-b border-stone-200/80 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Zap className="w-4 h-4 fill-current text-amber-500" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-stone-900 leading-tight flex items-center gap-2">
-                    <span>AI Engine & Models</span>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Ready
-                    </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold text-stone-900 tracking-tight leading-none truncate">
+                    AI Engine & Models
                   </h3>
-                  <p className="text-[11px] text-stone-500 font-normal mt-0.5">Switch active AI model or set credentials</p>
+                  <div className="flex items-center gap-2 mt-1 min-w-0">
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                      isConnected 
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" 
+                        : "bg-amber-50 text-amber-700 border border-amber-200/80"
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
+                      {isConnected ? "Ready" : "Key Needed"}
+                    </span>
+                    <p className="text-[11px] text-stone-500 truncate hidden xs:block">
+                      Switch model or manage keys
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     setIsOpen(false);
                     onOpenLlmModal(llmConfig.provider);
                   }}
-                  className="px-2.5 py-1 text-[11px] font-semibold text-stone-700 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200/90 rounded-lg flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                  className="px-2.5 py-1 text-xs font-semibold text-stone-700 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200/90 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
                   title="Manage API Keys"
                 >
-                  <Sliders className="w-3 h-3 text-stone-500" />
+                  <Sliders className="w-3.5 h-3.5 text-stone-500" />
                   <span>Keys</span>
                 </button>
                 <button

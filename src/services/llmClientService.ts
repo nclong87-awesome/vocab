@@ -389,7 +389,7 @@ export async function callWithRetry<T>(
     onRetry?: (attempt: number, delayMs: number, error: ParsedLlmError) => void;
   } = {}
 ): Promise<T> {
-  const maxRetries = options.maxRetries ?? 3;
+  const maxRetries = options.maxRetries ?? 1;
   const initialDelayMs = options.initialDelayMs ?? 1000;
   const maxDelayMs = options.maxDelayMs ?? 4000;
   const backoffFactor = options.backoffFactor ?? 2;
@@ -499,7 +499,7 @@ export async function callLLMClientSide(
         const cleanText = resText.split("<|stats|>")[0];
         return cleanJsonResponse(cleanText);
       },
-      { maxRetries: 3, provider: "chatjimmy" }
+      { maxRetries: 1, provider: "chatjimmy" }
     );
   }
 
@@ -574,7 +574,7 @@ export async function callLLMClientSide(
             throw err;
           }
         },
-        { maxRetries: 3, provider: "gemini" }
+        { maxRetries: 1, provider: "gemini" }
       );
     } else {
       const primaryModel = model || "gemini-3.6-flash";
@@ -625,7 +625,7 @@ export async function callLLMClientSide(
           }
           return cleanJsonResponse(text);
         },
-        { maxRetries: 3, provider: "gemini" }
+        { maxRetries: 1, provider: "gemini" }
       );
     }
   }
@@ -660,7 +660,7 @@ export async function callLLMClientSide(
         const contentText = data.content?.[0]?.text || "";
         return cleanJsonResponse(contentText);
       },
-      { maxRetries: 3, provider: "anthropic" }
+      { maxRetries: 1, provider: "anthropic" }
     );
   }
 
@@ -746,7 +746,7 @@ export async function callLLMClientSide(
 
       return await parseOpenAiStyleResponse(res);
     },
-    { maxRetries: 3, provider }
+    { maxRetries: 1, provider }
   );
 }
 
@@ -1720,8 +1720,11 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 
       return validQuestions;
     }
-  } catch (err) {
-    console.warn("AI Quiz Generation failed, falling back to rule-based engine:", err);
+  } catch (err: any) {
+    console.warn("AI Quiz Generation failed:", err);
+    if (llmConfig && llmConfig.isLoggedIn) {
+      throw err;
+    }
   }
 
   return fallbackQuestions;
