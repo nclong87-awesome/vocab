@@ -27,7 +27,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       "openai/gpt-oss-120b", 
       "openai/gpt-oss-20b", 
-      "groq/compound"
+      // "groq/compound"
     ],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
     directBaseUrl: "https://api.groq.com/openai/v1",
@@ -40,9 +40,9 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "deepseek/deepseek-chat",
     models: [
       "deepseek/deepseek-chat",
-      "openrouter/free", 
+      // "openrouter/free", 
       "meta-llama/llama-3.3-70b-instruct",
-      "google/gemma-2-9b-it"
+      // "google/gemma-2-9b-it"
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://openrouter.ai/api/v1",
@@ -53,7 +53,11 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "Google Gemini",
     tagline: "Fast & highly structured intelligence",
     defaultModel: "gemini-3.6-flash",
-    models: ["gemini-3.5-flash-lite", "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"],
+    models: [
+      "gemini-3.5-flash-lite", 
+      "gemini-3.5-flash", 
+      "gemini-3.6-flash"
+    ],
     tts_models: ["gemini-3.6-flash", "gemini-3.5-flash"],
     defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
     directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
@@ -64,7 +68,12 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "Ollama",
     tagline: "Ollama Cloud API (https://ollama.com/v1)",
     defaultModel: "gemma4:31b",
-    models: ["gemma4:31b","gpt-oss:20b","nemotron-3-nano:30b-cloud"],
+    models: [
+      "gemma4:31b",
+      "gemma4:26b",
+      "gpt-oss:20b",
+      "nemotron-3-nano:30b-cloud"
+    ],
     defaultBaseUrl: "https://ollama.nclong87.workers.dev/v1",
     directBaseUrl: "https://ollama.com/v1",
     requiresKey: false
@@ -74,7 +83,11 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "9Flare",
     tagline: "High performance API gateway",
     defaultModel: "pro/claude-haiku-4-5",
-    models: ["pro/minimax-m2.5", "pro/claude-haiku-4-5", "pro/glm-5"],
+    models: [
+      // "pro/minimax-m2.5", 
+      "pro/claude-haiku-4-5", 
+      "pro/glm-5"
+    ],
     defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://9flare.com/api/v1",
     requiresKey: false
@@ -84,7 +97,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     name: "OpenAI",
     tagline: "GPT series models",
     defaultModel: "gpt-5.4-mini",
-    models: ["gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini"],
+    models: ["gpt-5.4-mini"],
     defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
     directBaseUrl: "https://api.openai.com/v1",
     requiresKey: false
