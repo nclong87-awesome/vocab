@@ -1933,7 +1933,100 @@ Output MUST be strictly valid JSON matching this schema:
   }
 });
 
-// 10. Multimodal Image Vocabulary Analysis endpoint using Cloudflare Worker
+// Helper to analyze image using Gemini Vision API on server side
+async function analyzeImageVocabWithGeminiServer(params: {
+  base64Data: string;
+  mimeType: string;
+  customPrompt?: string;
+  targetLanguage: string;
+  nativeLanguage: string;
+  apiKey?: string;
+}): Promise<any> {
+  const { base64Data, mimeType, customPrompt, targetLanguage, nativeLanguage, apiKey } = params;
+  const keyToUse = apiKey || process.env.GEMINI_API_KEY;
+  if (!keyToUse) {
+    throw new Error("No Gemini API key available for vision analysis fallback");
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: keyToUse,
+    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+  });
+
+  const promptText = `Analyze this image for a language learner.
+Target Language to learn: "${targetLanguage}"
+Learner's Native Language for translations: "${nativeLanguage}"
+${customPrompt ? `Additional user prompt/instructions: "${customPrompt}"` : ""}
+
+CRITICAL REQUIREMENTS:
+1. Identify 5 to 8 key objects, actions, scenes, or vocabulary words visible in or directly related to the photo.
+2. Provide a brief 1-2 sentence description of the image ("imageDescription") in "${targetLanguage}".
+3. For each vocabulary item ("vocabularyItems"), include:
+   - "word": string in "${targetLanguage}"
+   - "translation": string in "${nativeLanguage}"
+   - "partOfSpeech": string (e.g. noun, verb, adjective, phrase)
+   - "pronunciation": string (IPA or phonetic guide)
+   - "definition": string in "${targetLanguage}"
+   - "example": string in "${targetLanguage}"
+   - "exampleTranslation": string in "${nativeLanguage}"
+   - "category": string (e.g. "Food & Dining", "Travel", "Nature", "Everyday Objects")
+   - "context": string (short description of where/how it appears in the photo)
+
+Return strictly valid JSON matching this schema:
+{
+  "imageDescription": "string in ${targetLanguage}",
+  "vocabularyItems": [
+    {
+      "word": "string",
+      "translation": "string",
+      "partOfSpeech": "string",
+      "pronunciation": "string",
+      "definition": "string",
+      "example": "string",
+      "exampleTranslation": "string",
+      "category": "string",
+      "context": "string"
+    }
+  ]
+}`;
+
+  const imagePart = {
+    inlineData: {
+      mimeType: mimeType || "image/jpeg",
+      data: base64Data
+    }
+  };
+
+  const modelsToTry = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
+  let lastErr = null;
+
+  for (const m of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({
+        model: m,
+        contents: [imagePart, promptText],
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      if (response.text) {
+        const cleaned = cleanJsonResponse(response.text);
+        const parsed = JSON.parse(cleaned);
+        if (parsed && (parsed.vocabularyItems || parsed.imageDescription)) {
+          return parsed;
+        }
+      }
+    } catch (err: any) {
+      console.warn(`Gemini Vision model ${m} failed:`, err.message || err);
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error("Failed to analyze image with Gemini Vision");
+}
+
+// 10. Multimodal Image Vocabulary Analysis endpoint with Worker + Gemini Fallback
 app.post("/api/analyze-image-vocab", async (req, res) => {
   try {
     const { imageDataUrl, customPrompt, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
@@ -1943,9 +2036,14 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
     }
 
     let base64Data = imageDataUrl;
+    let mimeType = "image/jpeg";
     if (imageDataUrl.startsWith("data:")) {
       const parts = imageDataUrl.split(";base64,");
       base64Data = parts[1] || imageDataUrl;
+      const match = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,/);
+      if (match) {
+        mimeType = match[1];
+      }
     }
 
     const sharedProxyKey = llmConfig?.proxyKey || 
@@ -1960,35 +2058,56 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
       headers["X-Proxy-Key"] = sharedProxyKey;
     }
 
-    const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        nativeLanguage,
-        targetLanguage,
-        imageData: base64Data,
-        customPrompt
-      })
-    });
-
-    if (!workerRes.ok) {
-      const errText = await workerRes.text().catch(() => workerRes.statusText);
-      throw new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
-    }
-
-    const rawText = await workerRes.text();
-    let result;
+    // 1. Attempt Cloudflare Worker first
     try {
-      result = JSON.parse(rawText);
-    } catch {
-      const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-      result = JSON.parse(cleaned);
+      const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          nativeLanguage,
+          targetLanguage,
+          imageData: base64Data,
+          customPrompt
+        })
+      });
+
+      if (workerRes.ok) {
+        const rawText = await workerRes.text();
+        let result;
+        try {
+          result = JSON.parse(rawText);
+        } catch {
+          const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+          result = JSON.parse(cleaned);
+        }
+        if (result && (result.vocabularyItems || result.imageDescription)) {
+          return res.json(result);
+        }
+      }
+      console.warn(`Cloudflare Image Worker returned non-ok status (${workerRes.status}), falling back to Gemini Vision...`);
+    } catch (workerErr: any) {
+      console.warn("Cloudflare Image Worker call failed, falling back to Gemini Vision:", workerErr.message);
     }
 
-    res.json(result);
+    // 2. Fallback to Gemini Multimodal Vision API
+    try {
+      const apiKeyToUse = sharedProxyKey || process.env.GEMINI_API_KEY;
+      const geminiResult = await analyzeImageVocabWithGeminiServer({
+        base64Data,
+        mimeType,
+        customPrompt,
+        targetLanguage,
+        nativeLanguage,
+        apiKey: apiKeyToUse
+      });
+      return res.json(geminiResult);
+    } catch (geminiErr: any) {
+      console.error("Gemini Vision fallback also failed:", geminiErr);
+      return res.status(500).json({ error: geminiErr.message || "Failed to analyze image vocabulary." });
+    }
   } catch (error: any) {
-    console.error("Error analyzing image vocabulary via worker:", error);
-    res.status(500).json({ error: error.message || "Failed to analyze image vocabulary via Cloudflare worker" });
+    console.error("Error analyzing image vocabulary:", error);
+    res.status(500).json({ error: error.message || "Failed to analyze image vocabulary" });
   }
 });
 

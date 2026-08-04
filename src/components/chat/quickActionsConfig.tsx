@@ -36,7 +36,10 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Check spelling, grammar, and improve natural clarity",
       className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 0,
-      getAction: ({ onFixGrammar }) => onFixGrammar()
+      getAction: ({ onFixGrammar, onClearHistory }) => {
+        onClearHistory();
+        onFixGrammar();
+      }
     },
     {
       id: "start_quiz",
@@ -48,7 +51,10 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Interactive flashcards and recall challenge",
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 1,
-      getAction: ({ onStartQuiz }) => onStartQuiz()
+      getAction: ({ onStartQuiz, onClearHistory }) => {
+        onClearHistory();
+        onStartQuiz();
+      }
     },
     {
       id: "view_flashcard",
@@ -60,7 +66,10 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
       className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
-      getAction: ({ onViewFlashcard }) => onViewFlashcard?.()
+      getAction: ({ onViewFlashcard, onClearHistory }) => {
+        onClearHistory();
+        onViewFlashcard?.();
+      }
     },
     {
       id: "generate_topic",
@@ -71,8 +80,11 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Generate Words",
       description: "Build vocabulary around travel, business, or custom topics",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 2,
-      getAction: ({ onGenerateByTopic }) => onGenerateByTopic()
+      defaultIndex: 3,
+      getAction: ({ onGenerateByTopic, onClearHistory }) => {
+        onClearHistory();
+        onGenerateByTopic();
+      }
     },
     {
       id: "add_word",
@@ -83,8 +95,11 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Add Word to Collection",
       description: "Manually store new words with notes & definitions",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 3,
-      getAction: ({ onAddWord }) => onAddWord()
+      defaultIndex: 4,
+      getAction: ({ onAddWord, onClearHistory }) => {
+        onClearHistory();
+        onAddWord();
+      }
     },
     {
       id: "interactive_chat_coach",
@@ -95,7 +110,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Interactive Language Coach",
       description: "Ask AI coach for interactive guidance on Grammar Rules, Nuance Translation, or Situational Phrases",
       className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 4,
+      defaultIndex: 5,
       getAction: ({ targetLanguage: _targetLanguage, nativeLanguage: _nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -112,7 +127,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Explain Grammar Rules (in Native Language)",
       description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 5,
+      defaultIndex: 6,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -129,7 +144,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Common Phrases & Idioms",
       description: "Learn essential daily expressions & conversational idioms by topic or scenario",
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 6,
+      defaultIndex: 7,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -146,7 +161,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Translate & Contrast",
       description: "Compare nuances between native phrasing and target language for custom sentences",
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
+      defaultIndex: 8,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -163,7 +178,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       title: "Start Fresh Chat Session",
       description: "Clear current conversation thread and start fresh",
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
+      defaultIndex: 9,
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];

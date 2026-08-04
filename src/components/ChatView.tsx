@@ -4,7 +4,7 @@ import {
   Send, Sparkles, Plus, Volume2, 
   Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
   LayoutGrid, X, Search, Languages, FileText,
-  Camera, Image as _ImageIcon, Upload, Layers
+  Camera, Image as _ImageIcon, Upload, Layers, ArrowUpDown
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
@@ -60,6 +60,7 @@ export default function ChatView({
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat">("all");
   const [actionSearchQuery, setActionSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"most_used" | "default">("most_used");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
@@ -175,7 +176,6 @@ export default function ChatView({
     };
   }, []);
 
-
   // Quick Actions Usage Counter (persisted in localStorage)
   const [actionCounts, setActionCounts] = useState<Record<string, number>>(() => {
     try {
@@ -201,6 +201,16 @@ export default function ChatView({
     });
   };
 
+  const handleResetActionCounts = () => {
+    setActionCounts({});
+    try {
+      localStorage.removeItem("vocab_action_usage_counts");
+    } catch (e) {
+      console.error(e);
+    }
+    showToast("🧹 Quick action usage counters reset!");
+  };
+
   // Ordered quick action items with categories, descriptions, and icons
   const allQuickActionItems = [
     {
@@ -215,6 +225,8 @@ export default function ChatView({
       defaultIndex: 0,
       onClick: () => {
         handleIncrementActionCount("fix_grammar");
+        setSelectedImage(null);
+        onClearHistory();
         onFixGrammar();
         setIsActionsPanelOpen(false);
         scrollToBottom("smooth");
@@ -233,6 +245,8 @@ export default function ChatView({
       defaultIndex: 1,
       onClick: () => {
         handleIncrementActionCount("start_quiz");
+        setSelectedImage(null);
+        onClearHistory();
         onStartQuiz();
         setIsActionsPanelOpen(false);
         scrollToBottom("smooth");
@@ -251,6 +265,8 @@ export default function ChatView({
       defaultIndex: 2,
       onClick: () => {
         handleIncrementActionCount("view_flashcard");
+        setSelectedImage(null);
+        onClearHistory();
         onViewFlashcard?.();
         setIsActionsPanelOpen(false);
         scrollToBottom("smooth");
@@ -266,9 +282,11 @@ export default function ChatView({
       title: "Generate Words",
       description: "Build vocabulary around travel, business, or custom topics",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 2,
+      defaultIndex: 3,
       onClick: () => {
         handleIncrementActionCount("generate_topic");
+        setSelectedImage(null);
+        onClearHistory();
         onGenerateByTopic();
         setIsActionsPanelOpen(false);
         scrollToBottom("smooth");
@@ -284,11 +302,35 @@ export default function ChatView({
       title: "Add Word to Collection",
       description: "Manually store new words with notes & definitions",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 3,
+      defaultIndex: 4,
       onClick: () => {
         handleIncrementActionCount("add_word");
+        setSelectedImage(null);
+        onClearHistory();
         onAddWord();
         setIsActionsPanelOpen(false);
+        scrollToBottom("smooth");
+        focusInput();
+      }
+    },
+    {
+      id: "interactive_prompts",
+      label: "Interactive AI Prompts",
+      category: "writing" as const,
+      categoryLabel: "Writing",
+      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+      title: "⚡ Interactive Language Coach",
+      description: "Consolidated tool: Ask AI coach to guide you on Grammar Rules, Nuance Translation, or Situational Phrases in natural conversation",
+      className: "bg-amber-100/80 hover:bg-amber-200/90 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 5,
+      onClick: () => {
+        handleIncrementActionCount("interactive_prompts");
+        setIsActionsPanelOpen(false);
+        setSelectedImage(null);
+        onClearHistory();
+        onSendMessage(
+          `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
+        );
         scrollToBottom("smooth");
         focusInput();
       }
@@ -302,10 +344,11 @@ export default function ChatView({
       title: "Explain Grammar Rules (in Native Language)",
       description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 4,
+      defaultIndex: 6,
       onClick: () => {
         handleIncrementActionCount("explain_grammar");
         setIsActionsPanelOpen(false);
+        setSelectedImage(null);
         onClearHistory();
         onSendMessage(
           `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
@@ -323,10 +366,11 @@ export default function ChatView({
       title: "Common Phrases & Idioms",
       description: "Learn essential daily expressions & conversational idioms by topic or scenario",
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 5,
+      defaultIndex: 7,
       onClick: () => {
         handleIncrementActionCount("common_phrases");
         setIsActionsPanelOpen(false);
+        setSelectedImage(null);
         onClearHistory();
         onSendMessage(
           `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
@@ -344,34 +388,14 @@ export default function ChatView({
       title: "Translate & Contrast",
       description: "Compare nuances between native phrasing and target language for custom sentences",
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 6,
+      defaultIndex: 8,
       onClick: () => {
         handleIncrementActionCount("translate_contrast");
         setIsActionsPanelOpen(false);
+        setSelectedImage(null);
         onClearHistory();
         onSendMessage(
           `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
-        );
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "interactive_prompts",
-      label: "Interactive AI Prompts",
-      category: "writing" as const,
-      categoryLabel: "Writing",
-      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: "⚡ Interactive Language Coach",
-      description: "Consolidated tool: Ask AI coach to guide you on Grammar Rules, Nuance Translation, or Situational Phrases in natural conversation",
-      className: "bg-amber-100/80 hover:bg-amber-200/90 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
-      onClick: () => {
-        handleIncrementActionCount("interactive_prompts");
-        setIsActionsPanelOpen(false);
-        onClearHistory();
-        onSendMessage(
-          `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
         );
         scrollToBottom("smooth");
         focusInput();
@@ -386,10 +410,11 @@ export default function ChatView({
       title: "Start Fresh Chat Session",
       description: "Clear current conversation thread and start fresh",
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
+      defaultIndex: 9,
       onClick: () => {
         handleIncrementActionCount("new_chat");
         setIsActionsPanelOpen(false);
+        setSelectedImage(null);
         onClearHistory();
         scrollToBottom("smooth");
         focusInput();
@@ -397,12 +422,14 @@ export default function ChatView({
     }
   ];
 
-  // Sorted quick action items by usage count
+  // Sorted quick action items by usage count or default index
   const quickActionItems = [...allQuickActionItems].sort((a, b) => {
-    const countA = actionCounts[a.id] || 0;
-    const countB = actionCounts[b.id] || 0;
-    if (countB !== countA) {
-      return countB - countA;
+    if (sortMode === "most_used") {
+      const countA = actionCounts[a.id] || 0;
+      const countB = actionCounts[b.id] || 0;
+      if (countB !== countA) {
+        return countB - countA;
+      }
     }
     return a.defaultIndex - b.defaultIndex;
   });
@@ -636,7 +663,7 @@ export default function ChatView({
               // Filter actions if this is NOT the latest message in the thread:
               // Hide interactive navigation actions ("send_message", "quiz_answer", "start_quiz") on old messages
               if (!isLatestMessage) {
-                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition");
+                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image");
               }
             }
 
@@ -840,6 +867,15 @@ export default function ChatView({
                                 );
                                 scrollToBottom("smooth");
                                 focusInput();
+                              } else if (act.action === "retry_analyze_image" && onAnalyzeImageVocab) {
+                                const imageToRetry = act.payload?.imageDataUrl || [...messages].reverse().find(m => Boolean(m.imageUrl))?.imageUrl;
+                                if (imageToRetry) {
+                                  showToast("🔄 Retrying photo vocabulary analysis...");
+                                  onAnalyzeImageVocab(imageToRetry, act.payload?.customPrompt);
+                                } else {
+                                  showToast("📷 Please upload or select a photo to analyze");
+                                  setIsPhotoModalOpen(true);
+                                }
                               } else if (act.action === "send_message" && act.payload?.message) {
                                 onSendMessage(act.payload.message);
                               }
@@ -985,28 +1021,55 @@ export default function ChatView({
               </div>
             </div>
 
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-              {[
-                { id: "all", label: "All Actions" },
-                { id: "writing", label: "✍️ Writing & Polish" },
-                { id: "study", label: "🧠 Quiz & Study" },
-                { id: "vocab", label: "📚 Vocabulary" },
-                { id: "chat", label: "💬 Chat Session" }
-              ].map((cat) => (
+            {/* Category Filter Pills & Sort Options */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+                {[
+                  { id: "all", label: "All Actions" },
+                  { id: "writing", label: "✍️ Writing & Polish" },
+                  { id: "study", label: "🧠 Quiz & Study" },
+                  { id: "vocab", label: "📚 Vocabulary" },
+                  { id: "chat", label: "💬 Chat Session" }
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id as any)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedCategory === cat.id
+                        ? "bg-stone-900 text-white shadow-xs"
+                        : "bg-white hover:bg-stone-100 text-stone-600 border border-stone-200/80"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
                 <button
-                  key={cat.id}
                   type="button"
-                  onClick={() => setSelectedCategory(cat.id as any)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    selectedCategory === cat.id
-                      ? "bg-stone-900 text-white shadow-xs"
-                      : "bg-white hover:bg-stone-100 text-stone-600 border border-stone-200/80"
+                  onClick={() => setSortMode(prev => prev === "most_used" ? "default" : "most_used")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                    sortMode === "most_used"
+                      ? "bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-300 shadow-2xs"
+                      : "bg-white hover:bg-stone-100 text-stone-700 border-stone-200"
                   }`}
+                  title={sortMode === "most_used" ? "Sorting by Most Used. Click for Default Order." : "Sorting by Default Order. Click for Most Used."}
                 >
-                  {cat.label}
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  <span>{sortMode === "most_used" ? "🔥 Sort: Most Used" : "📋 Sort: Default"}</span>
                 </button>
-              ))}
+
+                <button
+                  type="button"
+                  onClick={handleResetActionCounts}
+                  className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 hover:bg-stone-200/60 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                  title="Reset usage counters for all actions"
+                >
+                  Reset Counts
+                </button>
+              </div>
             </div>
 
             {/* Grid of Action Cards */}
@@ -1082,6 +1145,11 @@ export default function ChatView({
               >
                 {item.icon}
                 <span>{item.label}</span>
+                {count > 0 && (
+                  <span className="bg-amber-200/90 text-amber-950 text-[10px] font-mono font-extrabold px-1.5 py-0.2 rounded-full shadow-2xs shrink-0">
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
