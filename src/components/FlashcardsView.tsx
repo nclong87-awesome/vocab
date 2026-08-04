@@ -10,7 +10,6 @@ import {
   
   Check, 
   HelpCircle,
-  Sparkles,
   Trophy,
   List,
   Layers

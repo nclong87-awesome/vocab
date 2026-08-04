@@ -6,8 +6,7 @@ import {
   ExternalLink, 
   Check, 
   Sliders, 
-  AlertCircle,
-  HardDrive
+  AlertCircle
 } from "lucide-react";
 
 interface CloudSyncConfigModalProps {

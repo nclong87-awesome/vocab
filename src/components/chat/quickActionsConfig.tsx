@@ -56,7 +56,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       category: "study",
       categoryLabel: "Study",
       icon: <Layers className="w-4 h-4 text-indigo-600" />,
-      title: "View Word Flash Card",
+      title: "Flash Card",
       description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
       className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
@@ -96,7 +96,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Ask AI coach for interactive guidance on Grammar Rules, Nuance Translation, or Situational Phrases",
       className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
-      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
+      getAction: ({ targetLanguage: _targetLanguage, nativeLanguage: _nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
           `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`

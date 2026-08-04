@@ -57,7 +57,7 @@ export default function FlashcardMessageCard({
       </div>
 
       {/* Main Flashcard Body */}
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-3 sm:p-4 space-y-3.5">
         {/* Word Title & Pronunciation & Primary Speaker */}
         <div className="flex items-start justify-between gap-3 border-b border-stone-100 pb-3">
           <div className="min-w-0 flex-1">

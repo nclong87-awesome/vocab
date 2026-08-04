@@ -24,11 +24,11 @@ interface AppHeaderProps {
 }
 
 export default function AppHeader({
-  currentView,
+  currentView: _currentView,
   setCurrentView,
-  setIsLlmModalOpen,
+  setIsLlmModalOpen: _setIsLlmModalOpen,
   llmConfig,
-  stats,
+  stats: _stats,
   onSwitchProvider,
   onOpenLlmModal,
   targetLanguage = "English",
@@ -121,22 +121,6 @@ export default function AppHeader({
         <Sliders className="w-3.5 h-3.5" />
         <span>{t("nav_settings", appLanguage)}</span>
       </button>
-    </div>
-  );
-
-  const renderStreak = () => (
-    <div className="flex items-center gap-3 pl-4 border-l border-stone-200">
-      <span className="text-xs text-stone-500 font-medium">Streak</span>
-      <div className="flex gap-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div 
-            key={i} 
-            className={`w-4 h-1 transition-all ${
-              i < stats.streak.count ? "bg-stone-900" : "bg-stone-200"
-            }`}
-          />
-        ))}
-      </div>
     </div>
   );
 

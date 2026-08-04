@@ -245,7 +245,7 @@ export default function ChatView({
       category: "study" as const,
       categoryLabel: "Study",
       icon: <Layers className="w-4 h-4 text-indigo-600" />,
-      title: "View Word Flash Card",
+      title: "Flash Card",
       description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
       className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
@@ -513,7 +513,7 @@ export default function ChatView({
 
   return (
     <div 
-      className="flex flex-col flex-1 min-h-0 h-full bg-white rounded-none sm:rounded-xl border border-stone-200 overflow-hidden shadow-none relative" 
+      className="flex flex-col flex-1 min-h-0 h-full bg-stone-50/10 rounded-none sm:rounded-2xl border border-stone-200/80 overflow-hidden shadow-sm relative" 
       id="chat-container"
       onDragOver={handleDragOver}
       onDragEnter={handleDragOver}
@@ -560,7 +560,7 @@ export default function ChatView({
       </AnimatePresence>
 
       {/* Chat Messages Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-message-body" id="chat-messages-body">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-stone-50/50 chat-message-body" id="chat-messages-body">
         <AnimatePresence initial={false}>
           {messages.map((msg, idx) => {
             const isUser = msg.role === "user";
@@ -649,24 +649,29 @@ export default function ChatView({
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
-                className={`flex flex-col ${isUser ? "ml-auto" : "mr-auto"}`}
+                className={
+                  isUser
+                    ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end"
+                    : "flex flex-col max-w-full w-full mr-auto items-stretch"
+                }
               >
                 {/* Message Content Bubble */}
-                <div className="space-y-2">
+                <div className="space-y-2 w-full flex flex-col">
                   <div 
-                    className={`p-3.5 rounded-2xl ${
-                      msg.flashcardData ? "flashcard-message-card"
-                      :
-                      isUser 
-                        ? "text-stone-900 border border-stone-200 rounded-tr-none shadow-3xs" 
-                        : "bg-stone-50 border border-stone-200 text-stone-950 rounded-tl-none"
-                    }`}
-                    style={isUser ? { backgroundColor: "#E5F1FF" } : undefined}
+                    className={
+                      msg.flashcardData 
+                        ? "w-full"
+                        : `p-4 rounded-2xl w-full ${
+                            isUser 
+                              ? "bg-stone-900 text-white border border-stone-850 rounded-tr-none shadow-xs" 
+                              : "bg-white border border-stone-200/60 text-stone-900 rounded-tl-none shadow-3xs"
+                          }`
+                    }
                   >
                     {/* Format standard Markdown */}
                     {isUser ? (
                       <div className="space-y-2">
-                        <p className="text-sm sm:text-base leading-relaxed font-medium break-words">{msg.content}</p>
+                        <p className="text-sm sm:text-base leading-relaxed font-medium break-words text-white">{msg.content}</p>
                         {msg.imageUrl && (
                           <div className="mt-2 max-w-sm rounded-xl overflow-hidden border border-stone-200 bg-stone-900/5 shadow-2xs">
                             <img 
@@ -772,7 +777,7 @@ export default function ChatView({
 
                   {/* AI Suggested Actions Render */}
                   {!isUser && effectiveActions && effectiveActions.length > 0 && (
-                    <div className="flex flex-col gap-1.5 pt-1">
+                    <div className="flex flex-col gap-1.5 pt-1 w-full">
                       {effectiveActions.map((act, aIdx) => {
                         const isNextQ = act.label.toLowerCase().includes("question") || 
                           act.label.toLowerCase().includes("move on") || 
@@ -1024,7 +1029,7 @@ export default function ChatView({
                           </div>
                           <div>
                             <h5 className="text-xs font-bold text-stone-900 group-hover:text-stone-950 flex items-center gap-1">
-                              {item.title}
+                              {item.label}
                             </h5>
                             <span className="text-[10px] text-stone-400 font-semibold uppercase tracking-wider block">
                               {item.categoryLabel}
@@ -1108,19 +1113,19 @@ export default function ChatView({
       <form onSubmit={handleSubmit} className="p-3 bg-white border-t border-stone-200 shrink-0">
         {/* Attached image preview banner */}
         {selectedImage && (
-          <div className="mb-2.5 p-2 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+          <div className="mb-2.5 p-2 bg-amber-50/90 border border-amber-200/80 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
             <div className="flex items-center gap-2.5 min-w-0">
               <img
                 src={selectedImage.dataUrl}
                 alt="Upload preview"
-                className="w-10 h-10 object-cover rounded-lg border border-blue-300 shrink-0 shadow-2xs"
+                className="w-10 h-10 object-cover rounded-lg border border-amber-300 shrink-0 shadow-2xs"
               />
               <div className="min-w-0">
-                <span className="text-xs font-bold text-blue-950 truncate block flex items-center gap-1">
-                  <Camera className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="text-xs font-bold text-amber-950 truncate block flex items-center gap-1">
+                  <Camera className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   Photo Attached: {selectedImage.name}
                 </span>
-                <span className="text-[10px] text-blue-700/80 block">
+                <span className="text-[10px] text-amber-800/80 block">
                   Gemini Vision will extract & translate vocabulary items when submitted
                 </span>
               </div>
@@ -1128,7 +1133,7 @@ export default function ChatView({
             <button
               type="button"
               onClick={() => setSelectedImage(null)}
-              className="p-1 rounded-full bg-blue-200/80 hover:bg-blue-300 text-blue-900 transition-colors cursor-pointer shrink-0"
+              className="p-1 rounded-full bg-amber-200/80 hover:bg-amber-300 text-amber-900 transition-colors cursor-pointer shrink-0"
               title="Remove attached photo"
             >
               <X className="w-4 h-4" />
@@ -1150,7 +1155,7 @@ export default function ChatView({
             onClick={() => setIsPhotoModalOpen(true)}
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs ${
               selectedImage
-                ? "bg-blue-600 text-white shadow-xs scale-102"
+                ? "bg-amber-400 text-stone-950 shadow-xs scale-102 border border-amber-500/30"
                 : "bg-stone-100 hover:bg-stone-200/80 text-stone-700 hover:scale-105"
             }`}
             title="Take a picture, upload photo, or paste image to extract vocabulary with AI Vision"

@@ -9,8 +9,7 @@ import {
   CheckCircle2, 
   Cpu,
   X,
-  Server,
-  ShieldCheck
+  Server
 } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
@@ -38,7 +37,7 @@ export default function QuickAiSwitcher({
   llmConfig,
   onSwitchProvider,
   onOpenLlmModal,
-  compact = false
+  compact: _compact = false
 }: QuickAiSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);

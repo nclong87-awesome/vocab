@@ -17,7 +17,6 @@ import {
   ShieldCheck,
   Server,
   Globe2,
-  BookOpen,
   Check,
   Zap,
   BookmarkCheck

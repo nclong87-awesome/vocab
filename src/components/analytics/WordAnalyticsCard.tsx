@@ -26,31 +26,35 @@ export default function WordAnalyticsCard({
 
   return (
     <div 
-      className={`bg-stone-50 border p-4 space-y-3 relative flex flex-col justify-between transition-all hover:border-stone-400 ${
-        isMemoryDecayed ? "border-orange-300 hover:border-orange-500 bg-orange-50/20" : isMastered ? "border-emerald-200 hover:border-emerald-400" : "border-rose-200 hover:border-rose-400"
-      }`}
+      className={`p-5 space-y-4 relative flex flex-col justify-between transition-all duration-300 rounded-xl border ${
+        isMemoryDecayed 
+          ? "border-amber-300/80 bg-amber-50/15 shadow-[0_1px_3px_rgba(245,158,11,0.03)] hover:border-amber-400 hover:shadow-xs" 
+          : isMastered 
+            ? "border-emerald-200/80 bg-emerald-50/10 shadow-[0_1px_3px_rgba(16,185,129,0.02)] hover:border-emerald-300 hover:shadow-xs" 
+            : "border-stone-200/80 bg-white shadow-2xs hover:border-stone-300 hover:shadow-xs"
+      } hover:-translate-y-0.5`}
     >
       {/* Top Word Header */}
-      <div className="space-y-1.5">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h4 className="text-base font-bold text-stone-950 font-serif flex items-center gap-2">
-              {word.word}
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="text-lg font-bold text-stone-900 tracking-tight flex flex-wrap items-center gap-2">
+              <span className="truncate">{word.word}</span>
               {isMemoryDecayed && (
-                <span className="text-[9px] font-bold text-orange-800 bg-orange-100 border border-orange-200 px-1.5 py-0.5 rounded-none font-mono flex items-center gap-0.5" title={`Last reviewed ${daysSinceReview} day(s) ago. Refresher recommended!`}>
-                  <RefreshCw className="w-2.5 h-2.5 text-orange-600" />
-                  {daysSinceReview > 0 ? `${daysSinceReview}d ago` : "Refresher"}
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-mono shrink-0" title={`Last reviewed ${daysSinceReview} day(s) ago. Refresher recommended!`}>
+                  <RefreshCw className="w-2.5 h-2.5 text-amber-600 animate-spin-slow" />
+                  <span>{daysSinceReview > 0 ? `${daysSinceReview}d ago` : "Refresher"}</span>
                 </span>
               )}
             </h4>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Audio Pronunciation Button */}
             <button
               onClick={() => onSpeakWord(word.word, word.id)}
-              className={`p-1.5 border border-stone-200 bg-white hover:border-stone-900 text-stone-700 transition-all cursor-pointer ${
-                speakingWordId === word.id ? "bg-amber-100 text-amber-900 animate-pulse" : ""
+              className={`p-2 rounded-lg border border-stone-200/80 bg-white text-stone-600 hover:text-stone-900 hover:border-stone-300 transition-all cursor-pointer shadow-3xs ${
+                speakingWordId === word.id ? "bg-amber-50 text-amber-900 border-amber-300 animate-pulse" : ""
               }`}
               title="Listen Pronunciation"
             >
@@ -60,23 +64,28 @@ export default function WordAnalyticsCard({
             {/* Star Toggle */}
             <button
               onClick={() => onToggleStarWord(word.id)}
-              className={`p-1.5 border bg-white transition-all cursor-pointer ${
+              className={`p-2 rounded-lg border bg-white transition-all cursor-pointer shadow-3xs ${
                 word.starred 
-                  ? "border-amber-400 text-amber-500 fill-amber-400" 
-                  : "border-stone-200 text-stone-400 hover:text-stone-900"
+                  ? "border-amber-300 text-amber-500 bg-amber-50/30" 
+                  : "border-stone-200/80 text-stone-400 hover:text-stone-700 hover:border-stone-300"
               }`}
               title={word.starred ? "Unstar word" : "Star word for priority review"}
             >
-              <Star className={`w-3.5 h-3.5 ${word.starred ? "fill-amber-400" : ""}`} />
+              <Star className={`w-3.5 h-3.5 ${word.starred ? "fill-amber-400 text-amber-500" : ""}`} />
             </button>
           </div>
         </div>
 
         {/* Pronunciation & Part of speech */}
         <div className="flex items-center gap-2 text-xs text-stone-500 font-mono">
-          {word.pronunciation && <span>/{word.pronunciation}/</span>}
+          {word.pronunciation && (
+            <span className="text-stone-400">/{word.pronunciation}/</span>
+          )}
+          {word.pronunciation && word.partOfSpeech && (
+            <span className="text-stone-300">•</span>
+          )}
           {word.partOfSpeech && (
-            <span className="text-[10px] bg-stone-200 px-1.5 py-0.5 text-stone-800 font-semibold font-sans">
+            <span className="text-[10px] bg-stone-100 text-stone-600 font-bold px-2 py-0.5 rounded font-sans tracking-wide">
               {word.partOfSpeech}
             </span>
           )}
@@ -84,57 +93,63 @@ export default function WordAnalyticsCard({
       </div>
 
       {/* Definitions & Translations */}
-      <div className="space-y-1 text-xs pt-1 border-t border-stone-200/60">
-        <p className="text-stone-800 font-serif italic leading-snug">
+      <div className="space-y-2.5 pt-2.5 border-t border-stone-100">
+        <p className="text-stone-700 font-serif italic text-xs leading-relaxed">
           "{word.definition}"
         </p>
+        
         {word.translation && (
-          <p className="text-stone-600 text-[11px]">
-            <span className="font-semibold text-stone-900">Translation: </span>
-            {word.translation}
-          </p>
+          <div className="text-xs bg-stone-50/50 p-2 border border-stone-100 rounded-lg">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block mb-0.5">Translation</span>
+            <p className="font-semibold text-stone-800 text-xs">{word.translation}</p>
+          </div>
         )}
+
         {word.example && (
-          <p className="text-[10px] text-stone-500 font-mono bg-white p-2 border border-stone-100 mt-2">
-            "{word.example}"
-          </p>
+          <div className="p-2.5 bg-stone-50 border border-stone-200/60 rounded-lg mt-2 text-[11px] text-stone-600 font-mono">
+            <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block mb-1">Context</span>
+            <p className="leading-normal font-sans italic text-stone-700">"{word.example}"</p>
+          </div>
         )}
       </div>
 
       {/* Bottom Strength Bar & Mastery Toggle */}
-      <div className="pt-3 border-t border-stone-200 flex items-center justify-between gap-2 mt-auto">
+      <div className="pt-3.5 border-t border-stone-100 flex items-center justify-between gap-3 mt-auto">
         {/* Strength visual bar */}
         <div className="space-y-1">
-          <span className="text-[9px] font-bold text-stone-500 uppercase tracking-widest block">
-            Strength: {strengthLevel}/100
+          <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider block">
+            Strength: {strengthLevel}%
           </span>
-          <div className="flex items-center gap-1">
-            {[0, 20, 40, 60, 80].map(step => (
-              <span 
-                key={step} 
-                className={`w-3 h-1.5 rounded-none ${
-                  step <= strengthLevel 
-                    ? (strengthLevel >= 80 ? "bg-emerald-600" : strengthLevel >= 50 ? "bg-amber-500" : "bg-rose-500") 
-                    : "bg-stone-200"
-                }`} 
-              />
-            ))}
+          <div className="flex items-center gap-1.5">
+            {[0, 20, 40, 60, 80].map((step) => {
+              const isActive = step <= strengthLevel;
+              return (
+                <span 
+                  key={step} 
+                  className={`w-3.5 h-1.5 rounded-full transition-colors duration-300 ${
+                    isActive 
+                      ? (strengthLevel >= 80 ? "bg-emerald-500" : strengthLevel >= 40 ? "bg-amber-400" : "bg-rose-400") 
+                      : "bg-stone-150"
+                  }`} 
+                />
+              );
+            })}
           </div>
         </div>
 
         {/* Toggle Mastered Button */}
         <button
           onClick={() => onToggleLearnedWord(word.id)}
-          className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border transition-all cursor-pointer ${
+          className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border rounded-lg transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 ${
             isMastered 
-              ? "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100" 
-              : "bg-white border-stone-300 text-stone-700 hover:border-stone-900"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100/80" 
+              : "bg-white border-stone-200 text-stone-600 hover:text-stone-900 hover:border-stone-300"
           }`}
           title={isMastered ? "Click to mark as needing improvement" : "Click to mark as mastered"}
         >
           {isMastered ? (
             <>
-              <Check className="w-3 h-3 text-emerald-600" />
+              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>Mastered</span>
             </>
           ) : (

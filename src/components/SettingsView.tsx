@@ -77,7 +77,6 @@ export default function SettingsView({
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testText, setTestText] = useState("Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.");
   const [isTesting, setIsTesting] = useState(false);
-  const [saveSuccessMessage, setSaveSuccessMessage] = useState(false);
 
   // Language Preferences State
   const [selectedTargetLang, setSelectedTargetLang] = useState<string>(targetLanguage);
@@ -508,16 +507,6 @@ export default function SettingsView({
           </div>
         </div>
       </div>
-
-      {/* Save Toast Notification */}
-      {saveSuccessMessage && (
-        <div className="bg-emerald-900 text-white p-4 flex items-center justify-between text-xs font-semibold tracking-normal animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
-            <span>Settings saved successfully! Updated preferences are now active.</span>
-          </div>
-        </div>
-      )}
 
       {/* Language & Translation Preferences Card */}
       <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
