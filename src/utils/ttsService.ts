@@ -58,6 +58,15 @@ export function isVoiceInstalledForLanguage(langNameOrCode: string, voices: Spee
 }
 
 let currentAudioElement: HTMLAudioElement | null = null;
+
+function getAudioElement(): HTMLAudioElement | null {
+  if (typeof window === "undefined") return null;
+  if (!currentAudioElement) {
+    currentAudioElement = new Audio();
+  }
+  return currentAudioElement;
+}
+
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentSpeechToken: number = 0;
 
@@ -68,12 +77,15 @@ export function stopSpeech(): void {
       window.speechSynthesis.cancel();
     } catch {}
   }
-  if (currentAudioElement) {
+  const audio = getAudioElement();
+  if (audio) {
     try {
-      currentAudioElement.pause();
-      currentAudioElement.currentTime = 0;
+      audio.pause();
+      audio.onplay = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.currentTime = 0;
     } catch {}
-    currentAudioElement = null;
   }
   activeUtterance = null;
 }
@@ -222,6 +234,31 @@ export async function speakText(
   stopSpeech();
   const myToken = currentSpeechToken;
 
+  // Synchronously warm up and unlock BOTH HTMLAudioElement and SpeechSynthesis
+  // inside the direct user-gesture call stack to ensure future async plays are permitted.
+  const audio = getAudioElement();
+  if (audio) {
+    try {
+      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAAAAAA==";
+      audio.play().catch(() => {});
+    } catch (e) {
+      console.warn("Pre-unlocking audio element failed:", e);
+    }
+  }
+
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      const warmUpUtterance = new SpeechSynthesisUtterance(" ");
+      warmUpUtterance.volume = 0;
+      window.speechSynthesis.speak(warmUpUtterance);
+    } catch (e) {
+      console.warn("Pre-warming speech synthesis failed:", e);
+    }
+  }
+
   const normalizedText = normalizeTextForTTS(text);
 
   if (!normalizedText || !normalizedText.trim()) {
@@ -333,8 +370,12 @@ export async function speakText(
   if (cachedDataUrl) {
     cachedDataUrl = wrapPcmBase64ToWavDataUrl(cachedDataUrl);
     try {
-      const audio = new Audio(cachedDataUrl);
-      currentAudioElement = audio;
+      const audio = getAudioElement();
+      if (!audio) {
+        speakWithBrowser();
+        return;
+      }
+      audio.src = cachedDataUrl;
       audio.playbackRate = ttsConfig?.speed ?? 1.0;
 
       audio.onplay = () => {
@@ -342,13 +383,11 @@ export async function speakText(
       };
 
       audio.onended = () => {
-        currentAudioElement = null;
         safeOnEnd();
       };
 
       audio.onerror = (e) => {
         console.warn("Cached audio playback error, falling back to browser speech:", e);
-        currentAudioElement = null;
         speakWithBrowser();
       };
 
@@ -356,7 +395,6 @@ export async function speakText(
       return;
     } catch (err) {
       console.warn("Cached audio play exception, falling back to browser speech:", err);
-      currentAudioElement = null;
       speakWithBrowser();
       return;
     }
@@ -402,8 +440,12 @@ export async function speakText(
     // Cache generated audio data URL
     ttsAudioCache.set(cacheKey, playableDataUrl);
 
-    const audio = new Audio(playableDataUrl);
-    currentAudioElement = audio;
+    const audio = getAudioElement();
+    if (!audio) {
+      speakWithBrowser();
+      return;
+    }
+    audio.src = playableDataUrl;
     audio.playbackRate = ttsConfig.speed ?? 1.0;
 
     audio.onplay = () => {
@@ -411,13 +453,11 @@ export async function speakText(
     };
 
     audio.onended = () => {
-      currentAudioElement = null;
       safeOnEnd();
     };
 
     audio.onerror = (e) => {
       console.warn("Audio playback error, falling back to browser speech:", e);
-      currentAudioElement = null;
       speakWithBrowser();
     };
 
@@ -425,7 +465,6 @@ export async function speakText(
       await audio.play();
     } catch (playErr) {
       console.warn("audio.play() blocked/failed, falling back to browser speech:", playErr);
-      currentAudioElement = null;
       speakWithBrowser();
     }
   } catch (err) {
