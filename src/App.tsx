@@ -1362,9 +1362,6 @@ export default function App() {
       });
 
       const keywordText = flashcardContent.imageKeyword || candidateWord.imageKeyword || candidateWord.word;
-      const imgUrl = candidateWord.imageUrl && candidateWord.imageUrl.startsWith("http")
-        ? candidateWord.imageUrl
-        : `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
 
       const flashcardMsg: ChatMessage = {
         id: `flashcard-msg-${Date.now()}`,
@@ -1373,7 +1370,6 @@ export default function App() {
         timestamp: new Date().toISOString(),
         audioWord: flashcardContent.word,
         quizSpeechText: `${flashcardContent.word}. ${flashcardContent.definition}`,
-        imageUrl: imgUrl,
         imageKeyword: keywordText,
         flashcardData: {
           wordId: candidateWord.id,
@@ -1386,7 +1382,6 @@ export default function App() {
           context: flashcardContent.context || candidateWord.context || candidateWord.definition,
           extraExampleSentences: flashcardContent.extraExampleSentences,
           usageNotes: flashcardContent.usageNotes,
-          imageUrl: imgUrl,
           imageKeyword: keywordText
         },
         suggestedActions: [

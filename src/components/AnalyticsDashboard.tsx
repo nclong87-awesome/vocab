@@ -48,10 +48,10 @@ export default function AnalyticsDashboard({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  // Filter & Search states for Words breakdown
-  const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'decayed' | 'all' | 'starred'>('improving');
+  // Filter & Search states for Words breakdown - default to 'all' so mastered words are visible
+  const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'decayed' | 'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('strength-asc');
+  const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('strength-desc');
 
   // TTS audio state
   const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
@@ -164,6 +164,11 @@ export default function AnalyticsDashboard({
         return (a.strength ?? 0) - (b.strength ?? 0);
       }
       if (sortBy === 'strength-desc') {
+        const isMasteredA = (a.learned || (a.strength ?? 0) >= 3) ? 1 : 0;
+        const isMasteredB = (b.learned || (b.strength ?? 0) >= 3) ? 1 : 0;
+        if (isMasteredA !== isMasteredB) {
+          return isMasteredB - isMasteredA;
+        }
         return (b.strength ?? 0) - (a.strength ?? 0);
       }
       if (sortBy === 'alpha') {
@@ -176,7 +181,7 @@ export default function AnalyticsDashboard({
       }
       return 0;
     });
-  }, [words, improvingWords, masteredWords, starredWords, activeTab, searchQuery, sortBy]);
+  }, [words, improvingWords, masteredWords, starredWords, decayedWords, activeTab, searchQuery, sortBy]);
 
   // Overall Mastery Percentage
   const overallMasteryPercent = totalWordsCount > 0 
@@ -252,31 +257,100 @@ export default function AnalyticsDashboard({
 
       {/* Primary KPI Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="kpi-metrics-grid">
-        <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2 border-l-4 border-l-emerald-600">
+        <button 
+          onClick={() => setActiveTab('mastered')}
+          className={`p-5 border text-left transition-all cursor-pointer hover:shadow-xs space-y-2 border-l-4 border-l-emerald-600 ${
+            activeTab === 'mastered' ? 'bg-emerald-50/50 border-emerald-300 ring-1 ring-emerald-500' : 'bg-white border-stone-200 hover:border-emerald-300'
+          }`}
+          title="Click to view mastered words"
+        >
           <div className="flex justify-between items-center text-stone-500">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Mastered Words</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-3xl font-bold text-emerald-950 tracking-tight">{masteredWords.length}</div>
           <p className="text-[11px] text-emerald-700 font-serif italic">
-            {overallMasteryPercent}% overall collection mastery
+            {overallMasteryPercent}% overall collection mastery (click to filter)
           </p>
-        </div>
+        </button>
 
-        <div className="bg-white p-5 border border-stone-200 rounded-none space-y-2 border-l-4 border-l-rose-500">
+        <button 
+          onClick={() => setActiveTab('improving')}
+          className={`p-5 border text-left transition-all cursor-pointer hover:shadow-xs space-y-2 border-l-4 border-l-rose-500 ${
+            activeTab === 'improving' ? 'bg-rose-50/50 border-rose-300 ring-1 ring-rose-500' : 'bg-white border-stone-200 hover:border-rose-300'
+          }`}
+          title="Click to view words needing improvement"
+        >
           <div className="flex justify-between items-center text-stone-500">
             <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800">Need Improvement</span>
             <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
           <div className="text-3xl font-bold text-rose-950 tracking-tight">{improvingWords.length}</div>
           <p className="text-[11px] text-rose-700 font-serif italic">
-            Strength &lt; 3 or unlearned
+            Strength &lt; 3 or unlearned (click to filter)
           </p>
-        </div>
+        </button>
       </div>
 
       {/* DETAILED WORDS ANALYSIS & MANAGEMENT SECTION */}
       <div className="bg-white border border-stone-200 p-6 space-y-6 rounded-none shadow-2xs" id="words-breakdown-section">
+        
+        {/* Category Filter Tab Bar */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-4" id="words-filter-tabs">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'all'
+                ? 'bg-stone-900 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+            }`}
+          >
+            All Words ({totalWordsCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('improving')}
+            className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'improving'
+                ? 'bg-rose-600 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-rose-700'
+            }`}
+          >
+            Need Improvement ({improvingWords.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('mastered')}
+            className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'mastered'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-emerald-700'
+            }`}
+          >
+            Mastered Words ({masteredWords.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('decayed')}
+            className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+              activeTab === 'decayed'
+                ? 'bg-orange-600 text-white'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-orange-700'
+            }`}
+          >
+            Refresher Due ({decayedWords.length})
+          </button>
+          {starredWords.length > 0 && (
+            <button
+              onClick={() => setActiveTab('starred')}
+              className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'starred'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-amber-700'
+              }`}
+            >
+              Starred ({starredWords.length})
+            </button>
+          )}
+        </div>
+
         {/* Search & Sorting Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative">
