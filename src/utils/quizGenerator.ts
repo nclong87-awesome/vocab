@@ -50,23 +50,6 @@ export async function fetchWorkerImageUrl(keyword: string, proxyKey?: string): P
   }
 
   try {
-    const res = await fetch("/api/generate-image", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
-      },
-      body: JSON.stringify({ query: keyword, proxyKey: effectiveProxyKey })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.imageUrl) return data.imageUrl;
-    }
-  } catch (err) {
-    // server API call failed
-  }
-
-  try {
     const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;
     const headers: Record<string, string> = {};
     if (effectiveProxyKey) {
