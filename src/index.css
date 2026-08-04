@@ -59,3 +59,9 @@ h1, h2, h3, .font-display {
 main {
   background-color: #fff;
 }
+
+.word-card-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 13px;
+}

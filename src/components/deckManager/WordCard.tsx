@@ -36,7 +36,17 @@ export default function WordCard({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-2 border-b border-stone-100 pb-2.5">
           <div className="space-y-1">
-            <h4 className="text-base font-black text-stone-900 tracking-tight leading-snug">{word.word}</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-base font-black text-stone-900 tracking-tight leading-snug">{word.word}</h4>
+              <button
+                type="button"
+                onClick={() => speakWord(word.word)}
+                className="p-1.5 text-stone-500 hover:text-stone-950 hover:bg-white transition-all cursor-pointer"
+                title="Listen Pronunciation"
+              >
+                <Volume2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               {word.pronunciation && (
                 <span className="text-[10px] font-mono text-stone-500 bg-stone-100 border border-stone-200 px-1.5 py-0.5">
@@ -55,24 +65,7 @@ export default function WordCard({
           </div>
 
           {/* Action Buttons Bar */}
-          <div className="flex items-center gap-1 shrink-0 bg-stone-50 p-1 border border-stone-200">
-            <button
-              type="button"
-              onClick={() => speakWord(word.word)}
-              className="p-1.5 text-stone-500 hover:text-stone-950 hover:bg-white transition-all cursor-pointer"
-              title="Listen Pronunciation"
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRegenerateWord(word)}
-              disabled={regeneratingWordId === word.id}
-              className="p-1.5 text-stone-500 hover:text-amber-600 hover:bg-white transition-all cursor-pointer disabled:opacity-50"
-              title="Re-generate definition & translation with AI"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
-            </button>
+          <div className="word-card-actions">
             <button
               type="button"
               onClick={() => onToggleStar(word.id)}
@@ -82,6 +75,15 @@ export default function WordCard({
               title={word.starred ? "Unstar" : "Star"}
             >
               <Star className="w-3.5 h-3.5 fill-current" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRegenerateWord(word)}
+              disabled={regeneratingWordId === word.id}
+              className="p-1.5 text-stone-300 hover:text-red-600 hover:bg-white transition-all cursor-pointer"
+              title="Re-generate definition & translation with AI"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${regeneratingWordId === word.id ? "animate-spin text-amber-600" : ""}`} />
             </button>
             <button
               type="button"

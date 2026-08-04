@@ -181,7 +181,7 @@ export default function CollectionManager({
       <div className="space-y-4">
         <div className="bg-white border border-stone-200 p-4 space-y-6 shadow-2xs">
             {/* Active List Title & Info */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-500">
                   <Globe2 className="w-3.5 h-3.5 text-stone-900" />
@@ -189,7 +189,6 @@ export default function CollectionManager({
                   <span className="text-stone-300">•</span>
                   <span className="text-stone-900">{words.length} terms</span>
                 </div>
-                <h2 className="text-xl font-bold text-stone-950">Vocabulary List</h2>
               </div>
             </div>
 
