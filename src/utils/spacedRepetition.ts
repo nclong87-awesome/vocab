@@ -49,7 +49,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   const memoryDecay = eligibleWords.filter(w => {
     if (starred.includes(w)) return false;
     const days = getDaysSinceLastReview(w, now);
-    return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+    return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
   });
 
   const neverReviewed = eligibleWords.filter(w => 
@@ -62,7 +62,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     !starred.includes(w) && 
     !memoryDecay.includes(w) && 
     !neverReviewed.includes(w) && 
-    w.strength < 3
+    w.strength < 50
   );
 
   const rest = eligibleWords.filter(w => 
@@ -103,7 +103,7 @@ export function getDaysSinceLastReview(word: Word, now: Date = new Date()): numb
 
 /**
  * Evaluates memory decay based on spaced repetition principles.
- * Returns the recalculated strength (0 to 4) and learned flag for a word.
+ * Returns the recalculated strength (0 to 100) and learned flag for a word.
  */
 export function calculateDecayedWordStrength(word: Word, now: Date = new Date()): {
   newStrength: number;
@@ -123,49 +123,12 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
     };
   }
 
-  let newStrength = currentStrength;
+  // Decay 2 points per day since review
+  const decayAmount = daysSinceReview * 2;
+  const newStrength = Math.max(0, currentStrength - decayAmount);
 
-  // Spaced repetition decay logic:
-  // Level 4 (Mastered / Max Strength):
-  // - 21+ days without review -> decays to 1 (needs full review, learned = false)
-  // - 10+ days without review -> decays to 2 (needs practice, learned = false)
-  // - 5+ days without review  -> decays to 3 (refresher recommended, learned = true)
-  if (currentStrength === 4) {
-    if (daysSinceReview >= 21) {
-      newStrength = 1;
-    } else if (daysSinceReview >= 10) {
-      newStrength = 2;
-    } else if (daysSinceReview >= 5) {
-      newStrength = 3;
-    }
-  } 
-  // Level 3 (Learned / Strong):
-  // - 14+ days without review -> decays to 1
-  // - 5+ days without review  -> decays to 2
-  else if (currentStrength === 3) {
-    if (daysSinceReview >= 14) {
-      newStrength = 1;
-    } else if (daysSinceReview >= 5) {
-      newStrength = 2;
-    }
-  }
-  // Level 2 (Familiar):
-  // - 4+ days without review  -> decays to 1
-  else if (currentStrength === 2) {
-    if (daysSinceReview >= 4) {
-      newStrength = 1;
-    }
-  }
-  // Level 1 (Weak):
-  // - 2+ days without review  -> decays to 0
-  else if (currentStrength === 1) {
-    if (daysSinceReview >= 2) {
-      newStrength = 0;
-    }
-  }
-
-  // A word is considered fully learned only if strength is >= 3
-  const newLearned = newStrength >= 3 ? word.learned : false;
+  // A word is considered fully learned only if strength is >= 80
+  const newLearned = newStrength >= 80 ? word.learned : false;
   const hasDecayed = newStrength < currentStrength || (word.learned && !newLearned);
 
   return {
@@ -220,7 +183,7 @@ export function getCandidateWordForFlashcard(words: Word[]): Word | null {
   const memoryDecay = words.filter(w => {
     if (starred.includes(w)) return false;
     const days = getDaysSinceLastReview(w, now);
-    return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+    return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
   });
 
   const neverReviewed = words.filter(w => 
@@ -233,7 +196,7 @@ export function getCandidateWordForFlashcard(words: Word[]): Word | null {
     !starred.includes(w) && 
     !memoryDecay.includes(w) && 
     !neverReviewed.includes(w) && 
-    w.strength < 3
+    w.strength < 50
   );
 
   const rest = words.filter(w => 

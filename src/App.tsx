@@ -1361,6 +1361,24 @@ export default function App() {
         llmConfig: configToUse
       });
 
+      // Increase strength when viewing flashcard (+10)
+      setWords(prevWords => {
+        const updatedWords = prevWords.map(w => {
+          if (w.id === candidateWord.id) {
+            const newStrength = Math.min(100, (w.strength ?? 0) + 10);
+            return {
+              ...w,
+              strength: newStrength,
+              learned: newStrength >= 80 ? true : w.learned,
+              lastReviewed: new Date().toISOString()
+            };
+          }
+          return w;
+        });
+        saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB flashcard word save error:", e));
+        return updatedWords;
+      });
+
       const keywordText = flashcardContent.imageKeyword || candidateWord.imageKeyword || candidateWord.word;
 
       const flashcardMsg: ChatMessage = {
@@ -1553,7 +1571,7 @@ export default function App() {
             ...w,
             learned: isNowMastered,
             lastReviewed: new Date().toISOString(),
-            strength: isNowMastered ? 4 : 0
+            strength: isNowMastered ? 100 : 0
           };
           saveWordToDB(updated).catch(e => console.error("IndexedDB learned save error:", e));
           return updated;
@@ -1709,16 +1727,16 @@ export default function App() {
           const virtualId = `today-${word.id}`;
           
           if (correctWordIds?.includes(originalId) || correctWordIds?.includes(virtualId)) {
-            const newStrength = Math.min(4, word.strength + 1);
+            const newStrength = Math.min(100, word.strength + 20);
             return {
               ...word,
               strength: newStrength,
-              learned: newStrength >= 3 ? true : word.learned,
+              learned: newStrength >= 80 ? true : word.learned,
               lastReviewed: new Date().toISOString()
             };
           }
           if (incorrectWordIds?.includes(originalId) || incorrectWordIds?.includes(virtualId)) {
-            const newStrength = Math.max(0, word.strength - 1);
+            const newStrength = Math.max(0, word.strength - 20);
             return {
               ...word,
               strength: newStrength,

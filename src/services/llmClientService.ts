@@ -1398,7 +1398,7 @@ export async function analyzePerformanceService(params: PerformanceAnalysisReque
   const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig } = params;
 
   const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
-  const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (level ${w.strength ?? 0}, ${w.translation || w.definition})`).join(", ") || "None yet";
+  const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (strength ${w.strength ?? 0}/100, ${w.translation || w.definition})`).join(", ") || "None yet";
 
   const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report.
 
@@ -1627,12 +1627,12 @@ export async function generateAiQuizQuestionsService(
       category: w.category || "General",
       context: w.context || w.definition,
       // Useful stats per word for targeted learning & memory decay:
-      strength: w.strength ?? 0, // 0 (weakest/newest) to 4 (mastered)
+      strength: w.strength ?? 0, // 0 to 100
       learned: Boolean(w.learned),
       starred: Boolean(w.starred),
       daysSinceLastReview: daysSinceReview,
       lastReviewed: w.lastReviewed ? `${daysSinceReview} day(s) ago` : "Never reviewed",
-      memoryStatus: daysSinceReview >= 5 ? "Needs Refresher (Memory Decay / Overdue)" : w.strength >= 3 ? "Mastered / Strong" : "Learning / Developing"
+      memoryStatus: daysSinceReview >= 5 ? "Needs Refresher (Memory Decay / Overdue)" : w.strength >= 80 ? "Mastered / Strong" : "Learning / Developing"
     };
   });
 
@@ -1642,7 +1642,7 @@ export async function generateAiQuizQuestionsService(
     ? `${stats.totalCorrectAnswers} total correct answers`
     : "New learner";
 
-  const totalMasteredFromWords = (words || []).filter((w: any) => w.learned || (w.strength ?? 0) >= 3).length;
+  const totalMasteredFromWords = (words || []).filter((w: any) => w.learned || (w.strength ?? 0) >= 80).length;
   const totalStudiedFromWords = (words || []).filter((w: any) => w.lastReviewed !== null || (w.strength ?? 0) > 0).length;
 
   const usefulStatsSummary = stats ? {
@@ -1665,11 +1665,11 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
    - Never put the same option twice.
 3. Adaptive Difficulty & Spaced Repetition Personalization:
-   - Use each word's mastery stats (strength 0-4, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
+   - Use each word's mastery stats (strength 0-100, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
      * Memory Decay / Overdue Words (daysSinceLastReview >= 5, or recalculated strength): The student may have forgotten this word since it hasn't been reviewed in a while. Generate targeted context fill-in-the-blank or usage questions with challenging distractors to test active memory recall.
-     * Weak / New Words (strength 0-1, never reviewed): Generate foundational questions (e.g. direct definition matching or simple supportive sentences) with helpful hints to reinforce basic recall.
+     * Weak / New Words (strength < 50, never reviewed): Generate foundational questions (e.g. direct definition matching or simple supportive sentences) with helpful hints to reinforce basic recall.
      * Starred / Priority Words: Focus on practical usage and clear context sentences to solidify active vocabulary.
-     * High Strength / Recently Reviewed Words (strength 3-4): Challenge the learner with nuanced context or subtle distractor choices to ensure long-term mastery.
+     * High Strength / Recently Reviewed Words (strength >= 80): Challenge the learner with nuanced context or subtle distractor choices to ensure long-term mastery.
 4. Question Types (mix across questions):
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"

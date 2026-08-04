@@ -19,10 +19,10 @@ export default function WordAnalyticsCard({
   onToggleStarWord,
   onToggleLearnedWord
 }: WordAnalyticsCardProps) {
-  const isMastered = word.learned || word.strength >= 3;
+  const isMastered = word.learned || word.strength >= 80;
   const strengthLevel = word.strength ?? 0;
   const daysSinceReview = getDaysSinceLastReview(word);
-  const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 3);
+  const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80);
 
   return (
     <div 
@@ -106,15 +106,15 @@ export default function WordAnalyticsCard({
         {/* Strength visual bar */}
         <div className="space-y-1">
           <span className="text-[9px] font-bold text-stone-500 uppercase tracking-widest block">
-            Strength: Lvl {strengthLevel}/4
+            Strength: {strengthLevel}/100
           </span>
           <div className="flex items-center gap-1">
-            {[0, 1, 2, 3, 4].map(step => (
+            {[0, 20, 40, 60, 80].map(step => (
               <span 
                 key={step} 
                 className={`w-3 h-1.5 rounded-none ${
                   step <= strengthLevel 
-                    ? (strengthLevel >= 3 ? "bg-emerald-600" : strengthLevel === 2 ? "bg-amber-500" : "bg-rose-500") 
+                    ? (strengthLevel >= 80 ? "bg-emerald-600" : strengthLevel >= 50 ? "bg-amber-500" : "bg-rose-500") 
                     : "bg-stone-200"
                 }`} 
               />

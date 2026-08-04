@@ -63,7 +63,7 @@ export interface Word {
   starred: boolean;
   createdAt: string;
   lastReviewed: string | null;
-  strength: number; // 0 to 4 (representing levels of familiarity)
+  strength: number; // 0 to 100
   imageUrl?: string;
   imageKeyword?: string;
   category?: string;

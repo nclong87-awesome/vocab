@@ -58,21 +58,21 @@ export default function AnalyticsDashboard({
 
   const totalWordsCount = words.length;
 
-  // Mastered words: learned === true OR strength >= 3
+  // Mastered words: learned === true OR strength >= 80
   const masteredWords = useMemo(() => {
-    return words.filter(w => w.learned || w.strength >= 3);
+    return words.filter(w => w.learned || w.strength >= 80);
   }, [words]);
 
-  // Words needing improvement: !learned AND strength < 3
+  // Words needing improvement: !learned AND strength < 50
   const improvingWords = useMemo(() => {
-    return words.filter(w => !w.learned && w.strength < 3);
+    return words.filter(w => !w.learned && w.strength < 50);
   }, [words]);
 
   // Words needing memory refresher (decayed or overdue >= 5 days)
   const decayedWords = useMemo(() => {
     return words.filter(w => {
       const days = getDaysSinceLastReview(w);
-      return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+      return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
     });
   }, [words]);
 
@@ -164,8 +164,8 @@ export default function AnalyticsDashboard({
         return (a.strength ?? 0) - (b.strength ?? 0);
       }
       if (sortBy === 'strength-desc') {
-        const isMasteredA = (a.learned || (a.strength ?? 0) >= 3) ? 1 : 0;
-        const isMasteredB = (b.learned || (b.strength ?? 0) >= 3) ? 1 : 0;
+        const isMasteredA = (a.learned || (a.strength ?? 0) >= 80) ? 1 : 0;
+        const isMasteredB = (b.learned || (b.strength ?? 0) >= 80) ? 1 : 0;
         if (isMasteredA !== isMasteredB) {
           return isMasteredB - isMasteredA;
         }
