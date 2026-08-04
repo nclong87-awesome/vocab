@@ -54,13 +54,29 @@ export default function WordRow({
       </div>
 
       <div className="flex items-center gap-2 border-t md:border-t-0 pt-2.5 md:pt-0 border-stone-100 justify-between md:justify-end shrink-0">
-        <span className={`text-[10px] font-bold px-2 py-0.5 border ${
-          word.learned 
-            ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
-            : "bg-stone-100 text-stone-600 border-stone-200"
-        }`}>
-          {word.learned ? "Mastered" : "Learning"}
-        </span>
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center justify-center hidden sm:flex" title={`Memory Strength: ${word.strength || 0}%`}>
+            <div className="h-1.5 w-12 bg-stone-200 rounded-full overflow-hidden mb-0.5">
+              <div 
+                className={`h-full ${
+                  (word.strength || 0) >= 80 ? 'bg-emerald-500' : 
+                  (word.strength || 0) >= 40 ? 'bg-amber-500' : 
+                  'bg-rose-500'
+                }`} 
+                style={{ width: `${Math.max(0, Math.min(100, word.strength || 0))}%` }}
+              />
+            </div>
+            <span className="text-[8px] font-bold text-stone-400 leading-none">{Math.round(word.strength || 0)}%</span>
+          </div>
+
+          <span className={`text-[10px] font-bold px-2 py-0.5 border ${
+            word.learned 
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+              : "bg-stone-100 text-stone-600 border-stone-200"
+          }`}>
+            {word.learned ? "Mastered" : "Learning"}
+          </span>
+        </div>
 
         <div className="flex items-center gap-1 bg-stone-50 p-1 border border-stone-200">
           <button

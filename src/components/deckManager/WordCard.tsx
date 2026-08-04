@@ -151,13 +151,28 @@ export default function WordCard({
 
       {/* Card Footer Status Pill */}
       <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px]">
-        <span className={`font-semibold px-2 py-0.5 flex items-center gap-1 ${
-          word.learned 
-            ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
-            : "bg-stone-100 text-stone-600 border border-stone-200"
-        }`}>
-          {word.learned ? "✓ Mastered" : "• Learning"}
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span className={`font-semibold px-2 py-0.5 flex items-center gap-1 ${
+            word.learned 
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
+              : "bg-stone-100 text-stone-600 border border-stone-200"
+          }`}>
+            {word.learned ? "✓ Mastered" : "• Learning"}
+          </span>
+          <div className="flex items-center gap-1.5" title={`Memory Strength: ${word.strength || 0}%`}>
+            <div className="h-1.5 w-12 bg-stone-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${
+                  (word.strength || 0) >= 80 ? 'bg-emerald-500' : 
+                  (word.strength || 0) >= 40 ? 'bg-amber-500' : 
+                  'bg-rose-500'
+                }`} 
+                style={{ width: `${Math.max(0, Math.min(100, word.strength || 0))}%` }}
+              />
+            </div>
+            <span className="text-[9px] font-bold text-stone-400">{Math.round(word.strength || 0)}%</span>
+          </div>
+        </div>
         {word.starred && (
           <span className="text-amber-700 font-semibold flex items-center gap-1">
             ★ Starred
