@@ -5,7 +5,7 @@ import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMess
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider, getSavedProvidersMap, getProviderDisplayName } from "./utils/llmHelpers";
-import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeChatWordsService, analyzeImageVocabService } from "./services/llmClientService";
+import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService } from "./services/llmClientService";
 import { QuizQuestion } from "./types";
 import { 
   getAllWordsFromDB, 
@@ -190,8 +190,6 @@ export default function App() {
   }, [handleSelectLanguages]);
 
   const [stats, setStats] = useState<UserStats>({
-    totalWordsStudied: 0,
-    totalWordsMastered: 0,
     totalQuizzesTaken: 0,
     totalCorrectAnswers: 0,
     streak: { count: 0, lastActiveDate: "", history: [] }
@@ -794,107 +792,6 @@ export default function App() {
     }
   };
 
-  // Analyze conversation history to detect candidate words for user confirmation
-  const handleAnalyzeChatWords = async (overrideConfig?: LLMConfig) => {
-    const configToUse = overrideConfig || llmConfig;
-    setIsTyping(true);
-    const statusMsgId = `analyze-chat-status-${Date.now()}`;
-
-    setChatMessages(prev => [
-      ...prev,
-      {
-        id: statusMsgId,
-        role: "assistant",
-        content: `🪄 *Analyzing our conversation history to detect candidate vocabulary words for your collection...*`,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-
-    try {
-      const res = await analyzeChatWordsService({
-        messages: chatMessages,
-        targetLanguage,
-        nativeLanguage,
-        llmConfig: configToUse
-      });
-
-      const wordsFound = res.detectedWords || [];
-
-      if (wordsFound.length === 0) {
-        setChatMessages(prev => {
-          const filtered = prev.filter(m => m.id !== statusMsgId);
-          return [
-            ...filtered,
-            {
-              id: `sys-no-chat-words-${Date.now()}`,
-              role: "assistant",
-              content: `💡 **No new candidate vocabulary words detected in recent chat.**\n\nTry chatting with me about a new topic, asking for definitions, or using the **"Generate Words"** quick action!`,
-              timestamp: new Date().toISOString()
-            }
-          ];
-        });
-        return;
-      }
-
-      // Build candidate cards and suggested actions
-      const actions: any[] = [];
-      const formattedItems: string[] = [];
-
-      wordsFound.forEach((w: any, idx: number) => {
-        const isAlreadySaved = words.some(existing => existing.word.toLowerCase().trim() === w.word.toLowerCase().trim());
-        const statusBadge = isAlreadySaved ? " *(Already in collection)*" : "";
-
-        formattedItems.push(
-          `### ${idx + 1}. **${w.word}** \`${w.pronunciation || ""}\`${statusBadge}\n` +
-          `- **Translation**: ${w.translation} (${w.partOfSpeech || "word"})\n` +
-          `- **Definition**: *${w.definition}*\n` +
-          (w.example ? `- **Example**: "${w.example}"\n` : "") +
-          (w.reason ? `- **Context from Chat**: *${w.reason}*\n` : "")
-        );
-
-        if (!isAlreadySaved) {
-          actions.push({
-            label: `➕ Confirm & Add "${w.word}" (${w.translation})`,
-            action: "add_word",
-            payload: { word: w.word, hint: w.definition }
-          });
-        }
-      });
-
-      const unsavedWordsCount = wordsFound.filter(w => !words.some(e => e.word.toLowerCase().trim() === w.word.toLowerCase().trim())).length;
-
-      if (unsavedWordsCount > 1) {
-        actions.unshift({
-          label: `✨ Add All (${unsavedWordsCount}) Discovered Words`,
-          action: "add_multiple_words",
-          payload: { words: wordsFound }
-        });
-      }
-
-      setChatMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-chat-words-res-${Date.now()}`,
-            role: "assistant",
-            content: `💡 **Discovered ${wordsFound.length} vocabulary candidate(s) from our conversation:**\n\n${formattedItems.join("\n")}\n\n*Click a confirmation button below to save to your collection:*`,
-            timestamp: new Date().toISOString(),
-            suggestedActions: actions
-          }
-        ];
-      });
-    } catch (err: any) {
-      console.error(err);
-      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
-      handleAiApiError(err, configToUse, (newConfig) => {
-        handleAnalyzeChatWords(newConfig);
-      });
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
   // Analyze image uploaded by user using selected AI model to extract vocabulary
   const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string, overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
@@ -1457,8 +1354,6 @@ export default function App() {
       }
 
       const loadedStats = await getStatsFromDB({
-        totalWordsStudied: 0,
-        totalWordsMastered: 0,
         totalQuizzesTaken: 0,
         totalCorrectAnswers: 0,
         streak: { count: 0, lastActiveDate: "", history: [] }
@@ -1469,7 +1364,7 @@ export default function App() {
       const loadedConfig = await getLLMConfigFromDB(defaultConfig);
 
       const sanitizedProvider = loadedConfig.provider || DEFAULT_PROVIDER_ID;
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "groq" ? "openai/gpt-oss-120b" : sanitizedProvider === "openrouter" ? "deepseek/deepseek-chat" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "chatjimmy" ? "llama3.1-8B" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
+      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "groq" ? "openai/gpt-oss-120b" : sanitizedProvider === "openrouter" ? "deepseek/deepseek-chat" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
       const validGeminiModels = [
         "gemini-3.6-flash",
         "gemini-3.6-flash-lite",
@@ -1484,13 +1379,13 @@ export default function App() {
         ...loadedConfig,
         provider: sanitizedProvider as any,
         model: sanitizedModel,
-        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "groq" || sanitizedProvider === "openrouter" || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "chatjimmy" || sanitizedProvider === "ollama"
+        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "groq" || sanitizedProvider === "openrouter" || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "ollama"
       };
 
       setLlmConfig(activeConfig);
       await saveLLMConfigToDB(activeConfig);
 
-      if (!activeConfig.isLoggedIn && activeConfig.provider !== "groq" && activeConfig.provider !== "openrouter" && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "chatjimmy" && activeConfig.provider !== "ollama") {
+      if (!activeConfig.isLoggedIn && activeConfig.provider !== "groq" && activeConfig.provider !== "openrouter" && activeConfig.provider !== "openai" && activeConfig.provider !== "gemini" && activeConfig.provider !== "ollama") {
         setIsLlmModalOpen(true);
       }
 
@@ -1596,12 +1491,8 @@ export default function App() {
 
     setStats(prevStats => {
       const updatedStreak = calculateNewStreak(prevStats.streak);
-      const totalMasteredCount = updatedWordsList.filter(w => w.learned).length;
-      const totalStudiedCount = updatedWordsList.filter(w => w.lastReviewed !== null).length;
       const newStats = {
         ...prevStats,
-        totalWordsMastered: totalMasteredCount,
-        totalWordsStudied: totalStudiedCount,
         streak: updatedStreak
       };
       saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
@@ -1770,15 +1661,11 @@ export default function App() {
 
     setStats(prevStats => {
       const updatedStreak = calculateNewStreak(prevStats.streak);
-      const totalMasteredCount = updatedWordsList.filter(w => w.learned).length;
-      const totalStudiedCount = updatedWordsList.filter(w => w.lastReviewed !== null).length;
 
       const newStats = {
         ...prevStats,
         totalQuizzesTaken: prevStats.totalQuizzesTaken + 1,
         totalCorrectAnswers: prevStats.totalCorrectAnswers + score,
-        totalWordsMastered: totalMasteredCount > 0 ? totalMasteredCount : prevStats.totalWordsMastered,
-        totalWordsStudied: totalStudiedCount > 0 ? totalStudiedCount : prevStats.totalWordsStudied,
         streak: updatedStreak
       };
       saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
@@ -1895,7 +1782,6 @@ export default function App() {
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}
-                    onAnalyzeChatWords={handleAnalyzeChatWords}
                     onAnalyzeImageVocab={handleAnalyzeImageVocab}
                     onAddMultipleWords={handleAddMultipleWords}
                   />

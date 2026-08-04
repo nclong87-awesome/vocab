@@ -12,7 +12,7 @@ export interface TTSConfig {
   autoPlayAudioInQuiz: boolean;
 }
 
-export type LLMProvider = 'chatjimmy' | 'ollama' | 'openai' | 'groq' | 'openrouter' | 'custom' | (string & {});
+export type LLMProvider = 'ollama' | 'openai' | 'groq' | 'openrouter' | 'custom' | (string & {});
 
 export interface LLMProviderOption {
   id: LLMProvider;
@@ -105,8 +105,8 @@ export interface Streak {
 }
 
 export interface UserStats {
-  totalWordsStudied: number;
-  totalWordsMastered: number;
+  totalWordsStudied?: number;
+  totalWordsMastered?: number;
   totalQuizzesTaken: number;
   totalCorrectAnswers: number;
   streak: Streak;

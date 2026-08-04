@@ -431,9 +431,10 @@ export async function getStatsFromDB(defaultStats: UserStats): Promise<UserStats
   try {
     const stored = await readRecordData<UserStats>("stats", KEYS.stats);
     if (stored) {
+      const { totalWordsMastered, totalWordsStudied, ...cleanStored } = stored as any;
       return {
         ...defaultStats,
-        ...stored,
+        ...cleanStored,
         streak: {
           count: stored.streak?.count ?? 0,
           lastActiveDate: stored.streak?.lastActiveDate ?? "",
@@ -444,9 +445,10 @@ export async function getStatsFromDB(defaultStats: UserStats): Promise<UserStats
 
     const legacy = parseJSON<UserStats>(lsGet(LEGACY_KEYS.stats), "stats");
     const rawStats = legacy ?? defaultStats;
+    const { totalWordsMastered, totalWordsStudied, ...cleanRaw } = rawStats as any;
     const stats: UserStats = {
       ...defaultStats,
-      ...rawStats,
+      ...cleanRaw,
       streak: {
         count: rawStats.streak?.count ?? 0,
         lastActiveDate: rawStats.streak?.lastActiveDate ?? "",
@@ -463,7 +465,8 @@ export async function getStatsFromDB(defaultStats: UserStats): Promise<UserStats
 
 export async function saveStatsToDB(stats: UserStats): Promise<void> {
   try {
-    await writeRecordData("stats", KEYS.stats, stats);
+    const { totalWordsMastered, totalWordsStudied, ...cleanStats } = stats as any;
+    await writeRecordData("stats", KEYS.stats, cleanStats);
   } catch (err) {
     console.error("Error saving stats to IndexedDB:", err);
   }
@@ -605,7 +608,15 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
     ])
   );
 
-  const stores = { words, stats, config, settings, deletedWords };
+  const cleanedStats = stats.map(rec => {
+    if (rec && rec.data) {
+      const { totalWordsMastered, totalWordsStudied, ...restData } = rec.data as any;
+      return { ...rec, data: restData };
+    }
+    return rec;
+  });
+
+  const stores = { words, stats: cleanedStats, config, settings, deletedWords };
 
   return {
     version: DB_SCHEMA_VERSION,
@@ -653,6 +664,16 @@ export async function importIndexedDBDatabase(data: unknown): Promise<ImportResu
 
   if (Array.isArray(stores.deletedWords)) {
     stores.deletedWords = deduplicateDeletedWords(stores.deletedWords as DeletedWordRecord[]);
+  }
+
+  if (Array.isArray(stores.stats)) {
+    stores.stats = stores.stats.map((rec: any) => {
+      if (rec && rec.data) {
+        const { totalWordsMastered, totalWordsStudied, ...restData } = rec.data;
+        return { ...rec, data: restData };
+      }
+      return rec;
+    });
   }
 
   // Preserve existing local API keys and settings if the imported payload has empty/missing keys

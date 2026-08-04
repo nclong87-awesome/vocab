@@ -4,7 +4,7 @@ import {
   Send, Sparkles, Plus, Volume2, 
   Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
   ChevronLeft, LayoutGrid, X, Search, Languages, FileText,
-  Camera, Image as ImageIcon, Wand2, Upload
+  Camera, Image as ImageIcon, Upload
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
@@ -25,7 +25,6 @@ interface ChatViewProps {
   onGenerateByTopic: () => void;
   onStartQuiz: () => void;
   onFixGrammar: () => void;
-  onAnalyzeChatWords?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSelectDefinition?: (word: string, senseIndex: number, translation: string) => void;
   ttsConfig: TTSConfig;
@@ -45,7 +44,6 @@ export default function ChatView({
   onGenerateByTopic,
   onStartQuiz,
   onFixGrammar,
-  onAnalyzeChatWords,
   onAnalyzeImageVocab,
   onSelectDefinition,
   ttsConfig,
@@ -282,57 +280,22 @@ export default function ChatView({
       }
     },
     {
-      id: "detect_chat_words",
-      label: "Detect Chat Words",
-      category: "vocab" as const,
-      categoryLabel: "Vocab",
-      icon: <Wand2 className="w-4 h-4 text-purple-600" />,
-      title: "🪄 Auto-Detect Words from Chat",
-      description: "AI analyzes recent conversation to identify vocabulary words to confirm & add",
-      className: "bg-purple-50/90 hover:bg-purple-100 text-purple-950 border border-purple-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 4,
-      onClick: () => {
-        handleIncrementActionCount("detect_chat_words");
-        setIsActionsPanelOpen(false);
-        if (onAnalyzeChatWords) {
-          onAnalyzeChatWords();
-        } else {
-          onSendMessage(`Can you analyze our recent chat history and suggest vocabulary candidate words I should add to my collection?`);
-        }
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "scan_picture_vocab",
-      label: "Scan Picture Vocab",
-      category: "vocab" as const,
-      categoryLabel: "Vocab",
-      icon: <Camera className="w-4 h-4 text-blue-600" />,
-      title: "📷 Scan Picture for Vocab",
-      description: "Upload a photo or take a live picture to extract and translate real-world vocabulary with AI Vision",
-      className: "bg-blue-50/90 hover:bg-blue-100 text-blue-950 border border-blue-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 5,
-      onClick: () => {
-        handleIncrementActionCount("scan_picture_vocab");
-        setIsActionsPanelOpen(false);
-        setIsPhotoModalOpen(true);
-      }
-    },
-    {
       id: "explain_grammar",
       label: "Explain Grammar Rules",
       category: "writing" as const,
       categoryLabel: "Writing",
       icon: <FileText className="w-4 h-4 text-blue-600" />,
-      title: "Explain Grammar Rules",
-      description: "Ask AI coach for a simple breakdown of grammar structure",
+      title: "Explain Grammar Rules (in Native Language)",
+      description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
       onClick: () => {
         handleIncrementActionCount("explain_grammar");
         setIsActionsPanelOpen(false);
-        onSendMessage(`Can you explain the essential grammar rules and structures in ${targetLanguage} with quick clear examples?`);
+        onClearHistory();
+        onSendMessage(
+          `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
+        );
         scrollToBottom("smooth");
         focusInput();
       }
@@ -344,13 +307,16 @@ export default function ChatView({
       categoryLabel: "Study",
       icon: <HelpCircle className="w-4 h-4 text-emerald-600" />,
       title: "Common Phrases & Idioms",
-      description: "Learn essential daily expressions and conversational idioms",
+      description: "Learn essential daily expressions & conversational idioms by topic or scenario",
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
       onClick: () => {
         handleIncrementActionCount("common_phrases");
         setIsActionsPanelOpen(false);
-        onSendMessage(`What are the top 5 most useful conversational phrases and idioms in ${targetLanguage}?`);
+        onClearHistory();
+        onSendMessage(
+          `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
+        );
         scrollToBottom("smooth");
         focusInput();
       }
@@ -362,13 +328,37 @@ export default function ChatView({
       categoryLabel: "Writing",
       icon: <Languages className="w-4 h-4 text-purple-600" />,
       title: "Translate & Contrast",
-      description: "Compare nuances between native phrasing and target language",
+      description: "Compare nuances between native phrasing and target language for custom sentences",
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 6,
       onClick: () => {
         handleIncrementActionCount("translate_contrast");
         setIsActionsPanelOpen(false);
-        onSendMessage(`How do I express feelings and thoughts naturally in ${targetLanguage} compared to ${nativeLanguage}? Give 3 clear side-by-side examples.`);
+        onClearHistory();
+        onSendMessage(
+          `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
+        );
+        scrollToBottom("smooth");
+        focusInput();
+      }
+    },
+    {
+      id: "interactive_prompts",
+      label: "Interactive AI Prompts",
+      category: "writing" as const,
+      categoryLabel: "Writing",
+      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+      title: "⚡ Interactive Language Coach",
+      description: "Consolidated tool: Ask AI coach to guide you on Grammar Rules, Nuance Translation, or Situational Phrases in natural conversation",
+      className: "bg-amber-100/80 hover:bg-amber-200/90 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 7,
+      onClick: () => {
+        handleIncrementActionCount("interactive_prompts");
+        setIsActionsPanelOpen(false);
+        onClearHistory();
+        onSendMessage(
+          `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
+        );
         scrollToBottom("smooth");
         focusInput();
       }
@@ -795,8 +785,6 @@ export default function ChatView({
                               } else if (act.action === "add_multiple_words" && act.payload?.words && onAddMultipleWords) {
                                 onAddMultipleWords(act.payload.words);
                                 showToast(`🎉 Added ${act.payload.words.length} vocabulary words to collection!`);
-                              } else if (act.action === "analyze_chat_words" && onAnalyzeChatWords) {
-                                onAnalyzeChatWords();
                               } else if (act.action === "start_quiz") {
                                 handleIncrementActionCount("start_quiz");
                                 onStartQuiz();
@@ -807,7 +795,27 @@ export default function ChatView({
                               } else if (act.action === "common_phrases") {
                                 handleIncrementActionCount("common_phrases");
                                 onClearHistory();
-                                onSendMessage(`What are some common idioms and phrases in ${targetLanguage}?`);
+                                onSendMessage(
+                                  `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
+                                );
+                                scrollToBottom("smooth");
+                                focusInput();
+                              } else if (act.action === "explain_grammar") {
+                                handleIncrementActionCount("explain_grammar");
+                                onClearHistory();
+                                onSendMessage(
+                                  `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
+                                );
+                                scrollToBottom("smooth");
+                                focusInput();
+                              } else if (act.action === "translate_contrast") {
+                                handleIncrementActionCount("translate_contrast");
+                                onClearHistory();
+                                onSendMessage(
+                                  `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
+                                );
+                                scrollToBottom("smooth");
+                                focusInput();
                               } else if (act.action === "send_message" && act.payload?.message) {
                                 onSendMessage(act.payload.message);
                               }

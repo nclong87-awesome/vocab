@@ -221,7 +221,6 @@ export function getProviderDisplayName(provider?: string): string {
   if (provider === "openai") return "OpenAI";
   if (provider === "groq") return "Groq";
   if (provider === "openrouter") return "OpenRouter";
-  if (provider === "chatjimmy") return "ChatJimmy AI";
   if (provider === "ollama") return "Ollama";
   if (provider === "9flare") return "9Flare";
   if (provider === "custom") return "Custom Endpoint";

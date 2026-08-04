@@ -301,25 +301,17 @@ export function autoMergeLocalAndRemote(
   const localStats: UserStats = localStatsRec?.data || {
     totalQuizzesTaken: 0,
     totalCorrectAnswers: 0,
-    totalWordsMastered: 0,
-    totalWordsStudied: 0,
     streak: { count: 0, lastActiveDate: "", history: [] }
   };
 
   const remoteStats: UserStats = remoteStatsRec?.data || {
     totalQuizzesTaken: 0,
     totalCorrectAnswers: 0,
-    totalWordsMastered: 0,
-    totalWordsStudied: 0,
     streak: { count: 0, lastActiveDate: "", history: [] }
   };
 
   const mergedQuizzesTaken = Math.max(localStats.totalQuizzesTaken || 0, remoteStats.totalQuizzesTaken || 0);
   const mergedCorrectAnswers = Math.max(localStats.totalCorrectAnswers || 0, remoteStats.totalCorrectAnswers || 0);
-
-  // Recalculate word mastery stats from the newly merged words array
-  const mergedWordsMastered = mergedWordsList.filter(w => w.learned || (w.strength ?? 0) >= 3).length;
-  const mergedWordsStudied = mergedWordsList.filter(w => w.lastReviewed !== null || (w.strength ?? 0) > 0).length;
 
   // Streak logic: take the higher streak or most recent streak date
   const localStreakCount = localStats.streak?.count || 0;
@@ -341,8 +333,6 @@ export function autoMergeLocalAndRemote(
     data: {
       totalQuizzesTaken: mergedQuizzesTaken,
       totalCorrectAnswers: mergedCorrectAnswers,
-      totalWordsMastered: mergedWordsMastered,
-      totalWordsStudied: mergedWordsStudied,
       streak: {
         count: mergedStreakCount,
         lastActiveDate: mergedStreakDate,

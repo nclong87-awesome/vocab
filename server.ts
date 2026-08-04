@@ -101,9 +101,6 @@ const VALID_GEMINI_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-lite", "gemin
 
 // Sanitize model names for provider
 function sanitizeModel(provider: string, model?: string): string {
-  if (provider === "chatjimmy") {
-    return model || "llama3.1-8B";
-  }
   if (provider === "groq") {
     return model || "openai/gpt-oss-120b";
   }
@@ -115,7 +112,7 @@ function sanitizeModel(provider: string, model?: string): string {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "chatjimmy" ? "llama3.1-8B" : provider === "groq" ? "openai/gpt-oss-120b" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "openai/gpt-oss-120b");
+  return model || (provider === "groq" ? "openai/gpt-oss-120b" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "openai/gpt-oss-120b");
 }
 
 function getProviderDisplayName(provider?: string): string {
@@ -124,7 +121,6 @@ function getProviderDisplayName(provider?: string): string {
   if (provider === "openai") return "OpenAI";
   if (provider === "groq") return "Groq";
   if (provider === "openrouter") return "OpenRouter";
-  if (provider === "chatjimmy") return "ChatJimmy AI";
   if (provider === "ollama") return "Ollama";
   if (provider === "9flare") return "9Flare";
   if (provider === "custom") return "Custom Endpoint";
@@ -244,7 +240,7 @@ async function callLLM(
   const proxyKey = sharedProxyKey;
   const baseUrl = llmConfig?.baseUrl || "";
 
-  const requiresKey = provider !== "chatjimmy" && provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
+  const requiresKey = provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
   let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
   const effectiveProxyKey = proxyKey || apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "") || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
 
@@ -258,44 +254,6 @@ async function callLLM(
 
   if (!effectiveApiKey) {
     effectiveApiKey = "local-token";
-  }
-
-  if (provider === "chatjimmy") {
-    const endpoint = baseUrl || "https://chatjimmy.ai/api/chat";
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Accept": "*/*",
-        "Content-Type": "application/json",
-        "Origin": "https://chatjimmy.ai",
-        "Referer": "https://chatjimmy.ai/",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-        ...(effectiveProxyKey ? { "X-Proxy-Key": effectiveProxyKey } : {})
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        chatOptions: {
-          selectedModel: model || "llama3.1-8B",
-          systemPrompt: systemInstruction + "\n\nCRITICAL INSTRUCTION: Output STRICTLY raw valid JSON-only matching schema:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON.",
-          topK: 8
-        },
-        attachment: null
-      })
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      throw new Error(`ChatJimmy API Error (${res.status}): ${errText}`);
-    }
-
-    const resText = await res.text();
-    const cleanText = resText.split("<|stats|>")[0];
-    return cleanJsonResponse(cleanText);
   }
 
   if (provider === "gemini") {
@@ -1493,12 +1451,15 @@ app.post("/api/analyze-performance", async (req, res) => {
     const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
     const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (level ${w.strength ?? 0}, ${w.translation || w.definition})`).join(", ") || "None yet";
 
+    const masteredCount = (masteredWords || []).length;
+    const studiedCount = (masteredWords || []).length + (improvingWords || []).filter((w: any) => w.lastReviewed !== null || (w.strength ?? 0) > 0).length;
+
     const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report.
 
 STUDENT PERFORMANCE DATA:
 - Total Vocabulary Words in Collection: ${totalWords || 0}
-- Total Words Mastered: ${stats?.totalWordsMastered || 0}
-- Total Words Studied/Reviewed: ${stats?.totalWordsStudied || 0}
+- Total Words Mastered: ${masteredCount}
+- Total Words Studied/Reviewed: ${studiedCount}
 - Quizzes Completed: ${stats?.totalQuizzesTaken || 0}
 - Correct Answers in Quizzes: ${stats?.totalCorrectAnswers || 0}
 - Active Study Streak: ${stats?.streak?.count || 0} days
@@ -1560,13 +1521,47 @@ app.post("/api/chat", async (req, res) => {
 Your mission is to help the user master their target language "${targetLanguage}" from their native language "${nativeLanguage}".
 You speak in a warm, welcoming, and linguistically precise tone.
 
-CRITICAL INSTRUCTIONS:
-- Answer questions about grammar, translation, and pronunciation.
-- If you explain, introduce, or define a vocabulary word that the user might want to study, always suggest adding it to their collection using the "add_word" action.
-- If the user indicates they want to take a test, quiz, practice, or study their flashcards, suggest starting a quiz using the "start_quiz" action.
-- If you ask or offer the user to move on to the next question or topic (e.g., "Shall we move on to Question 4?"), you MUST include a "send_message" action in suggestedActions with label "Move on to Question X" or "Continue to Next Question".
-- You MUST strictly output valid JSON-only output when requested matching the schema below.
-- Do not include any conversational filler outside the JSON.`;
+CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
+1. **Explain Grammar Rules**:
+   - When the user asks to learn or explain grammar rules (or clicks "Explain Grammar Rules"):
+     * Do NOT dump a massive wall of unrequested text immediately.
+     * Ask the user naturally in their native language ("${nativeLanguage}") which specific grammar rule or sentence structure they would like to explore today.
+     * Give a few clear, concrete examples (e.g., Past Tense vs Present Perfect, Subjunctive Mood, Prepositions & Word Order, Passive Voice).
+     * Provide 3 to 4 interactive options in "suggestedActions" with action "send_message" so the user can click to select a topic or type their own!
+   - When the user specifies a grammar rule:
+     * Explain it clearly in their native language ("${nativeLanguage}"), with clear example sentences in "${targetLanguage}" and translations in "${nativeLanguage}".
+     * Highlight key vocabulary words or phrases in the explanation and attach "add_word" suggestedActions for those words!
+
+2. **Translate & Compare**:
+   - When the user asks to translate & compare (or clicks "Translate & Compare"):
+     * Ask the user what sentence, phrase, or context they would like to translate and contrast between "${nativeLanguage}" and "${targetLanguage}".
+     * Give 3 to 4 concrete example scenario options in "suggestedActions" (e.g., "Polite Requests & Ordering Coffee", "Expressing Opinions & Disagreeing", "Formal vs Casual Greetings").
+   - When the user provides a sentence or scenario to compare:
+     * Present side-by-side comparisons showing literal translation vs. natural/idiomatic translation in "${targetLanguage}".
+     * Explain tone, nuance, and cultural context.
+
+3. **Common Phrases & Idioms**:
+   - When the user asks for common phrases or idioms (or clicks "Common Phrases"):
+     * Ask the user which real-world scenario or topic they want to cover (e.g., Dining Out, Travel & Airports, Workplace Small Talk, Expressing Emotions).
+     * Provide 3 to 4 topic options in "suggestedActions".
+   - When a topic is chosen:
+     * Provide 4-6 essential, practical expressions/idioms with target language text, IPA pronunciation, native translation, and usage notes.
+     * Include "add_word" suggestedActions so the user can easily save useful phrases to their collection!
+
+4. **Interactive Language Coach (Consolidated Action)**:
+   - When the user initiates the interactive language coach:
+     * Offer 3 clear paths in "suggestedActions": "Explain Grammar Rules (in ${nativeLanguage})", "Translate & Compare Nuances", and "Common Phrases & Idioms".
+
+5. **Ambiguous or Unclear User Input**:
+   - If the user's message is vague, ambiguous, or incomplete (e.g., just typing "grammar", "rule", "translate", or an unclear fragment):
+     * Kindly ask the user to clarify or confirm what specific topic, phrase, or sentence they would like to focus on before providing a full explanation. Provide helpful choices in "suggestedActions"!
+
+6. **General Rules**:
+   - Answer questions about grammar, translation, and pronunciation clearly and encouragingly.
+   - If you introduce a valuable vocabulary word or expression, include an "add_word" action in suggestedActions.
+   - If the user wants to practice flashcards or take a test, include a "start_quiz" action in suggestedActions.
+   - You MUST strictly output valid JSON-only output matching the schema below.
+   - Do not include any conversational filler outside the JSON.`;
 
     const schemaDesc = `{
   "text": "string (the main conversation response in markdown format. Keep it beautifully styled, use bolding, bullet points, etc. where helpful)",
@@ -1635,10 +1630,13 @@ app.post("/api/generate-quiz", async (req, res) => {
       ? `${stats.totalCorrectAnswers} total correct answers`
       : "New learner";
 
+    const totalMasteredFromWords = (words || []).filter((w: any) => w.learned || (w.strength ?? 0) >= 3).length;
+    const totalStudiedFromWords = (words || []).filter((w: any) => w.lastReviewed !== null || (w.strength ?? 0) > 0).length;
+
     const usefulStatsSummary = stats ? {
       activeStreakDays: stats.streak?.count || 0,
-      totalWordsMastered: stats.totalWordsMastered || 0,
-      totalWordsStudied: stats.totalWordsStudied || 0,
+      totalWordsMastered: totalMasteredFromWords,
+      totalWordsStudied: totalStudiedFromWords,
       totalQuizzesTaken: stats.totalQuizzesTaken || 0,
       accuracyTrend: accuracyPercent
     } : null;
@@ -1731,68 +1729,6 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
     res.json(result);
   } catch (error: any) {
     console.error("Error generating AI quiz:", error);
-    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
-    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
-    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
-  }
-});
-
-// 9. Analyze conversation history to auto-detect candidate words to add
-app.post("/api/analyze-chat-words", async (req, res) => {
-  try {
-    const { messages, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
-
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ error: "Messages array is required" });
-    }
-
-    const chatHistoryStr = messages
-      .slice(-12)
-      .map((m: any) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
-      .join("\n\n");
-
-    const prompt = `Analyze the following recent conversation thread between the user and their AI language coach:
-
-${chatHistoryStr}
-
-TASK: Identify candidate vocabulary words or expressions in "${targetLanguage}" (or native terms translated into "${targetLanguage}") that were discussed, introduced, used, or that the user wants to add to their vocabulary collection.
-
-For each candidate word detected:
-- Target word in "${targetLanguage}"
-- Translation in "${nativeLanguage}"
-- International Phonetic Alphabet (IPA) pronunciation guide
-- Part of speech (noun, verb, adjective, adverb, idiom, expression, etc.)
-- Clear definition in "${targetLanguage}"
-- Natural example sentence in "${targetLanguage}"
-- Translation of example sentence in "${nativeLanguage}"
-- Suitable category (e.g. Daily Life, Travel, Business, Academic, Emotions, etc.)
-- Short reason why this word was detected from the conversation.`;
-
-    const systemInstruction = `You are an expert AI Vocabulary Analyzer. You examine conversation transcripts and detect the most valuable vocabulary words the user should add to their learning collection. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
-
-    const schemaDesc = `{
-  "summary": "string (Short 1-2 sentence overview of discovered words from the chat)",
-  "detectedWords": [
-    {
-      "word": "string (word in target language ${targetLanguage})",
-      "translation": "string (translation in native language ${nativeLanguage})",
-      "pronunciation": "string (IPA pronunciation)",
-      "partOfSpeech": "string",
-      "definition": "string",
-      "example": "string",
-      "exampleTranslation": "string",
-      "category": "string",
-      "context": "string",
-      "reason": "string (Short reason why this word was extracted from conversation)"
-    }
-  ]
-}`;
-
-    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
-    res.json(result);
-  } catch (error: any) {
-    console.error("Error analyzing chat words:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
     const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
     res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });

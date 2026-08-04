@@ -740,7 +740,7 @@ export default function LlmLoginModal({
                     <Key className="w-3.5 h-3.5 text-stone-900" /> API Key
                   </label>
                   <span className="text-[10px] text-stone-400 font-mono">
-                    {currentProviderMeta.id === "chatjimmy" || currentProviderMeta.id === "ollama" ? "Optional (default key)" : currentProviderMeta.requiresKey ? "Required" : "Optional for local"}
+                    {currentProviderMeta.id === "ollama" ? "Optional (default key)" : currentProviderMeta.requiresKey ? "Required" : "Optional for local"}
                   </span>
                 </div>
 

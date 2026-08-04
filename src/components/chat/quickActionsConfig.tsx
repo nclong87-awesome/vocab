@@ -74,17 +74,37 @@ export function getQuickActionItems(): QuickActionItem[] {
       getAction: ({ onAddWord }) => onAddWord()
     },
     {
+      id: "interactive_chat_coach",
+      label: "Interactive AI Prompts",
+      category: "writing",
+      categoryLabel: "Writing",
+      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+      title: "Interactive Language Coach",
+      description: "Ask AI coach for interactive guidance on Grammar Rules, Nuance Translation, or Situational Phrases",
+      className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 4,
+      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
+        onClearHistory();
+        onSendMessage(
+          `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
+        );
+      }
+    },
+    {
       id: "explain_grammar",
       label: "Explain Grammar Rules",
       category: "writing",
       categoryLabel: "Writing",
       icon: <FileText className="w-4 h-4 text-blue-600" />,
-      title: "Explain Grammar Rules",
-      description: "Ask AI coach for a simple breakdown of grammar structure",
+      title: "Explain Grammar Rules (in Native Language)",
+      description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 4,
-      getAction: ({ targetLanguage, onSendMessage }) => {
-        onSendMessage(`Can you explain the essential grammar rules and structures in ${targetLanguage} with quick clear examples?`);
+      defaultIndex: 5,
+      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
+        onClearHistory();
+        onSendMessage(
+          `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
+        );
       }
     },
     {
@@ -94,11 +114,14 @@ export function getQuickActionItems(): QuickActionItem[] {
       categoryLabel: "Study",
       icon: <HelpCircle className="w-4 h-4 text-emerald-600" />,
       title: "Common Phrases & Idioms",
-      description: "Learn essential daily expressions and conversational idioms",
+      description: "Learn essential daily expressions & conversational idioms by topic or scenario",
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 5,
-      getAction: ({ targetLanguage, onSendMessage }) => {
-        onSendMessage(`What are the top 5 most useful conversational phrases and idioms in ${targetLanguage}?`);
+      defaultIndex: 6,
+      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
+        onClearHistory();
+        onSendMessage(
+          `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
+        );
       }
     },
     {
@@ -108,11 +131,14 @@ export function getQuickActionItems(): QuickActionItem[] {
       categoryLabel: "Writing",
       icon: <Languages className="w-4 h-4 text-purple-600" />,
       title: "Translate & Contrast",
-      description: "Compare nuances between native phrasing and target language",
+      description: "Compare nuances between native phrasing and target language for custom sentences",
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 6,
-      getAction: ({ targetLanguage, nativeLanguage, onSendMessage }) => {
-        onSendMessage(`How do I express feelings and thoughts naturally in ${targetLanguage} compared to ${nativeLanguage}? Give 3 clear side-by-side examples.`);
+      defaultIndex: 7,
+      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
+        onClearHistory();
+        onSendMessage(
+          `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
+        );
       }
     },
     {

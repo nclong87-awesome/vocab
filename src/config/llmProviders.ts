@@ -82,16 +82,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     requiresKey: false
   },
   {
-    id: "chatjimmy",
-    name: "ChatJimmy AI",
-    tagline: "ChatJimmy Free API (https://chatjimmy.ai)",
-    defaultModel: "llama3.1-8B",
-    models: ["llama3.1-8B"],
-    defaultBaseUrl: "https://chatjimmy.nclong87.workers.dev/api/chat",
-    directBaseUrl: "https://chatjimmy.ai/api/chat",
-    requiresKey: false
-  },
-  {
     id: "custom",
     name: "Custom / Local Endpoint",
     tagline: "vLLM, LMStudio, or private proxy",
