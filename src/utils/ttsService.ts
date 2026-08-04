@@ -90,8 +90,6 @@ export function stopSpeech(): void {
   activeUtterance = null;
 }
 
-const ttsAudioCache = new Map<string, string>();
-
 let isAudioUnlocked = false;
 
 export function unlockAudioElement(): void {
@@ -119,63 +117,6 @@ export function unlockAudioElement(): void {
     }
   } else {
     isAudioUnlocked = true;
-  }
-}
-
-// Helper to wrap base64 PCM into WAV if client receives raw PCM data
-function wrapPcmBase64ToWavDataUrl(dataUrl: string): string {
-  if (!dataUrl || !dataUrl.startsWith("data:")) return dataUrl;
-  if (!dataUrl.includes("l16") && !dataUrl.includes("pcm") && !dataUrl.includes("raw")) return dataUrl;
-
-  try {
-    const commaIdx = dataUrl.indexOf(",");
-    if (commaIdx === -1) return dataUrl;
-
-    const base64Str = dataUrl.substring(commaIdx + 1);
-    const rawBinary = atob(base64Str);
-    const pcmLen = rawBinary.length;
-
-    const rateMatch = dataUrl.match(/rate=(\d+)/);
-    const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-    const numChannels = 1;
-    const bitsPerSample = 16;
-    const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-    const blockAlign = numChannels * (bitsPerSample / 8);
-
-    const wavBuf = new Uint8Array(44 + pcmLen);
-    const view = new DataView(wavBuf.buffer);
-
-    // RIFF
-    wavBuf[0] = 0x52; wavBuf[1] = 0x49; wavBuf[2] = 0x46; wavBuf[3] = 0x46;
-    view.setUint32(4, 36 + pcmLen, true);
-    // WAVE
-    wavBuf[8] = 0x57; wavBuf[9] = 0x41; wavBuf[10] = 0x56; wavBuf[11] = 0x45;
-    // fmt 
-    wavBuf[12] = 0x66; wavBuf[13] = 0x6d; wavBuf[14] = 0x74; wavBuf[15] = 0x20;
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, bitsPerSample, true);
-    // data
-    wavBuf[36] = 0x64; wavBuf[37] = 0x61; wavBuf[38] = 0x74; wavBuf[39] = 0x61;
-    view.setUint32(40, pcmLen, true);
-
-    for (let i = 0; i < pcmLen; i++) {
-      wavBuf[44 + i] = rawBinary.charCodeAt(i);
-    }
-
-    let binaryString = "";
-    const chunkSize = 8192;
-    for (let i = 0; i < wavBuf.length; i += chunkSize) {
-      binaryString += String.fromCharCode.apply(null, Array.from(wavBuf.subarray(i, i + chunkSize)));
-    }
-    return `data:audio/wav;base64,${btoa(binaryString)}`;
-  } catch (err) {
-    console.warn("Client pcmToWav error:", err);
-    return dataUrl;
   }
 }
 
@@ -256,7 +197,7 @@ export function normalizeTextForTTS(text: string): string {
 export async function speakText(
   text: string,
   ttsConfig: TTSConfig = DEFAULT_TTS_CONFIG,
-  llmConfig?: LLMConfig,
+  _llmConfig?: LLMConfig,
   customLang?: string,
   onStart?: () => void,
   onEnd?: () => void
@@ -293,40 +234,49 @@ export async function speakText(
     }
   };
 
-  // Browser Native Speech Synthesis (Default or Fallback)
-  const playFallbackStream = async () => {
-    if (myToken !== currentSpeechToken) return false;
+  // Direct HTML5 Audio stream (works reliably in all iframe/browser environments)
+  const playAudioStream = () => {
+    const audio = getAudioElement();
+    if (!audio) return false;
     try {
+      audio.pause();
+      audio.currentTime = 0;
+      
       const bcp47 = customLang 
         ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
         : "en-US";
       const cleanLang = bcp47.split('-')[0].toLowerCase();
-      const res = await fetch(`/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.audioDataUrl && myToken === currentSpeechToken) {
-          const audio = getAudioElement();
-          if (audio) {
-            audio.src = data.audioDataUrl;
-            audio.playbackRate = ttsConfig?.speed ?? 1.0;
-            audio.onplay = () => safeOnStart();
-            audio.onended = () => safeOnEnd();
-            audio.onerror = () => safeOnEnd();
-            await audio.play();
-            return true;
-          }
-        }
+      const activeEngine = ttsConfig?.engine || 'browser';
+
+      const streamUrl = `/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}&engine=${encodeURIComponent(activeEngine)}&model=${encodeURIComponent(ttsConfig?.model || '')}&voice=${encodeURIComponent(ttsConfig?.voice || '')}&t=${Date.now()}`;
+
+      audio.src = streamUrl;
+      audio.playbackRate = ttsConfig?.speed ?? 1.0;
+
+      audio.onplay = () => safeOnStart();
+      audio.onended = () => safeOnEnd();
+      audio.onerror = (e) => {
+        console.warn("Audio stream error, trying SpeechSynthesis fallback:", e);
+        speakWithBrowser();
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Audio element play() blocked or failed, falling back to SpeechSynthesis:", err);
+          speakWithBrowser();
+        });
       }
+      return true;
     } catch (e) {
-      console.warn("playFallbackStream exception:", e);
+      console.warn("playAudioStream exception:", e);
+      return false;
     }
-    safeOnEnd();
-    return false;
   };
 
   const speakWithBrowser = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
-      playFallbackStream();
+      safeOnEnd();
       return;
     }
 
@@ -346,7 +296,6 @@ export async function speakText(
       utterance.rate = ttsConfig.speed ?? 1.0;
       utterance.pitch = ttsConfig.pitch ?? 1.0;
 
-      // Ensure language is formatted as BCP-47 code
       const bcp47Lang = customLang 
         ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
         : "en-US";
@@ -368,18 +317,11 @@ export async function speakText(
         }
       }
 
-      let speechStarted = false;
-      let watchdogTimer: any = null;
-
       utterance.onstart = () => {
-        speechStarted = true;
-        if (watchdogTimer) clearTimeout(watchdogTimer);
         safeOnStart();
       };
 
       utterance.onend = () => {
-        speechStarted = true;
-        if (watchdogTimer) clearTimeout(watchdogTimer);
         if (activeUtterance === utterance) {
           activeUtterance = null;
         }
@@ -387,168 +329,26 @@ export async function speakText(
         safeOnEnd();
       };
 
-      utterance.onerror = (err) => {
-        if (watchdogTimer) clearTimeout(watchdogTimer);
+      utterance.onerror = () => {
         if (activeUtterance === utterance) {
           activeUtterance = null;
         }
         (window as any)._activeUtteranceRef = null;
-
-        if (err.error !== "interrupted" && err.error !== "canceled") {
-          console.warn("Browser SpeechSynthesis error, trying fallback stream:", err.error, err);
-          playFallbackStream();
-        } else {
-          safeOnEnd();
-        }
+        safeOnEnd();
       };
 
-      // Ensure UI reflects active speaking
       safeOnStart();
-
-      // Use a slight timeout after resume() so speech queue processes before speak()
-      setTimeout(() => {
-        if (myToken === currentSpeechToken) {
-          try {
-            if (window.speechSynthesis.paused) {
-              window.speechSynthesis.resume();
-            }
-            window.speechSynthesis.speak(utterance);
-
-            // Watchdog: If browser speech hasn't actually started playing after 750ms (common in sandboxed iframes), fall back to audio stream
-            watchdogTimer = setTimeout(() => {
-              if (!speechStarted && myToken === currentSpeechToken) {
-                console.warn("Browser SpeechSynthesis delayed or silent, invoking audio stream fallback...");
-                try {
-                  window.speechSynthesis.cancel();
-                } catch {}
-                playFallbackStream();
-              }
-            }, 750);
-          } catch (speakErr) {
-            console.warn("SpeechSynthesis speak exception:", speakErr);
-            playFallbackStream();
-          }
-        }
-      }, 15);
+      window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.warn("SpeechSynthesis execution error:", err);
       activeUtterance = null;
       (window as any)._activeUtteranceRef = null;
-      playFallbackStream();
+      safeOnEnd();
     }
   };
 
-  if (activeEngine === 'browser') {
-    speakWithBrowser();
-    return;
-  }
-
-  // Check cache for AI TTS
-  const cacheKey = `${activeEngine}:${ttsConfig?.model}:${ttsConfig?.voice}:${normalizedText}`;
-  let cachedDataUrl = ttsAudioCache.get(cacheKey);
-
-  if (cachedDataUrl) {
-    cachedDataUrl = wrapPcmBase64ToWavDataUrl(cachedDataUrl);
-    try {
-      const audio = getAudioElement();
-      if (!audio) {
-        speakWithBrowser();
-        return;
-      }
-      audio.src = cachedDataUrl;
-      audio.playbackRate = ttsConfig?.speed ?? 1.0;
-
-      audio.onplay = () => {
-        safeOnStart();
-      };
-
-      audio.onended = () => {
-        safeOnEnd();
-      };
-
-      audio.onerror = (e) => {
-        console.warn("Cached audio playback error, falling back to browser speech:", e);
-        speakWithBrowser();
-      };
-
-      await audio.play();
-      return;
-    } catch (err) {
-      console.warn("Cached audio play exception, falling back to browser speech:", err);
-      speakWithBrowser();
-      return;
-    }
-  }
-
-  // AI TTS Model generation via server proxy
-  try {
-    const response = await fetch("/api/tts", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: normalizedText,
-        engine: activeEngine,
-        model: ttsConfig?.model || 'gemini-3.6-flash',
-        voice: ttsConfig?.voice || 'Puck',
-        apiKey: ttsConfig?.apiKey,
-        customEndpoint: ttsConfig?.customEndpoint,
-        llmConfig
-      })
-    });
-
-    if (myToken !== currentSpeechToken) return;
-
-    if (!response.ok) {
-      console.warn(`AI TTS server returned status ${response.status}, falling back to browser speech synthesis`);
-      speakWithBrowser();
-      return;
-    }
-
-    const data = await response.json();
-    if (myToken !== currentSpeechToken) return;
-    
-    if (!data.audioDataUrl) {
-      console.warn("No audio data returned, falling back to browser speech");
-      speakWithBrowser();
-      return;
-    }
-
-    const playableDataUrl = wrapPcmBase64ToWavDataUrl(data.audioDataUrl);
-
-    // Cache generated audio data URL
-    ttsAudioCache.set(cacheKey, playableDataUrl);
-
-    const audio = getAudioElement();
-    if (!audio) {
-      speakWithBrowser();
-      return;
-    }
-    audio.src = playableDataUrl;
-    audio.playbackRate = ttsConfig.speed ?? 1.0;
-
-    audio.onplay = () => {
-      safeOnStart();
-    };
-
-    audio.onended = () => {
-      safeOnEnd();
-    };
-
-    audio.onerror = (e) => {
-      console.warn("Audio playback error, falling back to browser speech:", e);
-      speakWithBrowser();
-    };
-
-    try {
-      await audio.play();
-    } catch (playErr) {
-      console.warn("audio.play() blocked/failed, falling back to browser speech:", playErr);
-      speakWithBrowser();
-    }
-  } catch (err) {
-    console.warn("AI TTS request exception, falling back to browser speech:", err);
+  // Initiate direct HTML5 audio stream playback synchronously inside user click handler
+  if (!playAudioStream()) {
     speakWithBrowser();
   }
 }

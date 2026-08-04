@@ -1009,13 +1009,80 @@ app.get("/api/tts/stream", async (req, res) => {
   try {
     const rawText = (req.query.text as string) || "";
     const lang = (req.query.lang as string) || "en";
+    const engine = (req.query.engine as string) || "browser";
+    const voice = (req.query.voice as string) || "";
+    const model = (req.query.model as string) || "";
+
     if (!rawText.trim()) {
-      return res.status(400).json({ error: "Text parameter is required" });
+      return res.status(400).send("Text parameter is required");
     }
 
     const text = normalizeServerTextForTTS(rawText).slice(0, 300);
     const cleanLang = (lang.includes("-") ? lang.split("-")[0] : lang).toLowerCase() || "en";
 
+    // 1. If Gemini AI TTS engine specified
+    if (engine === "gemini") {
+      const keyToUse = process.env.GEMINI_API_KEY;
+      if (keyToUse) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey: keyToUse,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
+
+          const modelsToTry = [
+            (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-2.0-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-3.6-flash"
+          ];
+
+          for (const m of Array.from(new Set(modelsToTry))) {
+            try {
+              const gemRes = await ai.models.generateContent({
+                model: m,
+                contents: `Pronounce clearly: "${text}"`,
+                config: {
+                  responseModalities: ["AUDIO"],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: {
+                        voiceName: voice || "Puck"
+                      }
+                    }
+                  }
+                }
+              });
+
+              const candidate = gemRes.candidates?.[0];
+              const part = candidate?.content?.parts?.find((p: any) => p.inlineData);
+              if (part && part.inlineData) {
+                const mimeType = part.inlineData.mimeType || "audio/mp3";
+                const base64Data = part.inlineData.data || "";
+                const audioBuf = Buffer.from(base64Data, "base64");
+
+                if (mimeType.includes("l16") || mimeType.includes("pcm") || mimeType.includes("raw") || (!mimeType.includes("mp3") && !mimeType.includes("wav"))) {
+                  const wavBuf = pcmToWav(audioBuf, 24000, 1, 16);
+                  res.setHeader("Content-Type", "audio/wav");
+                  res.setHeader("Cache-Control", "public, max-age=86400");
+                  return res.send(wavBuf);
+                }
+
+                res.setHeader("Content-Type", mimeType);
+                res.setHeader("Cache-Control", "public, max-age=86400");
+                return res.send(audioBuf);
+              }
+            } catch (mErr) {
+              console.warn(`Gemini TTS model ${m} failed in stream route:`, mErr);
+            }
+          }
+        } catch (gemErr) {
+          console.warn("Gemini stream TTS exception, falling back to Google TTS:", gemErr);
+        }
+      }
+    }
+
+    // 2. High-quality Google TTS stream fallback
     const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text)}&tl=${cleanLang}`;
     const response = await fetch(googleTtsUrl, {
       headers: {
@@ -1023,16 +1090,17 @@ app.get("/api/tts/stream", async (req, res) => {
       }
     });
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: "Failed to fetch TTS stream" });
+    if (response.ok) {
+      const arrayBuffer = await response.arrayBuffer();
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.send(Buffer.from(arrayBuffer));
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64}` });
+    return res.status(500).send("Failed to fetch TTS stream");
   } catch (err: any) {
-    console.warn("TTS stream fallback error:", err.message);
-    return res.status(500).json({ error: "Failed to generate TTS stream" });
+    console.warn("TTS stream error:", err.message);
+    return res.status(500).send("TTS stream error");
   }
 });
 
