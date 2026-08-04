@@ -1145,11 +1145,6 @@ export default function ChatView({
               >
                 {item.icon}
                 <span>{item.label}</span>
-                {count > 0 && (
-                  <span className="bg-amber-200/90 text-amber-950 text-[10px] font-mono font-extrabold px-1.5 py-0.2 rounded-full shadow-2xs shrink-0">
-                    {count}
-                  </span>
-                )}
               </button>
             );
           })}
