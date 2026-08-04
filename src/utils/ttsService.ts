@@ -92,6 +92,36 @@ export function stopSpeech(): void {
 
 const ttsAudioCache = new Map<string, string>();
 
+let isAudioUnlocked = false;
+
+export function unlockAudioElement(): void {
+  if (isAudioUnlocked) return;
+  if (typeof window === "undefined") return;
+
+  const audio = getAudioElement();
+  if (audio) {
+    try {
+      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAAAAAA==";
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            isAudioUnlocked = true;
+          })
+          .catch((e) => {
+            console.warn("Audio unlock play failed:", e);
+          });
+      } else {
+        isAudioUnlocked = true;
+      }
+    } catch (e) {
+      console.warn("Audio unlock failed:", e);
+    }
+  } else {
+    isAudioUnlocked = true;
+  }
+}
+
 // Helper to wrap base64 PCM into WAV if client receives raw PCM data
 function wrapPcmBase64ToWavDataUrl(dataUrl: string): string {
   if (!dataUrl || !dataUrl.startsWith("data:")) return dataUrl;
@@ -234,29 +264,10 @@ export async function speakText(
   stopSpeech();
   const myToken = currentSpeechToken;
 
-  // Synchronously warm up and unlock BOTH HTMLAudioElement and SpeechSynthesis
-  // inside the direct user-gesture call stack to ensure future async plays are permitted.
-  const audio = getAudioElement();
-  if (audio) {
-    try {
-      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAAAAAA==";
-      audio.play().catch(() => {});
-    } catch (e) {
-      console.warn("Pre-unlocking audio element failed:", e);
-    }
-  }
-
-  if (typeof window !== "undefined" && window.speechSynthesis) {
-    try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      const warmUpUtterance = new SpeechSynthesisUtterance(" ");
-      warmUpUtterance.volume = 0;
-      window.speechSynthesis.speak(warmUpUtterance);
-    } catch (e) {
-      console.warn("Pre-warming speech synthesis failed:", e);
-    }
+  // Ensure Mobile HTMLAudioElement is fully unlocked if we are using an AI/Server engine
+  const activeEngine = ttsConfig?.engine || 'browser';
+  if (activeEngine !== 'browser') {
+    unlockAudioElement();
   }
 
   const normalizedText = normalizeTextForTTS(text);
@@ -337,7 +348,9 @@ export async function speakText(
       };
 
       utterance.onerror = (err) => {
-        console.warn("Browser SpeechSynthesis error:", err);
+        if (err.error !== "interrupted" && err.error !== "canceled") {
+          console.warn("Browser SpeechSynthesis error:", err.error, err);
+        }
         if (activeUtterance === utterance) {
           activeUtterance = null;
         }
@@ -355,8 +368,6 @@ export async function speakText(
       safeOnEnd();
     }
   };
-
-  const activeEngine = ttsConfig?.engine || 'browser';
 
   if (activeEngine === 'browser') {
     speakWithBrowser();
