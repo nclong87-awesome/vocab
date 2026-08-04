@@ -10,8 +10,6 @@ interface FlashcardMessageCardProps {
   nativeLanguage: string;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
-  onNextFlashcard?: () => void;
-  onStartQuiz?: () => void;
 }
 
 export default function FlashcardMessageCard({
@@ -20,8 +18,6 @@ export default function FlashcardMessageCard({
   nativeLanguage,
   ttsConfig,
   llmConfig,
-  onNextFlashcard,
-  onStartQuiz
 }: FlashcardMessageCardProps) {
   const [speakingText, setSpeakingText] = useState<string | null>(null);
 
@@ -39,7 +35,7 @@ export default function FlashcardMessageCard({
   };
 
   return (
-    <div className="bg-white border border-stone-200/90 rounded-2xl overflow-hidden shadow-sm my-2 max-w-full font-sans transition-all">
+    <div className="bg-white border border-stone-200/90 rounded-2xl overflow-hidden my-2 max-w-full font-sans transition-all">
       {/* Top Header Banner */}
       <div className="bg-stone-900 text-white px-4 py-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -207,26 +203,6 @@ export default function FlashcardMessageCard({
           >
             <Volume2 className="w-3.5 h-3.5" /> Speak Word
           </button>
-
-          {onNextFlashcard && (
-            <button
-              type="button"
-              onClick={onNextFlashcard}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-            >
-              <Layers className="w-3.5 h-3.5" /> Next Flash Card
-            </button>
-          )}
-
-          {onStartQuiz && (
-            <button
-              type="button"
-              onClick={onStartQuiz}
-              className="bg-stone-900 hover:bg-stone-800 text-amber-300 font-bold text-xs py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
-            >
-              <Brain className="w-3.5 h-3.5" /> Start Quiz
-            </button>
-          )}
         </div>
       </div>
     </div>

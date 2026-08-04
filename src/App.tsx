@@ -1386,8 +1386,6 @@ export default function App() {
         },
         suggestedActions: [
           { label: "🃏 Next Flash Card", action: "view_flashcard" },
-          { label: "🧠 Start Quiz", action: "start_quiz" },
-          { label: "✨ Add More Words", action: "generate_topic" }
         ]
       };
 

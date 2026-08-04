@@ -670,6 +670,8 @@ export default function ChatView({
                 <div className="space-y-2">
                   <div 
                     className={`p-3.5 rounded-2xl ${
+                      msg.flashcardData ? "flashcard-message-card"
+                      :
                       isUser 
                         ? "text-stone-900 border border-stone-200 rounded-tr-none shadow-3xs" 
                         : "bg-stone-50 border border-stone-200 text-stone-950 rounded-tl-none"
@@ -697,8 +699,6 @@ export default function ChatView({
                         nativeLanguage={nativeLanguage}
                         ttsConfig={ttsConfig}
                         llmConfig={llmConfig}
-                        onNextFlashcard={onViewFlashcard}
-                        onStartQuiz={onStartQuiz}
                       />
                     ) : (
                       <>

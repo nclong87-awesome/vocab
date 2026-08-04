@@ -65,3 +65,7 @@ main {
   right: 10px;
   bottom: 13px;
 }
+
+.flashcard-message-card {
+  padding: 0;
+}
