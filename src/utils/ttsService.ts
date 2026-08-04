@@ -96,28 +96,17 @@ export function unlockAudioElement(): void {
   if (isAudioUnlocked) return;
   if (typeof window === "undefined") return;
 
-  const audio = getAudioElement();
-  if (audio) {
-    try {
-      audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAAAAAA==";
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            isAudioUnlocked = true;
-          })
-          .catch((e) => {
-            console.warn("Audio unlock play failed:", e);
-          });
-      } else {
+  try {
+    const silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAAAAAA==");
+    const p = silent.play();
+    if (p !== undefined) {
+      p.then(() => {
         isAudioUnlocked = true;
-      }
-    } catch (e) {
-      console.warn("Audio unlock failed:", e);
+      }).catch(() => {});
+    } else {
+      isAudioUnlocked = true;
     }
-  } else {
-    isAudioUnlocked = true;
-  }
+  } catch {}
 }
 
 // Helper to normalize text for speech synthesis (TTS) to avoid strange characters or prompt noise
@@ -234,42 +223,56 @@ export async function speakText(
     }
   };
 
-  // Direct HTML5 Audio stream (works reliably in all iframe/browser environments)
-  const playAudioStream = () => {
+  // Direct HTML5 Audio stream for AI models or server-side TTS
+  const playAudioStream = async (): Promise<boolean> => {
     const audio = getAudioElement();
     if (!audio) return false;
+
     try {
-      audio.pause();
-      audio.currentTime = 0;
-      
       const bcp47 = customLang 
         ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
         : "en-US";
       const cleanLang = bcp47.split('-')[0].toLowerCase();
-      const activeEngine = ttsConfig?.engine || 'browser';
 
-      const streamUrl = `/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}&engine=${encodeURIComponent(activeEngine)}&model=${encodeURIComponent(ttsConfig?.model || '')}&voice=${encodeURIComponent(ttsConfig?.voice || '')}&t=${Date.now()}`;
+      const queryKey = ttsConfig?.apiKey || '';
+      const streamUrl = `/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}&engine=${encodeURIComponent(activeEngine)}&model=${encodeURIComponent(ttsConfig?.model || '')}&voice=${encodeURIComponent(ttsConfig?.voice || '')}&apiKey=${encodeURIComponent(queryKey)}&t=${Date.now()}`;
 
-      audio.src = streamUrl;
+      const res = await fetch(streamUrl);
+      if (myToken !== currentSpeechToken) return true;
+      if (!res.ok) return false;
+
+      const blob = await res.blob();
+      if (myToken !== currentSpeechToken) return true;
+      if (!blob || blob.size < 100) return false;
+
+      const objectUrl = URL.createObjectURL(blob);
+      audio.pause();
+      audio.src = objectUrl;
       audio.playbackRate = ttsConfig?.speed ?? 1.0;
 
-      audio.onplay = () => safeOnStart();
-      audio.onended = () => safeOnEnd();
-      audio.onerror = (e) => {
-        console.warn("Audio stream error, trying SpeechSynthesis fallback:", e);
+      audio.onplay = () => {
+        if (myToken === currentSpeechToken) safeOnStart();
+      };
+      audio.onended = () => {
+        URL.revokeObjectURL(objectUrl);
+        if (myToken === currentSpeechToken) safeOnEnd();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        if (myToken !== currentSpeechToken) return;
         speakWithBrowser();
       };
 
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn("Audio element play() blocked or failed, falling back to SpeechSynthesis:", err);
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch(() => {
+          URL.revokeObjectURL(objectUrl);
+          if (myToken !== currentSpeechToken) return;
           speakWithBrowser();
         });
       }
       return true;
-    } catch (e) {
-      console.warn("playAudioStream exception:", e);
+    } catch {
       return false;
     }
   };
@@ -291,7 +294,7 @@ export async function speakText(
     try {
       const utterance = new SpeechSynthesisUtterance(normalizedText);
       activeUtterance = utterance;
-      (window as any)._activeUtteranceRef = utterance; // Prevent garbage collection bug in Chromium browsers
+      (window as any)._activeUtteranceRef = utterance;
 
       utterance.rate = ttsConfig.speed ?? 1.0;
       utterance.pitch = ttsConfig.pitch ?? 1.0;
@@ -318,7 +321,7 @@ export async function speakText(
       }
 
       utterance.onstart = () => {
-        safeOnStart();
+        if (myToken === currentSpeechToken) safeOnStart();
       };
 
       utterance.onend = () => {
@@ -326,7 +329,7 @@ export async function speakText(
           activeUtterance = null;
         }
         (window as any)._activeUtteranceRef = null;
-        safeOnEnd();
+        if (myToken === currentSpeechToken) safeOnEnd();
       };
 
       utterance.onerror = () => {
@@ -334,7 +337,7 @@ export async function speakText(
           activeUtterance = null;
         }
         (window as any)._activeUtteranceRef = null;
-        safeOnEnd();
+        if (myToken === currentSpeechToken) safeOnEnd();
       };
 
       safeOnStart();
@@ -347,8 +350,10 @@ export async function speakText(
     }
   };
 
-  // Initiate direct HTML5 audio stream playback synchronously inside user click handler
-  if (!playAudioStream()) {
-    speakWithBrowser();
-  }
+  // Route based on requested TTS engine
+  playAudioStream().then((streamPlayed) => {
+    if (!streamPlayed && myToken === currentSpeechToken) {
+      speakWithBrowser();
+    }
+  });
 }

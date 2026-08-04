@@ -1022,7 +1022,8 @@ app.get("/api/tts/stream", async (req, res) => {
 
     // 1. If Gemini AI TTS engine specified
     if (engine === "gemini") {
-      const keyToUse = process.env.GEMINI_API_KEY;
+      const queryKey = (req.query.apiKey as string) || "";
+      const keyToUse = queryKey || process.env.GEMINI_API_KEY;
       if (keyToUse) {
         try {
           const ai = new GoogleGenAI({
@@ -1078,6 +1079,36 @@ app.get("/api/tts/stream", async (req, res) => {
           }
         } catch (gemErr) {
           console.warn("Gemini stream TTS exception, falling back to Google TTS:", gemErr);
+        }
+      }
+    }
+
+    // 2. OpenAI TTS
+    if (engine === "openai") {
+      const queryKey = (req.query.apiKey as string) || "";
+      const keyToUse = queryKey || process.env.OPENAI_API_KEY;
+      if (keyToUse) {
+        try {
+          const oaRes = await fetch("https://api.openai.com/v1/audio/speech", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${keyToUse}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: model || "tts-1",
+              input: text,
+              voice: voice || "alloy"
+            })
+          });
+          if (oaRes.ok) {
+            const ab = await oaRes.arrayBuffer();
+            res.setHeader("Content-Type", "audio/mpeg");
+            res.setHeader("Cache-Control", "public, max-age=86400");
+            return res.send(Buffer.from(ab));
+          }
+        } catch (oaErr) {
+          console.warn("OpenAI TTS stream exception:", oaErr);
         }
       }
     }
