@@ -351,6 +351,11 @@ export async function speakText(
   };
 
   // Route based on requested TTS engine
+  if (activeEngine === 'browser') {
+    speakWithBrowser();
+    return;
+  }
+
   playAudioStream().then((streamPlayed) => {
     if (!streamPlayed && myToken === currentSpeechToken) {
       speakWithBrowser();
