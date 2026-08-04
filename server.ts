@@ -97,7 +97,16 @@ function cleanJsonResponse(rawText: string): string {
   }
 }
 
-const VALID_GEMINI_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-lite", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
+const VALID_GEMINI_MODELS = [
+  "gemini-3.6-flash", 
+  "gemini-3.6-flash-lite", 
+  "gemini-3.5-flash", 
+  "gemini-3.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash"
+];
 
 // Sanitize model names for provider
 function sanitizeModel(provider: string, model?: string): string {
@@ -996,128 +1005,208 @@ function normalizeServerTextForTTS(text: string): string {
 }
 
 // 5. Text-to-Speech API
+app.get("/api/tts/stream", async (req, res) => {
+  try {
+    const rawText = (req.query.text as string) || "";
+    const lang = (req.query.lang as string) || "en";
+    if (!rawText.trim()) {
+      return res.status(400).json({ error: "Text parameter is required" });
+    }
+
+    const text = normalizeServerTextForTTS(rawText).slice(0, 300);
+    const cleanLang = (lang.includes("-") ? lang.split("-")[0] : lang).toLowerCase() || "en";
+
+    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text)}&tl=${cleanLang}`;
+    const response = await fetch(googleTtsUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Failed to fetch TTS stream" });
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64}` });
+  } catch (err: any) {
+    console.warn("TTS stream fallback error:", err.message);
+    return res.status(500).json({ error: "Failed to generate TTS stream" });
+  }
+});
+
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text: rawText, engine, model, voice, apiKey, customEndpoint, llmConfig } = req.body;
+    const { text: rawText, engine, model, voice, apiKey, customEndpoint, lang, llmConfig } = req.body;
 
     if (!rawText) {
       return res.status(400).json({ error: "Text is required for TTS generation" });
     }
 
     const text = normalizeServerTextForTTS(rawText);
-
     const effectiveApiKey = apiKey || (llmConfig?.provider === engine ? llmConfig?.apiKey : undefined) || (engine === "gemini" ? process.env.GEMINI_API_KEY : "");
+
+    // Fallback helper to fetch audio stream from Google Translate TTS
+    const fetchFallbackTtsAudio = async (): Promise<string | null> => {
+      try {
+        const cleanLang = (lang || "en").split("-")[0].toLowerCase();
+        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text.slice(0, 300))}&tl=${cleanLang}`;
+        const response = await fetch(googleTtsUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          }
+        });
+        if (response.ok) {
+          const arrayBuf = await response.arrayBuffer();
+          const base64 = Buffer.from(arrayBuf).toString("base64");
+          return `data:audio/mp3;base64,${base64}`;
+        }
+      } catch (fbErr) {
+        console.warn("Fallback TTS fetch failed:", fbErr);
+      }
+      return null;
+    };
 
     if (engine === "gemini") {
       const keyToUse = effectiveApiKey || process.env.GEMINI_API_KEY;
-      if (!keyToUse) {
-        return res.status(400).json({ error: "Gemini API key is required for Gemini AI TTS model" });
-      }
+      if (keyToUse) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey: keyToUse,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+          });
 
-      const ai = new GoogleGenAI({
-        apiKey: keyToUse,
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-      });
+          // Try Gemini audio model aliases
+          const modelsToTry = [
+            (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-2.0-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-3.6-flash"
+          ];
 
-      const targetTtsModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-3.6-flash";
-      const response = await ai.models.generateContent({
-        model: targetTtsModel,
-        contents: `Pronounce the following text clearly for a language learner: "${text}"`,
-        config: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: voice || "Puck"
+          for (const m of Array.from(new Set(modelsToTry))) {
+            try {
+              const response = await ai.models.generateContent({
+                model: m,
+                contents: `Pronounce clearly: "${text}"`,
+                config: {
+                  responseModalities: ["AUDIO"],
+                  speechConfig: {
+                    voiceConfig: {
+                      prebuiltVoiceConfig: {
+                        voiceName: voice || "Puck"
+                      }
+                    }
+                  }
+                }
+              });
+
+              const candidate = response.candidates?.[0];
+              const part = candidate?.content?.parts?.find((p: any) => p.inlineData);
+
+              if (part && part.inlineData) {
+                const mimeType = part.inlineData.mimeType || "audio/mp3";
+                const base64Data = part.inlineData.data || "";
+
+                if (mimeType.includes("l16") || mimeType.includes("pcm") || mimeType.includes("raw") || (!mimeType.includes("mp3") && !mimeType.includes("wav"))) {
+                  const rawPcm = Buffer.from(base64Data, "base64");
+                  const rateMatch = mimeType.match(/rate=(\d+)/);
+                  const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+                  const wavBuffer = pcmToWav(rawPcm, sampleRate, 1, 16);
+                  return res.json({ audioDataUrl: `data:audio/wav;base64,${wavBuffer.toString("base64")}` });
+                }
+                return res.json({ audioDataUrl: `data:${mimeType};base64,${base64Data}` });
               }
+            } catch (mErr) {
+              console.warn(`Gemini TTS model ${m} failed:`, mErr);
             }
           }
+        } catch (genErr) {
+          console.warn("Gemini AI TTS generation exception:", genErr);
         }
-      });
-
-      const candidate = response.candidates?.[0];
-      const part = candidate?.content?.parts?.find((p: any) => p.inlineData);
-
-      if (part && part.inlineData) {
-        const mimeType = part.inlineData.mimeType || "audio/mp3";
-        const base64Data = part.inlineData.data || "";
-
-        // If Gemini returned raw PCM / L16 audio, wrap with standard WAV header so browsers decode and play natively
-        if (mimeType.includes("l16") || mimeType.includes("pcm") || mimeType.includes("raw") || (!mimeType.includes("mp3") && !mimeType.includes("wav"))) {
-          try {
-            const rawPcm = Buffer.from(base64Data, "base64");
-            const rateMatch = mimeType.match(/rate=(\d+)/);
-            const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-            const wavBuffer = pcmToWav(rawPcm, sampleRate, 1, 16);
-            const wavBase64 = wavBuffer.toString("base64");
-            return res.json({ audioDataUrl: `data:audio/wav;base64,${wavBase64}` });
-          } catch (convErr) {
-            console.warn("PCM to WAV conversion error, falling back to raw data:", convErr);
-          }
-        }
-
-        return res.json({ audioDataUrl: `data:${mimeType};base64,${base64Data}` });
       }
 
-      return res.status(422).json({ error: "Gemini model did not return inline audio. Falling back to browser speech synthesis." });
+      // If Gemini did not return audio or key missing, use high-quality TTS fallback stream
+      const fbAudio = await fetchFallbackTtsAudio();
+      if (fbAudio) {
+        return res.json({ audioDataUrl: fbAudio });
+      }
+      return res.status(422).json({ error: "Gemini model did not return inline audio." });
     }
 
     if (engine === "openai") {
-      if (!effectiveApiKey) {
-        return res.status(400).json({ error: "OpenAI API key is required for OpenAI TTS model" });
+      if (effectiveApiKey) {
+        try {
+          const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${effectiveApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: model || "tts-1",
+              input: text,
+              voice: voice || "alloy"
+            })
+          });
+
+          if (ttsRes.ok) {
+            const audioBuffer = await ttsRes.arrayBuffer();
+            const base64Audio = Buffer.from(audioBuffer).toString("base64");
+            return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
+          }
+        } catch (oaErr) {
+          console.warn("OpenAI TTS error:", oaErr);
+        }
       }
 
-      const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${effectiveApiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: model || "tts-1",
-          input: text,
-          voice: voice || "alloy"
-        })
-      });
-
-      if (!ttsRes.ok) {
-        const errText = await ttsRes.text();
-        throw new Error(`OpenAI TTS API Error (${ttsRes.status}): ${errText}`);
+      const fbAudio = await fetchFallbackTtsAudio();
+      if (fbAudio) {
+        return res.json({ audioDataUrl: fbAudio });
       }
-
-      const audioBuffer = await ttsRes.arrayBuffer();
-      const base64Audio = Buffer.from(audioBuffer).toString("base64");
-      return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
+      return res.status(400).json({ error: "OpenAI API key is required for OpenAI TTS model" });
     }
 
     if (engine === "custom") {
-      if (!customEndpoint) {
-        return res.status(400).json({ error: "Custom endpoint URL is required for custom TTS model" });
+      if (customEndpoint) {
+        try {
+          const customRes = await fetch(customEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(effectiveApiKey ? { "Authorization": `Bearer ${effectiveApiKey}` } : {})
+            },
+            body: JSON.stringify({ text, voice, model })
+          });
+
+          if (customRes.ok) {
+            const contentType = customRes.headers.get("content-type") || "";
+            if (contentType.includes("json")) {
+              const json: any = await customRes.json();
+              return res.json({ audioDataUrl: json.audioDataUrl || json.url || json.audio });
+            } else {
+              const audioBuffer = await customRes.arrayBuffer();
+              const base64Audio = Buffer.from(audioBuffer).toString("base64");
+              return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
+            }
+          }
+        } catch (cErr) {
+          console.warn("Custom TTS error:", cErr);
+        }
       }
 
-      const customRes = await fetch(customEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(effectiveApiKey ? { "Authorization": `Bearer ${effectiveApiKey}` } : {})
-        },
-        body: JSON.stringify({ text, voice, model })
-      });
-
-      if (!customRes.ok) {
-        const errText = await customRes.text();
-        throw new Error(`Custom TTS Error (${customRes.status}): ${errText}`);
+      const fbAudio = await fetchFallbackTtsAudio();
+      if (fbAudio) {
+        return res.json({ audioDataUrl: fbAudio });
       }
+      return res.status(400).json({ error: "Custom endpoint URL is required for custom TTS model" });
+    }
 
-      const contentType = customRes.headers.get("content-type") || "";
-      if (contentType.includes("json")) {
-        const json: any = await customRes.json();
-        return res.json({ audioDataUrl: json.audioDataUrl || json.url || json.audio });
-      } else {
-        const audioBuffer = await customRes.arrayBuffer();
-        const base64Audio = Buffer.from(audioBuffer).toString("base64");
-        return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
-      }
+    // Default or Browser engine requested via POST /api/tts
+    const fbAudio = await fetchFallbackTtsAudio();
+    if (fbAudio) {
+      return res.json({ audioDataUrl: fbAudio });
     }
 
     return res.status(400).json({ error: "Unsupported TTS engine specified" });

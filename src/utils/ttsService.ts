@@ -294,9 +294,39 @@ export async function speakText(
   };
 
   // Browser Native Speech Synthesis (Default or Fallback)
+  const playFallbackStream = async () => {
+    if (myToken !== currentSpeechToken) return false;
+    try {
+      const bcp47 = customLang 
+        ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
+        : "en-US";
+      const cleanLang = bcp47.split('-')[0].toLowerCase();
+      const res = await fetch(`/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.audioDataUrl && myToken === currentSpeechToken) {
+          const audio = getAudioElement();
+          if (audio) {
+            audio.src = data.audioDataUrl;
+            audio.playbackRate = ttsConfig?.speed ?? 1.0;
+            audio.onplay = () => safeOnStart();
+            audio.onended = () => safeOnEnd();
+            audio.onerror = () => safeOnEnd();
+            await audio.play();
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("playFallbackStream exception:", e);
+    }
+    safeOnEnd();
+    return false;
+  };
+
   const speakWithBrowser = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
-      safeOnEnd();
+      playFallbackStream();
       return;
     }
 
@@ -304,10 +334,10 @@ export async function speakText(
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
-      window.speechSynthesis.cancel();
     } catch {}
 
     if (myToken !== currentSpeechToken) return;
+
     try {
       const utterance = new SpeechSynthesisUtterance(normalizedText);
       activeUtterance = utterance;
@@ -315,9 +345,12 @@ export async function speakText(
 
       utterance.rate = ttsConfig.speed ?? 1.0;
       utterance.pitch = ttsConfig.pitch ?? 1.0;
-      if (customLang) {
-        utterance.lang = customLang;
-      }
+
+      // Ensure language is formatted as BCP-47 code
+      const bcp47Lang = customLang 
+        ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
+        : "en-US";
+      utterance.lang = bcp47Lang;
 
       const voices = window.speechSynthesis.getVoices();
       if (ttsConfig.voiceURI && voices.length > 0) {
@@ -327,19 +360,26 @@ export async function speakText(
         }
       }
 
-      if (!utterance.voice && customLang && voices.length > 0) {
-        const langPrefix = customLang.split('-')[0].toLowerCase();
+      if (!utterance.voice && bcp47Lang && voices.length > 0) {
+        const langPrefix = bcp47Lang.split('-')[0].toLowerCase();
         const matchingVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(langPrefix));
         if (matchingVoice) {
           utterance.voice = matchingVoice;
         }
       }
 
+      let speechStarted = false;
+      let watchdogTimer: any = null;
+
       utterance.onstart = () => {
+        speechStarted = true;
+        if (watchdogTimer) clearTimeout(watchdogTimer);
         safeOnStart();
       };
 
       utterance.onend = () => {
+        speechStarted = true;
+        if (watchdogTimer) clearTimeout(watchdogTimer);
         if (activeUtterance === utterance) {
           activeUtterance = null;
         }
@@ -348,24 +388,53 @@ export async function speakText(
       };
 
       utterance.onerror = (err) => {
-        if (err.error !== "interrupted" && err.error !== "canceled") {
-          console.warn("Browser SpeechSynthesis error:", err.error, err);
-        }
+        if (watchdogTimer) clearTimeout(watchdogTimer);
         if (activeUtterance === utterance) {
           activeUtterance = null;
         }
         (window as any)._activeUtteranceRef = null;
-        safeOnEnd();
+
+        if (err.error !== "interrupted" && err.error !== "canceled") {
+          console.warn("Browser SpeechSynthesis error, trying fallback stream:", err.error, err);
+          playFallbackStream();
+        } else {
+          safeOnEnd();
+        }
       };
 
-      // Ensure UI reflects active speaking even if some browsers delay `onstart`.
+      // Ensure UI reflects active speaking
       safeOnStart();
-      window.speechSynthesis.speak(utterance);
+
+      // Use a slight timeout after resume() so speech queue processes before speak()
+      setTimeout(() => {
+        if (myToken === currentSpeechToken) {
+          try {
+            if (window.speechSynthesis.paused) {
+              window.speechSynthesis.resume();
+            }
+            window.speechSynthesis.speak(utterance);
+
+            // Watchdog: If browser speech hasn't actually started playing after 750ms (common in sandboxed iframes), fall back to audio stream
+            watchdogTimer = setTimeout(() => {
+              if (!speechStarted && myToken === currentSpeechToken) {
+                console.warn("Browser SpeechSynthesis delayed or silent, invoking audio stream fallback...");
+                try {
+                  window.speechSynthesis.cancel();
+                } catch {}
+                playFallbackStream();
+              }
+            }, 750);
+          } catch (speakErr) {
+            console.warn("SpeechSynthesis speak exception:", speakErr);
+            playFallbackStream();
+          }
+        }
+      }, 15);
     } catch (err) {
       console.warn("SpeechSynthesis execution error:", err);
       activeUtterance = null;
       (window as any)._activeUtteranceRef = null;
-      safeOnEnd();
+      playFallbackStream();
     }
   };
 

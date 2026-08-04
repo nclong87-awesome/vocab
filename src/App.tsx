@@ -19,7 +19,7 @@ import {
   getTTSConfigFromDB,
   saveTTSConfigToDB
 } from "./db/indexedDB";
-import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
+import { DEFAULT_TTS_CONFIG, stopSpeech, unlockAudioElement } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay, getQuizCandidateWords, getCandidateWordForFlashcard } from "./utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
 import { DEFAULT_PROVIDER_ID, getDefaultLLMConfig } from "./config/llmProviders";
@@ -192,29 +192,43 @@ export default function App() {
     streak: { count: 0, lastActiveDate: "", history: [] }
   });
 
-  // Global Interaction Listener to stop TTS immediately on user inputs
+  // Global Interaction Listener to unlock audio context and handle user input
   useEffect(() => {
     const handleInteraction = (e: Event) => {
+      // Unlock HTML5 Audio context on initial or subsequent user gestures
+      unlockAudioElement();
+
       const target = e.target as HTMLElement;
+      if (!target) return;
+
+      // Only stop speech if user is actively typing in an input/textarea or pressing Escape
+      if (e.type === 'keydown') {
+        const keyboardEvt = e as KeyboardEvent;
+        if (keyboardEvt.key === 'Escape') {
+          stopSpeech();
+        }
+        return;
+      }
+
+      // If user clicks into a text input or textarea, stop active speech so it doesn't distract typing
       if (
         target.tagName === 'INPUT' || 
         target.tagName === 'TEXTAREA' || 
-        target.tagName === 'BUTTON' ||
-        target.closest('button') ||
-        target.closest('input')
+        target.closest('input') || 
+        target.closest('textarea')
       ) {
         stopSpeech();
       }
     };
 
-    window.addEventListener('click', handleInteraction, true);
-    window.addEventListener('keydown', handleInteraction, true);
-    window.addEventListener('touchstart', handleInteraction, true);
+    window.addEventListener('click', handleInteraction, { capture: true, passive: true });
+    window.addEventListener('keydown', handleInteraction, { capture: true, passive: true });
+    window.addEventListener('touchstart', handleInteraction, { capture: true, passive: true });
 
     return () => {
-      window.removeEventListener('click', handleInteraction, true);
-      window.removeEventListener('keydown', handleInteraction, true);
-      window.removeEventListener('touchstart', handleInteraction, true);
+      window.removeEventListener('click', handleInteraction, { capture: true });
+      window.removeEventListener('keydown', handleInteraction, { capture: true });
+      window.removeEventListener('touchstart', handleInteraction, { capture: true });
     };
   }, []);
 
