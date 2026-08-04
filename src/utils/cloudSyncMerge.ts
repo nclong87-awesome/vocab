@@ -1,5 +1,5 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
-import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
+import { Word, UserStats } from "../types";
 
 export interface DeletedWordRecord {
   id: string;
@@ -104,7 +104,7 @@ function getDeletedWordsFromExportData(data: IndexedDBExportData): DeletedWordRe
   if (Array.isArray(data.stores?.deletedWords) && data.stores.deletedWords.length > 0) {
     list = data.stores.deletedWords;
   } else {
-    const settingRec = data.stores?.settings?.find((s) => s && s.key === "deleted_words");
+    const settingRec = data.stores?.settings?.find((s) => s && s.key === "deletedwords");
     if (settingRec && settingRec.value) {
       try {
         const parsed = JSON.parse(settingRec.value);
@@ -213,11 +213,25 @@ export function autoMergeLocalAndRemote(
 
       // Merge combined fields:
       // - Starred: if starred anywhere, keep true
-      // - Learned: if learned anywhere with higher strength, take highest
-      // - Strength: max strength or from most recent review
       const mergedStarred = Boolean(lWord.starred || match.starred);
-      const mergedStrength = Math.max(lWord.strength ?? 0, match.strength ?? 0);
-      const mergedLearned = mergedStrength >= 3 || lWord.learned || match.learned;
+
+      // Determine strength and learned status:
+      // If one side has been reviewed/updated more recently, take its strength/learned as authoritative.
+      // If they have the exact same review/creation time, use local's values to prevent memory decay ping-pong.
+      let mergedStrength = primary.strength ?? 0;
+      let mergedLearned = primary.learned;
+
+      if (localReviewTime > remoteReviewTime) {
+        mergedStrength = lWord.strength ?? 0;
+        mergedLearned = lWord.learned;
+      } else if (remoteReviewTime > localReviewTime) {
+        mergedStrength = match.strength ?? 0;
+        mergedLearned = match.learned;
+      } else {
+        // Equal review times: use local values (which may have undergone decay)
+        mergedStrength = lWord.strength ?? 0;
+        mergedLearned = lWord.learned;
+      }
 
       const mergedWordItem: Word = {
         ...primary,
@@ -234,12 +248,17 @@ export function autoMergeLocalAndRemote(
       if (lWord.starred !== match.starred) {
         changesList.push(`Starred status synced (${mergedStarred ? "Starred" : "Unstarred"})`);
       }
-      if ((lWord.strength ?? 0) !== (match.strength ?? 0)) {
-        changesList.push(`Strength level merged (${lWord.strength ?? 0} vs ${match.strength ?? 0} → ${mergedStrength})`);
+      
+      // Only detect strength/learned changes if there is a real difference in user review time
+      if (localReviewTime !== remoteReviewTime) {
+        if ((lWord.strength ?? 0) !== (match.strength ?? 0)) {
+          changesList.push(`Strength level merged (${lWord.strength ?? 0} vs ${match.strength ?? 0} → ${mergedStrength})`);
+        }
+        if (lWord.learned !== match.learned) {
+          changesList.push(`Mastery synced (${mergedLearned ? "Mastered" : "Learning"})`);
+        }
       }
-      if (lWord.learned !== match.learned) {
-        changesList.push(`Mastery synced (${mergedLearned ? "Mastered" : "Learning"})`);
-      }
+
       if (lWord.definition !== match.definition) {
         changesList.push(`Definition updated from latest edit`);
       }
@@ -382,8 +401,8 @@ export function autoMergeLocalAndRemote(
   }
 
   const mergedConfig = Array.from(mergedConfigMap.values());
-  const localSettings = (localData.stores?.settings || []).filter((s) => !s || s.key !== "deleted_words");
-  const remoteSettings = (remoteData.stores?.settings || []).filter((s) => !s || s.key !== "deleted_words");
+  const localSettings = (localData.stores?.settings || []).filter((s) => !s || s.key !== "deletedwords");
+  const remoteSettings = (remoteData.stores?.settings || []).filter((s) => !s || s.key !== "deletedwords");
 
   const settingsMap = new Map<string, StoredSetting>();
   for (const s of remoteSettings) if (s && s.key) settingsMap.set(s.key, s);

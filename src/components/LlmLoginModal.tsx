@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { 
   Key, 
   Cpu, 
@@ -9,7 +9,7 @@ import {
   Eye, 
   EyeOff, 
   Globe, 
-  Lock, 
+  
   X,
   Sparkles,
   ArrowRight,

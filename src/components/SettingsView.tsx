@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Volume2, 
   VolumeX, 
-  Settings, 
+  
   Sparkles, 
   Cpu, 
   Check, 
-  Radio, 
+  
   Sliders, 
   Key, 
   RefreshCw, 
@@ -97,8 +97,8 @@ export default function SettingsView({
   useEffect(() => {
     setSelectedAppLang(appLanguage || nativeLanguage);
   }, [appLanguage, nativeLanguage]);
-
   const handleSaveLanguagePreferences = () => {
+
     if (onSelectLanguages) {
       onSelectLanguages(selectedTargetLang, selectedNativeLang, selectedAppLang);
     }
@@ -337,11 +337,6 @@ export default function SettingsView({
     );
   };
 
-  const handleSave = () => {
-    onSaveTTSConfig(config);
-    setSaveSuccessMessage(true);
-    setTimeout(() => setSaveSuccessMessage(false), 3000);
-  };
 
   // Export IndexedDB Database to JSON file
   const handleExportDB = async () => {
@@ -445,7 +440,7 @@ export default function SettingsView({
         const { clearAllWordsAndStatsFromDB } = await import("../db/indexedDB");
         await clearAllWordsAndStatsFromDB();
         try {
-          localStorage.removeItem("vocab_learner_words_backup");
+          localStorage.removeItem("vocab_learnerwords_backup");
           localStorage.removeItem("vocab_learner_stats_backup");
           localStorage.removeItem("vocab_learner_active_quiz_session");
         } catch (e) {

@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+import  { useState, useRef, useEffect } from "react";
 import { 
   Key, 
   ChevronDown, 
   Zap, 
   Check, 
-  Sparkles, 
+  
   Sliders, 
   CheckCircle2, 
   Cpu,

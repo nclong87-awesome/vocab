@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Send, Sparkles, Plus, Volume2, 
   Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
-  ChevronLeft, LayoutGrid, X, Search, Languages, FileText,
-  Camera, Image as ImageIcon, Upload, Layers
+  LayoutGrid, X, Search, Languages, FileText,
+  Camera, Image as _ImageIcon, Upload, Layers
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
@@ -51,7 +51,6 @@ export default function ChatView({
   onSelectDefinition,
   ttsConfig,
   llmConfig,
-  words
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
@@ -176,12 +175,6 @@ export default function ChatView({
     };
   }, []);
 
-  const handleScrollDock = (direction: "left" | "right") => {
-    if (dockScrollRef.current) {
-      const scrollAmount = direction === "left" ? -220 : 220;
-      dockScrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
-    }
-  };
 
   // Quick Actions Usage Counter (persisted in localStorage)
   const [actionCounts, setActionCounts] = useState<Record<string, number>>(() => {
@@ -517,14 +510,6 @@ export default function ChatView({
     scrollToBottom("smooth");
   };
 
-  const handleSpeak = (textToSpeak: string) => {
-    // Strip out Markdown formatting before speaking
-    const cleanedText = textToSpeak
-      .replace(/\*\*|`/g, "")
-      .replace(/###/g, "")
-      .replace(/##/g, "");
-    speakText(cleanedText, ttsConfig, llmConfig, getLanguageCode(targetLanguage));
-  };
 
   return (
     <div 
@@ -813,7 +798,7 @@ export default function ChatView({
                               } else if (act.action === "add_word" && act.payload?.word) {
                                 handleIncrementActionCount("add_word");
                                 onAddWord(act.payload.word, act.payload?.hint);
-                              } else if (act.action === "add_multiple_words" && act.payload?.words && onAddMultipleWords) {
+                              } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
                                 onAddMultipleWords(act.payload.words);
                                 showToast(`🎉 Added ${act.payload.words.length} vocabulary words to collection!`);
                               } else if (act.action === "start_quiz") {

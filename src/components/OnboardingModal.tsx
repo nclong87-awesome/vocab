@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { 
   Key, 
   Globe, 
@@ -11,12 +11,12 @@ import {
   ShieldCheck, 
   Search, 
   X, 
-  BookOpen, 
-  Languages, 
+  
+  
   Lock,
   Globe2
 } from "lucide-react";
-import { SUPPORTED_LANGUAGES, LanguageOption, getLanguageFlag } from "../config/languages";
+import { SUPPORTED_LANGUAGES,  getLanguageFlag } from "../config/languages";
 
 interface OnboardingModalProps {
   isOpen: boolean;

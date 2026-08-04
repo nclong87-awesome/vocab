@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMessage } from "./types";
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
-import { switchActiveProvider, getSavedProvidersMap, getProviderDisplayName } from "./utils/llmHelpers";
-import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService, generateFlashcardContentService } from "./services/llmClientService";
+import { switchActiveProvider, getSavedProvidersMap } from "./utils/llmHelpers";
+import { sendChatMessageService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService, generateFlashcardContentService } from "./services/llmClientService";
 import { QuizQuestion } from "./types";
 import { 
   getAllWordsFromDB, 
@@ -20,12 +20,11 @@ import {
   saveTTSConfigToDB
 } from "./db/indexedDB";
 import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
-import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords, getCandidateWordForFlashcard } from "./utils/spacedRepetition";
+import { recalculateWordsMemoryDecay, getQuizCandidateWords, getCandidateWordForFlashcard } from "./utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
 import { DEFAULT_PROVIDER_ID, getDefaultLLMConfig } from "./config/llmProviders";
 
 import ChatView from "./components/ChatView";
-import FlashcardsView from "./components/FlashcardsView";
 import CollectionManager from "./components/CollectionManager";
 import SettingsView from "./components/SettingsView";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
@@ -39,8 +38,6 @@ import AiErrorFallbackModal from "./components/layout/AiErrorFallbackModal";
 export default function App() {
   const [words, setWords] = useState<Word[]>([]);
   const [currentView, setCurrentView] = useState<"chatview" | "manage" | "analytics" | "settings">("chatview");
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("");
   
   // LLM Provider Login Config state
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(getDefaultLLMConfig());
@@ -659,11 +656,11 @@ export default function App() {
 
         const actions = validSenses.map((sense: any, idx: number) => {
           const targetWord = sense.word || data.word || wordText;
-          const partOfSpeech = sense.partOfSpeech || "word";
           const translation = sense.translation && sense.translation !== "undefined" ? sense.translation : "";
           const definition = sense.definition || "";
           const example = sense.example || "";
 
+          const partOfSpeech = sense.partOfSpeech || "word";
           let header = `[${partOfSpeech}]`;
           if (targetWord && targetWord.toLowerCase() !== wordText.toLowerCase()) {
             header += ` ${targetWord}${translation ? ` (${translation})` : ''}`;
@@ -705,8 +702,8 @@ export default function App() {
         // Only 1 definition found (exact definition matching context hint)
         const sense = validSenses[0];
         
+        const partOfSpeechVal = sense?.partOfSpeech || data.partOfSpeech || "word";
         const pronunciationVal = sense?.pronunciation || data.pronunciation || "/.../";
-        const partOfSpeechVal = sense?.partOfSpeech || data.partOfSpeech || "expression";
         const definitionVal = sense?.definition || data.definition;
         const translationVal = sense?.translation || data.translation;
         const exampleVal = sense?.example || data.example || undefined;
@@ -858,7 +855,7 @@ export default function App() {
       if (unsavedItems.length > 1) {
         actions.unshift({
           label: `✨ Add All (${unsavedItems.length}) Discovered Photo Words`,
-          action: "add_multiple_words",
+          action: "add_multiplewords",
           payload: { words: items }
         });
       }
@@ -984,7 +981,6 @@ export default function App() {
     
     // Add user selection message to chat
     const finalTranslation = translation && translation !== "undefined" ? translation : (sense.translation && sense.translation !== "undefined" ? sense.translation : targetWord);
-    const partOfSpeech = sense.partOfSpeech || "word";
     const newUserMsg: ChatMessage = {
       id: `user-select-def-${Date.now()}`,
       role: "user",
@@ -1539,11 +1535,6 @@ export default function App() {
     saveTTSConfigToDB(newConfig).catch(e => console.error("IndexedDB TTS save error:", e));
   };
 
-  // Save words to IndexedDB when changed
-  const saveWordsToStorage = useCallback((updatedWords: Word[]) => {
-    setWords(updatedWords);
-    saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB word save error:", e));
-  }, []);
 
   // Word interactions (starred state)
   const handleToggleStar = useCallback((wordId: string) => {
@@ -1562,9 +1553,8 @@ export default function App() {
 
   // Word mastery interaction
   const handleToggleLearned = useCallback((wordId: string) => {
-    let updatedWordsList: Word[] = [];
     setWords(prevWords => {
-      updatedWordsList = prevWords.map(w => {
+      const updatedWordsList = prevWords.map(w => {
         if (w.id === wordId) {
           const isNowMastered = !w.learned;
           const updated = {
@@ -1706,19 +1696,14 @@ export default function App() {
     saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB update words error:", e));
   }, []);
 
-  // Memoize Today's Practice words (applying recency cooldown to avoid repeating recently quizzed words)
-  const todayPracticeWords = useMemo((): Word[] => {
-    return getQuizCandidateWords(words, { maxCandidates: 10, cooldownHours: 12 });
-  }, [words]);
 
   // Quiz completion handler
   const handleFinishQuiz = useCallback((
     score: number, 
-    total: number, 
+    _total: number, 
     correctWordIds?: string[], 
     incorrectWordIds?: string[]
   ) => {
-    let updatedWordsList: Word[] = [];
     setWords(prevWords => {
       let updatedWords = [...prevWords];
       if (correctWordIds || incorrectWordIds) {
@@ -1747,7 +1732,6 @@ export default function App() {
         });
         saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB quiz words save error:", e));
       }
-      updatedWordsList = updatedWords;
       return updatedWords;
     });
 
@@ -1792,7 +1776,7 @@ export default function App() {
               stats={stats}
               llmConfig={llmConfig}
               ttsConfig={ttsConfig}
-              onStartPracticeWeakWords={(weakWords) => {
+              onStartPracticeWeakWords={(_weakWords) => {
                 setCurrentView("chatview");
               }}
               onToggleLearnedWord={(wordId) => handleToggleLearned(wordId)}

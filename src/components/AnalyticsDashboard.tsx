@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import  { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   BarChart2, 
@@ -6,10 +6,10 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Search, 
-  Star, 
+  
   BookOpen, 
   Zap, 
-  Flame, 
+  
   RefreshCw,
   Layers
 } from "lucide-react";
@@ -83,12 +83,6 @@ export default function AnalyticsDashboard({
 
 
   // Calculate overall accuracy rate
-  const accuracyRate = useMemo(() => {
-    if (!stats.totalQuizzesTaken || stats.totalQuizzesTaken === 0) return 0;
-    const estimatedTotalQuestions = stats.totalQuizzesTaken * 5; 
-    if (estimatedTotalQuestions === 0) return 0;
-    return Math.min(100, Math.round((stats.totalCorrectAnswers / Math.max(stats.totalCorrectAnswers, estimatedTotalQuestions)) * 100));
-  }, [stats]);
 
   // Run AI Analysis
   const handleRunAiAnalysis = async (overrideConfig?: LLMConfig) => {

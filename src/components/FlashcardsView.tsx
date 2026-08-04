@@ -7,7 +7,7 @@ import {
   ArrowLeft, 
   ArrowRight, 
   RefreshCw, 
-  BookOpen, 
+  
   Check, 
   HelpCircle,
   Sparkles,
@@ -123,7 +123,6 @@ export default function FlashcardsView({
   const percentage = Math.round(((currentIndex + 1) / sortedWords.length) * 100);
 
   // Statistics for completion screen
-  const masteredCount = useMemo(() => sortedWords.filter(w => w.learned).length, [sortedWords]);
 
   return (
     <div className="h-full overflow-y-auto p-2 sm:p-4 space-y-6 sm:space-y-8 max-w-3xl mx-auto w-full" id="flashcard-collection-view">
