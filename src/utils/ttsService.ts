@@ -67,16 +67,46 @@ function getAudioElement(): HTMLAudioElement | null {
   return currentAudioElement;
 }
 
+let sharedAudioContext: AudioContext | null = null;
+let currentSourceNode: AudioBufferSourceNode | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!sharedAudioContext) {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      sharedAudioContext = new AudioCtx();
+    }
+  }
+  if (sharedAudioContext && sharedAudioContext.state === 'suspended') {
+    sharedAudioContext.resume().catch(() => {});
+  }
+  return sharedAudioContext;
+}
+
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentSpeechToken: number = 0;
 
 export function stopSpeech(): void {
   currentSpeechToken++;
+
+  // Stop Web Audio API playback
+  if (currentSourceNode) {
+    try {
+      currentSourceNode.stop();
+      currentSourceNode.disconnect();
+    } catch {}
+    currentSourceNode = null;
+  }
+
+  // Stop browser SpeechSynthesis
   if (typeof window !== "undefined" && window.speechSynthesis) {
     try {
       window.speechSynthesis.cancel();
     } catch {}
   }
+
+  // Stop HTML Audio fallback
   const audio = getAudioElement();
   if (audio) {
     try {
@@ -95,6 +125,19 @@ let isAudioUnlocked = false;
 export function unlockAudioElement(): void {
   if (isAudioUnlocked) return;
   if (typeof window === "undefined") return;
+
+  try {
+    const ctx = getAudioContext();
+    if (ctx) {
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(() => {
+          isAudioUnlocked = true;
+        }).catch(() => {});
+      } else {
+        isAudioUnlocked = true;
+      }
+    }
+  } catch {}
 
   try {
     const silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAAAAAA==");
@@ -223,7 +266,75 @@ export async function speakText(
     }
   };
 
-  // Direct HTML5 Audio stream for AI models or server-side TTS
+  // Web Audio API buffer playback using dedicated AudioContext
+  const playWebAudioStream = async (): Promise<boolean> => {
+    const ctx = getAudioContext();
+    if (!ctx) return false;
+
+    try {
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
+      const bcp47 = customLang 
+        ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
+        : "en-US";
+      const cleanLang = bcp47.split('-')[0].toLowerCase();
+
+      const queryKey = ttsConfig?.apiKey || '';
+      const streamUrl = `/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}&engine=${encodeURIComponent(activeEngine)}&model=${encodeURIComponent(ttsConfig?.model || '')}&voice=${encodeURIComponent(ttsConfig?.voice || '')}&apiKey=${encodeURIComponent(queryKey)}&t=${Date.now()}`;
+
+      const res = await fetch(streamUrl);
+      if (myToken !== currentSpeechToken) return true;
+      if (!res.ok) return false;
+
+      const arrayBuffer = await res.arrayBuffer();
+      if (myToken !== currentSpeechToken) return true;
+      if (!arrayBuffer || arrayBuffer.byteLength < 100) return false;
+
+      // Decode audio data into AudioBuffer via Web Audio API
+      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+        const promise = ctx.decodeAudioData(
+          arrayBuffer.slice(0),
+          (decoded) => resolve(decoded),
+          (err) => reject(err)
+        );
+        if (promise && typeof promise.then === 'function') {
+          promise.then(resolve).catch(reject);
+        }
+      });
+
+      if (myToken !== currentSpeechToken) return true;
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+
+      if (ttsConfig?.speed) {
+        source.playbackRate.value = ttsConfig.speed;
+      }
+
+      source.connect(ctx.destination);
+      currentSourceNode = source;
+
+      source.onended = () => {
+        if (currentSourceNode === source) {
+          currentSourceNode = null;
+        }
+        if (myToken === currentSpeechToken) {
+          safeOnEnd();
+        }
+      };
+
+      safeOnStart();
+      source.start(0);
+      return true;
+    } catch (err) {
+      console.warn("Web Audio API stream playback failed, trying fallback:", err);
+      return false;
+    }
+  };
+
+  // Direct HTML5 Audio stream for AI models or server-side TTS fallback
   const playAudioStream = async (): Promise<boolean> => {
     const audio = getAudioElement();
     if (!audio) return false;
@@ -350,15 +461,18 @@ export async function speakText(
     }
   };
 
-  // Route based on requested TTS engine
-  if (activeEngine === 'browser') {
-    speakWithBrowser();
-    return;
-  }
-
-  playAudioStream().then((streamPlayed) => {
-    if (!streamPlayed && myToken === currentSpeechToken) {
-      speakWithBrowser();
+  // Primary: Use Web Audio API with dedicated AudioContext for reliable TTS buffering & playback
+  playWebAudioStream().then((webAudioPlayed) => {
+    if (!webAudioPlayed && myToken === currentSpeechToken) {
+      if (activeEngine === 'browser') {
+        speakWithBrowser();
+      } else {
+        playAudioStream().then((audioStreamPlayed) => {
+          if (!audioStreamPlayed && myToken === currentSpeechToken) {
+            speakWithBrowser();
+          }
+        });
+      }
     }
   });
 }
