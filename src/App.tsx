@@ -882,17 +882,37 @@ export default function App() {
             id: `sys-img-res-${Date.now()}`,
             role: "assistant",
             content: `🔍 **Photo Analysis**: *"${res.imageDescription || "Visual scene"}"*\n\nFound **${items.length}** vocabulary items:\n\n${formattedItems.join("\n")}\n\n*Click below to confirm and add items to your collection:*`,
-            imageUrl: imageDataUrl,
+            imageUrl: '',
             timestamp: new Date().toISOString(),
             suggestedActions: actions
           }
         ];
       });
     } catch (err: any) {
-      console.error(err);
-      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
-      handleAiApiError(err, configToUse, (newConfig) => {
-        handleAnalyzeImageVocab(imageDataUrl, customPrompt, newConfig);
+      console.error("Image analysis error:", err);
+      const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to analyze image for vocabulary.");
+
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `err-img-${Date.now()}`,
+            role: "assistant",
+            content: `⚠️ **Unable to generate vocabulary from image.**\n\n*Error*: ${rawMsg}`,
+            timestamp: new Date().toISOString(),
+            suggestedActions: [
+              {
+                label: "🔄 Try again analyzing photo",
+                action: "retry_analyze_image",
+                payload: {
+                  imageDataUrl,
+                  customPrompt
+                }
+              }
+            ]
+          }
+        ];
       });
     } finally {
       setIsTyping(false);

@@ -1832,7 +1832,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 }
 
 /**
- * Service to analyze image for vocabulary using Cloudflare worker (https://image-analysis.nclong87.workers.dev/)
+ * Service to analyze image for vocabulary using Cloudflare worker
  */
 export async function analyzeImageVocabService(params: {
   imageDataUrl: string;
@@ -1888,7 +1888,7 @@ export async function analyzeImageVocabService(params: {
     }
   }
 
-  // 2. Direct client-side call to Cloudflare Worker (https://image-analysis.nclong87.workers.dev/)
+  // 2. Direct client-side call to Cloudflare Worker
   let base64Data = imageDataUrl;
   if (imageDataUrl.startsWith("data:")) {
     const parts = imageDataUrl.split(";base64,");
@@ -1908,7 +1908,7 @@ export async function analyzeImageVocabService(params: {
     headers["X-Proxy-Key"] = sharedProxyKey;
   }
 
-  const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+  const workerRes = await fetch("https://1image-analysis.nclong87.workers.dev/", {
     method: "POST",
     headers,
     body: JSON.stringify({
