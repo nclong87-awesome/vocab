@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCw, Check, X, Bot } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getProviderDisplayName } from "../../utils/llmHelpers";
+import { isModelLocked } from "../../utils/autoModeManager";
 
 interface AiErrorFallbackModalProps {
   isOpen: boolean;
@@ -22,8 +23,12 @@ export default function AiErrorFallbackModal({
   llmConfig,
   onConfirmSwitchAndRetry
 }: AiErrorFallbackModalProps) {
-  // Filter out the current failed provider
-  const alternativeProviders = PROVIDER_OPTIONS.filter(p => p.id !== currentProvider);
+  // Filter out current failed provider and providers where all models are locked
+  const alternativeProviders = PROVIDER_OPTIONS.filter(p => {
+    if (p.id === currentProvider) return false;
+    if (p.id === "auto") return true;
+    return p.models.some(m => !isModelLocked(p.id, m));
+  });
 
   // Default selected provider to the first available alternative
   const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(() => {
@@ -33,7 +38,11 @@ export default function AiErrorFallbackModal({
   // Whenever modal opens or currentProvider changes, reset selectedProvider to first available option
   useEffect(() => {
     if (isOpen) {
-      const filtered = PROVIDER_OPTIONS.filter(p => p.id !== currentProvider);
+      const filtered = PROVIDER_OPTIONS.filter(p => {
+        if (p.id === currentProvider) return false;
+        if (p.id === "auto") return true;
+        return p.models.some(m => !isModelLocked(p.id, m));
+      });
       if (filtered.length > 0) {
         setSelectedProvider(filtered[0].id);
       }

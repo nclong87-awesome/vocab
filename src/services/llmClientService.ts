@@ -2201,6 +2201,14 @@ Output MUST be strictly valid JSON matching this schema:
       if (res.ok) {
         const data = await res.json();
         if (data && data.word) return data;
+      } else {
+        let errData: any = {};
+        try { errData = await res.json(); } catch {}
+        const userMsg = errData.error || `HTTP ${res.status} from flashcard generation endpoint`;
+        const err: any = new Error(userMsg);
+        err.userMessage = userMsg;
+        err.statusCode = res.status;
+        throw err;
       }
       rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     }
@@ -2225,8 +2233,12 @@ Output MUST be strictly valid JSON matching this schema:
         suggestedVocabulary: Array.isArray(parsed.suggestedVocabulary) ? parsed.suggestedVocabulary : []
       };
     }
-  } catch (err) {
-    console.warn("AI Flashcard Generation failed, returning fallback content:", err);
+  } catch (err: any) {
+    console.error("AI Flashcard Generation API error:", err);
+    if (llmConfig?.provider && llmConfig?.model) {
+      lockModel(llmConfig.provider, llmConfig.model);
+    }
+    throw err;
   }
 
   return fallbackContent;

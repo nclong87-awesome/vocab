@@ -14,7 +14,7 @@ import {
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
-import { getLockedModels, clearAllLocks } from "../../utils/autoModeManager";
+import { getLockedModels, isModelLocked, clearAllLocks } from "../../utils/autoModeManager";
 
 interface QuickAiSwitcherProps {
   llmConfig: LLMConfig;
@@ -234,28 +234,48 @@ export default function QuickAiSwitcher({
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-stone-300 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Cpu className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Select Model:</span>
-                    </span>
-                    <span className="text-[10px] text-stone-400">{activeProviderMeta.models.length} available</span>
-                  </label>
-                  <select
-                    value={llmConfig.model}
-                    onChange={(e) => handleModelSelect(e.target.value)}
-                    className="w-full bg-stone-800/90 text-white border border-stone-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
-                  >
-                    {activeProviderMeta.models.map((m) => (
-                      <option key={m} value={m}>
-                        {m} {m === activeProviderMeta.defaultModel ? "★ Recommended" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              ) : (() => {
+                const unlockedModels = activeProviderMeta.models.filter(m => !isModelLocked(activeProviderMeta.id, m));
+                return (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-stone-300 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Select Model:</span>
+                      </span>
+                      <span className="text-[10px] text-stone-400">{unlockedModels.length} available</span>
+                    </label>
+                    {unlockedModels.length > 0 ? (
+                      <select
+                        value={unlockedModels.includes(llmConfig.model) ? llmConfig.model : unlockedModels[0]}
+                        onChange={(e) => handleModelSelect(e.target.value)}
+                        className="w-full bg-stone-800/90 text-white border border-stone-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
+                      >
+                        {unlockedModels.map((m) => (
+                          <option key={m} value={m}>
+                            {m} {m === activeProviderMeta.defaultModel ? "★ Recommended" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-2.5 text-[11px] text-amber-300 bg-stone-800/80 rounded-lg border border-stone-700/80 flex items-center justify-between gap-2">
+                        <span>⚠️ All models for this provider are currently locked.</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearAllLocks();
+                            setToastMessage("Cleared all model locks!");
+                            setTimeout(() => setToastMessage(null), 2500);
+                          }}
+                          className="text-[10px] font-bold text-amber-400 hover:text-white underline cursor-pointer shrink-0"
+                        >
+                          Reset Locks
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Provider Selection Header */}
@@ -265,7 +285,7 @@ export default function QuickAiSwitcher({
                 <span>Switch Provider</span>
               </span>
               <span className="text-[10px] font-mono text-stone-400">
-                {PROVIDER_OPTIONS.length} Options Available
+                {PROVIDER_OPTIONS.filter(p => p.id === "auto" || p.models.some(m => !isModelLocked(p.id, m))).length} Options Available
               </span>
             </div>
 
@@ -275,6 +295,11 @@ export default function QuickAiSwitcher({
                 const isActive = llmConfig.provider === p.id;
                 const saved = savedMap[p.id];
                 const isSaved = Boolean(saved && (saved.apiKey || !p.requiresKey));
+                const allModelsLocked = p.id !== "auto" && p.models.length > 0 && p.models.every(m => isModelLocked(p.id, m));
+
+                if (allModelsLocked && !isActive) {
+                  return null;
+                }
 
                 return (
                   <button
