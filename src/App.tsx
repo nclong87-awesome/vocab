@@ -1377,6 +1377,12 @@ export default function App() {
 
       const keywordText = flashcardContent.imageKeyword || candidateWord.imageKeyword || candidateWord.word;
 
+      const vocabActions = (flashcardContent.suggestedVocabulary || []).map((vocab: any) => ({
+        label: `➕ Add "${vocab.word}" (${vocab.translation})`,
+        action: "add_word",
+        payload: { word: vocab.word, hint: vocab.definition }
+      }));
+
       const flashcardMsg: ChatMessage = {
         id: `flashcard-msg-${Date.now()}`,
         role: "assistant",
@@ -1396,9 +1402,11 @@ export default function App() {
           context: flashcardContent.context || candidateWord.context || candidateWord.definition,
           extraExampleSentences: flashcardContent.extraExampleSentences,
           usageNotes: flashcardContent.usageNotes,
-          imageKeyword: keywordText
+          imageKeyword: keywordText,
+          suggestedVocabulary: flashcardContent.suggestedVocabulary
         },
         suggestedActions: [
+          ...vocabActions,
           { label: "🃏 Next Flash Card", action: "view_flashcard" },
         ]
       };

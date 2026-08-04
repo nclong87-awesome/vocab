@@ -1368,6 +1368,76 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
   }
 });
 
+// Flashcard Generation endpoint
+app.post("/api/generate-flashcard", async (req, res) => {
+  try {
+    const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+
+    if (!word || !word.word) {
+      return res.status(400).json({ error: "Word object is required" });
+    }
+
+    const systemInstruction = `You are a world-class AI Language Pedagogy Engine creating interactive flash cards for ${targetLanguage} learners (native language: ${nativeLanguage}).
+Given a target vocabulary word, its category, context, definition, and user stats, generate rich flashcard study content.
+
+CRITICAL REQUIREMENTS:
+1. Provide a refined target language definition in ${targetLanguage}, pronunciation (IPA), and native translation in ${nativeLanguage}.
+2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
+3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
+4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
+5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
+6. Suggested Vocabulary from Examples: Identify 2 to 4 advanced, interesting, or highly useful vocabulary words, collocations, idioms, or expressions that appear within the generated extra example sentences (or are very closely related to them) in ${targetLanguage}. For each, provide its target-language form ("word"), direct native-language translation ("translation" in ${nativeLanguage}), part of speech ("partOfSpeech"), and a brief definition ("definition" in ${targetLanguage}). These will be displayed as suggested actions to allow the user to easily add them to their collection.
+
+Output MUST be strictly valid JSON matching this schema:
+{
+  "word": "string",
+  "pronunciation": "string",
+  "partOfSpeech": "string",
+  "definition": "string in ${targetLanguage}",
+  "translation": "string in ${nativeLanguage}",
+  "category": "string",
+  "context": "string",
+  "extraExampleSentences": [
+    {
+      "sentence": "string in ${targetLanguage}",
+      "translation": "string in ${nativeLanguage}",
+      "contextCategoryNote": "string (brief note explaining relevance to context/category)"
+    }
+  ],
+  "usageNotes": "string",
+  "imageKeyword": "string (ONE single comma-free search term)",
+  "suggestedVocabulary": [
+    {
+      "word": "string (useful word/phrase extracted from the example sentences)",
+      "translation": "string (translation in ${nativeLanguage})",
+      "partOfSpeech": "string (e.g. noun, verb, adjective, idiom)",
+      "definition": "string (short definition in ${targetLanguage})"
+    }
+  ]
+}`;
+
+    const prompt = `Generate interactive flashcard content for the word:\n` +
+      `Word: "${word.word}"\n` +
+      `Part of Speech: "${word.partOfSpeech || "unknown"}"\n` +
+      `Stored Definition: "${word.definition}"\n` +
+      `Stored Translation: "${word.translation}"\n` +
+      `Stored Category: "${word.category || "General"}"\n` +
+      `Stored Context: "${word.context || word.definition}"\n` +
+      `Stored Example: "${word.example || "N/A"}"`;
+
+    const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array of sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (array of useful words or expressions from example sentences with word, translation, partOfSpeech, definition).`;
+
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const result = JSON.parse(text);
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error generating flashcard content:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
 // 8. Quiz Question Generation endpoint
 app.post("/api/generate-quiz", async (req, res) => {
   try {

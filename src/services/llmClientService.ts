@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
-import { LLMConfig, Word, QuizQuestion, UserStats } from "../types";
+import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord } from "../types";
 import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
-import { getProviderDisplayName, resizeImageDataUrl } from "../utils/llmHelpers";
+import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 
 // Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
@@ -1909,6 +1909,7 @@ export interface GeneratedFlashcardContent {
   }[];
   usageNotes?: string;
   imageKeyword?: string;
+  suggestedVocabulary?: SuggestedVocabularyWord[];
 }
 
 export async function generateFlashcardContentService(
@@ -1932,7 +1933,8 @@ export async function generateFlashcardContentService(
       }
     ] : [],
     usageNotes: `Category: ${word.category || "General"}. Context: ${word.context || word.definition}`,
-    imageKeyword: word.imageKeyword || word.word
+    imageKeyword: word.imageKeyword || word.word,
+    suggestedVocabulary: []
   };
 
   if (!llmConfig || !llmConfig.isLoggedIn) {
@@ -1948,6 +1950,7 @@ CRITICAL REQUIREMENTS:
 3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
 4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
 5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
+6. Suggested Vocabulary from Examples: Identify 2 to 4 advanced, interesting, or highly useful vocabulary words, collocations, idioms, or expressions that appear within the generated extra example sentences (or are very closely related to them) in ${targetLanguage}. For each, provide its target-language form ("word"), direct native-language translation ("translation" in ${nativeLanguage}), part of speech ("partOfSpeech"), and a brief definition ("definition" in ${targetLanguage}). These will be displayed as suggested actions to allow the user to easily add them to their collection.
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -1966,7 +1969,15 @@ Output MUST be strictly valid JSON matching this schema:
     }
   ],
   "usageNotes": "string",
-  "imageKeyword": "string (ONE single comma-free search term)"
+  "imageKeyword": "string (ONE single comma-free search term)",
+  "suggestedVocabulary": [
+    {
+      "word": "string (useful word/phrase extracted from the example sentences)",
+      "translation": "string (translation in ${nativeLanguage})",
+      "partOfSpeech": "string (e.g. noun, verb, adjective, idiom)",
+      "definition": "string (short definition in ${targetLanguage})"
+    }
+  ]
 }`;
 
   const prompt = `Generate interactive flashcard content for the word:\n` +
@@ -1978,7 +1989,7 @@ Output MUST be strictly valid JSON matching this schema:
     `Stored Context: "${word.context || word.definition}"\n` +
     `Stored Example: "${word.example || "N/A"}"`;
 
-  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array of sentence, translation, contextCategoryNote), usageNotes, and imageKeyword.`;
+  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array of sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (array of useful words or expressions from example sentences with word, translation, partOfSpeech, definition).`;
 
   try {
     let rawResultText = "";
@@ -2013,7 +2024,8 @@ Output MUST be strictly valid JSON matching this schema:
           ? parsed.extraExampleSentences
           : fallbackContent.extraExampleSentences,
         usageNotes: parsed.usageNotes || fallbackContent.usageNotes,
-        imageKeyword: parsed.imageKeyword || word.imageKeyword || word.word
+        imageKeyword: parsed.imageKeyword || word.imageKeyword || word.word,
+        suggestedVocabulary: Array.isArray(parsed.suggestedVocabulary) ? parsed.suggestedVocabulary : []
       };
     }
   } catch (err) {

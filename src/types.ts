@@ -112,6 +112,13 @@ export interface UserStats {
   streak: Streak;
 }
 
+export interface SuggestedVocabularyWord {
+  word: string;
+  translation: string;
+  partOfSpeech?: string;
+  definition?: string;
+}
+
 export interface FlashcardData {
   wordId?: string;
   word: string;
@@ -129,6 +136,7 @@ export interface FlashcardData {
   usageNotes?: string;
   imageUrl?: string;
   imageKeyword?: string;
+  suggestedVocabulary?: SuggestedVocabularyWord[];
 }
 
 export interface ChatMessage {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Volume2, Layers, Sparkles, Brain, ArrowRight, Lightbulb, Star } from "lucide-react";
+import { Volume2,  Sparkles,   Lightbulb } from "lucide-react";
 import { FlashcardData, TTSConfig, LLMConfig } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import QuizImage from "../quiz/QuizImage";
@@ -190,6 +190,60 @@ export default function FlashcardMessageCard({
               <p className="text-xs text-stone-800 leading-relaxed font-medium">
                 {data.usageNotes}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Suggested Vocabulary from Examples */}
+        {data.suggestedVocabulary && data.suggestedVocabulary.length > 0 && (
+          <div className="space-y-2.5 pt-1">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                Suggested Vocabulary from Examples:
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              {data.suggestedVocabulary.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="bg-stone-50 border border-stone-200/80 hover:border-amber-300 rounded-xl p-3 space-y-1 transition-all shadow-2xs group"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-stone-900 text-sm">
+                        {item.word}
+                      </span>
+                      {item.partOfSpeech && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-stone-200 text-stone-800 rounded">
+                          {item.partOfSpeech}
+                        </span>
+                      )}
+                      <span className="text-xs text-stone-500 font-semibold">
+                        — {item.translation}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleSpeak(item.word, e)}
+                      className={`p-1 rounded transition-colors cursor-pointer shrink-0 ${
+                        speakingText === item.word
+                          ? "bg-amber-400 text-stone-950"
+                          : "bg-stone-100 hover:bg-stone-200 text-stone-600"
+                      }`}
+                      title="Listen to word"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {item.definition && (
+                    <p className="text-xs text-stone-600 leading-normal font-medium">
+                      {item.definition}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
