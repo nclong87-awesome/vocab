@@ -1908,7 +1908,7 @@ export async function analyzeImageVocabService(params: {
     headers["X-Proxy-Key"] = sharedProxyKey;
   }
 
-  const workerRes = await fetch("https://1image-analysis.nclong87.workers.dev/", {
+  const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
     method: "POST",
     headers,
     body: JSON.stringify({
