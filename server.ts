@@ -1125,6 +1125,9 @@ CRITICAL INSTRUCTIONS:
    - Why those changes make the sentence sound more natural and fluent
    - Alternative casual ways to express the same idea
 3. "vocabularyCandidates": Identify 1 to 4 valuable candidate vocabulary words, expressions, or idioms from EITHER the user's input or the fixed sentence that are worth learning in "${userTarget}".
+  PRIORITY RULE: If the user's input contains misspelled words, prioritize those first as vocabulary candidates.
+  - For misspelled candidates, set "word" to the corrected form in "${userTarget}" and mention the original misspelling in "reason".
+  - If there are multiple misspellings, rank them before other candidate words.
    For each candidate, provide:
    - "word": string (the target language word or expression)
    - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
