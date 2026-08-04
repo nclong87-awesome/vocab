@@ -70,7 +70,7 @@ export default function WordCard({
           </div>
 
           {/* Action Buttons Bar */}
-          <div className="flex items-center gap-1 bg-stone-50 p-1 border border-stone-150 rounded-lg shrink-0 shadow-3xs">
+          <div className="word-card-actions">
             <button
               type="button"
               onClick={() => onToggleStar(word.id)}

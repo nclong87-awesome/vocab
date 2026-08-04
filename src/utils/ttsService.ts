@@ -1,12 +1,12 @@
 import { TTSConfig, LLMConfig } from "../types";
 
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
-  engine: 'browser',
+  engine: "browser",
   speed: 1.0,
   pitch: 1.0,
-  model: 'gemini-3.6-flash',
-  voice: 'Puck',
-  autoPlayAudioInQuiz: true
+  model: "gemini-3.6-flash",
+  voice: "",
+  autoPlayAudioInQuiz: true,
 };
 
 export function getLanguageCode(langName?: string): string {
@@ -38,17 +38,17 @@ export function getLanguageCode(langName?: string): string {
     thai: "th-TH",
     indonesian: "id-ID",
     tagalog: "tl-PH",
-    english: "en-US"
+    english: "en-US",
   };
   return map[name] || "en-US";
 }
 
 export function getVoicesForLanguage(langNameOrCode: string, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
   if (!voices || voices.length === 0) return [];
-  const bcp47 = langNameOrCode.includes('-') ? langNameOrCode : getLanguageCode(langNameOrCode);
-  const langPrefix = bcp47.split('-')[0].toLowerCase();
-  return voices.filter(v => {
-    const vLang = (v.lang || "").toLowerCase().replace('_', '-');
+  const bcp47 = langNameOrCode.includes("-") ? langNameOrCode : getLanguageCode(langNameOrCode);
+  const langPrefix = bcp47.split("-")[0].toLowerCase();
+  return voices.filter((v) => {
+    const vLang = (v.lang || "").toLowerCase().replace("_", "-");
     return vLang.startsWith(langPrefix) || vLang.includes(langPrefix);
   });
 }
@@ -78,19 +78,24 @@ function getAudioContext(): AudioContext | null {
       sharedAudioContext = new AudioCtx();
     }
   }
-  if (sharedAudioContext && sharedAudioContext.state === 'suspended') {
+  if (sharedAudioContext && sharedAudioContext.state === "suspended") {
     sharedAudioContext.resume().catch(() => {});
   }
   return sharedAudioContext;
 }
 
 let activeUtterance: SpeechSynthesisUtterance | null = null;
-let currentSpeechToken: number = 0;
+let currentSpeechToken = 0;
 
-export function stopSpeech(): void {
-  currentSpeechToken++;
+function stopSpeechInternal(options?: { bumpToken?: boolean; forceCancel?: boolean }): void {
+  const bumpToken = options?.bumpToken ?? true;
+  const forceCancel = options?.forceCancel ?? true;
 
-  // Stop Web Audio API playback
+  if (bumpToken) {
+    currentSpeechToken++;
+  }
+
+  // Stop Web Audio playback if any.
   if (currentSourceNode) {
     try {
       currentSourceNode.stop();
@@ -99,14 +104,17 @@ export function stopSpeech(): void {
     currentSourceNode = null;
   }
 
-  // Stop browser SpeechSynthesis
+  // Stop browser SpeechSynthesis.
   if (typeof window !== "undefined" && window.speechSynthesis) {
     try {
-      window.speechSynthesis.cancel();
+      const shouldCancel = forceCancel || window.speechSynthesis.speaking || window.speechSynthesis.pending || !!activeUtterance;
+      if (shouldCancel) {
+        window.speechSynthesis.cancel();
+      }
     } catch {}
   }
 
-  // Stop HTML Audio fallback
+  // Stop HTMLAudio fallback (kept for compatibility with existing cleanup behavior).
   const audio = getAudioElement();
   if (audio) {
     try {
@@ -117,7 +125,12 @@ export function stopSpeech(): void {
       audio.currentTime = 0;
     } catch {}
   }
+
   activeUtterance = null;
+}
+
+export function stopSpeech(): void {
+  stopSpeechInternal({ bumpToken: true, forceCancel: true });
 }
 
 let isAudioUnlocked = false;
@@ -129,7 +142,7 @@ export function unlockAudioElement(): void {
   try {
     const ctx = getAudioContext();
     if (ctx) {
-      if (ctx.state === 'suspended') {
+      if (ctx.state === "suspended") {
         ctx.resume().then(() => {
           isAudioUnlocked = true;
         }).catch(() => {});
@@ -152,42 +165,37 @@ export function unlockAudioElement(): void {
   } catch {}
 }
 
-// Helper to normalize text for speech synthesis (TTS) to avoid strange characters or prompt noise
+// Helper to normalize text for speech synthesis (TTS) to avoid strange characters or prompt noise.
 export function normalizeTextForTTS(text: string): string {
   if (!text) return "";
 
   let cleaned = text;
 
-  // 1. Remove zero-width spaces, soft hyphens, non-breaking spaces & control characters
+  // 1. Remove zero-width spaces, soft hyphens, non-breaking spaces & control characters.
   cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF\u00A0\u0000-\u001F]/g, " ");
 
-  // 2. Strip HTML tags (e.g. <b>, <br/>, <span class="...">)
+  // 2. Strip HTML tags (e.g. <b>, <br/>, <span class="...">).
   cleaned = cleaned.replace(/<[^>]*>/g, " ");
 
-  // 3. Strip Emojis & decorative non-speech symbols (e.g. ★, ☆, ●, •, ►, ▪, ✦, ✧, ✔, ✕, ✖)
+  // 3. Strip emojis & decorative non-speech symbols.
   cleaned = cleaned.replace(/[\u{1F300}-\u{1F9FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E0}-\u{1F1FF}]/gu, "");
   cleaned = cleaned.replace(/[★☆●•►▪✦✧✔✕✖✓✗➔→←⇒▲▼♦♠♣♥]/g, " ");
 
-  // 4. Handle Markdown syntax
-  // Markdown links: [text](url) -> text
+  // 4. Handle Markdown syntax.
   cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
-  // Markdown images: ![alt](url) -> ""
   cleaned = cleaned.replace(/!\[([^\]]*)\]\([^)]+\)/g, "");
-  // Remove bold, italic, strikethrough, inline code (keep text inside): **text**, *text*, __text__, _text_, ~~text~~, `text`
   cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, "$1");
   cleaned = cleaned.replace(/\*([^*]+)\*/g, "$1");
   cleaned = cleaned.replace(/~~([^~]+)~~/g, "$1");
   cleaned = cleaned.replace(/`([^`]+)`/g, "$1");
-  // Heading marks, blockquotes, list markers at start of line
   cleaned = cleaned.replace(/^[#>\-\*\+\s]+/gm, " ");
 
-  // 5. Handle bracketed IPA phonetics if present alongside regular text (e.g., /bɔ̃ʒuʁ/)
+  // 5. Remove IPA blocks if they appear with normal text.
   if (/[a-zA-Z0-9]/.test(cleaned.replace(/\/[^/]+\//g, ""))) {
     cleaned = cleaned.replace(/\/[^/]{2,30}\//g, " ");
   }
 
-  // 6. Normalize fill-in-the-blanks / placeholders so speech engines don't read "underscore underscore"
-  // Handles [___], (___), [...], (...), ________, -----, ......
+  // 6. Normalize blanks/placeholders.
   cleaned = cleaned.replace(/\[\s*_{1,}\s*\]/g, " blank ");
   cleaned = cleaned.replace(/\(\s*_{1,}\s*\)/g, " blank ");
   cleaned = cleaned.replace(/\[\s*\.{3,}\s*\]/g, " blank ");
@@ -196,29 +204,28 @@ export function normalizeTextForTTS(text: string): string {
   cleaned = cleaned.replace(/-{3,}/g, " blank ");
   cleaned = cleaned.replace(/\.{4,}/g, " blank ");
 
-  // 7. Streamline common prompt prefixes for speech clarity
+  // 7. Streamline common prompt prefixes.
   cleaned = cleaned.replace(/^(Fill in the blank for the sentence|Complete the sentence|Fill in the blank):\s*/i, "Complete sentence: ");
   cleaned = cleaned.replace(/^(Which word matches the following definition|Which word matches the definition):\s*/i, "Definition: ");
   cleaned = cleaned.replace(/^(Question|Q):\s*/i, "");
 
-  // 8. Clean redundant or strange quotes
+  // 8. Clean quotes.
   cleaned = cleaned.replace(/["“”«»„‟]/g, "");
-  cleaned = cleaned.replace(/['‘’]/g, "'"); // Normalize curly apostrophes
+  cleaned = cleaned.replace(/['‘’]/g, "'");
 
-  // 9. Remove non-speech punctuation/symbols like ~, ^, |, \, @, #, $, %, *, +, =, <, >
+  // 9. Remove non-speech punctuation/symbols.
   cleaned = cleaned.replace(/[~^|\\@#$%*+=<>]/g, " ");
 
-  // 10. Clean up multiple punctuation and line breaks
+  // 10. Clean duplicate punctuation/line breaks.
   cleaned = cleaned.replace(/[\r\n]+/g, ". ");
   cleaned = cleaned.replace(/,\s*,/g, ",");
   cleaned = cleaned.replace(/\?\s*\?/g, "?");
   cleaned = cleaned.replace(/!\s*!/g, "!");
   cleaned = cleaned.replace(/\.\s*\./g, ".");
 
-  // 11. Normalize spaces
+  // 11. Normalize spaces.
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
-  // Fallback safety check: if everything was stripped, return basic sanitized original text
   if (!cleaned) {
     return text.replace(/[\u200B-\u200D\uFEFF\u00A0\u0000-\u001F]/g, " ").replace(/<[^>]*>/g, " ").trim();
   }
@@ -234,17 +241,18 @@ export async function speakText(
   onStart?: () => void,
   onEnd?: () => void
 ): Promise<void> {
-  stopSpeech();
+  const shouldCancelOnStart =
+    !!currentSourceNode ||
+    !!activeUtterance ||
+    (typeof window !== "undefined" && !!window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending));
+
+  stopSpeechInternal({ bumpToken: false, forceCancel: shouldCancelOnStart });
+  currentSpeechToken++;
   const myToken = currentSpeechToken;
 
-  // Ensure Mobile HTMLAudioElement is fully unlocked if we are using an AI/Server engine
-  const activeEngine = ttsConfig?.engine || 'browser';
-  if (activeEngine !== 'browser') {
-    unlockAudioElement();
-  }
+  unlockAudioElement();
 
   const normalizedText = normalizeTextForTTS(text);
-
   if (!normalizedText || !normalizedText.trim()) {
     if (onEnd) onEnd();
     return;
@@ -266,127 +274,17 @@ export async function speakText(
     }
   };
 
-  // Web Audio API buffer playback using dedicated AudioContext
-  const playWebAudioStream = async (): Promise<boolean> => {
-    const ctx = getAudioContext();
-    if (!ctx) return false;
+  const safeRate = (() => {
+    const n = Number(ttsConfig.speed);
+    if (!Number.isFinite(n)) return 1.0;
+    return Math.min(10, Math.max(0.1, n));
+  })();
 
-    try {
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
-      const bcp47 = customLang 
-        ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
-        : "en-US";
-      const cleanLang = bcp47.split('-')[0].toLowerCase();
-
-      const queryKey = ttsConfig?.apiKey || '';
-      const streamUrl = `/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}&engine=${encodeURIComponent(activeEngine)}&model=${encodeURIComponent(ttsConfig?.model || '')}&voice=${encodeURIComponent(ttsConfig?.voice || '')}&apiKey=${encodeURIComponent(queryKey)}&t=${Date.now()}`;
-
-      const res = await fetch(streamUrl);
-      if (myToken !== currentSpeechToken) return true;
-      if (!res.ok) return false;
-
-      const arrayBuffer = await res.arrayBuffer();
-      if (myToken !== currentSpeechToken) return true;
-      if (!arrayBuffer || arrayBuffer.byteLength < 100) return false;
-
-      // Decode audio data into AudioBuffer via Web Audio API
-      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        const promise = ctx.decodeAudioData(
-          arrayBuffer.slice(0),
-          (decoded) => resolve(decoded),
-          (err) => reject(err)
-        );
-        if (promise && typeof promise.then === 'function') {
-          promise.then(resolve).catch(reject);
-        }
-      });
-
-      if (myToken !== currentSpeechToken) return true;
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-
-      if (ttsConfig?.speed) {
-        source.playbackRate.value = ttsConfig.speed;
-      }
-
-      source.connect(ctx.destination);
-      currentSourceNode = source;
-
-      source.onended = () => {
-        if (currentSourceNode === source) {
-          currentSourceNode = null;
-        }
-        if (myToken === currentSpeechToken) {
-          safeOnEnd();
-        }
-      };
-
-      safeOnStart();
-      source.start(0);
-      return true;
-    } catch (err) {
-      console.warn("Web Audio API stream playback failed, trying fallback:", err);
-      return false;
-    }
-  };
-
-  // Direct HTML5 Audio stream for AI models or server-side TTS fallback
-  const playAudioStream = async (): Promise<boolean> => {
-    const audio = getAudioElement();
-    if (!audio) return false;
-
-    try {
-      const bcp47 = customLang 
-        ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
-        : "en-US";
-      const cleanLang = bcp47.split('-')[0].toLowerCase();
-
-      const queryKey = ttsConfig?.apiKey || '';
-      const streamUrl = `/api/tts/stream?text=${encodeURIComponent(normalizedText)}&lang=${encodeURIComponent(cleanLang)}&engine=${encodeURIComponent(activeEngine)}&model=${encodeURIComponent(ttsConfig?.model || '')}&voice=${encodeURIComponent(ttsConfig?.voice || '')}&apiKey=${encodeURIComponent(queryKey)}&t=${Date.now()}`;
-
-      const res = await fetch(streamUrl);
-      if (myToken !== currentSpeechToken) return true;
-      if (!res.ok) return false;
-
-      const blob = await res.blob();
-      if (myToken !== currentSpeechToken) return true;
-      if (!blob || blob.size < 100) return false;
-
-      const objectUrl = URL.createObjectURL(blob);
-      audio.pause();
-      audio.src = objectUrl;
-      audio.playbackRate = ttsConfig?.speed ?? 1.0;
-
-      audio.onplay = () => {
-        if (myToken === currentSpeechToken) safeOnStart();
-      };
-      audio.onended = () => {
-        URL.revokeObjectURL(objectUrl);
-        if (myToken === currentSpeechToken) safeOnEnd();
-      };
-      audio.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        if (myToken !== currentSpeechToken) return;
-        speakWithBrowser();
-      };
-
-      const p = audio.play();
-      if (p !== undefined) {
-        p.catch(() => {
-          URL.revokeObjectURL(objectUrl);
-          if (myToken !== currentSpeechToken) return;
-          speakWithBrowser();
-        });
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  const safePitch = (() => {
+    const n = Number(ttsConfig.pitch);
+    if (!Number.isFinite(n)) return 1.0;
+    return Math.min(2, Math.max(0, n));
+  })();
 
   const speakWithBrowser = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
@@ -394,85 +292,187 @@ export async function speakText(
       return;
     }
 
+    const synth = window.speechSynthesis;
+
     try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
+      if (synth.paused) {
+        synth.resume();
       }
     } catch {}
 
     if (myToken !== currentSpeechToken) return;
 
+    let recoveryTimerId: number | null = null;
+    let recoveryRetryTimerId: number | null = null;
+    let hasEndedOrErrored = false;
+    let didStart = false;
+
+    const clearRecoveryTimers = () => {
+      if (recoveryTimerId !== null) {
+        window.clearTimeout(recoveryTimerId);
+        recoveryTimerId = null;
+      }
+      if (recoveryRetryTimerId !== null) {
+        window.clearTimeout(recoveryRetryTimerId);
+        recoveryRetryTimerId = null;
+      }
+    };
+
     try {
+      const voices = synth.getVoices();
+      const pickLocalVoice = (allVoices: SpeechSynthesisVoice[], preferredLang?: string): SpeechSynthesisVoice | undefined => {
+        const langPrefix = (preferredLang || "").split("-")[0].toLowerCase();
+        const normalizeLang = (v: SpeechSynthesisVoice) => (v.lang || "").toLowerCase().replace("_", "-");
+
+        return allVoices.find((v) => !!v.localService && normalizeLang(v).startsWith(langPrefix))
+          || allVoices.find((v) => !!v.localService)
+          || allVoices.find((v) => normalizeLang(v).startsWith(langPrefix))
+          || allVoices[0];
+      };
+
+      const bindUtteranceLifecycle = (targetUtterance: SpeechSynthesisUtterance) => {
+        targetUtterance.onstart = () => {
+          didStart = true;
+          clearRecoveryTimers();
+          if (myToken === currentSpeechToken) safeOnStart();
+        };
+
+        targetUtterance.onend = () => {
+          hasEndedOrErrored = true;
+          clearRecoveryTimers();
+          if (activeUtterance === targetUtterance) {
+            activeUtterance = null;
+          }
+          (window as any)._activeUtteranceRef = null;
+          if (myToken === currentSpeechToken) safeOnEnd();
+        };
+
+        targetUtterance.onerror = () => {
+          hasEndedOrErrored = true;
+          clearRecoveryTimers();
+          if (activeUtterance === targetUtterance) {
+            activeUtterance = null;
+          }
+          (window as any)._activeUtteranceRef = null;
+          if (myToken === currentSpeechToken) safeOnEnd();
+        };
+      };
+
       const utterance = new SpeechSynthesisUtterance(normalizedText);
       activeUtterance = utterance;
       (window as any)._activeUtteranceRef = utterance;
 
-      utterance.rate = ttsConfig.speed ?? 1.0;
-      utterance.pitch = ttsConfig.pitch ?? 1.0;
+      utterance.rate = safeRate;
+      utterance.pitch = safePitch;
+      utterance.volume = 1;
 
-      const bcp47Lang = customLang 
-        ? (customLang.includes('-') ? customLang : getLanguageCode(customLang))
+      const bcp47Lang = customLang
+        ? (customLang.includes("-") ? customLang : getLanguageCode(customLang))
         : "en-US";
       utterance.lang = bcp47Lang;
 
-      const voices = window.speechSynthesis.getVoices();
       if (ttsConfig.voiceURI && voices.length > 0) {
-        const selectedVoice = voices.find(v => v.voiceURI === ttsConfig.voiceURI);
+        const selectedVoice = voices.find((v) => v.voiceURI === ttsConfig.voiceURI);
         if (selectedVoice) {
           utterance.voice = selectedVoice;
+          utterance.lang = selectedVoice.lang || utterance.lang;
+        }
+      }
+
+      if (!utterance.voice && ttsConfig.voice && voices.length > 0) {
+        const preferredName = ttsConfig.voice.toLowerCase().trim();
+        const selectedByName = voices.find((v) => v.name.toLowerCase() === preferredName)
+          || voices.find((v) => v.name.toLowerCase().includes(preferredName));
+        if (selectedByName) {
+          utterance.voice = selectedByName;
+          utterance.lang = selectedByName.lang || utterance.lang;
         }
       }
 
       if (!utterance.voice && bcp47Lang && voices.length > 0) {
-        const langPrefix = bcp47Lang.split('-')[0].toLowerCase();
-        const matchingVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(langPrefix));
+        const langPrefix = bcp47Lang.split("-")[0].toLowerCase();
+        const matchingVoice = voices.find((v) => v.lang.toLowerCase().replace("_", "-").startsWith(langPrefix));
         if (matchingVoice) {
           utterance.voice = matchingVoice;
+          utterance.lang = matchingVoice.lang || utterance.lang;
         }
       }
 
-      utterance.onstart = () => {
-        if (myToken === currentSpeechToken) safeOnStart();
-      };
+      if (!utterance.voice && voices.length > 0) {
+        const defaultVoice = voices.find((v) => v.default) || voices[0];
+        utterance.voice = defaultVoice;
+        utterance.lang = defaultVoice.lang || "en-US";
+      }
 
-      utterance.onend = () => {
-        if (activeUtterance === utterance) {
-          activeUtterance = null;
+      const localVoice = pickLocalVoice(voices, utterance.lang || bcp47Lang);
+      if (localVoice) {
+        utterance.voice = localVoice;
+        utterance.lang = localVoice.lang || utterance.lang;
+      }
+
+      if (!utterance.voice && voices.length === 0) {
+        utterance.lang = "";
+      }
+
+      bindUtteranceLifecycle(utterance);
+      if (myToken !== currentSpeechToken) return;
+
+      recoveryTimerId = window.setTimeout(() => {
+        if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
+
+        if (!didStart) {
+          try {
+            synth.pause();
+            synth.resume();
+          } catch {}
+
+          recoveryRetryTimerId = window.setTimeout(() => {
+            if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
+            if (!didStart) {
+              try {
+                synth.cancel();
+
+                const fallbackUtterance = new SpeechSynthesisUtterance(normalizedText);
+                fallbackUtterance.rate = safeRate;
+                fallbackUtterance.pitch = safePitch;
+                fallbackUtterance.volume = 1;
+                fallbackUtterance.lang = "";
+
+                const alternateVoice = voices.find(
+                  (v) => v.voiceURI !== (utterance.voice?.voiceURI || "") && v.lang?.toLowerCase().startsWith("en")
+                ) || voices.find((v) => v.voiceURI !== (utterance.voice?.voiceURI || ""));
+                if (alternateVoice) {
+                  fallbackUtterance.voice = alternateVoice;
+                  fallbackUtterance.lang = alternateVoice.lang || "";
+                }
+
+                activeUtterance = fallbackUtterance;
+                (window as any)._activeUtteranceRef = fallbackUtterance;
+
+                bindUtteranceLifecycle(fallbackUtterance);
+                synth.speak(fallbackUtterance);
+              } catch {
+                if (myToken === currentSpeechToken) safeOnEnd();
+              }
+            }
+          }, 120);
         }
-        (window as any)._activeUtteranceRef = null;
-        if (myToken === currentSpeechToken) safeOnEnd();
-      };
+      }, 500);
 
-      utterance.onerror = () => {
-        if (activeUtterance === utterance) {
-          activeUtterance = null;
+      if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
+      try {
+        if (synth.paused) {
+          synth.resume();
         }
-        (window as any)._activeUtteranceRef = null;
-        if (myToken === currentSpeechToken) safeOnEnd();
-      };
-
-      safeOnStart();
-      window.speechSynthesis.speak(utterance);
-    } catch (err) {
-      console.warn("SpeechSynthesis execution error:", err);
+      } catch {}
+      synth.speak(utterance);
+    } catch {
+      clearRecoveryTimers();
       activeUtterance = null;
       (window as any)._activeUtteranceRef = null;
       safeOnEnd();
     }
   };
 
-  // Primary: Use Web Audio API with dedicated AudioContext for reliable TTS buffering & playback
-  playWebAudioStream().then((webAudioPlayed) => {
-    if (!webAudioPlayed && myToken === currentSpeechToken) {
-      if (activeEngine === 'browser') {
-        speakWithBrowser();
-      } else {
-        playAudioStream().then((audioStreamPlayed) => {
-          if (!audioStreamPlayed && myToken === currentSpeechToken) {
-            speakWithBrowser();
-          }
-        });
-      }
-    }
-  });
+  speakWithBrowser();
 }
