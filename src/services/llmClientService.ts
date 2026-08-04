@@ -1884,3 +1884,139 @@ export async function analyzeImageVocabService(params: {
   return data;
 }
 
+export interface FlashcardGenerationRequest {
+  word: Word;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  llmConfig?: LLMConfig;
+}
+
+export interface GeneratedFlashcardContent {
+  word: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  definition: string;
+  translation: string;
+  category?: string;
+  context?: string;
+  extraExampleSentences: {
+    sentence: string;
+    translation: string;
+    contextCategoryNote?: string;
+  }[];
+  usageNotes?: string;
+  imageKeyword?: string;
+}
+
+export async function generateFlashcardContentService(
+  params: FlashcardGenerationRequest
+): Promise<GeneratedFlashcardContent> {
+  const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+
+  const fallbackContent: GeneratedFlashcardContent = {
+    word: word.word,
+    pronunciation: word.pronunciation,
+    partOfSpeech: word.partOfSpeech || "noun",
+    definition: word.definition,
+    translation: word.translation,
+    category: word.category || "General",
+    context: word.context || word.definition,
+    extraExampleSentences: word.example ? [
+      {
+        sentence: word.example,
+        translation: word.exampleTranslation || word.translation,
+        contextCategoryNote: word.category || "Context Example"
+      }
+    ] : [],
+    usageNotes: `Category: ${word.category || "General"}. Context: ${word.context || word.definition}`,
+    imageKeyword: word.imageKeyword || word.word
+  };
+
+  if (!llmConfig || !llmConfig.isLoggedIn) {
+    return fallbackContent;
+  }
+
+  const systemInstruction = `You are a world-class AI Language Pedagogy Engine creating interactive flash cards for ${targetLanguage} learners (native language: ${nativeLanguage}).
+Given a target vocabulary word, its category, context, definition, and user stats, generate rich flashcard study content.
+
+CRITICAL REQUIREMENTS:
+1. Provide a refined target language definition in ${targetLanguage}, pronunciation (IPA), and native translation in ${nativeLanguage}.
+2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
+3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
+4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
+5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
+
+Output MUST be strictly valid JSON matching this schema:
+{
+  "word": "string",
+  "pronunciation": "string",
+  "partOfSpeech": "string",
+  "definition": "string in ${targetLanguage}",
+  "translation": "string in ${nativeLanguage}",
+  "category": "string",
+  "context": "string",
+  "extraExampleSentences": [
+    {
+      "sentence": "string in ${targetLanguage}",
+      "translation": "string in ${nativeLanguage}",
+      "contextCategoryNote": "string (brief note explaining relevance to context/category)"
+    }
+  ],
+  "usageNotes": "string",
+  "imageKeyword": "string (ONE single comma-free search term)"
+}`;
+
+  const prompt = `Generate interactive flashcard content for the word:\n` +
+    `Word: "${word.word}"\n` +
+    `Part of Speech: "${word.partOfSpeech || "unknown"}"\n` +
+    `Stored Definition: "${word.definition}"\n` +
+    `Stored Translation: "${word.translation}"\n` +
+    `Stored Category: "${word.category || "General"}"\n` +
+    `Stored Context: "${word.context || word.definition}"\n` +
+    `Stored Example: "${word.example || "N/A"}"`;
+
+  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array of sentence, translation, contextCategoryNote), usageNotes, and imageKeyword.`;
+
+  try {
+    let rawResultText = "";
+    if (isStaticHost()) {
+      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    } else {
+      const res = await fetch("/api/generate-flashcard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word, targetLanguage, nativeLanguage, llmConfig })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.word) return data;
+      }
+      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+    }
+
+    const cleaned = cleanJsonResponse(rawResultText);
+    const parsed = JSON.parse(cleaned);
+
+    if (parsed && parsed.word) {
+      return {
+        word: parsed.word || word.word,
+        pronunciation: parsed.pronunciation || word.pronunciation,
+        partOfSpeech: parsed.partOfSpeech || word.partOfSpeech || "noun",
+        definition: parsed.definition || word.definition,
+        translation: parsed.translation || word.translation,
+        category: parsed.category || word.category || "General",
+        context: parsed.context || word.context || word.definition,
+        extraExampleSentences: Array.isArray(parsed.extraExampleSentences) && parsed.extraExampleSentences.length > 0
+          ? parsed.extraExampleSentences
+          : fallbackContent.extraExampleSentences,
+        usageNotes: parsed.usageNotes || fallbackContent.usageNotes,
+        imageKeyword: parsed.imageKeyword || word.imageKeyword || word.word
+      };
+    }
+  } catch (err) {
+    console.warn("AI Flashcard Generation failed, returning fallback content:", err);
+  }
+
+  return fallbackContent;
+}
+

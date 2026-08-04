@@ -200,3 +200,58 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
 
   return { updatedWords, decayedCount };
 }
+
+/**
+ * Selects a candidate word for flashcard viewing applying the same candidate rules as quiz question selection.
+ */
+export function getCandidateWordForFlashcard(words: Word[]): Word | null {
+  if (!words || words.length === 0) return null;
+
+  // 1. First try quiz candidates with standard 12h cooldown
+  const cooldownCandidates = getQuizCandidateWords(words, { maxCandidates: 10, cooldownHours: 12 });
+  if (cooldownCandidates.length > 0) {
+    return cooldownCandidates[Math.floor(Math.random() * Math.min(cooldownCandidates.length, 3))];
+  }
+
+  // 2. If no candidate met cooldown rules, fallback to candidate priority tiers without cooldown restriction
+  const now = new Date();
+  const starred = words.filter(w => w.starred);
+
+  const memoryDecay = words.filter(w => {
+    if (starred.includes(w)) return false;
+    const days = getDaysSinceLastReview(w, now);
+    return days >= 5 || (w.strength < 3 && w.lastReviewed !== null);
+  });
+
+  const neverReviewed = words.filter(w => 
+    !starred.includes(w) && 
+    !memoryDecay.includes(w) && 
+    !w.lastReviewed
+  );
+
+  const weak = words.filter(w => 
+    !starred.includes(w) && 
+    !memoryDecay.includes(w) && 
+    !neverReviewed.includes(w) && 
+    w.strength < 3
+  );
+
+  const rest = words.filter(w => 
+    !starred.includes(w) && 
+    !memoryDecay.includes(w) && 
+    !neverReviewed.includes(w) && 
+    !weak.includes(w)
+  );
+
+  const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
+
+  const orderedList = [
+    ...shuffle(starred),
+    ...shuffle(memoryDecay),
+    ...shuffle(neverReviewed),
+    ...shuffle(weak),
+    ...shuffle(rest)
+  ];
+
+  return orderedList[0] || words[0] || null;
+}

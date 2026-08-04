@@ -112,6 +112,25 @@ export interface UserStats {
   streak: Streak;
 }
 
+export interface FlashcardData {
+  wordId?: string;
+  word: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  definition: string;
+  translation: string;
+  category?: string;
+  context?: string;
+  extraExampleSentences?: {
+    sentence: string;
+    translation: string;
+    contextCategoryNote?: string;
+  }[];
+  usageNotes?: string;
+  imageUrl?: string;
+  imageKeyword?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -124,4 +143,5 @@ export interface ChatMessage {
   quizSpeechText?: string;
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
+  flashcardData?: FlashcardData;
 }

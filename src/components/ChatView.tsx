@@ -4,7 +4,7 @@ import {
   Send, Sparkles, Plus, Volume2, 
   Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
   ChevronLeft, LayoutGrid, X, Search, Languages, FileText,
-  Camera, Image as ImageIcon, Upload
+  Camera, Image as ImageIcon, Upload, Layers
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
@@ -12,6 +12,7 @@ import { resizeImageDataUrl } from "../utils/llmHelpers";
 import FormattedMessage from "./chat/FormattedMessage";
 import QuizImage from "./quiz/QuizImage";
 import PhotoCaptureModal from "./chat/PhotoCaptureModal";
+import FlashcardMessageCard from "./chat/FlashcardMessageCard";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -25,6 +26,7 @@ interface ChatViewProps {
   onGenerateByTopic: () => void;
   onStartQuiz: () => void;
   onFixGrammar: () => void;
+  onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSelectDefinition?: (word: string, senseIndex: number, translation: string) => void;
   ttsConfig: TTSConfig;
@@ -44,6 +46,7 @@ export default function ChatView({
   onGenerateByTopic,
   onStartQuiz,
   onFixGrammar,
+  onViewFlashcard,
   onAnalyzeImageVocab,
   onSelectDefinition,
   ttsConfig,
@@ -238,6 +241,24 @@ export default function ChatView({
       onClick: () => {
         handleIncrementActionCount("start_quiz");
         onStartQuiz();
+        setIsActionsPanelOpen(false);
+        scrollToBottom("smooth");
+        focusInput();
+      }
+    },
+    {
+      id: "view_flashcard",
+      label: "Flash Card",
+      category: "study" as const,
+      categoryLabel: "Study",
+      icon: <Layers className="w-4 h-4 text-indigo-600" />,
+      title: "View Word Flash Card",
+      description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
+      className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 2,
+      onClick: () => {
+        handleIncrementActionCount("view_flashcard");
+        onViewFlashcard?.();
         setIsActionsPanelOpen(false);
         scrollToBottom("smooth");
         focusInput();
@@ -669,6 +690,16 @@ export default function ChatView({
                           </div>
                         )}
                       </div>
+                    ) : msg.flashcardData ? (
+                      <FlashcardMessageCard
+                        data={msg.flashcardData}
+                        targetLanguage={targetLanguage}
+                        nativeLanguage={nativeLanguage}
+                        ttsConfig={ttsConfig}
+                        llmConfig={llmConfig}
+                        onNextFlashcard={onViewFlashcard}
+                        onStartQuiz={onStartQuiz}
+                      />
                     ) : (
                       <>
                         <FormattedMessage text={msg.content} />
@@ -788,6 +819,9 @@ export default function ChatView({
                               } else if (act.action === "start_quiz") {
                                 handleIncrementActionCount("start_quiz");
                                 onStartQuiz();
+                              } else if (act.action === "view_flashcard") {
+                                handleIncrementActionCount("view_flashcard");
+                                onViewFlashcard?.();
                               } else if (act.action === "quiz_answer" && act.payload?.answer) {
                                 onSendMessage(act.payload.answer);
                               } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {

@@ -1735,6 +1735,68 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
   }
 });
 
+// 9. AI Flashcard Generation endpoint
+app.post("/api/generate-flashcard", async (req, res) => {
+  try {
+    const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+
+    if (!word || !word.word) {
+      return res.status(400).json({ error: "A valid word object is required" });
+    }
+
+    const systemInstruction = `You are a world-class AI Language Pedagogy Engine creating interactive flash cards for ${targetLanguage} learners (native language: ${nativeLanguage}).
+Given a target vocabulary word, its category, context, definition, and user stats, generate rich flashcard study content.
+
+CRITICAL REQUIREMENTS:
+1. Provide a refined target language definition in ${targetLanguage}, pronunciation (IPA), and native translation in ${nativeLanguage}.
+2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
+3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
+4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
+5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
+
+Output MUST be strictly valid JSON matching this schema:
+{
+  "word": "string",
+  "pronunciation": "string",
+  "partOfSpeech": "string",
+  "definition": "string in ${targetLanguage}",
+  "translation": "string in ${nativeLanguage}",
+  "category": "string",
+  "context": "string",
+  "extraExampleSentences": [
+    {
+      "sentence": "string in ${targetLanguage}",
+      "translation": "string in ${nativeLanguage}",
+      "contextCategoryNote": "string (brief note explaining relevance to context/category)"
+    }
+  ],
+  "usageNotes": "string",
+  "imageKeyword": "string (ONE single comma-free search term)"
+}`;
+
+    const prompt = `Generate interactive flashcard content for the word:\n` +
+      `Word: "${word.word}"\n` +
+      `Part of Speech: "${word.partOfSpeech || "unknown"}"\n` +
+      `Stored Definition: "${word.definition}"\n` +
+      `Stored Translation: "${word.translation}"\n` +
+      `Stored Category: "${word.category || "General"}"\n` +
+      `Stored Context: "${word.context || word.definition}"\n` +
+      `Stored Example: "${word.example || "N/A"}"`;
+
+    const schemaDesc = `Flashcard JSON object with word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences, usageNotes, imageKeyword`;
+    const rawResponse = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig || {});
+    const cleaned = cleanJsonResponse(rawResponse);
+    const parsed = JSON.parse(cleaned);
+
+    res.json(parsed);
+  } catch (error: any) {
+    console.error("Error generating AI flashcard:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
 // 10. Multimodal Image Vocabulary Analysis endpoint using Cloudflare Worker
 app.post("/api/analyze-image-vocab", async (req, res) => {
   try {

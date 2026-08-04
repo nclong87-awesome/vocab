@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers } from "lucide-react";
 
 export interface QuickActionItem {
   id: string;
@@ -20,6 +20,7 @@ export interface QuickActionItem {
     onAddWord: () => void;
     onSendMessage: (text: string) => void;
     onClearHistory: () => void;
+    onViewFlashcard?: () => void;
   }) => void;
 }
 
@@ -48,6 +49,18 @@ export function getQuickActionItems(): QuickActionItem[] {
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 1,
       getAction: ({ onStartQuiz }) => onStartQuiz()
+    },
+    {
+      id: "view_flashcard",
+      label: "Flash Card",
+      category: "study",
+      categoryLabel: "Study",
+      icon: <Layers className="w-4 h-4 text-indigo-600" />,
+      title: "View Word Flash Card",
+      description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
+      className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 2,
+      getAction: ({ onViewFlashcard }) => onViewFlashcard?.()
     },
     {
       id: "generate_topic",

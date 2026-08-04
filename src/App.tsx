@@ -5,7 +5,7 @@ import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMess
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider, getSavedProvidersMap, getProviderDisplayName } from "./utils/llmHelpers";
-import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService } from "./services/llmClientService";
+import { sendChatMessageService, autofillWordService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService, generateFlashcardContentService } from "./services/llmClientService";
 import { QuizQuestion } from "./types";
 import { 
   getAllWordsFromDB, 
@@ -20,7 +20,7 @@ import {
   saveTTSConfigToDB
 } from "./db/indexedDB";
 import { DEFAULT_TTS_CONFIG, stopSpeech } from "./utils/ttsService";
-import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords } from "./utils/spacedRepetition";
+import { recalculateWordsMemoryDecay, getDaysSinceLastReview, getQuizCandidateWords, getCandidateWordForFlashcard } from "./utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
 import { DEFAULT_PROVIDER_ID, getDefaultLLMConfig } from "./config/llmProviders";
 
@@ -1324,6 +1324,87 @@ export default function App() {
     }
   };
 
+  // Trigger AI Flashcard View for Candidate Word
+  const handleViewFlashcard = async (overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
+
+    if (words.length === 0) {
+      const noWordsMsg: ChatMessage = {
+        id: `flashcard-no-words-${Date.now()}`,
+        role: "assistant",
+        content: `📝 **Your vocabulary collection is empty!**\n\nTo view AI flash cards, please add some words to your collection first using the **+ Add Word** button or ask me to generate words by topic!`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, noWordsMsg]);
+      return;
+    }
+
+    const candidateWord = getCandidateWordForFlashcard(words);
+    if (!candidateWord) {
+      const noCandidateMsg: ChatMessage = {
+        id: `flashcard-no-candidates-${Date.now()}`,
+        role: "assistant",
+        content: `📝 **No vocabulary words found.** Please add words to your collection to view flash cards!`,
+        timestamp: new Date().toISOString()
+      };
+      setChatMessages(prev => [...prev, noCandidateMsg]);
+      return;
+    }
+
+    setIsTyping(true);
+
+    try {
+      const flashcardContent = await generateFlashcardContentService({
+        word: candidateWord,
+        targetLanguage,
+        nativeLanguage,
+        llmConfig: configToUse
+      });
+
+      const keywordText = flashcardContent.imageKeyword || candidateWord.imageKeyword || candidateWord.word;
+      const imgUrl = candidateWord.imageUrl && candidateWord.imageUrl.startsWith("http")
+        ? candidateWord.imageUrl
+        : `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
+
+      const flashcardMsg: ChatMessage = {
+        id: `flashcard-msg-${Date.now()}`,
+        role: "assistant",
+        content: `🃏 **Word Flash Card: ${flashcardContent.word}**\n\n*${flashcardContent.partOfSpeech || candidateWord.partOfSpeech}* • \`${flashcardContent.pronunciation || candidateWord.pronunciation || ''}\`\n\n**Definition**: ${flashcardContent.definition}\n**Translation**: "${flashcardContent.translation}"`,
+        timestamp: new Date().toISOString(),
+        audioWord: flashcardContent.word,
+        quizSpeechText: `${flashcardContent.word}. ${flashcardContent.definition}`,
+        imageUrl: imgUrl,
+        imageKeyword: keywordText,
+        flashcardData: {
+          wordId: candidateWord.id,
+          word: flashcardContent.word,
+          pronunciation: flashcardContent.pronunciation || candidateWord.pronunciation,
+          partOfSpeech: flashcardContent.partOfSpeech || candidateWord.partOfSpeech,
+          definition: flashcardContent.definition,
+          translation: flashcardContent.translation,
+          category: flashcardContent.category || candidateWord.category || "General",
+          context: flashcardContent.context || candidateWord.context || candidateWord.definition,
+          extraExampleSentences: flashcardContent.extraExampleSentences,
+          usageNotes: flashcardContent.usageNotes,
+          imageUrl: imgUrl,
+          imageKeyword: keywordText
+        },
+        suggestedActions: [
+          { label: "🃏 Next Flash Card", action: "view_flashcard" },
+          { label: "🧠 Start Quiz", action: "start_quiz" },
+          { label: "✨ Add More Words", action: "generate_topic" }
+        ]
+      };
+
+      setChatMessages(prev => [...prev, flashcardMsg]);
+    } catch (e: any) {
+      console.error("Error generating flash card:", e);
+      handleAiApiError(e, configToUse, (newConfig) => handleViewFlashcard(newConfig));
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   const handleClearChatHistory = () => {
     setActiveQuiz(null);
     setConversationalState("none");
@@ -1775,6 +1856,7 @@ export default function App() {
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
                     onStartQuiz={startChatQuiz}
                     onFixGrammar={handlePromptFixGrammar}
+                    onViewFlashcard={handleViewFlashcard}
                     onSelectDefinition={handleSelectDefinition}
                     onClearHistory={handleClearChatHistory}
                     targetLanguage={targetLanguage}
