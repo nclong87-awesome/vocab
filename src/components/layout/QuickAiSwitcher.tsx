@@ -14,6 +14,7 @@ import {
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
+import { getLockedModels, clearAllLocks } from "../../utils/autoModeManager";
 
 interface QuickAiSwitcherProps {
   llmConfig: LLMConfig;
@@ -23,6 +24,7 @@ interface QuickAiSwitcherProps {
 }
 
 function getShortProviderName(name: string): string {
+  if (name.includes("Auto")) return "Auto";
   if (name.includes("Gemini")) return "Gemini";
   if (name.includes("Custom")) return "Custom";
   if (name.includes("Ollama")) return "Ollama";
@@ -206,26 +208,54 @@ export default function QuickAiSwitcher({
               </div>
 
               {/* Model Dropdown Selector */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-stone-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Select Model:</span>
-                  </span>
-                  <span className="text-[10px] text-stone-400">{activeProviderMeta.models.length} available</span>
-                </label>
-                <select
-                  value={llmConfig.model}
-                  onChange={(e) => handleModelSelect(e.target.value)}
-                  className="w-full bg-stone-800/90 text-white border border-stone-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
-                >
-                  {activeProviderMeta.models.map((m) => (
-                    <option key={m} value={m}>
-                      {m} {m === activeProviderMeta.defaultModel ? "★ Recommended" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {activeProviderMeta.id === "auto" ? (
+                <div className="text-[11px] text-stone-300 bg-stone-800/70 p-2.5 rounded-lg border border-stone-700/60 leading-relaxed">
+                  <div className="font-semibold text-amber-400 mb-0.5 flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    <span>Auto Mode Active</span>
+                  </div>
+                  Rotates models across Groq, OpenRouter, Gemini, 9Flare, OpenAI & Ollama. Errors automatically lock models for 1 hour and failover to the next candidate.
+                  {Object.keys(getLockedModels()).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-stone-700/80 flex items-center justify-between">
+                      <span className="text-amber-300 text-[10px] font-medium">
+                        ⚠️ {Object.keys(getLockedModels()).length} model(s) locked
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearAllLocks();
+                          setToastMessage("Cleared all model lockouts!");
+                          setTimeout(() => setToastMessage(null), 2500);
+                        }}
+                        className="text-[10px] font-bold text-amber-400 hover:text-white underline cursor-pointer"
+                      >
+                        Reset Locks
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-stone-300 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Select Model:</span>
+                    </span>
+                    <span className="text-[10px] text-stone-400">{activeProviderMeta.models.length} available</span>
+                  </label>
+                  <select
+                    value={llmConfig.model}
+                    onChange={(e) => handleModelSelect(e.target.value)}
+                    className="w-full bg-stone-800/90 text-white border border-stone-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
+                  >
+                    {activeProviderMeta.models.map((m) => (
+                      <option key={m} value={m}>
+                        {m} {m === activeProviderMeta.defaultModel ? "★ Recommended" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Provider Selection Header */}

@@ -4,6 +4,7 @@ import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../ut
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
+import { getAutoModelCandidates, getNextAutoCandidate, lockModel } from "../utils/autoModeManager";
 
 // Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
 function sanitizeUnescapedJsonStrings(str: string): string {
@@ -434,8 +435,8 @@ export async function callWithRetry<T>(
   );
 }
 
-// Client-side direct LLM API invocation with retry logic and model fallback
-export async function callLLMClientSide(
+// Client-side direct LLM API invocation for a single provider candidate
+async function callLLMClientSideSingleCandidate(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
@@ -667,6 +668,54 @@ export async function callLLMClientSide(
     },
     { maxRetries: 1, provider }
   );
+}
+
+// Outer LLM invocation entry point supporting Auto Mode model rotation & circuit breaker lockouts
+export async function callLLMClientSide(
+  prompt: string, 
+  systemInstruction: string, 
+  schemaDescription: string,
+  llmConfig?: LLMConfig
+): Promise<string> {
+  const provider = llmConfig?.provider || "auto";
+
+  // AUTO MODE: Automatically rotate across all available models & lock failing models for 1 hour
+  if (provider === "auto" || llmConfig?.model === "auto") {
+    const candidates = getAutoModelCandidates(llmConfig);
+    const excludedKeys = new Set<string>();
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < candidates.length; attempt++) {
+      const candidate = getNextAutoCandidate(llmConfig, excludedKeys);
+      const candidateKey = `${candidate.provider}:${candidate.model}`;
+      excludedKeys.add(candidateKey);
+
+      const candidateSavedProfile = llmConfig?.savedProviders?.[candidate.provider];
+      const effectiveCandidateConfig: LLMConfig = {
+        provider: candidate.provider,
+        model: candidate.model,
+        apiKey: candidateSavedProfile?.apiKey || (llmConfig?.provider === candidate.provider ? llmConfig.apiKey : ""),
+        proxyKey: candidateSavedProfile?.proxyKey || llmConfig?.proxyKey || "",
+        baseUrl: candidateSavedProfile?.baseUrl || "",
+        useProxy: candidateSavedProfile?.useProxy !== undefined ? candidateSavedProfile.useProxy : true,
+        isLoggedIn: true,
+        savedProviders: llmConfig?.savedProviders
+      };
+
+      try {
+        console.log(`[Auto Mode] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
+        return await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour and switching automatically...`);
+        lockModel(candidate.provider, candidate.model, 3600000); // Lock failing model for 1 hour
+      }
+    }
+
+    throw lastError || new Error("All AI models in Auto Mode failed or were locked out. Please check network connectivity or API configuration.");
+  }
+
+  return callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig);
 }
 
 function extractTextFromContentClient(content: any): string {

@@ -4,13 +4,21 @@ import { LLMConfig, LLMProvider, LLMProviderOption } from "../types";
  * Default AI Provider ID.
  * To change the default provider across the app, simply update DEFAULT_PROVIDER_ID here!
  */
-export const DEFAULT_PROVIDER_ID: LLMProvider = "groq";
+export const DEFAULT_PROVIDER_ID: LLMProvider = "auto";
 
 /**
  * Configuration file for LLM Providers.
  * Easily modify, add, or remove providers here.
  */
 export const PROVIDER_OPTIONS: LLMProviderOption[] = [
+  {
+    id: "auto",
+    name: "Auto Mode (Default)",
+    tagline: "Rotates models automatically & switches on error",
+    defaultModel: "auto",
+    models: ["auto"],
+    requiresKey: false
+  },
   {
     id: "groq",
     name: "Groq",

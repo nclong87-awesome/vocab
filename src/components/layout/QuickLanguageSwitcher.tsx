@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Globe, ChevronDown, Check, ArrowRight, Languages, Search, X, Sparkles, Info } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Globe, ChevronDown, Check, ArrowRight, Languages, Search, X, Info } from "lucide-react";
 import { SUPPORTED_LANGUAGES, getLanguageFlag } from "../../config/languages";
 
 interface QuickLanguageSwitcherProps {

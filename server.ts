@@ -110,6 +110,9 @@ const VALID_GEMINI_MODELS = [
 
 // Sanitize model names for provider
 function sanitizeModel(provider: string, model?: string): string {
+  if (provider === "auto") {
+    return "auto";
+  }
   if (provider === "groq") {
     return model || "openai/gpt-oss-120b";
   }
@@ -222,8 +225,59 @@ function parseServerError(err: any, provider: string = "gemini"): {
   };
 }
 
-// Call LLM based on provider
-async function callLLM(
+const serverLockedModels = new Map<string, number>();
+
+function lockServerModel(provider: string, model: string, durationMs: number = 3600000): void {
+  if (provider === "auto" || model === "auto") return;
+  const key = `${provider}:${model}`;
+  serverLockedModels.set(key, Date.now() + durationMs);
+  console.warn(`[Server Auto Mode] Locked model ${key} for ${Math.round(durationMs / 60000)} minutes`);
+}
+
+function isServerModelLocked(provider: string, model: string): boolean {
+  const key = `${provider}:${model}`;
+  const expiresAt = serverLockedModels.get(key);
+  if (!expiresAt) return false;
+  if (expiresAt > Date.now()) return true;
+  serverLockedModels.delete(key);
+  return false;
+}
+
+const SERVER_AUTO_CANDIDATES = [
+  { provider: "groq", model: "openai/gpt-oss-120b" },
+  { provider: "openrouter", model: "deepseek/deepseek-chat" },
+  { provider: "gemini", model: "gemini-3.6-flash" },
+  { provider: "9flare", model: "pro/claude-haiku-4-5" },
+  { provider: "openai", model: "gpt-5.4-mini" },
+  { provider: "ollama", model: "gemma4:31b" },
+  { provider: "groq", model: "groq/compound" },
+  { provider: "openrouter", model: "openrouter/free" },
+  { provider: "gemini", model: "gemini-3.5-flash" },
+  { provider: "9flare", model: "pro/minimax-m2.5" },
+  { provider: "openai", model: "gpt-4o-mini" }
+];
+
+let serverAutoRotationIndex = 0;
+
+function getNextServerAutoCandidate(excludedKeys?: Set<string>): { provider: string; model: string } {
+  for (let i = 0; i < SERVER_AUTO_CANDIDATES.length; i++) {
+    const idx = (serverAutoRotationIndex + i) % SERVER_AUTO_CANDIDATES.length;
+    const cand = SERVER_AUTO_CANDIDATES[idx];
+    const key = `${cand.provider}:${cand.model}`;
+
+    if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
+      serverAutoRotationIndex = (idx + 1) % SERVER_AUTO_CANDIDATES.length;
+      return cand;
+    }
+  }
+
+  serverLockedModels.clear();
+  serverAutoRotationIndex = (serverAutoRotationIndex + 1) % SERVER_AUTO_CANDIDATES.length;
+  return SERVER_AUTO_CANDIDATES[0];
+}
+
+// Call LLM for a single provider/model candidate
+async function callLLMSingle(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
@@ -430,6 +484,50 @@ async function callLLM(
   }
 
   return await parseOpenAiStyleResponse(res);
+}
+
+// Main callLLM function supporting Auto Mode
+async function callLLM(
+  prompt: string, 
+  systemInstruction: string, 
+  schemaDescription: string,
+  llmConfig?: LLMRequestConfig
+): Promise<string> {
+  const provider = llmConfig?.provider || "auto";
+
+  if (provider === "auto" || llmConfig?.model === "auto") {
+    const excludedKeys = new Set<string>();
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < SERVER_AUTO_CANDIDATES.length; attempt++) {
+      const cand = getNextServerAutoCandidate(excludedKeys);
+      const candKey = `${cand.provider}:${cand.model}`;
+      excludedKeys.add(candKey);
+
+      const candProfile = llmConfig?.savedProviders?.[cand.provider];
+      const candConfig: LLMRequestConfig = {
+        provider: cand.provider,
+        model: cand.model,
+        apiKey: candProfile?.apiKey || (llmConfig?.provider === cand.provider ? llmConfig.apiKey : ""),
+        proxyKey: candProfile?.proxyKey || llmConfig?.proxyKey || "",
+        baseUrl: candProfile?.baseUrl || "",
+        savedProviders: llmConfig?.savedProviders
+      };
+
+      try {
+        console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${SERVER_AUTO_CANDIDATES.length}: Routing request to ${candKey}`);
+        return await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Server Auto Mode] Model ${candKey} failed: ${err?.message || err}. Locking model for 1 hour and switching...`);
+        lockServerModel(cand.provider, cand.model, 3600000);
+      }
+    }
+
+    throw lastError || new Error("All AI models in Auto Mode failed on server.");
+  }
+
+  return callLLMSingle(prompt, systemInstruction, schemaDescription, llmConfig);
 }
 
 function extractTextFromContent(content: any): string {

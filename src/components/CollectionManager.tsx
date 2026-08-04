@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { 
   BookOpen, 
   Search, 
@@ -35,7 +35,7 @@ interface CollectionManagerProps {
 
 export default function CollectionManager({
   words,
-  onAddWord,
+  onAddWord: _onAddWord,
   onDeleteWord,
   onToggleStar,
   onToggleLearned,

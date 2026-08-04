@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { 
   Cloud, 
   RefreshCw, 
@@ -207,7 +207,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
   };
 
   // Save config from Modal
-  const handleSaveConfigAndSync = (savedToken: string, savedGistId: string) => {
+  const handleSaveConfigAndSync = (_savedToken: string, _savedGistId: string) => {
     setShowConfigModal(false);
     setTimeout(() => {
       handleTriggerSync();

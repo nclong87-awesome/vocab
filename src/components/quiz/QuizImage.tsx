@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { HelpCircle, ImageIcon, Loader2 } from "lucide-react";
 import { fetchWorkerImageUrl, getImageKeyword } from "../../utils/quizGenerator";
 

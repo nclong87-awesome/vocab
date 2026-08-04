@@ -32,7 +32,7 @@ export default function PhotoCaptureModal({
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState<boolean>(false);
-  const [hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
+  const [_hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);

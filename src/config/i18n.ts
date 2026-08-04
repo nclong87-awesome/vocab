@@ -1,5 +1,3 @@
-import { getLanguageCode } from "../utils/ttsService";
-
 export type TranslationKey =
   | "app_title"
   | "nav_collection"

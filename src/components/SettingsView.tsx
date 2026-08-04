@@ -34,6 +34,7 @@ import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
+import { getLockedModels, unlockModel, clearAllLocks } from "../utils/autoModeManager";
 import { testLlmConnection } from "../services/llmClientService";
 import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage } from "../utils/ttsService";
 import { 
@@ -613,6 +614,69 @@ export default function SettingsView({
             }`}>
               {llmTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
               <span>{llmTestResult.msg}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Auto Mode Circuit-Breaker Status Card */}
+        <div className="bg-amber-50/50 border border-amber-200/90 p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/80 pb-2.5">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-amber-600 fill-current" />
+                Auto Mode Model Rotation & Health Circuit-Breaker
+              </h4>
+              <p className="text-xs text-stone-600 mt-0.5">
+                Auto Mode automatically rotates models across providers. Failing models are locked for ~1 hour to ensure seamless continuity.
+              </p>
+            </div>
+
+            {Object.keys(getLockedModels()).length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearAllLocks();
+                  setLlmTestResult({ success: true, msg: "All model lockouts successfully cleared!" });
+                }}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
+              >
+                <span>Clear All Locks</span>
+              </button>
+            )}
+          </div>
+
+          {Object.keys(getLockedModels()).length === 0 ? (
+            <div className="text-xs text-emerald-800 font-medium flex items-center gap-2 bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>All AI models across providers are healthy and unlocked.</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold text-amber-900 uppercase">
+                Currently Locked Models ({Object.keys(getLockedModels()).length}):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {Object.entries(getLockedModels()).map(([key, info]) => (
+                  <div key={key} className="bg-white p-2.5 border border-amber-300 rounded-lg flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="min-w-0">
+                      <div className="font-bold font-mono text-stone-900 truncate">{info.provider}:{info.model}</div>
+                      <div className="text-[10px] text-stone-500">
+                        Locked until {new Date(info.expiresAt).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unlockModel(info.provider, info.model);
+                        setLlmTestResult({ success: true, msg: `Unlocked ${key}` });
+                      }}
+                      className="px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 text-[10px] font-bold rounded border border-stone-300 shrink-0 cursor-pointer"
+                    >
+                      Unlock
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
