@@ -14,14 +14,21 @@ import {
   Play,
   Loader2,
   Clock,
-  BarChart2
+  BarChart2,
+  Zap,
+  ShieldCheck,
+  Layers,
+  Info
 } from "lucide-react";
 import { LLMConfig } from "../types";
 import { 
   getAllModelStatuses, 
   ModelStatusItem, 
   ModelStatusIndicator,
-  clearModelFailureLogs
+  clearModelFailureLogs,
+  getPerformanceTierMeta,
+  PerformanceTierNumber,
+  isMetricStale
 } from "../utils/autoModeManager";
 import { testSingleModelStatus } from "../services/llmClientService";
 
@@ -39,6 +46,8 @@ export default function ModelStatusModal({
   const [modelStatuses, setModelStatuses] = useState<ModelStatusItem[]>([]);
   const [selectedLogsModel, setSelectedLogsModel] = useState<ModelStatusItem | null>(null);
   const [testingModelKey, setTestingModelKey] = useState<string | null>(null);
+  const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
+  const [showTierExplanation, setShowTierExplanation] = useState(true);
 
   const refreshStatuses = () => {
     const list = getAllModelStatuses(llmConfig);
@@ -266,58 +275,189 @@ export default function ModelStatusModal({
             )}
           </div>
         ) : (
-          /* View 2: Model Status List */
-          <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
-            {modelStatuses.map((item, index) => {
-              const isActive = llmConfig.provider === item.provider && llmConfig.model === item.model;
-              const rank = index + 1;
-              const itemKey = `${item.provider}:${item.model}`;
-              const isTesting = testingModelKey === itemKey;
+          <div className="p-4 overflow-y-auto space-y-3 flex-1">
+            {/* Performance-Tiered Priority Routing Explanation Banner */}
+            {showTierExplanation && (
+              <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-50 to-amber-500/5 rounded-xl border border-amber-200/90 text-stone-800 text-xs space-y-2 relative animate-in fade-in duration-150">
+                <button
+                  type="button"
+                  onClick={() => setShowTierExplanation(false)}
+                  className="absolute top-2.5 right-2.5 p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-md transition-colors cursor-pointer"
+                  title="Dismiss explanation"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
 
-              const successStats = formatSuccessRate(item.totalSuccesses, item.totalCalls);
+                <div className="flex items-center gap-2 font-bold text-amber-900">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Performance-Tiered Priority Routing & Dynamic Re-Evaluation Active</span>
+                </div>
 
-              return (
-                <div
-                  key={itemKey}
-                  className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-colors ${
-                    isActive
-                      ? "bg-amber-50/60 border-amber-300"
-                      : "bg-white border-stone-200/90 hover:bg-stone-50/60"
+                <p className="text-stone-700 leading-relaxed text-[11px]">
+                  <strong>1. Untested Models:</strong> Newly added or untested models are automatically placed in <strong className="text-sky-800">Tier 1 (Probe Queue)</strong> to immediately benchmark their speed.<br/>
+                  <strong>2. Continuous Re-Evaluation:</strong> Slower models in Tier 2 and Tier 4 are re-evaluated via <strong>15% Epsilon Exploration</strong> and <strong>15m Metric Expiration</strong>. If their speed recovers, they are automatically promoted to Tier 1!
+                </p>
+
+                <div className="grid grid-cols-2 xs:grid-cols-4 gap-1.5 pt-1 text-[10px]">
+                  <div className="px-2 py-1 rounded bg-emerald-100/80 border border-emerald-200 text-emerald-900 font-medium flex items-center justify-between">
+                    <span>Tier 1: Fast / Probe</span>
+                    <span className="font-mono font-bold text-emerald-700">&lt;10s / New</span>
+                  </div>
+                  <div className="px-2 py-1 rounded bg-amber-100/80 border border-amber-200 text-amber-900 font-medium flex items-center justify-between">
+                    <span>Tier 2: Balanced</span>
+                    <span className="font-mono font-bold text-amber-700">10-20s</span>
+                  </div>
+                  <div className="px-2 py-1 rounded bg-stone-100 border border-stone-200 text-stone-800 font-medium flex items-center justify-between">
+                    <span>Tier 3: Backup</span>
+                    <span className="font-mono text-stone-600">Secondary</span>
+                  </div>
+                  <div className="px-2 py-1 rounded bg-orange-100/80 border border-orange-200 text-orange-900 font-medium flex items-center justify-between">
+                    <span>Tier 4: Demoted</span>
+                    <span className="font-mono font-bold text-orange-800">&gt;20s</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tier Filter Tabs */}
+            <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-100 overflow-x-auto">
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-stone-500 font-medium flex items-center gap-1 text-[11px] shrink-0">
+                  <Layers className="w-3.5 h-3.5 text-stone-400" />
+                  <span>Filter Tier:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTierFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                    tierFilter === 'all'
+                      ? "bg-stone-900 text-white shadow-2xs"
+                      : "bg-stone-100 text-stone-600 hover:bg-stone-200/80"
                   }`}
                 >
-                  {/* Top Row: Rank, Model Name, Provider & Status Badges */}
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <span className={`w-6 h-6 rounded-md text-xs font-mono font-bold flex items-center justify-center shrink-0 mt-0.5 ${
-                      rank === 1 && item.status !== 'offline'
-                        ? "bg-amber-400 text-stone-950"
-                        : "bg-stone-100 text-stone-500"
-                    }`}>
-                      #{rank}
-                    </span>
+                  All ({modelStatuses.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTierFilter(1)}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                    tierFilter === 1
+                      ? "bg-emerald-700 text-white shadow-2xs"
+                      : "bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100"
+                  }`}
+                >
+                  Tier 1: Fast ({modelStatuses.filter(m => m.performanceTier === 1).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTierFilter(2)}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                    tierFilter === 2
+                      ? "bg-amber-700 text-white shadow-2xs"
+                      : "bg-amber-50 text-amber-800 border border-amber-200/80 hover:bg-amber-100"
+                  }`}
+                >
+                  Tier 2: Balanced ({modelStatuses.filter(m => m.performanceTier === 2).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTierFilter(3)}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                    tierFilter === 3
+                      ? "bg-stone-800 text-white shadow-2xs"
+                      : "bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200/80"
+                  }`}
+                >
+                  Tier 3 ({modelStatuses.filter(m => m.performanceTier === 3).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTierFilter(4)}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                    tierFilter === 4
+                      ? "bg-orange-800 text-white shadow-2xs"
+                      : "bg-orange-50 text-orange-900 border border-orange-200 hover:bg-orange-100"
+                  }`}
+                >
+                  Tier 4: Slow ({modelStatuses.filter(m => m.performanceTier === 4).length})
+                </button>
+              </div>
 
-                    <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-xs text-stone-900 font-mono break-all" title={item.model}>
-                        {item.model}
+              {!showTierExplanation && (
+                <button
+                  type="button"
+                  onClick={() => setShowTierExplanation(true)}
+                  className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors cursor-pointer shrink-0 text-xs font-semibold flex items-center gap-1"
+                  title="Show Tier explanation"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Info</span>
+                </button>
+              )}
+            </div>
+
+            {/* Model List Items */}
+            {modelStatuses
+              .filter(item => tierFilter === 'all' || item.performanceTier === tierFilter)
+              .map((item, index) => {
+                const isActive = llmConfig.provider === item.provider && llmConfig.model === item.model;
+                const rank = index + 1;
+                const itemKey = `${item.provider}:${item.model}`;
+                const isTesting = testingModelKey === itemKey;
+                const isStale = isMetricStale(item.lastTestedAt);
+                const isUntestedOrStale = item.status === 'untested' || item.lastResponseTimeMs === null || isStale;
+                const tierMeta = getPerformanceTierMeta(item.performanceTier, isUntestedOrStale);
+
+                const successStats = formatSuccessRate(item.totalSuccesses, item.totalCalls);
+
+                return (
+                  <div
+                    key={itemKey}
+                    className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-colors ${
+                      isActive
+                        ? "bg-amber-50/60 border-amber-300"
+                        : "bg-white border-stone-200/90 hover:bg-stone-50/60"
+                    }`}
+                  >
+                    {/* Top Row: Rank, Model Name, Provider, Tier & Status Badges */}
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <span className={`w-6 h-6 rounded-md text-xs font-mono font-bold flex items-center justify-center shrink-0 mt-0.5 ${
+                        rank === 1 && item.status !== 'offline'
+                          ? "bg-amber-400 text-stone-950"
+                          : "bg-stone-100 text-stone-500"
+                      }`}>
+                        #{rank}
                       </span>
 
-                      <span className="text-[11px] font-medium text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md border border-stone-200/80 shrink-0">
-                        {item.providerName}
-                      </span>
-
-                      {isActive && (
-                        <span className="text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded shrink-0">
-                          Active
+                      <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-xs text-stone-900 font-mono break-all" title={item.model}>
+                          {item.model}
                         </span>
-                      )}
 
-                      {item.isLocked && (
-                        <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-                          <Lock className="w-3 h-3 text-rose-500" />
-                          <span>Locked</span>
+                        <span className="text-[11px] font-medium text-stone-600 bg-stone-100 px-2 py-0.5 rounded-md border border-stone-200/80 shrink-0">
+                          {item.providerName}
                         </span>
-                      )}
+
+                        {/* Performance Tier Badge */}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 flex items-center gap-1 ${tierMeta.colorClass}`} title={tierMeta.description}>
+                          <Zap className="w-3 h-3 shrink-0" />
+                          <span>{tierMeta.badgeLabel}</span>
+                        </span>
+
+                        {isActive && (
+                          <span className="text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded shrink-0">
+                            Active
+                          </span>
+                        )}
+
+                        {item.isLocked && (
+                          <span className="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
+                            <Lock className="w-3 h-3 text-rose-500" />
+                            <span>Locked</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
                   {/* Middle Row: Metrics (Response Time, Success Rate, Status Badge) */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-100/80 text-xs">

@@ -319,6 +319,90 @@ export function clearModelFailureLogs(provider: string, model: string): void {
   }
 }
 
+export type PerformanceTierNumber = 1 | 2 | 3 | 4;
+
+export const METRIC_STALE_MS = 15 * 60 * 1000; // 15 minutes until metrics expire and trigger a re-test probe
+
+export function isMetricStale(lastTestedAt: number | null): boolean {
+  if (!lastTestedAt) return true;
+  return Date.now() - lastTestedAt > METRIC_STALE_MS;
+}
+
+export interface PerformanceTierInfo {
+  tier: PerformanceTierNumber;
+  name: string;
+  badgeLabel: string;
+  shortLabel: string;
+  description: string;
+  colorClass: string;
+}
+
+export function getModelPerformanceTier(
+  status: ModelStatusIndicator, 
+  responseTimeMs?: number | null,
+  lastTestedAt?: number | null
+): PerformanceTierNumber {
+  if (status === 'offline') return 4;
+  
+  // Untested models or stale metrics (>15 min) are promoted to Tier 1 as Probes so newly added models & changing models get benchmarked immediately
+  if (status === 'untested' || responseTimeMs === null || responseTimeMs === undefined || isMetricStale(lastTestedAt ?? null)) {
+    return 1;
+  }
+  
+  if (status === 'strong' || responseTimeMs < 10000) return 1;
+  if (status === 'medium' || responseTimeMs <= 20000) return 2;
+  return 4; // 'weak' / slow models (>20s)
+}
+
+export function getPerformanceTierMeta(
+  tier: PerformanceTierNumber,
+  isUntestedOrStale?: boolean
+): PerformanceTierInfo {
+  switch (tier) {
+    case 1:
+      return {
+        tier: 1,
+        name: "Tier 1: High-Speed Priority & New Probes",
+        badgeLabel: isUntestedOrStale ? "Tier 1 (Probe/New)" : "Tier 1 (Fast)",
+        shortLabel: "Tier 1: Fast",
+        description: isUntestedOrStale 
+          ? "Untested or stale model boosted to Tier 1 for immediate benchmark sampling."
+          : "Fast response times (<10s). First priority choice for all queries.",
+        colorClass: isUntestedOrStale 
+          ? "bg-sky-50 text-sky-800 border-sky-200" 
+          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+      };
+    case 2:
+      return {
+        tier: 2,
+        name: "Tier 2: Balanced Performance",
+        badgeLabel: "Tier 2 (Balanced)",
+        shortLabel: "Tier 2: Balanced",
+        description: "Moderate response times (10s - 20s). Automatically re-probed periodically for promotion to Tier 1.",
+        colorClass: "bg-amber-50 text-amber-700 border-amber-200"
+      };
+    case 3:
+      return {
+        tier: 3,
+        name: "Tier 3: Moderate Backup",
+        badgeLabel: "Tier 3 (Backup)",
+        shortLabel: "Tier 3: Backup",
+        description: "Secondary backup tier.",
+        colorClass: "bg-stone-100 text-stone-700 border-stone-200"
+      };
+    case 4:
+    default:
+      return {
+        tier: 4,
+        name: "Tier 4: Demoted Fallback",
+        badgeLabel: "Tier 4 (Slow Fallback)",
+        shortLabel: "Tier 4: Slow",
+        description: "Slow response (>20s). Demoted as emergency backups, but periodically re-evaluated to detect performance recovery.",
+        colorClass: "bg-orange-50 text-orange-800 border-orange-200"
+      };
+  }
+}
+
 export interface ModelStatusItem {
   provider: string;
   providerName: string;
@@ -330,6 +414,7 @@ export interface ModelStatusItem {
   lastTestedAt: number | null;
   lastError: string | null;
   status: ModelStatusIndicator;
+  performanceTier: PerformanceTierNumber;
   totalCalls: number;
   totalSuccesses: number;
   failureLogs: FailureLogEntry[];
@@ -416,7 +501,9 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
       const metric = metricsMap[key];
 
       const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
+      const lastTestedAt = metric?.lastTestedAt ?? null;
       const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
       const { totalCalls, totalSuccesses, failureLogs } = extractModelStats(
         metric, 
         isLocked, 
@@ -432,9 +519,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         lockedAt: lockedInfo?.lockedAt,
         expiresAt: lockedInfo?.expiresAt,
         lastResponseTimeMs,
-        lastTestedAt: metric?.lastTestedAt ?? null,
+        lastTestedAt,
         lastError: metric?.lastError ?? null,
         status,
+        performanceTier,
         totalCalls,
         totalSuccesses,
         failureLogs
@@ -465,7 +553,9 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
       const metric = metricsMap[key];
 
       const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
+      const lastTestedAt = metric?.lastTestedAt ?? null;
       const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
       const { totalCalls, totalSuccesses, failureLogs } = extractModelStats(
         metric, 
         isLocked, 
@@ -481,9 +571,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         lockedAt: lockedInfo?.lockedAt,
         expiresAt: lockedInfo?.expiresAt,
         lastResponseTimeMs,
-        lastTestedAt: metric?.lastTestedAt ?? null,
+        lastTestedAt,
         lastError: metric?.lastError ?? null,
         status,
+        performanceTier,
         totalCalls,
         totalSuccesses,
         failureLogs
@@ -492,16 +583,13 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
     }
   }
 
-  // Sort by fastest response time first
+  // Sort by performance tier first (Tier 1 -> Tier 2 -> Tier 3 -> Tier 4), then by response time
   result.sort((a, b) => {
     const getSortWeight = (item: ModelStatusItem) => {
       if (item.status === 'offline') {
         return 10000000 + (item.lastResponseTimeMs ?? 999999);
       }
-      if (item.status === 'untested' || item.lastResponseTimeMs === null) {
-        return 5000000;
-      }
-      return item.lastResponseTimeMs;
+      return (item.performanceTier * 1000000) + (item.lastResponseTimeMs ?? 500000);
     };
 
     return getSortWeight(a) - getSortWeight(b);
@@ -511,10 +599,16 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
 }
 
 let autoRotationIndex = 0;
+let explorationCallCounter = 0;
 
 /**
- * Picks the next unlocked candidate in rotation order.
- * If all models are locked, it auto-clears locks so the system continues seamlessly!
+ * Performance-Tiered Priority Candidate Selection:
+ * 1. Untested models & stale models (>15m) are automatically placed into Tier 1 (Probe Queue)
+ *    so newly added models or changed models get benchmarked immediately.
+ * 2. Epsilon-Greedy Exploration Sampling (15% rate):
+ *    Every ~6th call, if Tier 2 or Tier 4 candidates exist, one is selected as an exploratory probe
+ *    to give slower or demoted models a chance to refresh their response times and get promoted to Tier 1.
+ * 3. Priority routing targets Tier 1 first -> Tier 2 -> Tier 4.
  */
 export function getNextAutoCandidate(
   llmConfig?: LLMConfig,
@@ -522,22 +616,107 @@ export function getNextAutoCandidate(
 ): AutoCandidate {
   const candidates = getAutoModelCandidates(llmConfig);
   const lockedMap = getLockedModels();
+  const metricsMap = getModelMetricsMap();
 
-  // Find candidate that is NOT locked and NOT excluded in this request attempt
-  for (let i = 0; i < candidates.length; i++) {
-    const idx = (autoRotationIndex + i) % candidates.length;
-    const cand = candidates[idx];
+  const available = candidates.filter(cand => {
     const key = `${cand.provider}:${cand.model}`;
+    const isLocked = Boolean(lockedMap[key] && lockedMap[key].expiresAt > Date.now());
+    const isExcluded = Boolean(excludedKeys && excludedKeys.has(key));
+    return !isLocked && !isExcluded;
+  });
 
-    if (!lockedMap[key] && (!excludedKeys || !excludedKeys.has(key))) {
-      autoRotationIndex = (idx + 1) % candidates.length; // Advance index for next call
-      return cand;
+  if (available.length > 0) {
+    const tier1: { cand: AutoCandidate; time: number | null; isUntestedOrStale: boolean }[] = [];
+    const tier2: { cand: AutoCandidate; time: number }[] = [];
+    const tier4: { cand: AutoCandidate; time: number }[] = [];
+
+    for (const cand of available) {
+      const key = `${cand.provider}:${cand.model}`;
+      const metric = metricsMap[key];
+      const time = metric?.lastResponseTimeMs ?? null;
+      const lastTestedAt = metric?.lastTestedAt ?? null;
+      const stale = isMetricStale(lastTestedAt);
+
+      if (time === null || stale) {
+        // Untested or Stale -> Priority Tier 1 Probe!
+        tier1.push({ cand, time, isUntestedOrStale: true });
+      } else if (time < 10000) {
+        // Fast -> Tier 1
+        tier1.push({ cand, time, isUntestedOrStale: false });
+      } else if (time <= 20000) {
+        // Balanced -> Tier 2
+        tier2.push({ cand, time });
+      } else {
+        // Slow -> Tier 4 (Demoted)
+        tier4.push({ cand, time });
+      }
+    }
+
+    // Sort Tier 1: Untested/Stale probes first to sample new models immediately, then fastest verified models
+    tier1.sort((a, b) => {
+      if (a.isUntestedOrStale && !b.isUntestedOrStale) return -1;
+      if (!a.isUntestedOrStale && b.isUntestedOrStale) return 1;
+      return (a.time ?? 0) - (b.time ?? 0);
+    });
+    tier2.sort((a, b) => a.time - b.time);
+    tier4.sort((a, b) => a.time - b.time);
+
+    explorationCallCounter++;
+
+    // 15% Epsilon-Greedy Exploration: Every 6th call, probe a Tier 2 or Tier 4 model if Tier 1 is non-empty
+    // to give slower models a chance to re-evaluate latency and get promoted!
+    const isExplorationTurn = explorationCallCounter % 6 === 0;
+    if (isExplorationTurn && (tier2.length > 0 || tier4.length > 0)) {
+      const probePool = [...tier2.map(t => t.cand), ...tier4.map(t => t.cand)];
+      const idx = autoRotationIndex % probePool.length;
+      autoRotationIndex++;
+      const probeCandidate = probePool[idx];
+      console.log(`[Auto Mode - Epsilon Exploration Probe] Probing Tier 2/4 candidate to re-evaluate response time: ${probeCandidate.provider}:${probeCandidate.model}`);
+      return probeCandidate;
+    }
+
+    // Standard Tier Priority Selection (Tier 1 -> Tier 2 -> Tier 4)
+    if (tier1.length > 0) {
+      const idx = autoRotationIndex % tier1.length;
+      autoRotationIndex++;
+      return tier1[idx].cand;
+    }
+
+    if (tier2.length > 0) {
+      const idx = autoRotationIndex % tier2.length;
+      autoRotationIndex++;
+      return tier2[idx].cand;
+    }
+
+    if (tier4.length > 0) {
+      const idx = autoRotationIndex % tier4.length;
+      autoRotationIndex++;
+      console.warn(`[Auto Mode - Tier 4 Priority Routing] Tier 1 & 2 exhausted. Using Tier 4 demoted fallback: ${tier4[idx].cand.provider}:${tier4[idx].cand.model}`);
+      return tier4[idx].cand;
     }
   }
 
-  // Fallback: If all candidates are locked or excluded, find candidate with earliest lock expiration or clear locks
-  console.warn("[Auto Mode] All candidate models are currently locked or failed. Resetting locks to prevent total lock-out.");
+  // Fallback: Reset locks if all candidates locked or failed
+  console.warn("[Auto Mode] All candidate models are locked or failed. Resetting locks to prevent total lock-out.");
   clearAllLocks();
   autoRotationIndex = (autoRotationIndex + 1) % candidates.length;
   return candidates[0];
+}
+
+export function getAutoCandidateWithMeta(
+  llmConfig?: LLMConfig,
+  excludedKeys?: Set<string>
+): { candidate: AutoCandidate; tier: PerformanceTierNumber; tierMeta: PerformanceTierInfo } {
+  const candidate = getNextAutoCandidate(llmConfig, excludedKeys);
+  const key = `${candidate.provider}:${candidate.model}`;
+  const metricsMap = getModelMetricsMap();
+  const metric = metricsMap[key];
+  const isLocked = isModelLocked(candidate.provider, candidate.model);
+  const status = getModelStatusIndicator(isLocked, metric?.lastResponseTimeMs);
+  const isStale = isMetricStale(metric?.lastTestedAt ?? null);
+  const isUntestedOrStale = status === 'untested' || metric?.lastResponseTimeMs === null || isStale;
+  const tier = getModelPerformanceTier(status, metric?.lastResponseTimeMs, metric?.lastTestedAt);
+  const tierMeta = getPerformanceTierMeta(tier, isUntestedOrStale);
+
+  return { candidate, tier, tierMeta };
 }

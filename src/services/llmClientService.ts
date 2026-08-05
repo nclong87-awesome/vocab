@@ -7,13 +7,14 @@ import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 import { fetchWithTimeout } from "../utils";
 import { 
   getAutoModelCandidates, 
-  getNextAutoCandidate, 
+  getAutoCandidateWithMeta,
   lockModel, 
   recordModelResponse, 
   recordModelFailure,
   getModelMetricsMap,
   getLockedModels,
   getModelStatusIndicator,
+  getModelPerformanceTier,
   getAllModelStatuses,
   ModelStatusItem
 } from "../utils/autoModeManager";
@@ -705,7 +706,7 @@ export async function callLLMClientSideWithMeta(
     let lastError: any = null;
 
     for (let attempt = 0; attempt < candidates.length; attempt++) {
-      const candidate = getNextAutoCandidate(llmConfig, excludedKeys);
+      const { candidate, tierMeta } = getAutoCandidateWithMeta(llmConfig, excludedKeys);
       const candidateKey = `${candidate.provider}:${candidate.model}`;
       excludedKeys.add(candidateKey);
 
@@ -723,7 +724,7 @@ export async function callLLMClientSideWithMeta(
 
       const candidateStartTime = Date.now();
       try {
-        console.log(`[Auto Mode] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
+        console.log(`[Auto Mode - ${tierMeta.badgeLabel}] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
         const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
         const candidateDuration = Date.now() - candidateStartTime;
 
@@ -821,6 +822,8 @@ export async function testSingleModelStatus(
 
   const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
 
+  const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+
   return {
     provider,
     providerName: providerMeta?.name || provider,
@@ -831,7 +834,8 @@ export async function testSingleModelStatus(
     lastResponseTimeMs,
     lastTestedAt: metric?.lastTestedAt ?? null,
     lastError: metric?.lastError ?? null,
-    status: getModelStatusIndicator(isLocked, lastResponseTimeMs),
+    status,
+    performanceTier: getModelPerformanceTier(status, lastResponseTimeMs),
     totalCalls: metric?.totalCalls ?? 0,
     totalSuccesses: metric?.totalSuccesses ?? 0,
     failureLogs: metric?.failureLogs ?? []

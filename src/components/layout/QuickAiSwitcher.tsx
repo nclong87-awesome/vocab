@@ -209,14 +209,21 @@ export default function QuickAiSwitcher({
 
               {/* Model Dropdown Selector */}
               {activeProviderMeta.id === "auto" ? (
-                <div className="text-[11px] text-stone-300 bg-stone-800/70 p-2.5 rounded-lg border border-stone-700/60 leading-relaxed">
-                  <div className="font-semibold text-amber-400 mb-0.5 flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    <span>Auto Mode Active</span>
+                <div className="text-[11px] text-stone-300 bg-stone-800/70 p-2.5 rounded-lg border border-stone-700/60 leading-relaxed space-y-1.5">
+                  <div className="font-semibold text-amber-400 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 fill-current" />
+                      <span>Auto Mode: Priority Routing Active</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-900/80 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                      Tier 1 → Tier 4
+                    </span>
                   </div>
-                  Rotates models across Groq, OpenRouter, Gemini, 9Flare, OpenAI & Ollama. Errors automatically lock models for 1 hour and failover to the next candidate.
+                  <p className="text-stone-300 text-[11px] leading-snug">
+                    Priority routes queries to <strong className="text-emerald-400">Tier 1 (Fast &lt;10s)</strong> models first. Slow models are demoted to <strong className="text-orange-400">Tier 4</strong> as emergency backups so your requests never fail.
+                  </p>
                   {Object.keys(getLockedModels()).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-stone-700/80 flex items-center justify-between">
+                    <div className="pt-1.5 border-t border-stone-700/80 flex items-center justify-between">
                       <span className="text-amber-300 text-[10px] font-medium">
                         ⚠️ {Object.keys(getLockedModels()).length} model(s) locked
                       </span>
