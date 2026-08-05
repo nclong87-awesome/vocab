@@ -39,7 +39,7 @@ import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
 import { getLockedModels, unlockModel, clearAllLocks } from "../utils/autoModeManager";
 import { testLlmConnection } from "../services/llmClientService";
-import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage } from "../utils/ttsService";
+import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage, waitForVoices } from "../utils/ttsService";
 import { 
   exportIndexedDBDatabase, 
   importIndexedDBDatabase, 
@@ -81,6 +81,16 @@ export default function SettingsView({
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testText, setTestText] = useState("Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.");
   const [isTesting, setIsTesting] = useState(false);
+  const testFailsafeRef = useRef<number | null>(null);
+
+  const clearTestFailsafe = () => {
+    if (testFailsafeRef.current !== null) {
+      window.clearTimeout(testFailsafeRef.current);
+      testFailsafeRef.current = null;
+    }
+  };
+
+  useEffect(() => clearTestFailsafe, []);
 
   // Language Preferences State
   const [selectedTargetLang, setSelectedTargetLang] = useState<string>(targetLanguage);
@@ -123,9 +133,10 @@ export default function SettingsView({
     }
   };
 
-  const handleRescanVoices = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const voices = window.speechSynthesis.getVoices();
+  const handleRescanVoices = async () => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const voices = await waitForVoices(5000);
+    if (voices.length > 0) {
       setAvailableVoices(voices);
     }
   };
@@ -305,17 +316,37 @@ export default function SettingsView({
   };
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load system voices for browser TTS
+  // Load system voices for browser TTS. Android Chrome often never dispatches
+  // `voiceschanged`, so poll as well until the list is populated.
   useEffect(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const updateVoices = () => {
-        const voices = window.speechSynthesis.getVoices();
-        setAvailableVoices(voices);
-      };
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
 
-      updateVoices();
-      window.speechSynthesis.onvoiceschanged = updateVoices;
+    const synth = window.speechSynthesis;
+    let cancelled = false;
+
+    const updateVoices = () => {
+      if (cancelled) return false;
+      const voices = synth.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+        return true;
+      }
+      return false;
+    };
+
+    if (!updateVoices()) {
+      waitForVoices(5000).then((voices) => {
+        if (!cancelled && voices.length > 0) {
+          setAvailableVoices(voices);
+        }
+      });
     }
+
+    synth.addEventListener("voiceschanged", updateVoices);
+    return () => {
+      cancelled = true;
+      synth.removeEventListener("voiceschanged", updateVoices);
+    };
   }, []);
 
   // Update internal state if prop updates
@@ -326,11 +357,21 @@ export default function SettingsView({
   const handleTestAudio = async () => {
     if (isTesting) {
       stopSpeech();
+      clearTestFailsafe();
       setIsTesting(false);
       return;
     }
 
     setIsTesting(true);
+
+    // Safety net: if the speech engine never reports start or end (observed on
+    // Android when the TTS service drops the request), clear the state so the
+    // button doesn't stay stuck on "Stop Audio" and block a retry.
+    clearTestFailsafe();
+    testFailsafeRef.current = window.setTimeout(() => {
+      setIsTesting(false);
+    }, 15000);
+
     const targetLang = getLanguageCode(selectedTargetLang);
     await speakText(
       testText,
@@ -341,6 +382,7 @@ export default function SettingsView({
         setIsTesting(true);
       },
       () => {
+        clearTestFailsafe();
         setIsTesting(false);
       }
     );

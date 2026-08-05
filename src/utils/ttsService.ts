@@ -57,6 +57,71 @@ export function isVoiceInstalledForLanguage(langNameOrCode: string, voices: Spee
   return getVoicesForLanguage(langNameOrCode, voices).length > 0;
 }
 
+/**
+ * Mobile engines (notably Android Chrome bridging to Google TTS) behave very
+ * differently from desktop: cold-start latency before audio is high, `onstart`
+ * is often late or never fired, and `speechSynthesis.cancel()` right after
+ * `speak()` can permanently break the engine binding for the page session.
+ */
+function isMobileBrowser(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod|IEMobile|Mobile|Silk|Kindle|BlackBerry|Opera Mini/i.test(ua);
+}
+
+/**
+ * Resolves the system voice list. `getVoices()` returns `[]` for the first
+ * moments after load, and Android Chrome frequently never dispatches
+ * `voiceschanged`, so poll in addition to listening for the event.
+ */
+export function waitForVoices(timeoutMs = 2000): Promise<SpeechSynthesisVoice[]> {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    return Promise.resolve([]);
+  }
+
+  const synth = window.speechSynthesis;
+  const immediate = synth.getVoices();
+  if (immediate.length > 0) {
+    return Promise.resolve(immediate);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const startedAt = Date.now();
+
+    const finish = (voices: SpeechSynthesisVoice[]) => {
+      if (settled) return;
+      settled = true;
+      window.clearInterval(intervalId);
+      try {
+        synth.removeEventListener("voiceschanged", onVoicesChanged);
+      } catch {}
+      resolve(voices);
+    };
+
+    const onVoicesChanged = () => {
+      const voices = synth.getVoices();
+      if (voices.length > 0) finish(voices);
+    };
+
+    const intervalId = window.setInterval(() => {
+      const voices = synth.getVoices();
+      if (voices.length > 0) {
+        finish(voices);
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        finish([]);
+      }
+    }, 100);
+
+    // Use addEventListener so we don't clobber an existing `onvoiceschanged` handler.
+    try {
+      synth.addEventListener("voiceschanged", onVoicesChanged);
+    } catch {}
+  });
+}
+
 let currentAudioElement: HTMLAudioElement | null = null;
 
 function getAudioElement(): HTMLAudioElement | null {
@@ -286,13 +351,14 @@ export async function speakText(
     return Math.min(2, Math.max(0, n));
   })();
 
-  const speakWithBrowser = () => {
+  const speakWithBrowser = async () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       safeOnEnd();
       return;
     }
 
     const synth = window.speechSynthesis;
+    const isMobile = isMobileBrowser();
 
     try {
       if (synth.paused) {
@@ -303,7 +369,6 @@ export async function speakText(
     if (myToken !== currentSpeechToken) return;
 
     let recoveryTimerId: number | null = null;
-    let recoveryRetryTimerId: number | null = null;
     let hasEndedOrErrored = false;
     let didStart = false;
 
@@ -312,22 +377,24 @@ export async function speakText(
         window.clearTimeout(recoveryTimerId);
         recoveryTimerId = null;
       }
-      if (recoveryRetryTimerId !== null) {
-        window.clearTimeout(recoveryRetryTimerId);
-        recoveryRetryTimerId = null;
-      }
     };
 
     try {
-      const voices = synth.getVoices();
-      const pickLocalVoice = (allVoices: SpeechSynthesisVoice[], preferredLang?: string): SpeechSynthesisVoice | undefined => {
-        const langPrefix = (preferredLang || "").split("-")[0].toLowerCase();
-        const normalizeLang = (v: SpeechSynthesisVoice) => (v.lang || "").toLowerCase().replace("_", "-");
+      // Voices are populated asynchronously; awaiting avoids the empty-list path
+      // that previously forced `lang = ""` (rejected by Android's TTS bridge).
+      const voices = await waitForVoices(isMobile ? 3000 : 1500);
+      if (myToken !== currentSpeechToken) return;
 
-        return allVoices.find((v) => !!v.localService && normalizeLang(v).startsWith(langPrefix))
-          || allVoices.find((v) => !!v.localService)
-          || allVoices.find((v) => normalizeLang(v).startsWith(langPrefix))
-          || allVoices[0];
+      // Fallback only: never overrides an already-resolved voice, and never
+      // crosses languages. `localService` is false for nearly every Android
+      // voice, so it is a soft preference rather than a requirement.
+      const pickFallbackVoice = (allVoices: SpeechSynthesisVoice[], preferredLang?: string): SpeechSynthesisVoice | undefined => {
+        const langPrefix = (preferredLang || "").split("-")[0].toLowerCase();
+        if (!langPrefix) return undefined;
+        const normalizeLang = (v: SpeechSynthesisVoice) => (v.lang || "").toLowerCase().replace("_", "-");
+        const sameLang = allVoices.filter((v) => normalizeLang(v).startsWith(langPrefix));
+
+        return sameLang.find((v) => !!v.localService) || sameLang[0];
       };
 
       const bindUtteranceLifecycle = (targetUtterance: SpeechSynthesisUtterance) => {
@@ -398,66 +465,55 @@ export async function speakText(
         }
       }
 
-      if (!utterance.voice && voices.length > 0) {
-        const defaultVoice = voices.find((v) => v.default) || voices[0];
-        utterance.voice = defaultVoice;
-        utterance.lang = defaultVoice.lang || "en-US";
+      // Prefer a same-language local voice only when nothing more specific was resolved.
+      if (!utterance.voice) {
+        const fallbackVoice = pickFallbackVoice(voices, utterance.lang || bcp47Lang);
+        if (fallbackVoice) {
+          utterance.voice = fallbackVoice;
+          utterance.lang = fallbackVoice.lang || utterance.lang;
+        }
       }
 
-      const localVoice = pickLocalVoice(voices, utterance.lang || bcp47Lang);
-      if (localVoice) {
-        utterance.voice = localVoice;
-        utterance.lang = localVoice.lang || utterance.lang;
-      }
-
-      if (!utterance.voice && voices.length === 0) {
-        utterance.lang = "";
+      // Last resort: let the engine choose using the language tag alone. Never
+      // assign an unrelated voice, and never assign an empty `lang` — Android
+      // rejects "" as an invalid BCP-47 tag and drops the utterance silently.
+      if (!utterance.lang) {
+        utterance.lang = bcp47Lang || "en-US";
       }
 
       bindUtteranceLifecycle(utterance);
       if (myToken !== currentSpeechToken) return;
 
+      // Watchdog. This only releases the caller's "speaking" state; it must never
+      // call cancel()/pause()/resume() as recovery. On Android those calls break
+      // the engine binding for the rest of the page session, and cold-start
+      // latency there routinely exceeds a second, so an aggressive retry turns a
+      // healthy-but-slow request into permanent silence.
+      const watchdogMs = isMobile ? 5000 : 2500;
       recoveryTimerId = window.setTimeout(() => {
         if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
+        if (didStart) return;
 
-        if (!didStart) {
-          try {
-            synth.pause();
-            synth.resume();
-          } catch {}
+        // Some Android engine versions never fire `onstart` even while speaking.
+        // If the queue reports activity, assume it is playing and report started.
+        let engineBusy = false;
+        try {
+          engineBusy = synth.speaking || synth.pending;
+        } catch {}
 
-          recoveryRetryTimerId = window.setTimeout(() => {
-            if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
-            if (!didStart) {
-              try {
-                synth.cancel();
-
-                const fallbackUtterance = new SpeechSynthesisUtterance(normalizedText);
-                fallbackUtterance.rate = safeRate;
-                fallbackUtterance.pitch = safePitch;
-                fallbackUtterance.volume = 1;
-                fallbackUtterance.lang = "";
-
-                const alternateVoice = voices.find(
-                  (v) => v.voiceURI !== (utterance.voice?.voiceURI || "") && v.lang?.toLowerCase().startsWith("en")
-                ) || voices.find((v) => v.voiceURI !== (utterance.voice?.voiceURI || ""));
-                if (alternateVoice) {
-                  fallbackUtterance.voice = alternateVoice;
-                  fallbackUtterance.lang = alternateVoice.lang || "";
-                }
-
-                activeUtterance = fallbackUtterance;
-                (window as any)._activeUtteranceRef = fallbackUtterance;
-
-                bindUtteranceLifecycle(fallbackUtterance);
-                synth.speak(fallbackUtterance);
-              } catch {
-                if (myToken === currentSpeechToken) safeOnEnd();
-              }
-            }
-          }, 120);
+        if (engineBusy) {
+          safeOnStart();
+          return;
         }
-      }, 500);
+
+        // Nothing was queued and nothing started: release the UI so the user can retry.
+        hasEndedOrErrored = true;
+        if (activeUtterance === utterance) {
+          activeUtterance = null;
+        }
+        (window as any)._activeUtteranceRef = null;
+        safeOnEnd();
+      }, watchdogMs);
 
       if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
       try {
@@ -474,5 +530,5 @@ export async function speakText(
     }
   };
 
-  speakWithBrowser();
+  await speakWithBrowser();
 }
