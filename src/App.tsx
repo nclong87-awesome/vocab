@@ -711,7 +711,10 @@ export default function App() {
               role: "assistant",
               content: `🤔 **"${wordText}"** has several common meanings in **${targetLanguage}**. Which definition would you like to add?`,
               timestamp: new Date().toISOString(),
-              suggestedActions: actions
+              suggestedActions: actions,
+              provider: data.provider,
+              model: data.model,
+              responseTimeMs: data.responseTimeMs
             }
           ];
         });
@@ -735,7 +738,10 @@ export default function App() {
                 id: `sys-not-found-${Date.now()}`,
                 role: "assistant",
                 content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.`,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                provider: data.provider,
+                model: data.model,
+                responseTimeMs: data.responseTimeMs
               }
             ];
           });
@@ -756,7 +762,10 @@ export default function App() {
                 id: `sys-exists-${Date.now()}`,
                 role: "assistant",
                 content: `ℹ️ **"${finalMatch.word}" is already in your vocabulary collection!**\n\nSkipped adding duplicate entry.`,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                provider: data.provider,
+                model: data.model,
+                responseTimeMs: data.responseTimeMs
               }
             ];
           });
@@ -784,11 +793,14 @@ export default function App() {
               role: "assistant",
               content: `💡 **Deduced Vocabulary Candidate for "${wordText}":**\n\n### **${targetWordStr}** \`${pronunciationVal}\`\n- **Translation**: ${translationVal} (${partOfSpeechVal})\n- **Definition**: *${definitionVal}*${exampleVal ? `\n- **Example**: "${exampleVal}"` : ""}${exampleTranslationVal ? `\n- **Example Translation**: "${exampleTranslationVal}"` : ""}\n\n*Click below to confirm and save to your collection:*`,
               timestamp: new Date().toISOString(),
+              provider: data.provider,
+              model: data.model,
+              responseTimeMs: data.responseTimeMs,
               suggestedActions: [
                 {
                   label: `➕ Confirm & Add "${targetWordStr}" (${translationVal})`,
                   action: "confirm_save_word",
-                  payload: candidateWordObj
+                  payload: candidateWordObj,
                 }
               ]
             }
@@ -1189,7 +1201,7 @@ export default function App() {
               id: `gen-words-empty-${Date.now()}`,
               role: "assistant",
               content: `⚠️ I tried to generate vocabulary words for **"${topic}"**, but I didn't find any new words that aren't already in your collection. Try a different topic or clear some existing words!`,
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             }
           ];
         });
@@ -1347,7 +1359,10 @@ export default function App() {
             content: contentMarkdown.trim(),
             timestamp: new Date().toISOString(),
             fixedSentence: fixedSentence,
-            suggestedActions: actions
+            suggestedActions: actions,
+            provider: res.provider,
+            model: res.model,
+            responseTimeMs: res.responseTimeMs
           }
         ];
       });
@@ -1447,6 +1462,9 @@ export default function App() {
           imageKeyword: keywordText,
           suggestedVocabulary: flashcardContent.suggestedVocabulary
         },
+        provider: flashcardContent.provider,
+        model: flashcardContent.model,
+        responseTimeMs: flashcardContent.responseTimeMs,
         suggestedActions: [
           ...vocabActions,
           { label: "🃏 Next Flash Card", action: "view_flashcard" },

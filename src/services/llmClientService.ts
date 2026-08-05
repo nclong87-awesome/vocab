@@ -1293,6 +1293,9 @@ export interface FixGrammarRequest {
 export interface FixGrammarResult {
   fixedSentence: string;
   explanation: string;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
   vocabularyCandidates: {
     word: string;
     reason: string;
@@ -2172,6 +2175,9 @@ export interface GeneratedFlashcardContent {
   usageNotes?: string;
   imageKeyword?: string;
   suggestedVocabulary?: SuggestedVocabularyWord[];
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
 }
 
 export async function generateFlashcardContentService(

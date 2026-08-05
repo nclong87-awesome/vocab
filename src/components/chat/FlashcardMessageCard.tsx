@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Volume2,  Sparkles,   Lightbulb } from "lucide-react";
+import { Volume2,  Sparkles,   Lightbulb, Clock } from "lucide-react";
 import { FlashcardData, TTSConfig, LLMConfig } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import QuizImage from "../quiz/QuizImage";
@@ -10,6 +10,9 @@ interface FlashcardMessageCardProps {
   nativeLanguage: string;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
 }
 
 export default function FlashcardMessageCard({
@@ -18,6 +21,9 @@ export default function FlashcardMessageCard({
   nativeLanguage,
   ttsConfig,
   llmConfig,
+  provider,
+  model,
+  responseTimeMs
 }: FlashcardMessageCardProps) {
   const [speakingText, setSpeakingText] = useState<string | null>(null);
 
@@ -245,6 +251,30 @@ export default function FlashcardMessageCard({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* AI Response Metadata (Provider, Model, Response Time) */}
+        {(provider || model || responseTimeMs !== undefined) && (
+          <div className="mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-400 font-medium select-none">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {provider && (
+                <span className="capitalize font-semibold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded text-[10.5px]">
+                  {provider}
+                </span>
+              )}
+              {model && (
+                <span className="font-mono text-[10.5px] text-stone-500">
+                  {model}
+                </span>
+              )}
+            </div>
+            {responseTimeMs !== undefined && (
+              <div className="flex items-center gap-1 text-stone-400 shrink-0 text-[11px] font-mono" title="AI Response Time">
+                <Clock className="w-3 h-3 text-stone-400" />
+                <span>{(responseTimeMs / 1000).toFixed(2)}s</span>
+              </div>
+            )}
           </div>
         )}
 

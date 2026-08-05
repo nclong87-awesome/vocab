@@ -1,7 +1,7 @@
 {
   "name": "vocab-learner",
   "private": true,
-  "version": "1.0.92",
+  "version": "1.0.94",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

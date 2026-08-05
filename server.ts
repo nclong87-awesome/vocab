@@ -250,11 +250,10 @@ const SERVER_AUTO_CANDIDATES = [
   { provider: "9flare", model: "pro/claude-haiku-4-5" },
   { provider: "openai", model: "gpt-5.4-mini" },
   { provider: "ollama", model: "gemma4:31b" },
-  { provider: "groq", model: "groq/compound" },
-  { provider: "openrouter", model: "openrouter/free" },
+  { provider: "groq", model: "llama-3.3-70b-versatile" },
+  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct" },
   { provider: "gemini", model: "gemini-3.5-flash" },
-  { provider: "9flare", model: "pro/minimax-m2.5" },
-  { provider: "openai", model: "gpt-4o-mini" }
+  { provider: "ollama", model: "gpt-oss:20b" }
 ];
 
 let serverAutoRotationIndex = 0;
@@ -350,6 +349,13 @@ async function callLLMSingle(
         "Content-Type": "application/json"
       };
 
+      if (proxyKey) {
+        headers["X-Proxy-Key"] = proxyKey;
+      }
+      if (apiKey) {
+        headers["x-goog-api-key"] = apiKey;
+      }
+
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
@@ -358,6 +364,7 @@ async function callLLMSingle(
         }
       };
 
+      const startTime = Date.now();
       const res = await fetch(targetEndpoint, {
         method: "POST",
         headers,
@@ -375,7 +382,12 @@ async function callLLMSingle(
       if (!text) {
         throw new Error("Empty text response from Gemini worker proxy.");
       }
-      return cleanJsonResponse(text);
+      const cleanedText = cleanJsonResponse(text);
+      const result = JSON.parse(cleanedText);
+      result.model = sanitizeModel(provider, llmConfig?.model);
+      result.provider = provider;
+      result.responseTimeMs = Date.now() - startTime;
+      return JSON.stringify(result);
     }
   }
 
@@ -418,6 +430,7 @@ async function callLLMSingle(
     reqBody.response_format = { type: "json_object" };
   }
   console.log(`[Server] Calling ${provider.toUpperCase()} model ${reqBody.model} at ${targetUrl} with system instruction and schema description.`);
+  const startTime = Date.now();
 
   let res = await fetch(targetUrl, {
     method: "POST",
@@ -444,7 +457,13 @@ async function callLLMSingle(
     throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
   }
 
-  return await parseOpenAiStyleResponse(res);
+  const text = await parseOpenAiStyleResponse(res);
+  const responseTimeMs = Date.now() - startTime;
+  const result = JSON.parse(text);
+  result.model = sanitizeModel(provider, llmConfig?.model);
+  result.provider = provider;
+  result.responseTimeMs = responseTimeMs;
+  return JSON.stringify(result);
 }
 
 // Main callLLM function supporting Auto Mode
@@ -1806,21 +1825,16 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 // 10. Multimodal Image Vocabulary Analysis endpoint with Worker + Gemini Fallback
 app.post("/api/analyze-image-vocab", async (req, res) => {
   try {
-    const { imageDataUrl, customPrompt, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+    const { imageDataUrl, customPrompt, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig: _llmConfig } = req.body;
 
     if (!imageDataUrl) {
       return res.status(400).json({ error: "Image Data (imageDataUrl) is required" });
     }
 
     let base64Data = imageDataUrl;
-    let mimeType = "image/jpeg";
     if (imageDataUrl.startsWith("data:")) {
       const parts = imageDataUrl.split(";base64,");
       base64Data = parts[1] || imageDataUrl;
-      const match = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,/);
-      if (match) {
-        mimeType = match[1];
-      }
     }
 
     const headers: Record<string, string> = {

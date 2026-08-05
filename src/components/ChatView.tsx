@@ -716,6 +716,9 @@ export default function ChatView({
                         nativeLanguage={nativeLanguage}
                         ttsConfig={ttsConfig}
                         llmConfig={llmConfig}
+                        provider={msg.provider}
+                        model={msg.model}
+                        responseTimeMs={msg.responseTimeMs}
                       />
                     ) : (
                       <>
