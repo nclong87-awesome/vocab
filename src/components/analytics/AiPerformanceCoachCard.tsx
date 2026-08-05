@@ -145,6 +145,24 @@ export default function AiPerformanceCoachCard({
               </p>
             )}
           </div>
+
+          {(aiReport.provider || aiReport.model || aiReport.responseTimeMs !== undefined) && (
+            <div className="flex items-center gap-2 pt-2 text-[10px] text-stone-400 border-t border-stone-100/60 font-mono">
+              <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-semibold uppercase tracking-wider">
+                {aiReport.provider || "AI"}
+              </span>
+              {aiReport.model && (
+                <span className="text-stone-500 font-medium">
+                  {aiReport.model}
+                </span>
+              )}
+              {aiReport.responseTimeMs !== undefined && (
+                <span className="text-stone-400 ml-auto font-mono">
+                  {(aiReport.responseTimeMs / 1000).toFixed(1)}s
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

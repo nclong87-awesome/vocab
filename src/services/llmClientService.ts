@@ -1177,9 +1177,17 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   ]
 }`;
 
+  const startTime = performance.now();
+
   if (isStaticHost()) {
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 
   try {
@@ -1190,12 +1198,24 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return {
+        ...data,
+        provider: data.provider || llmConfig?.provider || "gemini",
+        model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+        responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+      };
     }
 
     if (res.status === 405 || res.status === 404) {
-      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      return JSON.parse(text);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1204,8 +1224,14 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
       throw err;
     }
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 }
 
@@ -1216,10 +1242,11 @@ export async function generateRandomWordsService(params: {
   nativeLanguage?: string;
   count?: number;
   llmConfig?: LLMConfig;
-}): Promise<{ words: any[] }> {
+}): Promise<{ words: any[]; provider?: string; model?: string; responseTimeMs?: number }> {
   const { topic, targetLanguage, nativeLanguage, count = 5, llmConfig } = params;
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
+  const startTime = performance.now();
 
   const prompt = `Generate ${count} practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the topic "${topic || "Vocabulary"}".
 The user's native language is "${userNative}".
@@ -1251,8 +1278,14 @@ CRITICAL INSTRUCTIONS:
 }`;
 
   if (isStaticHost()) {
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 
   try {
@@ -1263,12 +1296,24 @@ CRITICAL INSTRUCTIONS:
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return {
+        ...data,
+        provider: data.provider || llmConfig?.provider || "gemini",
+        model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+        responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+      };
     }
 
     if (res.status === 405 || res.status === 404) {
-      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      return JSON.parse(text);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1277,8 +1322,14 @@ CRITICAL INSTRUCTIONS:
     if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
       throw err;
     }
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 }
 
@@ -1306,6 +1357,7 @@ export async function fixGrammarService(params: FixGrammarRequest): Promise<FixG
   const { userText, targetLanguage, nativeLanguage, llmConfig } = params;
   const userTarget = targetLanguage || "English";
   const userNative = nativeLanguage || "Vietnamese";
+  const startTime = performance.now();
 
   const prompt = `Analyze and fix grammar, spelling, clarity, and vocabulary in the following user text:
 "${userText}"
@@ -1341,8 +1393,14 @@ CRITICAL INSTRUCTIONS:
 }`;
 
   if (isStaticHost()) {
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 
   try {
@@ -1353,12 +1411,24 @@ CRITICAL INSTRUCTIONS:
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return {
+        ...data,
+        provider: data.provider || llmConfig?.provider || "gemini",
+        model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+        responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+      };
     }
 
     if (res.status === 405 || res.status === 404) {
-      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      return JSON.parse(text);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1367,8 +1437,14 @@ CRITICAL INSTRUCTIONS:
     if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
       throw err;
     }
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 }
 
@@ -1388,6 +1464,9 @@ export interface PerformanceAnalysisResult {
   actionableTips: string[];
   recommendedFocusTopics: string[];
   motivationQuote: string;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
 }
 
 export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResult {
@@ -1475,12 +1554,16 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
     weaknessesSummary: weaknessesSummary || "Focus on terms with lower strength scores and terms needing review.",
     actionableTips: actionableTips.length > 0 ? actionableTips : ["Review weak terms daily", "Practice with active quizzes", "Focus on spaced repetition"],
     recommendedFocusTopics: recommendedFocusTopics.length > 0 ? recommendedFocusTopics : ["Core Vocabulary"],
-    motivationQuote: motivationQuote || "Consistency in practice builds lasting language fluency."
+    motivationQuote: motivationQuote || "Consistency in practice builds lasting language fluency.",
+    provider: raw.provider,
+    model: raw.model,
+    responseTimeMs: raw.responseTimeMs
   };
 }
 
 export async function analyzePerformanceService(params: PerformanceAnalysisRequest): Promise<PerformanceAnalysisResult> {
   const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig } = params;
+  const startTime = performance.now();
 
   const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
   const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (strength ${w.strength ?? 0}/100, ${w.translation || w.definition})`).join(", ") || "None yet";
@@ -1521,9 +1604,15 @@ Provide a structured AI analysis with constructive insights, memory retention st
 }`;
 
   if (isStaticHost()) {
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsedRaw = JSON.parse(text);
-    return normalizePerformanceAnalysis(parsedRaw);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsedRaw = JSON.parse(resWithMeta.text);
+    const result = normalizePerformanceAnalysis(parsedRaw);
+    return {
+      ...result,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 
   try {
@@ -1535,13 +1624,25 @@ Provide a structured AI analysis with constructive insights, memory retention st
 
     if (res.ok) {
       const rawJson = await res.json();
-      return normalizePerformanceAnalysis(rawJson);
+      const result = normalizePerformanceAnalysis(rawJson);
+      return {
+        ...result,
+        provider: rawJson.provider || llmConfig?.provider || "gemini",
+        model: rawJson.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+        responseTimeMs: rawJson.responseTimeMs || Math.round(performance.now() - startTime)
+      };
     }
 
     if (res.status === 405 || res.status === 404) {
-      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsedRaw = JSON.parse(text);
-      return normalizePerformanceAnalysis(parsedRaw);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsedRaw = JSON.parse(resWithMeta.text);
+      const result = normalizePerformanceAnalysis(parsedRaw);
+      return {
+        ...result,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1550,9 +1651,15 @@ Provide a structured AI analysis with constructive insights, memory retention st
     if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
       throw err;
     }
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsedRaw = JSON.parse(text);
-    return normalizePerformanceAnalysis(parsedRaw);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsedRaw = JSON.parse(resWithMeta.text);
+    const result = normalizePerformanceAnalysis(parsedRaw);
+    return {
+      ...result,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   }
 }
 
@@ -2049,7 +2156,11 @@ export async function analyzeImageVocabService(params: {
     category?: string;
     context?: string;
   }>;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
 }> {
+  const startTime = performance.now();
   let { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
 
   // Resize client-side before sending to server or worker if image is large
@@ -2072,7 +2183,13 @@ export async function analyzeImageVocabService(params: {
         body: JSON.stringify({ imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig })
       });
       if (res.ok) {
-        return await res.json();
+        const data = await res.json();
+        return {
+          ...data,
+          provider: data.provider || llmConfig?.provider || "gemini",
+          model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+          responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+        };
       }
       const errorJson = await res.json().catch(() => null);
       if (errorJson?.error) {
@@ -2126,7 +2243,12 @@ export async function analyzeImageVocabService(params: {
         data = JSON.parse(cleaned);
       }
       if (data && (data.vocabularyItems || data.imageDescription)) {
-        return data;
+        return {
+          ...data,
+          provider: data.provider || "gemini",
+          model: data.model || "gemini-2.5-flash",
+          responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+        };
       }
     } else {
       const errText = await workerRes.text().catch(() => workerRes.statusText);
@@ -2139,13 +2261,19 @@ export async function analyzeImageVocabService(params: {
 
   // 3. Fallback to client-side Gemini Vision API
   try {
-    return await analyzeImageVocabWithGeminiClient({
+    const clientRes = await analyzeImageVocabWithGeminiClient({
       imageDataUrl,
       customPrompt,
       targetLanguage,
       nativeLanguage,
       llmConfig
     });
+    return {
+      ...clientRes,
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model || "gemini-2.5-flash"),
+      responseTimeMs: Math.round(performance.now() - startTime)
+    };
   } catch (geminiClientErr: any) {
     console.error("Client-side Gemini Vision fallback also failed:", geminiClientErr);
     throw serverOrWorkerError || geminiClientErr;
@@ -2184,6 +2312,7 @@ export async function generateFlashcardContentService(
   params: FlashcardGenerationRequest
 ): Promise<GeneratedFlashcardContent> {
   const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+  const startTime = performance.now();
 
   const fallbackContent: GeneratedFlashcardContent = {
     word: word.word,
@@ -2261,8 +2390,14 @@ Output MUST be strictly valid JSON matching this schema:
 
   try {
     let rawResultText = "";
+    let metaProvider: string | undefined;
+    let metaModel: string | undefined;
+
     if (isStaticHost()) {
-      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      rawResultText = resWithMeta.text;
+      metaProvider = resWithMeta.provider;
+      metaModel = resWithMeta.model;
     } else {
       const res = await fetch("/api/generate-flashcard", {
         method: "POST",
@@ -2271,7 +2406,14 @@ Output MUST be strictly valid JSON matching this schema:
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && data.word) return data;
+        if (data && data.word) {
+          return {
+            ...data,
+            provider: data.provider || llmConfig?.provider || "gemini",
+            model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+            responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+          };
+        }
       } else {
         let errData: any = {};
         try { errData = await res.json(); } catch {}
@@ -2281,7 +2423,10 @@ Output MUST be strictly valid JSON matching this schema:
         err.statusCode = res.status;
         throw err;
       }
-      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      rawResultText = resWithMeta.text;
+      metaProvider = resWithMeta.provider;
+      metaModel = resWithMeta.model;
     }
 
     const cleaned = cleanJsonResponse(rawResultText);
@@ -2301,7 +2446,10 @@ Output MUST be strictly valid JSON matching this schema:
           : fallbackContent.extraExampleSentences,
         usageNotes: parsed.usageNotes || fallbackContent.usageNotes,
         imageKeyword: parsed.imageKeyword || word.imageKeyword || word.word,
-        suggestedVocabulary: Array.isArray(parsed.suggestedVocabulary) ? parsed.suggestedVocabulary : []
+        suggestedVocabulary: Array.isArray(parsed.suggestedVocabulary) ? parsed.suggestedVocabulary : [],
+        provider: metaProvider || llmConfig?.provider || "gemini",
+        model: metaModel || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+        responseTimeMs: Math.round(performance.now() - startTime)
       };
     }
   } catch (err: any) {

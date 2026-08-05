@@ -1513,7 +1513,10 @@ Provide a structured AI analysis with constructive insights, memory retention st
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const rawParsed = JSON.parse(text);
-    const result = normalizePerformanceAnalysis(rawParsed);
+    const result: any = normalizePerformanceAnalysis(rawParsed);
+    if (rawParsed.provider) result.provider = rawParsed.provider;
+    if (rawParsed.model) result.model = rawParsed.model;
+    if (rawParsed.responseTimeMs !== undefined) result.responseTimeMs = rawParsed.responseTimeMs;
     res.json(result);
   } catch (error: any) {
     console.error("Error analyzing performance:", error);
