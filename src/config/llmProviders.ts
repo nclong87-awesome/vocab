@@ -41,11 +41,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Unified API gateway for 100+ AI models",
     defaultModel: "deepseek/deepseek-chat",
     models: [
-      // "deepseek/deepseek-chat",
-      // "openrouter/free", 
-      // "meta-llama/llama-3.3-70b-instruct",
-      // "google/gemma-4-26b-a4b-it",
-      // "google/gemma-4-31b-it",
+      "deepseek/deepseek-chat",
       "inclusionai/ling-3.0-flash:free",
       // "poolside/laguna-xs-2.1",
       // "openai/gpt-oss-20b",

@@ -149,6 +149,196 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
   ];
 }
 
+export type ModelStatusIndicator = 'strong' | 'medium' | 'weak' | 'offline' | 'untested';
+
+export interface ModelMetricsRecord {
+  provider: string;
+  model: string;
+  lastResponseTimeMs?: number | null;
+  lastTestedAt?: number | null;
+  lastError?: string | null;
+}
+
+export type ModelMetricsMap = Record<string, ModelMetricsRecord>;
+
+const METRICS_STORAGE_KEY = "vocab_learner_model_metrics";
+
+export function getModelMetricsMap(): ModelMetricsMap {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(METRICS_STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as ModelMetricsMap;
+  } catch (e) {
+    return {};
+  }
+}
+
+export function saveModelMetricsMap(map: ModelMetricsMap): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(METRICS_STORAGE_KEY, JSON.stringify(map));
+  } catch (e) {
+    // ignore
+  }
+}
+
+export function recordModelResponse(provider: string, model: string, durationMs: number): void {
+  if (!provider || !model || provider === "auto" || model === "auto") return;
+  const key = `${provider}:${model}`;
+  
+  // Unlock if previously locked
+  unlockModel(provider, model);
+
+  const metrics = getModelMetricsMap();
+  metrics[key] = {
+    provider,
+    model,
+    lastResponseTimeMs: Math.max(1, Math.round(durationMs)),
+    lastTestedAt: Date.now(),
+    lastError: null
+  };
+  saveModelMetricsMap(metrics);
+}
+
+export function recordModelFailure(provider: string, model: string, errorMsg?: string, durationMs?: number): void {
+  if (!provider || !model || provider === "auto" || model === "auto") return;
+  const key = `${provider}:${model}`;
+
+  // Lock model
+  lockModel(provider, model);
+
+  const metrics = getModelMetricsMap();
+  metrics[key] = {
+    provider,
+    model,
+    lastResponseTimeMs: durationMs ? Math.round(durationMs) : metrics[key]?.lastResponseTimeMs ?? null,
+    lastTestedAt: Date.now(),
+    lastError: errorMsg || "Request failed"
+  };
+  saveModelMetricsMap(metrics);
+}
+
+export interface ModelStatusItem {
+  provider: string;
+  providerName: string;
+  model: string;
+  isLocked: boolean;
+  lockedAt?: number;
+  expiresAt?: number;
+  lastResponseTimeMs: number | null;
+  lastTestedAt: number | null;
+  lastError: string | null;
+  status: ModelStatusIndicator;
+}
+
+export function getModelStatusIndicator(isLocked: boolean, responseTimeMs?: number | null): ModelStatusIndicator {
+  if (isLocked) return 'offline';
+  if (responseTimeMs === null || responseTimeMs === undefined) return 'untested';
+  if (responseTimeMs < 10000) return 'strong';
+  if (responseTimeMs <= 20000) return 'medium';
+  return 'weak';
+}
+
+export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
+  const lockedMap = getLockedModels();
+  const metricsMap = getModelMetricsMap();
+  const result: ModelStatusItem[] = [];
+
+  const providersToInclude = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom");
+  if (
+    llmConfig?.savedProviders?.custom?.baseUrl ||
+    (llmConfig?.provider === "custom" && llmConfig.baseUrl)
+  ) {
+    const customMeta = PROVIDER_OPTIONS.find(p => p.id === "custom");
+    if (customMeta) providersToInclude.push(customMeta);
+  }
+
+  for (const p of providersToInclude) {
+    for (const m of p.models) {
+      if (!m || m === "auto") continue;
+      const key = `${p.id}:${m}`;
+      const lockedInfo = lockedMap[key];
+      const isLocked = Boolean(lockedInfo && lockedInfo.expiresAt > Date.now());
+      const metric = metricsMap[key];
+
+      const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
+      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+
+      result.push({
+        provider: p.id,
+        providerName: p.name,
+        model: m,
+        isLocked,
+        lockedAt: lockedInfo?.lockedAt,
+        expiresAt: lockedInfo?.expiresAt,
+        lastResponseTimeMs,
+        lastTestedAt: metric?.lastTestedAt ?? null,
+        lastError: metric?.lastError ?? null,
+        status
+      });
+    }
+  }
+
+  // Include any models present in metrics, locks, or active config that were not in static provider lists
+  const addedKeys = new Set(result.map(r => `${r.provider}:${r.model}`));
+  const extraKeys = new Set([
+    ...Object.keys(metricsMap),
+    ...Object.keys(lockedMap),
+    ...(llmConfig?.provider && llmConfig?.model && llmConfig.provider !== "auto" && llmConfig.model !== "auto"
+      ? [`${llmConfig.provider}:${llmConfig.model}`]
+      : [])
+  ]);
+
+  for (const key of extraKeys) {
+    if (!addedKeys.has(key)) {
+      const [pId, ...mParts] = key.split(':');
+      const m = mParts.join(':');
+      if (!pId || !m || m === "auto") continue;
+
+      const providerOpt = PROVIDER_OPTIONS.find(p => p.id === pId);
+      const providerName = providerOpt?.name || pId;
+      const lockedInfo = lockedMap[key];
+      const isLocked = Boolean(lockedInfo && lockedInfo.expiresAt > Date.now());
+      const metric = metricsMap[key];
+
+      const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
+      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+
+      result.push({
+        provider: pId,
+        providerName,
+        model: m,
+        isLocked,
+        lockedAt: lockedInfo?.lockedAt,
+        expiresAt: lockedInfo?.expiresAt,
+        lastResponseTimeMs,
+        lastTestedAt: metric?.lastTestedAt ?? null,
+        lastError: metric?.lastError ?? null,
+        status
+      });
+      addedKeys.add(key);
+    }
+  }
+
+  // Sort by fastest response time first
+  result.sort((a, b) => {
+    const getSortWeight = (item: ModelStatusItem) => {
+      if (item.status === 'offline') {
+        return 10000000 + (item.lastResponseTimeMs ?? 999999);
+      }
+      if (item.status === 'untested' || item.lastResponseTimeMs === null) {
+        return 5000000;
+      }
+      return item.lastResponseTimeMs;
+    };
+
+    return getSortWeight(a) - getSortWeight(b);
+  });
+
+  return result;
+}
+
 let autoRotationIndex = 0;
 
 /**

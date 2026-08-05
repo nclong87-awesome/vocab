@@ -28,8 +28,11 @@ import {
   ExternalLink,
   Cloud,
   Smartphone,
-  HelpCircle
+  HelpCircle,
+  Activity,
+  Gauge
 } from "lucide-react";
+import ModelStatusModal from "./ModelStatusModal";
 import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
@@ -85,6 +88,7 @@ export default function SettingsView({
   const [selectedAppLang, setSelectedAppLang] = useState<string>(appLanguage || nativeLanguage);
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
+  const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
 
   useEffect(() => {
     setSelectedTargetLang(targetLanguage);
@@ -528,14 +532,24 @@ export default function SettingsView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsModelStatusModalOpen(true)}
+              className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+              id="view-model-statuses-btn"
+            >
+              <Activity className="w-3.5 h-3.5 text-stone-950 shrink-0 animate-pulse" />
+              <span>View All Model Statuses</span>
+            </button>
+
             {onOpenOnboarding && (
               <button
                 type="button"
                 onClick={onOpenOnboarding}
-                className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+                className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
               >
-                <Sparkles className="w-3.5 h-3.5 text-stone-950 shrink-0" />
-                <span>Onboarding & Access Code Wizard</span>
+                <Sparkles className="w-3.5 h-3.5 text-stone-700 shrink-0" />
+                <span>Onboarding Wizard</span>
               </button>
             )}
 
@@ -631,18 +645,29 @@ export default function SettingsView({
               </p>
             </div>
 
-            {Object.keys(getLockedModels()).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
               <button
                 type="button"
-                onClick={() => {
-                  clearAllLocks();
-                  setLlmTestResult({ success: true, msg: "All model lockouts successfully cleared!" });
-                }}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start sm:self-auto"
+                onClick={() => setIsModelStatusModalOpen(true)}
+                className="px-3 py-1.5 bg-stone-900 hover:bg-black text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <span>Clear All Locks</span>
+                <Gauge className="w-3.5 h-3.5 text-amber-400" />
+                <span>Model Statuses</span>
               </button>
-            )}
+
+              {Object.keys(getLockedModels()).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearAllLocks();
+                    setLlmTestResult({ success: true, msg: "All model lockouts successfully cleared!" });
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <span>Clear All Locks</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {Object.keys(getLockedModels()).length === 0 ? (
@@ -2027,6 +2052,12 @@ export default function SettingsView({
           </div>
         </div>
       )}
+      {/* Model Status Modal */}
+      <ModelStatusModal
+        isOpen={isModelStatusModalOpen}
+        onClose={() => setIsModelStatusModalOpen(false)}
+        llmConfig={llmConfig}
+      />
     </div>
   );
 }
