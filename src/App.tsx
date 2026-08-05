@@ -585,7 +585,10 @@ export default function App() {
         role: "assistant",
         content: result.text || "I was unable to formulate a response.",
         timestamp: new Date().toISOString(),
-        suggestedActions: result.suggestedActions || []
+        suggestedActions: result.suggestedActions || [],
+        provider: result.provider,
+        model: result.model,
+        responseTimeMs: result.responseTimeMs
       };
 
       setChatMessages(prev => [...prev, newAssistantMessage]);

@@ -670,13 +670,19 @@ async function callLLMClientSideSingleCandidate(
   );
 }
 
-// Outer LLM invocation entry point supporting Auto Mode model rotation & circuit breaker lockouts
-export async function callLLMClientSide(
+export interface LLMResponseWithMeta {
+  text: string;
+  provider: string;
+  model: string;
+}
+
+// Client-side LLM invocation returning text plus provider and model metadata
+export async function callLLMClientSideWithMeta(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
   llmConfig?: LLMConfig
-): Promise<string> {
+): Promise<LLMResponseWithMeta> {
   const provider = llmConfig?.provider || "auto";
 
   // AUTO MODE: Automatically rotate across all available models & lock failing models for 1 hour
@@ -704,7 +710,12 @@ export async function callLLMClientSide(
 
       try {
         console.log(`[Auto Mode] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
-        return await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
+        const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
+        return {
+          text,
+          provider: candidate.provider,
+          model: candidate.model
+        };
       } catch (err: any) {
         lastError = err;
         console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour and switching automatically...`);
@@ -715,7 +726,25 @@ export async function callLLMClientSide(
     throw lastError || new Error("All AI models in Auto Mode failed or were locked out. Please check network connectivity or API configuration.");
   }
 
-  return callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig);
+  const activeProvider = llmConfig?.provider || "gemini";
+  const activeModel = sanitizeModel(activeProvider, llmConfig?.model);
+  const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig);
+  return {
+    text,
+    provider: activeProvider,
+    model: activeModel
+  };
+}
+
+// Outer LLM invocation entry point supporting Auto Mode model rotation & circuit breaker lockouts
+export async function callLLMClientSide(
+  prompt: string, 
+  systemInstruction: string, 
+  schemaDescription: string,
+  llmConfig?: LLMConfig
+): Promise<string> {
+  const res = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig);
+  return res.text;
 }
 
 function extractTextFromContentClient(content: any): string {
@@ -1062,13 +1091,17 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
+    console.warn("[autofillWordService] Server returned error status:", res.status, errData, "Attempting client-side LLM fallback...");
     const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     return JSON.parse(text);
+  } catch (err: any) {
+    console.warn("[autofillWordService] Server call failed:", err?.message || err, "Attempting client-side LLM fallback...");
+    try {
+      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      return JSON.parse(text);
+    } catch (clientErr) {
+      throw err;
+    }
   }
 }
 
@@ -1537,10 +1570,14 @@ export interface ChatMessageResult {
       word?: string;
     };
   }[];
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
 }
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
   const { messages, targetLanguage, nativeLanguage, llmConfig } = params;
+  const startTime = performance.now();
 
   const chatHistoryStr = messages
     .slice(-10)
@@ -1610,8 +1647,15 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 }`;
 
   if (isStaticHost()) {
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    const endTime = performance.now();
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(endTime - startTime)
+    };
   }
 
   try {
@@ -1622,12 +1666,26 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      const endTime = performance.now();
+      return {
+        ...data,
+        provider: data.provider || llmConfig?.provider || "gemini",
+        model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+        responseTimeMs: data.responseTimeMs || Math.round(endTime - startTime)
+      };
     }
 
     if (res.status === 405 || res.status === 404) {
-      const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-      return JSON.parse(text);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      const endTime = performance.now();
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(endTime - startTime)
+      };
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1636,8 +1694,15 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
       throw err;
     }
-    const text = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
-    return JSON.parse(text);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const parsed = JSON.parse(resWithMeta.text);
+    const endTime = performance.now();
+    return {
+      ...parsed,
+      provider: resWithMeta.provider,
+      model: resWithMeta.model,
+      responseTimeMs: Math.round(endTime - startTime)
+    };
   }
 }
 

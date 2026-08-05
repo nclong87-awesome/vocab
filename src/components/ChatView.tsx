@@ -4,7 +4,7 @@ import {
   Send, Sparkles, Plus, Volume2, 
   Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
   LayoutGrid, X, Search, Languages, FileText,
-  Camera, Image as _ImageIcon, Upload, Layers, ArrowUpDown
+  Camera, Image as _ImageIcon, Upload, Layers, ArrowUpDown, Clock
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
@@ -796,6 +796,30 @@ export default function ChatView({
                               <Volume2 className="w-3.5 h-3.5" />
                               Play Clip
                             </button>
+                          </div>
+                        )}
+
+                        {/* AI Response Metadata (Provider, Model, Response Time) */}
+                        {(msg.provider || msg.model || msg.responseTimeMs !== undefined) && (
+                          <div className="mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-400 font-medium select-none">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {msg.provider && (
+                                <span className="capitalize font-semibold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded text-[10.5px]">
+                                  {msg.provider}
+                                </span>
+                              )}
+                              {msg.model && (
+                                <span className="font-mono text-[10.5px] text-stone-500">
+                                  {msg.model}
+                                </span>
+                              )}
+                            </div>
+                            {msg.responseTimeMs !== undefined && (
+                              <div className="flex items-center gap-1 text-stone-400 shrink-0 text-[11px] font-mono" title="AI Response Time">
+                                <Clock className="w-3 h-3 text-stone-400" />
+                                <span>{(msg.responseTimeMs / 1000).toFixed(2)}s</span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </>
