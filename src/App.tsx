@@ -651,7 +651,9 @@ export default function App() {
   // Add individual word directly from chat suggestions (or conversational input)
   const handleConversationalAddWord = async (wordText: string, hint?: string, overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
-    const normalizedWordText = wordText.trim().toLowerCase();
+
+    const rawWordInput = wordText.trim();
+    const normalizedWordText = rawWordInput.toLowerCase();
     const existingMatch = words.find(w => w.word.trim().toLowerCase() === normalizedWordText);
     if (existingMatch) {
       setChatMessages(prev => [
@@ -675,7 +677,7 @@ export default function App() {
       {
         id: statusMsgId,
         role: "assistant",
-        content: `🔍 *Consulting dictionary, translating, and generating definition for **"${wordText}"**${contextHintStr}...*`,
+        content: `🔍 *Consulting dictionary, translating, and generating definition for **"${rawWordInput}"**${contextHintStr}...*`,
         timestamp: new Date().toISOString()
       }
     ]);
@@ -683,7 +685,7 @@ export default function App() {
     try {
       // Check if word has multiple distinct meanings or generate exact definition with context hint
       const data = await checkWordDefinitionsService({
-        word: wordText,
+        word: rawWordInput,
         hint: hint,
         targetLanguage,
         nativeLanguage,
@@ -795,7 +797,7 @@ export default function App() {
 
         const categoryVal = sense?.category || data.category || "General";
         const contextVal = sense?.context || data.context || hint || definitionVal;
-        const targetWordStr = data.word || wordText;
+        const targetWordStr = sense?.word || data.word || rawWordInput;
 
         const finalMatch = words.find(w => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
         if (finalMatch) {
