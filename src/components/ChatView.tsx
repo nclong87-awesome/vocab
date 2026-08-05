@@ -833,10 +833,11 @@ export default function ChatView({
                   {!isUser && effectiveActions && effectiveActions.length > 0 && (
                     <div className="flex flex-col gap-1.5 pt-1 w-full">
                       {effectiveActions.map((act, aIdx) => {
-                        const isNextQ = act.label.toLowerCase().includes("question") || 
-                          act.label.toLowerCase().includes("move on") || 
-                          act.label.toLowerCase().includes("continue to") ||
-                          act.label.toLowerCase().includes("next");
+                        const isNextQ = act.action === "send_message" && (
+                          act.label.toLowerCase().startsWith("move on") ||
+                          act.label.toLowerCase().startsWith("next question") ||
+                          act.label.toLowerCase().includes("continue to question")
+                        );
 
                         return (
                           <button
@@ -908,50 +909,78 @@ export default function ChatView({
                               }
                               scrollToBottom("smooth");
                             }}
-                            className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 hover:scale-[1.005] shadow-2xs cursor-pointer group ${
+                            className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs cursor-pointer group ${
                               isNextQ
                                 ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold"
-                                : "bg-white hover:bg-stone-50 border border-stone-200 text-stone-900 hover:border-stone-300"
+                                : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white"
                             }`}
                           >
                             <div className="flex items-start gap-2.5 min-w-0 flex-1">
                               {isNextQ ? (
                                 <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                               ) : (
-                                <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse shrink-0 mt-0.5" />
+                                <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 animate-pulse shrink-0 mt-0.5" />
                               )}
 
                               {act.action === "select_definition" && act.payload?.definition ? (
                                 <div className="flex flex-col gap-1 min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase bg-amber-100/80 text-amber-900 rounded border border-amber-200/60 shrink-0">
+                                    <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded border shrink-0 transition-colors ${
+                                      isNextQ
+                                        ? "bg-amber-400 text-stone-950 border-amber-300"
+                                        : "bg-amber-100/90 text-amber-900 border-amber-200/70 group-hover:bg-amber-400 group-hover:text-stone-950 group-focus:bg-amber-400 group-focus:text-stone-950 group-active:bg-amber-400 group-active:text-stone-950"
+                                    }`}>
                                       {act.payload.partOfSpeech || "sense"}
                                     </span>
-                                    <span className="font-bold text-stone-900 text-xs sm:text-sm">
+                                    <span className={`font-bold text-xs sm:text-sm transition-colors ${
+                                      isNextQ
+                                        ? "text-white"
+                                        : "text-stone-900 group-hover:text-white group-focus:text-white group-active:text-white"
+                                    }`}>
                                       {act.payload.targetWord || act.payload.word}
                                       {act.payload.translation && (
-                                        <span className="text-stone-600 font-medium ml-1">
+                                        <span className={`font-medium ml-1 transition-colors ${
+                                          isNextQ
+                                            ? "text-stone-300"
+                                            : "text-stone-600 group-hover:text-stone-300 group-focus:text-stone-300 group-active:text-stone-300"
+                                        }`}>
                                           ({act.payload.translation})
                                         </span>
                                       )}
                                     </span>
                                   </div>
-                                  <p className="text-xs text-stone-700 leading-snug font-normal break-words line-clamp-3">
+                                  <p className={`text-xs leading-snug font-normal break-words line-clamp-3 transition-colors ${
+                                    isNextQ
+                                      ? "text-stone-200"
+                                      : "text-stone-700 group-hover:text-stone-200 group-focus:text-stone-200 group-active:text-stone-200"
+                                  }`}>
                                     {act.payload.definition}
                                   </p>
                                   {act.payload.example && (
-                                    <p className="text-[11px] text-stone-500 italic line-clamp-1 mt-0.5 font-normal">
+                                    <p className={`text-[11px] italic line-clamp-1 mt-0.5 font-normal transition-colors ${
+                                      isNextQ
+                                        ? "text-amber-200/90"
+                                        : "text-stone-500 group-hover:text-amber-200/90 group-focus:text-amber-200/90 group-active:text-amber-200/90"
+                                    }`}>
                                       Ex: "{act.payload.example}"
                                     </p>
                                   )}
                                 </div>
                               ) : (
-                                <span className="whitespace-normal break-words leading-relaxed font-semibold min-w-0 flex-1">
+                                <span className={`whitespace-normal break-words leading-relaxed font-semibold min-w-0 flex-1 transition-colors ${
+                                  isNextQ
+                                    ? "text-white"
+                                    : "text-stone-900 group-hover:text-white group-focus:text-white group-active:text-white"
+                                }`}>
                                   {act.label}
                                 </span>
                               )}
                             </div>
-                            <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform shrink-0 mt-1 ml-2 ${isNextQ ? "text-stone-300" : "text-stone-400"}`} />
+                            <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-all shrink-0 mt-1 ml-2 ${
+                              isNextQ 
+                                ? "text-stone-300" 
+                                : "text-stone-400 group-hover:text-white group-focus:text-white group-active:text-white"
+                            }`} />
                           </button>
                         );
                       })}
