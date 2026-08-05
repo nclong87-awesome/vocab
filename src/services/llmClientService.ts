@@ -343,21 +343,25 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     };
   }
 
-  // 6. Network / CORS / Fetch Error
+  // 6. Network / CORS / Fetch Error / Timeout
   if (
     err?.name === "TypeError" ||
     lowerMsg.includes("failed to fetch") ||
     lowerMsg.includes("networkerror") ||
     lowerMsg.includes("cors") ||
     lowerMsg.includes("econnreset") ||
-    lowerMsg.includes("etimedout")
+    lowerMsg.includes("etimedout") ||
+    lowerMsg.includes("timed out")
   ) {
+    const isTimeout = lowerMsg.includes("timed out") || lowerMsg.includes("etimedout");
     return {
       statusCode: 0,
       errorType: "NETWORK_ERROR",
-      userMessage: `Network Connection Error: Unable to reach ${provUpper} API servers from the browser. Please verify your internet connection.`,
+      userMessage: isTimeout
+        ? `API Request Timed Out (60s): ${provUpper} API did not respond within 60 seconds.`
+        : `Network Connection Error: Unable to reach ${provUpper} API servers from the browser. Please verify your internet connection.`,
       originalMessage,
-      isRetryable: true,
+      isRetryable: !isTimeout,
       provider
     };
   }

@@ -60,7 +60,7 @@ export function lockModel(
   provider: string, 
   model: string, 
   durationMs: number = ONE_HOUR_MS,
-  errorMsg?: string
+  _errorMsg?: string
 ): void {
   if (provider === "auto" || model === "auto") return;
   const locked = getLockedModels();
@@ -81,39 +81,6 @@ export function lockModel(
       // ignore storage error
     }
   }
-
-  const metrics = getModelMetricsMap();
-  const existing = metrics[key];
-  const reason = errorMsg || existing?.lastError || "Model locked due to API request failure or rate limit";
-  const prevCalls = existing?.totalCalls ?? (existing?.lastTestedAt ? 1 : 0);
-  const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
-
-  const newTotalCalls = prevCalls <= prevSuccesses ? prevSuccesses + 1 : prevCalls;
-
-  let existingLogs = existing?.failureLogs ? [...existing.failureLogs] : [];
-
-  // Don't add duplicate failure log if one was logged in the last 500ms
-  const isDuplicateRecent = existingLogs.length > 0 && (now - existingLogs[0].timestamp < 500);
-  if (!isDuplicateRecent) {
-    const newLogEntry: FailureLogEntry = {
-      id: `${now}-${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: now,
-      reason
-    };
-    existingLogs = [newLogEntry, ...existingLogs].slice(0, 10);
-  }
-
-  metrics[key] = {
-    ...existing,
-    provider,
-    model,
-    lastTestedAt: now,
-    lastError: reason,
-    totalCalls: newTotalCalls,
-    totalSuccesses: prevSuccesses,
-    failureLogs: existingLogs
-  };
-  saveModelMetricsMap(metrics);
 
   console.warn(`[Auto Mode] Locked model ${key} for ${Math.round(durationMs / 60000)} minutes until ${new Date(now + durationMs).toLocaleTimeString()}`);
 }
@@ -257,17 +224,44 @@ export function recordModelResponse(provider: string, model: string, durationMs:
   saveModelMetricsMap(metrics);
 }
 
+export function deduplicateFailureLogs(logs: FailureLogEntry[]): FailureLogEntry[] {
+  if (!logs || logs.length === 0) return [];
+  const result: FailureLogEntry[] = [];
+
+  for (const log of logs) {
+    const isDup = result.some(existing => {
+      const timeDiff = Math.abs(existing.timestamp - log.timestamp);
+      if (timeDiff < 2000) {
+        if (
+          existing.reason === log.reason ||
+          existing.reason.includes("Model locked") ||
+          log.reason.includes("Model locked")
+        ) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!isDup) {
+      result.push(log);
+    }
+  }
+
+  return result;
+}
+
 export function recordModelFailure(provider: string, model: string, errorMsg?: string, durationMs?: number): void {
   if (!provider || !model || provider === "auto" || model === "auto") return;
   const key = `${provider}:${model}`;
+  const now = Date.now();
+  const reason = errorMsg || "Request failed";
 
   // Lock model
-  lockModel(provider, model);
+  lockModel(provider, model, ONE_HOUR_MS, reason);
 
   const metrics = getModelMetricsMap();
   const existing = metrics[key];
-  const now = Date.now();
-  const reason = errorMsg || "Request failed";
 
   const prevCalls = existing?.totalCalls ?? (existing?.lastTestedAt ? 1 : 0);
   const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
@@ -291,8 +285,8 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     reason
   };
 
-  // Keep only the last 10 failure log entries (newest first)
-  const updatedLogs = [newLogEntry, ...existingLogs].slice(0, 10);
+  // Keep only up to 10 deduplicated failure log entries (newest first)
+  const updatedLogs = deduplicateFailureLogs([newLogEntry, ...existingLogs]).slice(0, 10);
 
   metrics[key] = {
     ...existing,
@@ -454,6 +448,9 @@ function extractModelStats(
       totalSuccesses = 1;
     }
   }
+
+  // Deduplicate failure logs so redundant/duplicate entries (e.g. from previous double logging) are cleaned up
+  failureLogs = deduplicateFailureLogs(failureLogs);
 
   // If the model is locked, a failure must be reflected in totalCalls and failureLogs
   if (isLocked) {
