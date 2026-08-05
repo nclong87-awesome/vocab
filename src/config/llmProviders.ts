@@ -27,6 +27,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       "openai/gpt-oss-120b", 
       "openai/gpt-oss-20b", 
+      "llama-3.3-70b-versatile",
+      "openai/gpt-oss-safeguard-20b"
       // "groq/compound"
     ],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
@@ -42,7 +44,11 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "deepseek/deepseek-chat",
       // "openrouter/free", 
       "meta-llama/llama-3.3-70b-instruct",
-      // "google/gemma-2-9b-it"
+      "google/gemma-4-26b-a4b-it",
+      "google/gemma-4-31b-it",
+      "inclusionai/ling-3.0-flash:free",
+      "poolside/laguna-xs-2.1",
+      "openai/gpt-oss-20b",
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://openrouter.ai/api/v1",
@@ -70,7 +76,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "gemma4:31b",
     models: [
       "gemma4:31b",
-      "gemma4:26b",
       "gpt-oss:20b",
       "nemotron-3-nano:30b-cloud"
     ],

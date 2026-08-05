@@ -285,28 +285,9 @@ async function callLLMSingle(
 ): Promise<string> {
   const provider = llmConfig?.provider || "openrouter";
   const model = sanitizeModel(provider, llmConfig?.model);
-  const apiKey = llmConfig?.apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY : "");
-  const sharedProxyKey = llmConfig?.proxyKey || 
-    (llmConfig?.savedProviders ? Object.values(llmConfig.savedProviders).find(p => Boolean(p?.proxyKey))?.proxyKey : "") || 
-    process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
-  const proxyKey = sharedProxyKey;
+  const apiKey = llmConfig?.apiKey;
+  const proxyKey = process.env.PROXY_SECRET;
   const baseUrl = llmConfig?.baseUrl || "";
-
-  const requiresKey = provider !== "ollama" && provider !== "custom" && provider !== "gemini" && provider !== "openai";
-  let effectiveApiKey = apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "");
-  const effectiveProxyKey = proxyKey || apiKey || (provider === "gemini" ? process.env.GEMINI_API_KEY || "" : "") || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || "";
-
-  if (requiresKey && !effectiveApiKey && !effectiveProxyKey) {
-    throw new Error(`API Key or Proxy Secret is required for provider: ${provider}. Please enter a valid key in LLM settings.`);
-  }
-
-  if (provider === "gemini" && !effectiveApiKey && !effectiveProxyKey) {
-    throw new Error(`Gemini API Key or Proxy Secret is missing. Please enter your key in LLM settings or configure GEMINI_API_KEY / PROXY_KEY.`);
-  }
-
-  if (!effectiveApiKey) {
-    effectiveApiKey = "local-token";
-  }
 
   if (provider === "gemini") {
     const effectiveGeminiUrl = baseUrl || "https://gemini.nclong87.workers.dev/v1beta";
@@ -314,11 +295,10 @@ async function callLLMSingle(
 
     if (!isCustomOrProxyUrl) {
       const ai = new GoogleGenAI({
-        apiKey: effectiveApiKey || effectiveProxyKey || "local-key",
+        apiKey: apiKey,
         httpOptions: { 
           headers: { 
             'User-Agent': 'aistudio-build',
-            ...(effectiveProxyKey ? { 'X-Proxy-Key': effectiveProxyKey } : {})
           } 
         }
       });
@@ -364,17 +344,11 @@ async function callLLMSingle(
       // Worker proxy handling for Gemini (uses native generateContent endpoint rather than /chat/completions)
       const primaryModel = model || "gemini-3.6-flash";
       const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
-      const targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
+      const targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent`;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json"
       };
-      if (effectiveProxyKey) {
-        headers["X-Proxy-Key"] = effectiveProxyKey;
-      }
-      if (effectiveApiKey) {
-        headers["x-goog-api-key"] = effectiveApiKey;
-      }
 
       const payload = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -405,22 +379,10 @@ async function callLLMSingle(
     }
   }
 
-  // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (when using worker/proxy)
-  let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
-  if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
-  if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
-  if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
-  if (provider === "ollama") defaultBaseUrl = "https://ollama.nclong87.workers.dev/v1";
-  if (provider === "custom") defaultBaseUrl = "http://localhost:11434/v1";
-  if (provider === "gemini") defaultBaseUrl = "https://gemini.nclong87.workers.dev/v1beta";
-
-  let effectiveTargetBaseUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : defaultBaseUrl;
+  let effectiveTargetBaseUrl = baseUrl.trim();
   effectiveTargetBaseUrl = effectiveTargetBaseUrl.replace(/\/+$/, "");
   if (effectiveTargetBaseUrl.endsWith("/chat/completions")) {
     effectiveTargetBaseUrl = effectiveTargetBaseUrl.slice(0, -"/chat/completions".length).replace(/\/+$/, "");
-  }
-  if (provider === "9flare" && effectiveTargetBaseUrl === "https://9flare.com") {
-    effectiveTargetBaseUrl = "https://9flare.com/v1";
   }
 
   const targetUrl = effectiveTargetBaseUrl + "/chat/completions";
@@ -431,8 +393,6 @@ async function callLLMSingle(
 
   if (apiKey) {
     headers["Authorization"] = `Bearer ${apiKey}`;
-  } else if (provider !== "ollama" && effectiveApiKey) {
-    headers["Authorization"] = `Bearer ${effectiveApiKey}`;
   }
 
   if (provider === "openrouter") {
@@ -440,8 +400,8 @@ async function callLLMSingle(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (effectiveProxyKey || (effectiveTargetBaseUrl && (effectiveTargetBaseUrl.includes("workers.dev") || effectiveTargetBaseUrl.includes("worker.dev") || effectiveTargetBaseUrl.includes("cloudflare.com")))) {
-    headers["X-Proxy-Key"] = effectiveProxyKey || effectiveApiKey;
+  if (effectiveTargetBaseUrl.includes("workers.dev")) {
+    headers["X-Proxy-Key"] = proxyKey!;
   }
 
   const reqBody: any = {
@@ -457,6 +417,7 @@ async function callLLMSingle(
   if (provider === "openai" || provider === "groq" || provider === "9flare" || provider === "gemini") {
     reqBody.response_format = { type: "json_object" };
   }
+  console.log(`[Server] Calling ${provider.toUpperCase()} model ${reqBody.model} at ${targetUrl} with system instruction and schema description.`);
 
   let res = await fetch(targetUrl, {
     method: "POST",
@@ -509,7 +470,7 @@ async function callLLM(
         provider: cand.provider,
         model: cand.model,
         apiKey: candProfile?.apiKey || (llmConfig?.provider === cand.provider ? llmConfig.apiKey : ""),
-        proxyKey: candProfile?.proxyKey || llmConfig?.proxyKey || "",
+        proxyKey: process.env.PROXY_SECRET,
         baseUrl: candProfile?.baseUrl || "",
         savedProviders: llmConfig?.savedProviders
       };
@@ -687,14 +648,14 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
 }
 
 // Helper function to generate image URL via Cloudflare Worker
-async function generateWorkerImage(keyword: string, effectiveProxyKey: string): Promise<string> {
+async function generateWorkerImage(keyword: string): Promise<string> {
   if (!keyword) return "";
   try {
     const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;
     const response = await fetch(workerUrl, {
       method: "GET",
       headers: {
-        "X-Proxy-Key": effectiveProxyKey || ""
+        "X-Proxy-Key": process.env.PROXY_SECRET || ""
       }
     });
     if (!response.ok) {
@@ -728,43 +689,19 @@ app.get("/api/health", (_req, res) => {
 // Image Generation Endpoint via worker https://image.nclong87.workers.dev
 app.post("/api/generate-image", async (req, res) => {
   try {
-    const { query, keyword, prompt, proxyKey, llmConfig } = req.body || {};
+    const { query, keyword, prompt } = req.body || {};
     const queryText = query || keyword || prompt || (req.query.query as string) || (req.query.keyword as string) || (req.query.prompt as string) || "";
     if (!queryText) {
       return res.status(400).json({ error: "Query parameter is required" });
     }
-    const sharedProxyKey = llmConfig?.proxyKey ||
-      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
-      "";
-    const effectiveProxyKey = proxyKey || sharedProxyKey || (req.headers["x-proxy-key"] as string) || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
 
-    const imageUrl = await generateWorkerImage(queryText, effectiveProxyKey);
+    const imageUrl = await generateWorkerImage(queryText);
     if (!imageUrl) {
       return res.status(500).json({ error: "Failed to generate image from worker" });
     }
     res.json({ imageUrl, query: queryText });
   } catch (error: any) {
     console.error("Error generating image via worker:", error);
-    res.status(500).json({ error: error.message || "Failed to generate image" });
-  }
-});
-
-app.get("/api/generate-image", async (req, res) => {
-  try {
-    const queryText = (req.query.query as string) || (req.query.keyword as string) || (req.query.prompt as string) || "";
-    const clientProxyKey = (req.query.proxyKey as string) || (req.headers["x-proxy-key"] as string) || "";
-    if (!queryText) {
-      return res.status(400).json({ error: "Query parameter is required" });
-    }
-    const effectiveProxyKey = clientProxyKey || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
-
-    const imageUrl = await generateWorkerImage(queryText, effectiveProxyKey);
-    if (!imageUrl) {
-      return res.status(500).json({ error: "Failed to generate image from worker" });
-    }
-    res.json({ imageUrl, query: queryText });
-  } catch (error: any) {
-    console.error("Error generating image via worker GET:", error);
     res.status(500).json({ error: error.message || "Failed to generate image" });
   }
 });
@@ -1841,17 +1778,12 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
         result[0].imageKeyword = result[0].word;
       }
 
-      const sharedProxyKey = llmConfig?.proxyKey ||
-        (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
-        "";
-      const effectiveProxyKey = sharedProxyKey || (req.headers["x-proxy-key"] as string) || process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
-
       await Promise.all(
         result.map(async (q: any) => {
           if (q.type === "picture" || q.imageKeyword || q.imageUrl) {
             const keywordText = q.imageKeyword || q.word;
             q.imageKeyword = keywordText;
-            const imgUrl = await generateWorkerImage(keywordText, effectiveProxyKey);
+            const imgUrl = await generateWorkerImage(keywordText);
             if (imgUrl) {
               q.imageUrl = imgUrl;
             } else {
@@ -1870,161 +1802,6 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
     res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
   }
 });
-
-// 9. AI Flashcard Generation endpoint
-app.post("/api/generate-flashcard", async (req, res) => {
-  try {
-    const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
-
-    if (!word || !word.word) {
-      return res.status(400).json({ error: "A valid word object is required" });
-    }
-
-    const systemInstruction = `You are a world-class AI Language Pedagogy Engine creating interactive flash cards for ${targetLanguage} learners (native language: ${nativeLanguage}).
-Given a target vocabulary word, its category, context, definition, and user stats, generate rich flashcard study content.
-
-CRITICAL REQUIREMENTS:
-1. Provide a refined target language definition in ${targetLanguage}, pronunciation (IPA), and native translation in ${nativeLanguage}.
-2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
-3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
-4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
-5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
-
-Output MUST be strictly valid JSON matching this schema:
-{
-  "word": "string",
-  "pronunciation": "string",
-  "partOfSpeech": "string",
-  "definition": "string in ${targetLanguage}",
-  "translation": "string in ${nativeLanguage}",
-  "category": "string",
-  "context": "string",
-  "extraExampleSentences": [
-    {
-      "sentence": "string in ${targetLanguage}",
-      "translation": "string in ${nativeLanguage}",
-      "contextCategoryNote": "string (brief note explaining relevance to context/category)"
-    }
-  ],
-  "usageNotes": "string",
-  "imageKeyword": "string (ONE single comma-free search term)"
-}`;
-
-    const prompt = `Generate interactive flashcard content for the word:\n` +
-      `Word: "${word.word}"\n` +
-      `Part of Speech: "${word.partOfSpeech || "unknown"}"\n` +
-      `Stored Definition: "${word.definition}"\n` +
-      `Stored Translation: "${word.translation}"\n` +
-      `Stored Category: "${word.category || "General"}"\n` +
-      `Stored Context: "${word.context || word.definition}"\n` +
-      `Stored Example: "${word.example || "N/A"}"`;
-
-    const schemaDesc = `Flashcard JSON object with word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences, usageNotes, imageKeyword`;
-    const rawResponse = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig || {});
-    const cleaned = cleanJsonResponse(rawResponse);
-    const parsed = JSON.parse(cleaned);
-
-    res.json(parsed);
-  } catch (error: any) {
-    console.error("Error generating AI flashcard:", error);
-    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
-    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
-    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
-  }
-});
-
-// Helper to analyze image using Gemini Vision API on server side
-async function analyzeImageVocabWithGeminiServer(params: {
-  base64Data: string;
-  mimeType: string;
-  customPrompt?: string;
-  targetLanguage: string;
-  nativeLanguage: string;
-  apiKey?: string;
-}): Promise<any> {
-  const { base64Data, mimeType, customPrompt, targetLanguage, nativeLanguage, apiKey } = params;
-  const keyToUse = apiKey || process.env.GEMINI_API_KEY;
-  if (!keyToUse) {
-    throw new Error("No Gemini API key available for vision analysis fallback");
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey: keyToUse,
-    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-  });
-
-  const promptText = `Analyze this image for a language learner.
-Target Language to learn: "${targetLanguage}"
-Learner's Native Language for translations: "${nativeLanguage}"
-${customPrompt ? `Additional user prompt/instructions: "${customPrompt}"` : ""}
-
-CRITICAL REQUIREMENTS:
-1. Identify 5 to 8 key objects, actions, scenes, or vocabulary words visible in or directly related to the photo.
-2. Provide a brief 1-2 sentence description of the image ("imageDescription") in "${targetLanguage}".
-3. For each vocabulary item ("vocabularyItems"), include:
-   - "word": string in "${targetLanguage}"
-   - "translation": string in "${nativeLanguage}"
-   - "partOfSpeech": string (e.g. noun, verb, adjective, phrase)
-   - "pronunciation": string (IPA or phonetic guide)
-   - "definition": string in "${targetLanguage}"
-   - "example": string in "${targetLanguage}"
-   - "exampleTranslation": string in "${nativeLanguage}"
-   - "category": string (e.g. "Food & Dining", "Travel", "Nature", "Everyday Objects")
-   - "context": string (short description of where/how it appears in the photo)
-
-Return strictly valid JSON matching this schema:
-{
-  "imageDescription": "string in ${targetLanguage}",
-  "vocabularyItems": [
-    {
-      "word": "string",
-      "translation": "string",
-      "partOfSpeech": "string",
-      "pronunciation": "string",
-      "definition": "string",
-      "example": "string",
-      "exampleTranslation": "string",
-      "category": "string",
-      "context": "string"
-    }
-  ]
-}`;
-
-  const imagePart = {
-    inlineData: {
-      mimeType: mimeType || "image/jpeg",
-      data: base64Data
-    }
-  };
-
-  const modelsToTry = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
-  let lastErr = null;
-
-  for (const m of modelsToTry) {
-    try {
-      const response = await ai.models.generateContent({
-        model: m,
-        contents: [imagePart, promptText],
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-
-      if (response.text) {
-        const cleaned = cleanJsonResponse(response.text);
-        const parsed = JSON.parse(cleaned);
-        if (parsed && (parsed.vocabularyItems || parsed.imageDescription)) {
-          return parsed;
-        }
-      }
-    } catch (err: any) {
-      console.warn(`Gemini Vision model ${m} failed:`, err.message || err);
-      lastErr = err;
-    }
-  }
-
-  throw lastErr || new Error("Failed to analyze image with Gemini Vision");
-}
 
 // 10. Multimodal Image Vocabulary Analysis endpoint with Worker + Gemini Fallback
 app.post("/api/analyze-image-vocab", async (req, res) => {
@@ -2046,65 +1823,36 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
       }
     }
 
-    const sharedProxyKey = llmConfig?.proxyKey || 
-      (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") || 
-      llmConfig?.apiKey ||
-      process.env.PROXY_KEY || process.env.PROXY_SECRET || process.env.X_PROXY_KEY || process.env.GEMINI_API_KEY || "";
-
     const headers: Record<string, string> = {
       "Content-Type": "application/json"
     };
-    if (sharedProxyKey) {
-      headers["X-Proxy-Key"] = sharedProxyKey;
-    }
+    headers["X-Proxy-Key"] = process.env.PROXY_SECRET || "";
 
-    // 1. Attempt Cloudflare Worker first
-    try {
-      const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          nativeLanguage,
-          targetLanguage,
-          imageData: base64Data,
-          customPrompt
-        })
-      });
-
-      if (workerRes.ok) {
-        const rawText = await workerRes.text();
-        let result;
-        try {
-          result = JSON.parse(rawText);
-        } catch {
-          const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-          result = JSON.parse(cleaned);
-        }
-        if (result && (result.vocabularyItems || result.imageDescription)) {
-          return res.json(result);
-        }
-      }
-      console.warn(`Cloudflare Image Worker returned non-ok status (${workerRes.status}), falling back to Gemini Vision...`);
-    } catch (workerErr: any) {
-      console.warn("Cloudflare Image Worker call failed, falling back to Gemini Vision:", workerErr.message);
-    }
-
-    // 2. Fallback to Gemini Multimodal Vision API
-    try {
-      const apiKeyToUse = sharedProxyKey || process.env.GEMINI_API_KEY;
-      const geminiResult = await analyzeImageVocabWithGeminiServer({
-        base64Data,
-        mimeType,
-        customPrompt,
-        targetLanguage,
+    const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
         nativeLanguage,
-        apiKey: apiKeyToUse
-      });
-      return res.json(geminiResult);
-    } catch (geminiErr: any) {
-      console.error("Gemini Vision fallback also failed:", geminiErr);
-      return res.status(500).json({ error: geminiErr.message || "Failed to analyze image vocabulary." });
+        targetLanguage,
+        imageData: base64Data,
+        customPrompt
+      })
+    });
+
+    if (workerRes.ok) {
+      const rawText = await workerRes.text();
+      let result;
+      try {
+        result = JSON.parse(rawText);
+      } catch {
+        const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        result = JSON.parse(cleaned);
+      }
+      if (result && (result.vocabularyItems || result.imageDescription)) {
+        return res.json(result);
+      }
     }
+    console.warn(`Cloudflare Image Worker returned non-ok status (${workerRes.status}), falling back to Gemini Vision...`);
   } catch (error: any) {
     console.error("Error analyzing image vocabulary:", error);
     res.status(500).json({ error: error.message || "Failed to analyze image vocabulary" });
