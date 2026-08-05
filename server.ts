@@ -496,7 +496,15 @@ async function callLLM(
 
       try {
         console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${SERVER_AUTO_CANDIDATES.length}: Routing request to ${candKey}`);
-        return await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
+        const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
+        if (schemaDescription) {
+          try {
+            JSON.parse(resultText);
+          } catch (jsonErr: any) {
+            throw new Error(`Invalid JSON response from ${candKey}: ${jsonErr.message}`);
+          }
+        }
+        return resultText;
       } catch (err: any) {
         lastError = err;
         console.warn(`[Server Auto Mode] Model ${candKey} failed: ${err?.message || err}. Locking model for 1 hour and switching...`);

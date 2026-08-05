@@ -5,6 +5,7 @@ import { Word, WordSense, UserStats, LLMConfig, TTSConfig, LLMProvider, ChatMess
 import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider, getSavedProvidersMap } from "./utils/llmHelpers";
+import { lockModel } from "./utils/autoModeManager";
 import { sendChatMessageService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService, generateFlashcardContentService } from "./services/llmClientService";
 import { QuizQuestion } from "./types";
 import { 
@@ -68,6 +69,38 @@ export default function App() {
   ) => {
     const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to communicate with AI provider.");
     const provider = currentConfig.provider || "groq";
+
+    if (provider === "auto" || currentConfig.model === "auto") {
+      console.warn("[Auto Mode] Suppressing dialog modal in Auto Mode. Automatically selecting another model candidate...", rawMsg);
+      
+      if (err?.provider && err?.model) {
+        lockModel(err.provider, err.model, 3600000);
+      }
+
+      // If all candidate models failed, show modal as last resort
+      if (rawMsg.includes("All AI models in Auto Mode failed") || rawMsg.includes("locked out")) {
+        setAiErrorModal({
+          isOpen: true,
+          errorMessage: "All AI models in Auto Mode are currently unavailable. Please check your network connection or API settings.",
+          failedProvider: "auto",
+          retryAction
+        });
+        return;
+      }
+
+      const updatedConfig: LLMConfig = {
+        ...currentConfig,
+        provider: "auto",
+        model: "auto"
+      };
+
+      if (retryAction) {
+        setTimeout(() => {
+          retryAction(updatedConfig);
+        }, 100);
+      }
+      return;
+    }
 
     setAiErrorModal({
       isOpen: true,

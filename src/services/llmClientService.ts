@@ -711,6 +711,15 @@ export async function callLLMClientSideWithMeta(
       try {
         console.log(`[Auto Mode] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
         const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
+        
+        if (schemaDescription) {
+          try {
+            JSON.parse(text);
+          } catch (jsonErr: any) {
+            throw new Error(`Invalid JSON format response from ${candidateKey}: ${jsonErr.message}`);
+          }
+        }
+
         return {
           text,
           provider: candidate.provider,
@@ -1219,11 +1228,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
+    console.warn("[checkWordDefinitionsService] Server returned error status, attempting client-side LLM auto mode fallback...", res.status, errData);
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
     const parsed = JSON.parse(resWithMeta.text);
     return {
@@ -1232,6 +1237,20 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       model: resWithMeta.model,
       responseTimeMs: Math.round(performance.now() - startTime)
     };
+  } catch (err: any) {
+    console.warn("[checkWordDefinitionsService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
+    try {
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
+    } catch (clientErr) {
+      throw err;
+    }
   }
 }
 
@@ -1317,11 +1336,7 @@ CRITICAL INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
+    console.warn("[generateRandomWordsService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
     const parsed = JSON.parse(resWithMeta.text);
     return {
@@ -1330,6 +1345,20 @@ CRITICAL INSTRUCTIONS:
       model: resWithMeta.model,
       responseTimeMs: Math.round(performance.now() - startTime)
     };
+  } catch (err: any) {
+    console.warn("[generateRandomWordsService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
+    try {
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
+    } catch (clientErr) {
+      throw err;
+    }
   }
 }
 
@@ -1432,11 +1461,7 @@ CRITICAL INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
+    console.warn("[fixGrammarService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
     const parsed = JSON.parse(resWithMeta.text);
     return {
@@ -1445,6 +1470,20 @@ CRITICAL INSTRUCTIONS:
       model: resWithMeta.model,
       responseTimeMs: Math.round(performance.now() - startTime)
     };
+  } catch (err: any) {
+    console.warn("[fixGrammarService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
+    try {
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
+    } catch (clientErr) {
+      throw err;
+    }
   }
 }
 
@@ -1646,11 +1685,7 @@ Provide a structured AI analysis with constructive insights, memory retention st
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
+    console.warn("[analyzePerformanceService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
     const parsedRaw = JSON.parse(resWithMeta.text);
     const result = normalizePerformanceAnalysis(parsedRaw);
@@ -1660,6 +1695,21 @@ Provide a structured AI analysis with constructive insights, memory retention st
       model: resWithMeta.model,
       responseTimeMs: Math.round(performance.now() - startTime)
     };
+  } catch (err: any) {
+    console.warn("[analyzePerformanceService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
+    try {
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsedRaw = JSON.parse(resWithMeta.text);
+      const result = normalizePerformanceAnalysis(parsedRaw);
+      return {
+        ...result,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(performance.now() - startTime)
+      };
+    } catch (clientErr) {
+      throw err;
+    }
   }
 }
 
@@ -1799,11 +1849,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errData.error || `Server Error ${res.status}`);
-  } catch (err: any) {
-    if (err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
-    }
+    console.warn("[sendChatMessageService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
     const parsed = JSON.parse(resWithMeta.text);
     const endTime = performance.now();
@@ -1813,6 +1859,21 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
       model: resWithMeta.model,
       responseTimeMs: Math.round(endTime - startTime)
     };
+  } catch (err: any) {
+    console.warn("[sendChatMessageService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
+    try {
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const parsed = JSON.parse(resWithMeta.text);
+      const endTime = performance.now();
+      return {
+        ...parsed,
+        provider: resWithMeta.provider,
+        model: resWithMeta.model,
+        responseTimeMs: Math.round(endTime - startTime)
+      };
+    } catch (clientErr) {
+      throw err;
+    }
   }
 }
 
