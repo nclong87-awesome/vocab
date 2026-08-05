@@ -87,13 +87,50 @@ export async function fetchWithTimeout(
       ...fetchInit,
       signal: controller.signal
     });
+
+    const originalText = response.text.bind(response);
+    const originalJson = response.json.bind(response);
+
+    response.text = async () => {
+      try {
+        const textPromise = originalText();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          if (controller.signal.aborted) {
+            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+          }
+          controller.signal.addEventListener("abort", () => {
+            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+          });
+        });
+        return await Promise.race([textPromise, timeoutPromise]);
+      } finally {
+        clearTimeout(id);
+      }
+    };
+
+    response.json = async () => {
+      try {
+        const jsonPromise = originalJson();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          if (controller.signal.aborted) {
+            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+          }
+          controller.signal.addEventListener("abort", () => {
+            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+          });
+        });
+        return await Promise.race([jsonPromise, timeoutPromise]);
+      } finally {
+        clearTimeout(id);
+      }
+    };
+
     return response;
   } catch (error: any) {
+    clearTimeout(id);
     if (error.name === "AbortError" || controller.signal.aborted) {
       throw new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
     }
     throw error;
-  } finally {
-    clearTimeout(id);
   }
 }
