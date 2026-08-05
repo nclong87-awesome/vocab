@@ -1880,17 +1880,26 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
     const cleaned = cleanJsonResponse(text);
     const result = JSON.parse(cleaned);
 
-    if (Array.isArray(result) && result.length > 0) {
+    let provider = result.provider || llmConfig?.provider || "gemini";
+    let model = result.model || sanitizeModel(provider, llmConfig?.model);
+    let responseTimeMs = result.responseTimeMs;
+
+    let questionsArray = result;
+    if (!Array.isArray(result) && result && Array.isArray(result.questions)) {
+      questionsArray = result.questions;
+    }
+
+    if (Array.isArray(questionsArray) && questionsArray.length > 0) {
       // Guarantee at least one picture question in result
-      const hasPicture = result.some((q: any) => q.type === "picture");
+      const hasPicture = questionsArray.some((q: any) => q.type === "picture");
       if (!hasPicture) {
-        result[0].type = "picture";
-        result[0].question = "Which word matches the visual concept shown below?";
-        result[0].imageKeyword = result[0].word;
+        questionsArray[0].type = "picture";
+        questionsArray[0].question = "Which word matches the visual concept shown below?";
+        questionsArray[0].imageKeyword = questionsArray[0].word;
       }
 
       await Promise.all(
-        result.map(async (q: any) => {
+        questionsArray.map(async (q: any) => {
           if (q.type === "picture" || q.imageKeyword || q.imageUrl) {
             const keywordText = q.imageKeyword || q.word;
             q.imageKeyword = keywordText;
@@ -1905,7 +1914,12 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
       );
     }
 
-    res.json(result);
+    res.json({
+      questions: questionsArray,
+      provider,
+      model,
+      responseTimeMs
+    });
   } catch (error: any) {
     console.error("Error generating AI quiz:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");

@@ -2122,19 +2122,27 @@ export interface QuizGenerationRequest {
   stats?: UserStats;
 }
 
+export interface QuizGenerationResult {
+  questions: QuizQuestion[];
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
+}
+
 export async function generateAiQuizQuestionsService(
   params: QuizGenerationRequest
-): Promise<QuizQuestion[]> {
+): Promise<QuizGenerationResult> {
   const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, stats } = params;
+  const startTime = performance.now();
 
   if (!words || words.length === 0) {
-    return [];
+    return { questions: [] };
   }
 
   const fallbackQuestions = generateQuizQuestions(words, targetLanguage);
 
   if (!llmConfig || !llmConfig.isLoggedIn) {
-    return fallbackQuestions;
+    return { questions: fallbackQuestions };
   }
 
   const wordDataSummary = words.map(w => {
@@ -2227,10 +2235,19 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 
   const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search).`;
 
+  let provider = llmConfig?.provider || "gemini";
+  let model = sanitizeModel(provider, llmConfig?.model);
+  let responseTimeMs: number | undefined = undefined;
+
   try {
-    let rawResultText = "";
+    let rawQuestions: any[] = [];
     if (isStaticHost()) {
-      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const cleaned = cleanJsonResponse(resWithMeta.text);
+      rawQuestions = JSON.parse(cleaned);
+      provider = resWithMeta.provider;
+      model = resWithMeta.model;
+      responseTimeMs = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     } else {
       const res = await fetchWithTimeout("/api/generate-quiz", {
         method: "POST",
@@ -2239,16 +2256,28 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) return data;
+        const endTime = performance.now();
+        responseTimeMs = Math.round(endTime - startTime);
+        if (Array.isArray(data)) {
+          rawQuestions = data;
+        } else if (data && typeof data === "object") {
+          rawQuestions = data.questions || [];
+          if (data.provider) provider = data.provider;
+          if (data.model) model = data.model;
+          if (data.responseTimeMs) responseTimeMs = data.responseTimeMs;
+        }
+      } else {
+        const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+        const cleaned = cleanJsonResponse(resWithMeta.text);
+        rawQuestions = JSON.parse(cleaned);
+        provider = resWithMeta.provider;
+        model = resWithMeta.model;
+        responseTimeMs = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
       }
-      rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     }
 
-    const cleaned = cleanJsonResponse(rawResultText);
-    const parsed = JSON.parse(cleaned);
-
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      const validQuestions: QuizQuestion[] = parsed.map((q: any, idx: number) => {
+    if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
+      const validQuestions: QuizQuestion[] = rawQuestions.map((q: any, idx: number) => {
         const matchingWord = words.find(w => w.id === q.wordId || w.word.toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length];
         
         let options = Array.isArray(q.options) ? q.options : [];
@@ -2292,7 +2321,16 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
         targetQ.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(targetQ.imageKeyword)}`;
       }
 
-      return validQuestions;
+      if (provider && model && responseTimeMs) {
+        recordModelResponse(provider, model, responseTimeMs);
+      }
+
+      return {
+        questions: validQuestions,
+        provider,
+        model,
+        responseTimeMs
+      };
     }
   } catch (err: any) {
     console.warn("AI Quiz Generation failed:", err);
@@ -2301,7 +2339,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
     }
   }
 
-  return fallbackQuestions;
+  return { questions: fallbackQuestions };
 }
 
 /**

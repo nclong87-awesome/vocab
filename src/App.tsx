@@ -340,13 +340,22 @@ export default function App() {
     setIsTyping(true);
 
     try {
-      const generatedQuestions = await generateAiQuizQuestionsService({
+      const quizResult = await generateAiQuizQuestionsService({
         words: quizWords,
         targetLanguage,
         nativeLanguage,
         llmConfig: configToUse,
         stats
       });
+
+      const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+      const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
+      const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
+      const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
+
+      if (!generatedQuestions || generatedQuestions.length === 0) {
+        throw new Error("No quiz questions were generated.");
+      }
 
       const firstQ = generatedQuestions[0];
 
@@ -373,7 +382,10 @@ export default function App() {
           payload: { answer: opt, wordId: firstQ.wordId }
         })) || [
           { label: firstQ.correctAnswer, action: "quiz_answer", payload: { answer: firstQ.correctAnswer, wordId: firstQ.wordId } }
-        ]
+        ],
+        provider,
+        model,
+        responseTimeMs
       };
 
       setChatMessages([introMsg]);
