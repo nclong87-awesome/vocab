@@ -53,3 +53,47 @@ export function calculateNewStreak(currentStreak?: Streak): Streak {
     history
   };
 }
+
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit & { timeoutMs?: number }
+): Promise<Response> {
+  const urlString = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+  const isImageAnalysisWorker = urlString.includes("image-analysis.nclong87.workers.dev");
+  const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 60000);
+
+  if (timeoutMs <= 0) {
+    const { timeoutMs: _, ...fetchInit } = init || {};
+    return fetch(input, fetchInit);
+  }
+
+  const controller = new AbortController();
+  const id = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  const { timeoutMs: _, ...fetchInit } = init || {};
+
+  if (fetchInit.signal) {
+    if (fetchInit.signal.aborted) {
+      controller.abort();
+    } else {
+      fetchInit.signal.addEventListener("abort", () => controller.abort());
+    }
+  }
+
+  try {
+    const response = await fetch(input, {
+      ...fetchInit,
+      signal: controller.signal
+    });
+    return response;
+  } catch (error: any) {
+    if (error.name === "AbortError" || controller.signal.aborted) {
+      throw new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(id);
+  }
+}

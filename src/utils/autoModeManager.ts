@@ -56,7 +56,12 @@ export function isModelLocked(provider: string, model: string): boolean {
 /**
  * Locks a model for durationMs (defaults to 1 hour = 3,600,000 ms).
  */
-export function lockModel(provider: string, model: string, durationMs: number = ONE_HOUR_MS): void {
+export function lockModel(
+  provider: string, 
+  model: string, 
+  durationMs: number = ONE_HOUR_MS,
+  errorMsg?: string
+): void {
   if (provider === "auto" || model === "auto") return;
   const locked = getLockedModels();
   const key = `${provider}:${model}`;
@@ -76,6 +81,39 @@ export function lockModel(provider: string, model: string, durationMs: number = 
       // ignore storage error
     }
   }
+
+  const metrics = getModelMetricsMap();
+  const existing = metrics[key];
+  const reason = errorMsg || existing?.lastError || "Model locked due to API request failure or rate limit";
+  const prevCalls = existing?.totalCalls ?? (existing?.lastTestedAt ? 1 : 0);
+  const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
+
+  const newTotalCalls = prevCalls <= prevSuccesses ? prevSuccesses + 1 : prevCalls;
+
+  let existingLogs = existing?.failureLogs ? [...existing.failureLogs] : [];
+
+  // Don't add duplicate failure log if one was logged in the last 500ms
+  const isDuplicateRecent = existingLogs.length > 0 && (now - existingLogs[0].timestamp < 500);
+  if (!isDuplicateRecent) {
+    const newLogEntry: FailureLogEntry = {
+      id: `${now}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: now,
+      reason
+    };
+    existingLogs = [newLogEntry, ...existingLogs].slice(0, 10);
+  }
+
+  metrics[key] = {
+    ...existing,
+    provider,
+    model,
+    lastTestedAt: now,
+    lastError: reason,
+    totalCalls: newTotalCalls,
+    totalSuccesses: prevSuccesses,
+    failureLogs: existingLogs
+  };
+  saveModelMetricsMap(metrics);
 
   console.warn(`[Auto Mode] Locked model ${key} for ${Math.round(durationMs / 60000)} minutes until ${new Date(now + durationMs).toLocaleTimeString()}`);
 }
@@ -151,12 +189,21 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
 
 export type ModelStatusIndicator = 'strong' | 'medium' | 'weak' | 'offline' | 'untested';
 
+export interface FailureLogEntry {
+  id: string;
+  timestamp: number;
+  reason: string;
+}
+
 export interface ModelMetricsRecord {
   provider: string;
   model: string;
   lastResponseTimeMs?: number | null;
   lastTestedAt?: number | null;
   lastError?: string | null;
+  totalCalls?: number;
+  totalSuccesses?: number;
+  failureLogs?: FailureLogEntry[];
 }
 
 export type ModelMetricsMap = Record<string, ModelMetricsRecord>;
@@ -191,12 +238,21 @@ export function recordModelResponse(provider: string, model: string, durationMs:
   unlockModel(provider, model);
 
   const metrics = getModelMetricsMap();
+  const existing = metrics[key];
+
+  const prevCalls = existing?.totalCalls ?? (existing?.lastTestedAt ? 1 : 0);
+  const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
+
   metrics[key] = {
+    ...existing,
     provider,
     model,
     lastResponseTimeMs: Math.max(1, Math.round(durationMs)),
     lastTestedAt: Date.now(),
-    lastError: null
+    lastError: null,
+    totalCalls: prevCalls + 1,
+    totalSuccesses: prevSuccesses + 1,
+    failureLogs: existing?.failureLogs ?? []
   };
   saveModelMetricsMap(metrics);
 }
@@ -209,14 +265,58 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
   lockModel(provider, model);
 
   const metrics = getModelMetricsMap();
+  const existing = metrics[key];
+  const now = Date.now();
+  const reason = errorMsg || "Request failed";
+
+  const prevCalls = existing?.totalCalls ?? (existing?.lastTestedAt ? 1 : 0);
+  const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
+
+  let existingLogs = existing?.failureLogs;
+  if (!existingLogs || existingLogs.length === 0) {
+    if (existing?.lastError && existing?.lastTestedAt) {
+      existingLogs = [{
+        id: `${existing.lastTestedAt}`,
+        timestamp: existing.lastTestedAt,
+        reason: existing.lastError
+      }];
+    } else {
+      existingLogs = [];
+    }
+  }
+
+  const newLogEntry: FailureLogEntry = {
+    id: `${now}-${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: now,
+    reason
+  };
+
+  // Keep only the last 10 failure log entries (newest first)
+  const updatedLogs = [newLogEntry, ...existingLogs].slice(0, 10);
+
   metrics[key] = {
+    ...existing,
     provider,
     model,
-    lastResponseTimeMs: durationMs ? Math.round(durationMs) : metrics[key]?.lastResponseTimeMs ?? null,
-    lastTestedAt: Date.now(),
-    lastError: errorMsg || "Request failed"
+    lastResponseTimeMs: durationMs ? Math.round(durationMs) : existing?.lastResponseTimeMs ?? null,
+    lastTestedAt: now,
+    lastError: reason,
+    totalCalls: prevCalls + 1,
+    totalSuccesses: prevSuccesses,
+    failureLogs: updatedLogs
   };
   saveModelMetricsMap(metrics);
+}
+
+export function clearModelFailureLogs(provider: string, model: string): void {
+  if (!provider || !model) return;
+  const key = `${provider}:${model}`;
+  const metrics = getModelMetricsMap();
+  if (metrics[key]) {
+    metrics[key].failureLogs = [];
+    metrics[key].lastError = null;
+    saveModelMetricsMap(metrics);
+  }
 }
 
 export interface ModelStatusItem {
@@ -230,6 +330,9 @@ export interface ModelStatusItem {
   lastTestedAt: number | null;
   lastError: string | null;
   status: ModelStatusIndicator;
+  totalCalls: number;
+  totalSuccesses: number;
+  failureLogs: FailureLogEntry[];
 }
 
 export function getModelStatusIndicator(isLocked: boolean, responseTimeMs?: number | null): ModelStatusIndicator {
@@ -238,6 +341,56 @@ export function getModelStatusIndicator(isLocked: boolean, responseTimeMs?: numb
   if (responseTimeMs < 10000) return 'strong';
   if (responseTimeMs <= 20000) return 'medium';
   return 'weak';
+}
+
+function extractModelStats(
+  metric?: ModelMetricsRecord,
+  isLocked?: boolean,
+  lockedAt?: number,
+  lastErrorFromLock?: string | null
+) {
+  let totalCalls = metric?.totalCalls ?? 0;
+  let totalSuccesses = metric?.totalSuccesses ?? 0;
+  let failureLogs: FailureLogEntry[] = metric?.failureLogs ? [...metric.failureLogs] : [];
+
+  if (metric && metric.totalCalls === undefined && metric.lastTestedAt) {
+    if (metric.lastError) {
+      totalCalls = 1;
+      totalSuccesses = 0;
+      if (failureLogs.length === 0) {
+        failureLogs = [{
+          id: `${metric.lastTestedAt}`,
+          timestamp: metric.lastTestedAt,
+          reason: metric.lastError
+        }];
+      }
+    } else {
+      totalCalls = 1;
+      totalSuccesses = 1;
+    }
+  }
+
+  // If the model is locked, a failure must be reflected in totalCalls and failureLogs
+  if (isLocked) {
+    if (totalCalls <= totalSuccesses) {
+      totalCalls = totalSuccesses + 1;
+    }
+    if (failureLogs.length === 0) {
+      const timestamp = lockedAt || metric?.lastTestedAt || Date.now();
+      const reason = metric?.lastError || lastErrorFromLock || "Model locked due to API request failure or rate limit";
+      failureLogs = [{
+        id: `lock-${timestamp}`,
+        timestamp,
+        reason
+      }];
+    }
+  }
+
+  if (failureLogs.length > 10) {
+    failureLogs = failureLogs.slice(0, 10);
+  }
+
+  return { totalCalls, totalSuccesses, failureLogs };
 }
 
 export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
@@ -264,6 +417,12 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
 
       const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
       const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+      const { totalCalls, totalSuccesses, failureLogs } = extractModelStats(
+        metric, 
+        isLocked, 
+        lockedInfo?.lockedAt, 
+        metric?.lastError
+      );
 
       result.push({
         provider: p.id,
@@ -275,7 +434,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         lastResponseTimeMs,
         lastTestedAt: metric?.lastTestedAt ?? null,
         lastError: metric?.lastError ?? null,
-        status
+        status,
+        totalCalls,
+        totalSuccesses,
+        failureLogs
       });
     }
   }
@@ -304,6 +466,12 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
 
       const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
       const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
+      const { totalCalls, totalSuccesses, failureLogs } = extractModelStats(
+        metric, 
+        isLocked, 
+        lockedInfo?.lockedAt, 
+        metric?.lastError
+      );
 
       result.push({
         provider: pId,
@@ -315,7 +483,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         lastResponseTimeMs,
         lastTestedAt: metric?.lastTestedAt ?? null,
         lastError: metric?.lastError ?? null,
-        status
+        status,
+        totalCalls,
+        totalSuccesses,
+        failureLogs
       });
       addedKeys.add(key);
     }

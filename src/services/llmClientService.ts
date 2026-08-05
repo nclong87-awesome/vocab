@@ -4,6 +4,7 @@ import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../ut
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
+import { fetchWithTimeout } from "../utils";
 import { 
   getAutoModelCandidates, 
   getNextAutoCandidate, 
@@ -13,6 +14,7 @@ import {
   getModelMetricsMap,
   getLockedModels,
   getModelStatusIndicator,
+  getAllModelStatuses,
   ModelStatusItem
 } from "../utils/autoModeManager";
 
@@ -570,7 +572,7 @@ async function callLLMClientSideSingleCandidate(
             }
           };
 
-          const res = await fetch(targetEndpoint, {
+          const res = await fetchWithTimeout(targetEndpoint, {
             method: "POST",
             headers,
             body: JSON.stringify(payload)
@@ -649,7 +651,7 @@ async function callLLMClientSideSingleCandidate(
 
   return callWithRetry(
     async () => {
-      let res = await fetch(targetUrl, {
+      let res = await fetchWithTimeout(targetUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(reqBody)
@@ -661,7 +663,7 @@ async function callLLMClientSideSingleCandidate(
         const errText = await errClone.text().catch(() => "");
         if (errText.includes("JSON mode") || errText.includes("response_format") || res.status === 400) {
           delete reqBody.response_format;
-          res = await fetch(targetUrl, {
+          res = await fetchWithTimeout(targetUrl, {
             method: "POST",
             headers,
             body: JSON.stringify(reqBody)
@@ -805,6 +807,10 @@ export async function testSingleModelStatus(
     recordModelFailure(provider, model, err?.message || String(err), durationMs);
   }
 
+  const allStatuses = getAllModelStatuses(llmConfig);
+  const found = allStatuses.find(s => s.provider === provider && s.model === model);
+  if (found) return found;
+
   const lockedMap = getLockedModels();
   const metricsMap = getModelMetricsMap();
   const key = `${provider}:${model}`;
@@ -825,7 +831,10 @@ export async function testSingleModelStatus(
     lastResponseTimeMs,
     lastTestedAt: metric?.lastTestedAt ?? null,
     lastError: metric?.lastError ?? null,
-    status: getModelStatusIndicator(isLocked, lastResponseTimeMs)
+    status: getModelStatusIndicator(isLocked, lastResponseTimeMs),
+    totalCalls: metric?.totalCalls ?? 0,
+    totalSuccesses: metric?.totalSuccesses ?? 0,
+    failureLogs: metric?.failureLogs ?? []
   };
 }
 
@@ -1049,7 +1058,7 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
   }
 
   try {
-    const response = await fetch("/api/test-llm", {
+    const response = await fetchWithTimeout("/api/test-llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ llmConfig })
@@ -1174,7 +1183,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   }
 
   try {
-    const res = await fetch("/api/autofill-word", {
+    const res = await fetchWithTimeout("/api/autofill-word", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
@@ -1313,7 +1322,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   }
 
   try {
-    const res = await fetch("/api/check-word-definitions", {
+    const res = await fetchWithTimeout("/api/check-word-definitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
@@ -1443,7 +1452,7 @@ CRITICAL INSTRUCTIONS:
   }
 
   try {
-    const res = await fetch("/api/generate-random-words", {
+    const res = await fetchWithTimeout("/api/generate-random-words", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, llmConfig })
@@ -1590,7 +1599,7 @@ CRITICAL INSTRUCTIONS:
   }
 
   try {
-    const res = await fetch("/api/fix-grammar", {
+    const res = await fetchWithTimeout("/api/fix-grammar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userText, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
@@ -1834,7 +1843,7 @@ Provide a structured AI analysis with constructive insights, memory retention st
   }
 
   try {
-    const res = await fetch("/api/analyze-performance", {
+    const res = await fetchWithTimeout("/api/analyze-performance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ stats, totalWords, masteredWords, improvingWords, llmConfig })
@@ -2021,7 +2030,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
   }
 
   try {
-    const res = await fetch("/api/chat", {
+    const res = await fetchWithTimeout("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig })
@@ -2219,7 +2228,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
     if (isStaticHost()) {
       rawResultText = await callLLMClientSide(prompt, systemInstruction, schemaDesc, llmConfig);
     } else {
-      const res = await fetch("/api/generate-quiz", {
+      const res = await fetchWithTimeout("/api/generate-quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ words, stats, targetLanguage, nativeLanguage, llmConfig })
@@ -2462,7 +2471,7 @@ export async function analyzeImageVocabService(params: {
   // 1. Attempt call through Node server API route if not running on static host
   if (!isStaticHost()) {
     try {
-      const res = await fetch("/api/analyze-image-vocab", {
+      const res = await fetchWithTimeout("/api/analyze-image-vocab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig })
@@ -2507,7 +2516,7 @@ export async function analyzeImageVocabService(params: {
   }
 
   try {
-    const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+    const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -2692,7 +2701,7 @@ Output MUST be strictly valid JSON matching this schema:
       metaProvider = resWithMeta.provider;
       metaModel = resWithMeta.model;
     } else {
-      const res = await fetch("/api/generate-flashcard", {
+      const res = await fetchWithTimeout("/api/generate-flashcard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ word, targetLanguage, nativeLanguage, llmConfig })
@@ -2756,7 +2765,7 @@ Output MUST be strictly valid JSON matching this schema:
   } catch (err: any) {
     console.error("AI Flashcard Generation API error:", err);
     if (llmConfig?.provider && llmConfig?.model) {
-      lockModel(llmConfig.provider, llmConfig.model);
+      lockModel(llmConfig.provider, llmConfig.model, 3600000, err?.message || String(err));
     }
     throw err;
   }

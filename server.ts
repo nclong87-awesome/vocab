@@ -31,6 +31,50 @@ function sanitizeUnescapedJsonStrings(str: string): string {
   });
 }
 
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit & { timeoutMs?: number }
+): Promise<Response> {
+  const urlString = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+  const isImageAnalysisWorker = urlString.includes("image-analysis.nclong87.workers.dev");
+  const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 60000);
+
+  if (timeoutMs <= 0) {
+    const { timeoutMs: _, ...fetchInit } = init || {};
+    return fetch(input, fetchInit);
+  }
+
+  const controller = new AbortController();
+  const id = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  const { timeoutMs: _, ...fetchInit } = init || {};
+
+  if (fetchInit.signal) {
+    if (fetchInit.signal.aborted) {
+      controller.abort();
+    } else {
+      fetchInit.signal.addEventListener("abort", () => controller.abort());
+    }
+  }
+
+  try {
+    const response = await fetch(input, {
+      ...fetchInit,
+      signal: controller.signal
+    });
+    return response;
+  } catch (error: any) {
+    if (error.name === "AbortError" || controller.signal.aborted) {
+      throw new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 // Helper to clean JSON response text
 function cleanJsonResponse(rawText: string): string {
   if (!rawText) return "";
@@ -365,7 +409,7 @@ async function callLLMSingle(
       };
 
       const startTime = Date.now();
-      const res = await fetch(targetEndpoint, {
+      const res = await fetchWithTimeout(targetEndpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(payload)
@@ -432,7 +476,7 @@ async function callLLMSingle(
   console.log(`[Server] Calling ${provider.toUpperCase()} model ${reqBody.model} at ${targetUrl} with system instruction and schema description.`);
   const startTime = Date.now();
 
-  let res = await fetch(targetUrl, {
+  let res = await fetchWithTimeout(targetUrl, {
     method: "POST",
     headers,
     body: JSON.stringify(reqBody)
@@ -444,7 +488,7 @@ async function callLLMSingle(
     const errText = await errClone.text().catch(() => "");
     if (errText.includes("JSON mode") || errText.includes("response_format") || res.status === 400) {
       delete reqBody.response_format;
-      res = await fetch(targetUrl, {
+      res = await fetchWithTimeout(targetUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(reqBody)
@@ -679,7 +723,7 @@ async function generateWorkerImage(keyword: string): Promise<string> {
   if (!keyword) return "";
   try {
     const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;
-    const response = await fetch(workerUrl, {
+    const response = await fetchWithTimeout(workerUrl, {
       method: "GET",
       headers: {
         "X-Proxy-Key": process.env.PROXY_SECRET || ""
@@ -1151,7 +1195,7 @@ app.get("/api/tts/stream", async (req, res) => {
       const keyToUse = queryKey || process.env.OPENAI_API_KEY;
       if (keyToUse) {
         try {
-          const oaRes = await fetch("https://api.openai.com/v1/audio/speech", {
+          const oaRes = await fetchWithTimeout("https://api.openai.com/v1/audio/speech", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${keyToUse}`,
@@ -1177,7 +1221,7 @@ app.get("/api/tts/stream", async (req, res) => {
 
     // 2. High-quality Google TTS stream fallback
     const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text)}&tl=${cleanLang}`;
-    const response = await fetch(googleTtsUrl, {
+    const response = await fetchWithTimeout(googleTtsUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -1213,7 +1257,7 @@ app.post("/api/tts", async (req, res) => {
       try {
         const cleanLang = (lang || "en").split("-")[0].toLowerCase();
         const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text.slice(0, 300))}&tl=${cleanLang}`;
-        const response = await fetch(googleTtsUrl, {
+        const response = await fetchWithTimeout(googleTtsUrl, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
@@ -1299,7 +1343,7 @@ app.post("/api/tts", async (req, res) => {
     if (engine === "openai") {
       if (effectiveApiKey) {
         try {
-          const ttsRes = await fetch("https://api.openai.com/v1/audio/speech", {
+          const ttsRes = await fetchWithTimeout("https://api.openai.com/v1/audio/speech", {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${effectiveApiKey}`,
@@ -1332,7 +1376,7 @@ app.post("/api/tts", async (req, res) => {
     if (engine === "custom") {
       if (customEndpoint) {
         try {
-          const customRes = await fetch(customEndpoint, {
+          const customRes = await fetchWithTimeout(customEndpoint, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1853,7 +1897,7 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
     };
     headers["X-Proxy-Key"] = process.env.PROXY_SECRET || "";
 
-    const workerRes = await fetch("https://image-analysis.nclong87.workers.dev/", {
+    const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
       method: "POST",
       headers,
       body: JSON.stringify({

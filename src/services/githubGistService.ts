@@ -1,5 +1,6 @@
 import { sanitizeDataForCloudSync, deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { IndexedDBExportData } from "../db/indexedDB";
+import { fetchWithTimeout } from "../utils";
 
 export const syncToGist = async (token: string, data: string, gistId?: string): Promise<string> => {
   let filesToUpdate: Record<string, any> = {};
@@ -8,7 +9,7 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
     let existingFiles: Record<string, any> = {};
     if (gistId) {
       try {
-        const getResponse = await fetch(`https://api.github.com/gists/${gistId}`, {
+        const getResponse = await fetchWithTimeout(`https://api.github.com/gists/${gistId}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/vnd.github+json',
@@ -81,7 +82,7 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
     ? `https://api.github.com/gists/${gistId}`
     : 'https://api.github.com/gists';
   
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: gistId ? 'PATCH' : 'POST',
     headers: {
       'Accept': 'application/vnd.github+json',
@@ -105,7 +106,7 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
 };
 
 export const syncFromGist = async (token: string, gistId: string): Promise<any> => {
-  const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+  const response = await fetchWithTimeout(`https://api.github.com/gists/${gistId}`, {
     method: 'GET',
     headers: {
       'Accept': 'application/vnd.github+json',

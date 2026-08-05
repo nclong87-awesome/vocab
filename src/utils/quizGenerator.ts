@@ -1,4 +1,5 @@
 import { Word, QuizQuestion } from "../types";
+import { fetchWithTimeout } from "../utils";
 
 // Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Spanish/etc.)
 export function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
@@ -55,7 +56,7 @@ export async function fetchWorkerImageUrl(keyword: string, proxyKey?: string): P
     if (effectiveProxyKey) {
       headers["X-Proxy-Key"] = effectiveProxyKey;
     }
-    const directRes = await fetch(workerUrl, {
+    const directRes = await fetchWithTimeout(workerUrl, {
       method: "GET",
       headers
     });

@@ -74,7 +74,7 @@ export default function App() {
       console.warn("[Auto Mode] Suppressing dialog modal in Auto Mode. Automatically selecting another model candidate...", rawMsg);
       
       if (err?.provider && err?.model) {
-        lockModel(err.provider, err.model, 3600000);
+        lockModel(err.provider, err.model, 3600000, rawMsg);
       }
 
       // If all candidate models failed, show modal as last resort
