@@ -54,7 +54,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "nvidia/nemotron-3-nano-30b-a3b:free",
       "google/gemma-4-26b-a4b-it:free",
       "google/gemma-4-31b-it:free",
-      "openai/gpt-oss-20b:free"
+      "openai/gpt-oss-20b:free",
+      "openai/gpt-5.6-luna"
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://openrouter.ai/api/v1",
