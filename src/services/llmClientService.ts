@@ -1119,7 +1119,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
-     "imageKeyword": string,
+     "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
      "category": string,
      "context": string`;
 
@@ -1137,7 +1137,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageKeyword": "string (concise relevant keywords)",
+      "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
       "category": "string",
       "context": "string"
     }
@@ -1723,12 +1723,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-  - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to ONE single search term only, with no comma, and it MUST be relevant to that word's context and category)
+  - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-  - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to ONE single comma-free search term that is directly relevant to the word's context and category.
+  - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
@@ -1748,11 +1748,11 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
 
   const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
-CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is ONE single comma-free search term and is directly relevant to the word's context and category.\n\n` +
+CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (ONE single comma-free search term relevant to the word's context and category).`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search).`;
 
   try {
     let rawResultText = "";
@@ -2166,7 +2166,7 @@ Output MUST be strictly valid JSON matching this schema:
     }
   ],
   "usageNotes": "string",
-  "imageKeyword": "string (ONE single comma-free search term)",
+  "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
   "suggestedVocabulary": [
     {
       "word": "string (useful word/phrase extracted from the example sentences)",

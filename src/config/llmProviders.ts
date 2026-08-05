@@ -27,8 +27,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       "openai/gpt-oss-120b", 
       "openai/gpt-oss-20b", 
+      "openai/gpt-oss-safeguard-20b",
       "llama-3.3-70b-versatile",
-      "openai/gpt-oss-safeguard-20b"
       // "groq/compound"
     ],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
@@ -91,7 +91,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       // "pro/minimax-m2.5", 
       "pro/claude-haiku-4-5", 
-      "pro/glm-5"
+      // "pro/glm-5"
     ],
     defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://9flare.com/api/v1",

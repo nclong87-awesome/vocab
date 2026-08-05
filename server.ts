@@ -837,7 +837,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
-     "imageKeyword": string,
+     "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
      "category": string,
      "context": string`;
 
@@ -855,7 +855,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageKeyword": "string (concise relevant keywords)",
+      "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
       "category": "string",
       "context": "string"
     }
@@ -1608,7 +1608,7 @@ CRITICAL REQUIREMENTS:
 2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
 3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
 4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
-5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
+5. Image Search Keyword: Set imageKeyword to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.
 6. Suggested Vocabulary from Examples: Identify 2 to 4 advanced, interesting, or highly useful vocabulary words, collocations, idioms, or expressions that appear within the generated extra example sentences (or are very closely related to them) in ${targetLanguage}. For each, provide its target-language form ("word"), direct native-language translation ("translation" in ${nativeLanguage}), part of speech ("partOfSpeech"), and a brief definition ("definition" in ${targetLanguage}). These will be displayed as suggested actions to allow the user to easily add them to their collection.
 
 Output MUST be strictly valid JSON matching this schema:
@@ -1628,7 +1628,7 @@ Output MUST be strictly valid JSON matching this schema:
     }
   ],
   "usageNotes": "string",
-  "imageKeyword": "string (ONE single comma-free search term)",
+  "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
   "suggestedVocabulary": [
     {
       "word": "string (useful word/phrase extracted from the example sentences)",
@@ -1735,12 +1735,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to ONE single search term only, with no comma, and it MUST be relevant to that word's context and category)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to ONE single comma-free search term that is directly relevant to the word's context and category.
+   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
@@ -1754,7 +1754,7 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imageKeyword": "string (most relevant keywords for picture questions)"
+    "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)"
   }
 ]`;
 
