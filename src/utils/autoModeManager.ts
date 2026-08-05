@@ -141,7 +141,7 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
 
   return candidates.length > 0 ? candidates : [
     { provider: "groq", model: "openai/gpt-oss-120b" },
-    { provider: "openrouter", model: "deepseek/deepseek-chat" },
+    { provider: "openrouter", model: "inclusionai/ling-3.0-flash:free" },
     { provider: "gemini", model: "gemini-3.6-flash" },
     { provider: "9flare", model: "pro/claude-haiku-4-5" },
     { provider: "openai", model: "gpt-5.4-mini" },

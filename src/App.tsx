@@ -1553,7 +1553,7 @@ export default function App() {
       const loadedConfig = await getLLMConfigFromDB(defaultConfig);
 
       const sanitizedProvider = loadedConfig.provider || DEFAULT_PROVIDER_ID;
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "groq" ? "openai/gpt-oss-120b" : sanitizedProvider === "openrouter" ? "deepseek/deepseek-chat" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
+      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "groq" ? "openai/gpt-oss-120b" : sanitizedProvider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
       const validGeminiModels = [
         "gemini-3.6-flash",
         "gemini-3.6-flash-lite",

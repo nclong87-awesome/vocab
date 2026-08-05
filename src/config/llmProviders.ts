@@ -39,12 +39,9 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "openrouter",
     name: "OpenRouter",
     tagline: "Unified API gateway for 100+ AI models",
-    defaultModel: "deepseek/deepseek-chat",
+    defaultModel: "inclusionai/ling-3.0-flash:free",
     models: [
-      "deepseek/deepseek-chat",
       "inclusionai/ling-3.0-flash:free",
-      // "poolside/laguna-xs-2.1",
-      // "openai/gpt-oss-20b",
       "nvidia/nemotron-3-super-120b-a12b:free",
       "poolside/laguna-xs-2.1:free",
       "nvidia/nemotron-3-nano-30b-a3b:free",

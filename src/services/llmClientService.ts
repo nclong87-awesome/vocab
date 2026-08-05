@@ -634,7 +634,7 @@ async function callLLMClientSideSingleCandidate(
   }
 
   const reqBody: any = {
-    model: model || (provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : provider === "ollama" ? "llama3.2" : "deepseek/deepseek-chat"),
+    model: model || (provider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : provider === "gemini" ? "gemini-3.6-flash" : provider === "ollama" ? "llama3.2" : "inclusionai/ling-3.0-flash:free"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
       { role: "user", content: prompt }

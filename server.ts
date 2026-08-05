@@ -117,14 +117,14 @@ function sanitizeModel(provider: string, model?: string): string {
     return model || "openai/gpt-oss-120b";
   }
   if (provider === "openrouter") {
-    return model || "deepseek/deepseek-chat";
+    return model || "inclusionai/ling-3.0-flash:free";
   }
   if (provider === "gemini") {
     if (!model || !VALID_GEMINI_MODELS.includes(model)) {
       return "gemini-3.6-flash";
     }
   }
-  return model || (provider === "groq" ? "openai/gpt-oss-120b" : provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "openai/gpt-oss-120b");
+  return model || (provider === "groq" ? "openai/gpt-oss-120b" : provider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : provider === "gemini" ? "gemini-3.6-flash" : "openai/gpt-oss-120b");
 }
 
 
@@ -245,7 +245,7 @@ function isServerModelLocked(provider: string, model: string): boolean {
 
 const SERVER_AUTO_CANDIDATES = [
   { provider: "groq", model: "openai/gpt-oss-120b" },
-  { provider: "openrouter", model: "deepseek/deepseek-chat" },
+  { provider: "openrouter", model: "inclusionai/ling-3.0-flash:free" },
   { provider: "gemini", model: "gemini-3.6-flash" },
   { provider: "9flare", model: "pro/claude-haiku-4-5" },
   { provider: "openai", model: "gpt-5.4-mini" },
@@ -417,7 +417,7 @@ async function callLLMSingle(
   }
 
   const reqBody: any = {
-    model: model || (provider === "openrouter" ? "deepseek/deepseek-chat" : provider === "gemini" ? "gemini-3.6-flash" : "deepseek/deepseek-chat"),
+    model: model || (provider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : provider === "gemini" ? "gemini-3.6-flash" : "inclusionai/ling-3.0-flash:free"),
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
       { role: "user", content: prompt }
