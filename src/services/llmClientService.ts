@@ -2536,6 +2536,37 @@ export interface GeneratedFlashcardContent {
   responseTimeMs?: number;
 }
 
+const MAX_EXTRA_EXAMPLE_SENTENCES = 1;
+const MAX_SUGGESTED_VOCABULARY = 5;
+
+/**
+ * Enforces flashcard content limits regardless of what the model returns.
+ * Prompt constraints alone are not reliable, so cap here as well.
+ */
+function limitFlashcardContent<T extends {
+  word?: string;
+  extraExampleSentences?: any;
+  suggestedVocabulary?: any;
+}>(content: T, targetWord?: string): T {
+  const sentences = Array.isArray(content.extraExampleSentences) ? content.extraExampleSentences : [];
+  const suggestions = Array.isArray(content.suggestedVocabulary) ? content.suggestedVocabulary : [];
+
+  const normalizedTarget = (targetWord || "").trim().toLowerCase();
+  const seen = new Set<string>();
+  const dedupedSuggestions = suggestions.filter((s: any) => {
+    const key = String(s?.word || "").trim().toLowerCase();
+    if (!key || key === normalizedTarget || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return {
+    ...content,
+    extraExampleSentences: sentences.slice(0, MAX_EXTRA_EXAMPLE_SENTENCES),
+    suggestedVocabulary: dedupedSuggestions.slice(0, MAX_SUGGESTED_VOCABULARY)
+  };
+}
+
 export async function generateFlashcardContentService(
   params: FlashcardGenerationRequest
 ): Promise<GeneratedFlashcardContent> {
@@ -2572,10 +2603,15 @@ Given a target vocabulary word, its category, context, definition, and user stat
 CRITICAL REQUIREMENTS:
 1. Provide a refined target language definition in ${targetLanguage}, pronunciation (IPA), and native translation in ${nativeLanguage}.
 2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
-3. Extra Example Sentences: Generate 2 to 3 EXTRA example sentences in ${targetLanguage} with native translations in ${nativeLanguage}. Each sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage.
+3. Extra Example Sentence: Generate EXACTLY 1 EXTRA example sentence in ${targetLanguage} with its native translation in ${nativeLanguage}. The sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage. Return it as a single-element array — do not return more than one sentence.
 4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
 5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
-6. Suggested Vocabulary from Examples: Identify 2 to 4 advanced, interesting, or highly useful vocabulary words, collocations, idioms, or expressions that appear within the generated extra example sentences (or are very closely related to them) in ${targetLanguage}. For each, provide its target-language form ("word"), direct native-language translation ("translation" in ${nativeLanguage}), part of speech ("partOfSpeech"), and a brief definition ("definition" in ${targetLanguage}). These will be displayed as suggested actions to allow the user to easily add them to their collection.
+6. Suggested Related Vocabulary: Identify 3 to 5 COMMON, everyday-frequency words or expressions in ${targetLanguage} that belong to the SAME category ("${word.category || "General"}") and the SAME usage context ("${word.context || "Conversational"}") as the target word. Guidelines:
+   - Prioritize high-frequency words a learner would realistically encounter and reuse in this context. Do NOT pick rare, archaic, academic, or overly advanced vocabulary.
+   - They must be thematically related to the target word (same topic/scenario), not merely words that happened to appear in the example sentence.
+   - Do NOT repeat the target word itself, and do not repeat the same word twice.
+   - For each, provide its target-language form ("word"), direct native-language translation ("translation" in ${nativeLanguage}), part of speech ("partOfSpeech"), and a brief definition ("definition" in ${targetLanguage}).
+   These will be displayed as suggested actions to allow the user to easily add them to their collection.
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -2597,13 +2633,15 @@ Output MUST be strictly valid JSON matching this schema:
   "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
   "suggestedVocabulary": [
     {
-      "word": "string (useful word/phrase extracted from the example sentences)",
+      "word": "string (common related word/expression in the same category and context)",
       "translation": "string (translation in ${nativeLanguage})",
       "partOfSpeech": "string (e.g. noun, verb, adjective, idiom)",
       "definition": "string (short definition in ${targetLanguage})"
     }
   ]
-}`;
+}
+
+NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary" MUST contain 3 to 5 items.`;
 
   const prompt = `Generate interactive flashcard content for the word:\n` +
     `Word: "${word.word}"\n` +
@@ -2612,9 +2650,12 @@ Output MUST be strictly valid JSON matching this schema:
     `Stored Translation: "${word.translation}"\n` +
     `Stored Category: "${word.category || "General"}"\n` +
     `Stored Context: "${word.context || word.definition}"\n` +
-    `Stored Example: "${word.example || "N/A"}"`;
+    `Stored Example: "${word.example || "N/A"}"\n\n` +
+    `REMINDERS:\n` +
+    `- Return EXACTLY 1 extra example sentence.\n` +
+    `- Return 3 to 5 suggestedVocabulary entries that are COMMON words related to the category "${word.category || "General"}" and context "${word.context || "Conversational"}" (not rare or advanced vocabulary, and not the target word itself).`;
 
-  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array of sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (array of useful words or expressions from example sentences with word, translation, partOfSpeech, definition).`;
+  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array with EXACTLY 1 item: sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (3 to 5 common related words in the same category and context, each with word, translation, partOfSpeech, definition).`;
 
   try {
     let rawResultText = "";
@@ -2639,12 +2680,12 @@ Output MUST be strictly valid JSON matching this schema:
           const prov = data.provider || llmConfig?.provider || "gemini";
           const mod = data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
           recordModelResponse(prov, mod, duration);
-          return {
+          return limitFlashcardContent({
             ...data,
             provider: prov,
             model: mod,
             responseTimeMs: duration
-          };
+          }, word.word);
         }
       } else {
         let errData: any = {};
@@ -2669,7 +2710,7 @@ Output MUST be strictly valid JSON matching this schema:
       const prov = metaProvider || llmConfig?.provider || "gemini";
       const mod = metaModel || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
       recordModelResponse(prov, mod, duration);
-      return {
+      return limitFlashcardContent({
         word: parsed.word || word.word,
         pronunciation: parsed.pronunciation || word.pronunciation,
         partOfSpeech: parsed.partOfSpeech || word.partOfSpeech || "noun",
@@ -2686,7 +2727,7 @@ Output MUST be strictly valid JSON matching this schema:
         provider: prov,
         model: mod,
         responseTimeMs: duration
-      };
+      }, word.word);
     }
   } catch (err: any) {
     console.error("AI Flashcard Generation API error:", err);
