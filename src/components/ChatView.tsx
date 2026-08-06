@@ -222,13 +222,16 @@ export default function ChatView({
       handleIncrementActionCount(item.id);
       setSelectedImage(null);
 
-      // Check default model for quick action and set active model for session if available & not locked
-      if (item.defaultModel) {
-        const match = findProviderForModel(item.defaultModel);
-        if (match && !isModelLocked(match.provider, match.model)) {
-          if (onSwitchProvider) {
-            onSwitchProvider(match.provider, match.model);
-            showToast(`⚡ Model set to ${match.provider.toUpperCase()}: ${match.model}`);
+      // Check default models for quick action and set active model for session if available & not locked
+      if (item.defaultModels && item.defaultModels.length > 0) {
+        for (const modelName of item.defaultModels) {
+          const match = findProviderForModel(modelName);
+          if (match && !isModelLocked(match.provider, match.model)) {
+            if (onSwitchProvider) {
+              onSwitchProvider(match.provider, match.model);
+              showToast(`⚡ Model set to ${match.provider.toUpperCase()}: ${match.model}`);
+            }
+            break;
           }
         }
       }
