@@ -24,7 +24,6 @@ import {
   getPerformanceTierMeta,
   PerformanceTierNumber,
   isMetricStale,
-  getDefaultAutoModel
 } from "../utils/autoModeManager";
 
 interface ModelStatusModalProps {
@@ -436,20 +435,6 @@ export default function ModelStatusModal({
                       <FileText className={`w-3.5 h-3.5 ${item.failureLogs.length > 0 ? "text-rose-500" : "text-stone-400"}`} />
                       <span>Failure Logs ({item.failureLogs.length})</span>
                     </button>
-
-                    {(() => {
-                      const def = getDefaultAutoModel();
-                      const isDef = def.provider === item.provider && def.model === item.model;
-                      if (isDef) {
-                        return (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                            <Zap className="w-3 h-3 text-amber-600 fill-current" />
-                            <span>Default Auto Model</span>
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
                   </div>
                 </div>
               );

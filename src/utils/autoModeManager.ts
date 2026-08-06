@@ -3,15 +3,6 @@ import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
 const ONE_HOUR_MS = 60 * 60 * 1000;
-export const HARDCODED_DEFAULT_AUTO_MODEL = { provider: "groq", model: "openai/gpt-oss-120b" };
-
-export function getDefaultAutoModel(): { provider: string; model: string } {
-  return HARDCODED_DEFAULT_AUTO_MODEL;
-}
-
-export function setDefaultAutoModel(_provider: string, _model: string): void {
-  // Hardcoded default AI model - user modification disabled per specification
-}
 
 export interface LockedModelInfo {
   provider: string;
@@ -654,17 +645,6 @@ export function getNextAutoCandidate(
   });
 
   if (available.length > 0) {
-    // Priority 0: Check if user has a set Default AI Model for Auto Mode that is available (unlocked and not excluded)
-    const defaultObj = getDefaultAutoModel();
-    const defaultKey = `${defaultObj.provider}:${defaultObj.model}`;
-    const defaultCand = available.find(c => c.provider === defaultObj.provider && c.model === defaultObj.model);
-
-    // If default model is available (not locked and not already tried/excluded in current attempt chain)
-    if (defaultCand && (!excludedKeys || !excludedKeys.has(defaultKey))) {
-      console.log(`[Auto Mode - Default Model Priority] Preferred default AI model selected: ${defaultKey}`);
-      return defaultCand;
-    }
-
     const tier1: { cand: AutoCandidate; time: number | null; isUntestedOrStale: boolean }[] = [];
     const tier2: { cand: AutoCandidate; time: number }[] = [];
     const tier4: { cand: AutoCandidate; time: number }[] = [];

@@ -14,12 +14,7 @@ import {
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
-import { 
-  getLockedModels, 
-  isModelLocked, 
-  clearAllLocks,
-  getDefaultAutoModel
-} from "../../utils/autoModeManager";
+import { getLockedModels, isModelLocked, clearAllLocks } from "../../utils/autoModeManager";
 
 interface QuickAiSwitcherProps {
   llmConfig: LLMConfig;
@@ -213,69 +208,40 @@ export default function QuickAiSwitcher({
               </div>
 
               {/* Model Dropdown Selector */}
-              {activeProviderMeta.id === "auto" ? (() => {
-                const defaultAuto = getDefaultAutoModel();
-                const isDefaultLocked = isModelLocked(defaultAuto.provider, defaultAuto.model);
-
-                return (
-                  <div className="text-[11px] text-stone-300 bg-stone-800/70 p-2.5 rounded-lg border border-stone-700/60 leading-relaxed space-y-2">
-                    <div className="font-semibold text-amber-400 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Zap className="w-3.5 h-3.5 fill-current" />
-                        <span>Auto Mode: Priority Routing Active</span>
-                      </span>
-                      <span className="text-[10px] bg-emerald-900/80 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded font-bold">
-                        Tier 1 → Tier 4
-                      </span>
-                    </div>
-
-                    {/* Default AI Model Display (Hard-Coded) */}
-                    <div className="space-y-1 pt-1 border-t border-stone-700/60">
-                      <div className="text-[11px] font-medium text-stone-300 flex items-center justify-between">
-                        <span className="flex items-center gap-1 text-amber-300 font-semibold">
-                          <Cpu className="w-3.5 h-3.5" />
-                          <span>Default AI Model:</span>
-                        </span>
-                        {isDefaultLocked ? (
-                          <span className="text-[10px] text-amber-300 font-bold bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-700">
-                            ⚠️ Locked (Fallback Active)
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-emerald-300 font-bold bg-emerald-950/80 px-1.5 py-0.2 rounded border border-emerald-700">
-                            ✓ Default Primary
-                          </span>
-                        )}
-                      </div>
-                      <div className="w-full bg-stone-900 text-amber-300 border border-stone-700/80 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold flex items-center justify-between">
-                        <span>{defaultAuto.provider.toUpperCase()}: {defaultAuto.model}</span>
-                        <span className="text-[10px] text-stone-400 font-sans font-normal">(Hardcoded)</span>
-                      </div>
-                    </div>
-
-                    <p className="text-stone-300 text-[11px] leading-snug">
-                      Calls start with your <strong className="text-amber-300">Default AI Model</strong>. If locked or failed, Auto mode automatically switches to the next available model in Tier 1 → Tier 4.
-                    </p>
-                    {Object.keys(getLockedModels()).length > 0 && (
-                      <div className="pt-1.5 border-t border-stone-700/80 flex items-center justify-between">
-                        <span className="text-amber-300 text-[10px] font-medium">
-                          ⚠️ {Object.keys(getLockedModels()).length} model(s) locked
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            clearAllLocks();
-                            setToastMessage("Cleared all model lockouts!");
-                            setTimeout(() => setToastMessage(null), 2500);
-                          }}
-                          className="text-[10px] font-bold text-amber-400 hover:text-white underline cursor-pointer"
-                        >
-                          Reset Locks
-                        </button>
-                      </div>
-                    )}
+              {activeProviderMeta.id === "auto" ? (
+                <div className="text-[11px] text-stone-300 bg-stone-800/70 p-2.5 rounded-lg border border-stone-700/60 leading-relaxed space-y-1.5">
+                  <div className="font-semibold text-amber-400 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 fill-current" />
+                      <span>Auto Mode: Priority Routing Active</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-900/80 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                      Tier 1 → Tier 4
+                    </span>
                   </div>
-                );
-              })() : (() => {
+                  <p className="text-stone-300 text-[11px] leading-snug">
+                    Priority routes queries to <strong className="text-emerald-400">Tier 1 (Fast &lt;10s)</strong> models first. Slow models are demoted to <strong className="text-orange-400">Tier 4</strong> as emergency backups so your requests never fail.
+                  </p>
+                  {Object.keys(getLockedModels()).length > 0 && (
+                    <div className="pt-1.5 border-t border-stone-700/80 flex items-center justify-between">
+                      <span className="text-amber-300 text-[10px] font-medium">
+                        ⚠️ {Object.keys(getLockedModels()).length} model(s) locked
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearAllLocks();
+                          setToastMessage("Cleared all model lockouts!");
+                          setTimeout(() => setToastMessage(null), 2500);
+                        }}
+                        className="text-[10px] font-bold text-amber-400 hover:text-white underline cursor-pointer"
+                      >
+                        Reset Locks
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (() => {
                 const unlockedModels = activeProviderMeta.models.filter(m => !isModelLocked(activeProviderMeta.id, m));
                 return (
                   <div className="space-y-1">
