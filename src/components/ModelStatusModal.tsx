@@ -9,7 +9,6 @@ import {
   HelpCircle,
   Lock,
   FileText,
-  ArrowLeft,
   Trash2,
   Clock,
   BarChart2,
@@ -24,7 +23,8 @@ import {
   clearModelFailureLogs,
   getPerformanceTierMeta,
   PerformanceTierNumber,
-  isMetricStale
+  isMetricStale,
+  getDefaultAutoModel
 } from "../utils/autoModeManager";
 
 interface ModelStatusModalProps {
@@ -422,8 +422,8 @@ export default function ModelStatusModal({
                     </div>
                   </div>
 
-                  {/* Bottom Action Row: View Failure Logs Button & Test Button */}
-                  <div className="flex items-center justify-between pt-1.5 border-t border-stone-100/60 text-xs">
+                  {/* Bottom Action Row: View Failure Logs Button & Set Default Button */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-stone-100/60 text-xs gap-2">
                     <button
                       type="button"
                       onClick={() => setSelectedLogsModel(item)}
@@ -437,6 +437,19 @@ export default function ModelStatusModal({
                       <span>Failure Logs ({item.failureLogs.length})</span>
                     </button>
 
+                    {(() => {
+                      const def = getDefaultAutoModel();
+                      const isDef = def.provider === item.provider && def.model === item.model;
+                      if (isDef) {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                            <Zap className="w-3 h-3 text-amber-600 fill-current" />
+                            <span>Default Auto Model</span>
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
               );

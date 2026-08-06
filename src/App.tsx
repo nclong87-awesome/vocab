@@ -1969,6 +1969,7 @@ export default function App() {
                     onViewFlashcard={handleViewFlashcard}
                     onSelectDefinition={handleSelectDefinition}
                     onClearHistory={handleClearChatHistory}
+                    onSwitchProvider={handleSwitchProviderQuick}
                     targetLanguage={targetLanguage}
                     nativeLanguage={nativeLanguage}
                     ttsConfig={ttsConfig}

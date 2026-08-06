@@ -1,18 +1,20 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  Send, Sparkles, Plus, Volume2, 
-  Brain, HelpCircle, ChevronRight, Check, CheckSquare, RotateCcw,
-  LayoutGrid, X, Search, Languages, FileText,
-  Camera, Image as _ImageIcon, Upload, Layers, ArrowUpDown, Clock
+  Send, Sparkles, Volume2, 
+  ChevronRight, Check,
+  LayoutGrid, X, Search,
+  Camera, Image as _ImageIcon, Upload, ArrowUpDown, Clock
 } from "lucide-react";
-import { ChatMessage, LLMConfig, TTSConfig, Word } from "../types";
+import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
+import { isModelLocked } from "../utils/autoModeManager";
 import FormattedMessage from "./chat/FormattedMessage";
 import QuizImage from "./quiz/QuizImage";
 import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 import FlashcardMessageCard from "./chat/FlashcardMessageCard";
+import { QuickActionsModelConfig, getQuickActionItems, findProviderForModel } from "./chat/quickActionsConfig";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -29,6 +31,7 @@ interface ChatViewProps {
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSelectDefinition?: (word: string, senseIndex: number, translation: string) => void;
+  onSwitchProvider?: (provider: LLMProvider, model?: string) => void;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   words: Word[];
@@ -49,6 +52,7 @@ export default function ChatView({
   onViewFlashcard,
   onAnalyzeImageVocab,
   onSelectDefinition,
+  onSwitchProvider,
   ttsConfig,
   llmConfig,
 }: ChatViewProps) {
@@ -211,216 +215,40 @@ export default function ChatView({
     showToast("🧹 Quick action usage counters reset!");
   };
 
-  // Ordered quick action items with categories, descriptions, and icons
-  const allQuickActionItems = [
-    {
-      id: "fix_grammar",
-      label: "Fix Grammar",
-      category: "writing" as const,
-      categoryLabel: "Writing",
-      icon: <CheckSquare className="w-4 h-4 text-amber-600" />,
-      title: "Fix Grammar & Polish",
-      description: "Check spelling, grammar, and improve natural clarity",
-      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 0,
-      onClick: () => {
-        handleIncrementActionCount("fix_grammar");
-        setSelectedImage(null);
-        onClearHistory();
-        onFixGrammar();
-        setIsActionsPanelOpen(false);
-        scrollToBottom("smooth");
-        focusInput();
+  // Ordered quick action items with categories, descriptions, and icons sourced from quickActionsConfig
+  const allQuickActionItems = getQuickActionItems().map((item) => ({
+    ...item,
+    onClick: () => {
+      handleIncrementActionCount(item.id);
+      setSelectedImage(null);
+
+      // Check default model for quick action and set active model for session if available & not locked
+      if (item.defaultModel) {
+        const match = findProviderForModel(item.defaultModel);
+        if (match && !isModelLocked(match.provider, match.model)) {
+          if (onSwitchProvider) {
+            onSwitchProvider(match.provider, match.model);
+            showToast(`⚡ Model set to ${match.provider.toUpperCase()}: ${match.model}`);
+          }
+        }
       }
-    },
-    {
-      id: "start_quiz",
-      label: "Start Quiz",
-      category: "study" as const,
-      categoryLabel: "Study",
-      icon: <Brain className="w-4 h-4 text-amber-600" />,
-      title: "Start Today's Quiz",
-      description: "Interactive flashcards and recall challenge",
-      className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 1,
-      onClick: () => {
-        handleIncrementActionCount("start_quiz");
-        setSelectedImage(null);
-        onClearHistory();
-        onStartQuiz();
-        setIsActionsPanelOpen(false);
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "view_flashcard",
-      label: "Flash Card",
-      category: "study" as const,
-      categoryLabel: "Study",
-      icon: <Layers className="w-4 h-4 text-indigo-600" />,
-      title: "Flash Card",
-      description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
-      className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 2,
-      onClick: () => {
-        handleIncrementActionCount("view_flashcard");
-        setSelectedImage(null);
-        onClearHistory();
-        onViewFlashcard?.();
-        setIsActionsPanelOpen(false);
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "generate_topic",
-      label: "Generate Words",
-      category: "vocab" as const,
-      categoryLabel: "Vocab",
-      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: "Generate Words",
-      description: "Build vocabulary around travel, business, or custom topics",
-      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 3,
-      onClick: () => {
-        handleIncrementActionCount("generate_topic");
-        setSelectedImage(null);
-        onClearHistory();
-        onGenerateByTopic();
-        setIsActionsPanelOpen(false);
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "add_word",
-      label: "Add Word",
-      category: "vocab" as const,
-      categoryLabel: "Vocab",
-      icon: <Plus className="w-4 h-4 text-green-600" />,
-      title: "Add Word to Collection",
-      description: "Manually store new words with notes & definitions",
-      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 4,
-      onClick: () => {
-        handleIncrementActionCount("add_word");
-        setSelectedImage(null);
-        onClearHistory();
-        onAddWord();
-        setIsActionsPanelOpen(false);
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "interactive_prompts",
-      label: "Interactive AI Prompts",
-      category: "writing" as const,
-      categoryLabel: "Writing",
-      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: "⚡ Interactive Language Coach",
-      description: "Consolidated tool: Ask AI coach to guide you on Grammar Rules, Nuance Translation, or Situational Phrases in natural conversation",
-      className: "bg-amber-100/80 hover:bg-amber-200/90 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 5,
-      onClick: () => {
-        handleIncrementActionCount("interactive_prompts");
-        setIsActionsPanelOpen(false);
-        setSelectedImage(null);
-        onClearHistory();
-        onSendMessage(
-          `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
-        );
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "explain_grammar",
-      label: "Explain Grammar Rules",
-      category: "writing" as const,
-      categoryLabel: "Writing",
-      icon: <FileText className="w-4 h-4 text-blue-600" />,
-      title: "Explain Grammar Rules (in Native Language)",
-      description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
-      className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 6,
-      onClick: () => {
-        handleIncrementActionCount("explain_grammar");
-        setIsActionsPanelOpen(false);
-        setSelectedImage(null);
-        onClearHistory();
-        onSendMessage(
-          `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
-        );
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "common_phrases",
-      label: "Common Phrases",
-      category: "study" as const,
-      categoryLabel: "Study",
-      icon: <HelpCircle className="w-4 h-4 text-emerald-600" />,
-      title: "Common Phrases & Idioms",
-      description: "Learn essential daily expressions & conversational idioms by topic or scenario",
-      className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
-      onClick: () => {
-        handleIncrementActionCount("common_phrases");
-        setIsActionsPanelOpen(false);
-        setSelectedImage(null);
-        onClearHistory();
-        onSendMessage(
-          `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
-        );
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "translate_contrast",
-      label: "Translate & Compare",
-      category: "writing" as const,
-      categoryLabel: "Writing",
-      icon: <Languages className="w-4 h-4 text-purple-600" />,
-      title: "Translate & Contrast",
-      description: "Compare nuances between native phrasing and target language for custom sentences",
-      className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 8,
-      onClick: () => {
-        handleIncrementActionCount("translate_contrast");
-        setIsActionsPanelOpen(false);
-        setSelectedImage(null);
-        onClearHistory();
-        onSendMessage(
-          `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
-        );
-        scrollToBottom("smooth");
-        focusInput();
-      }
-    },
-    {
-      id: "new_chat",
-      label: "Start New Chat",
-      category: "chat" as const,
-      categoryLabel: "Chat",
-      icon: <RotateCcw className="w-4 h-4 text-stone-500" />,
-      title: "Start Fresh Chat Session",
-      description: "Clear current conversation thread and start fresh",
-      className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 9,
-      onClick: () => {
-        handleIncrementActionCount("new_chat");
-        setIsActionsPanelOpen(false);
-        setSelectedImage(null);
-        onClearHistory();
-        scrollToBottom("smooth");
-        focusInput();
-      }
+
+      item.getAction({
+        targetLanguage,
+        nativeLanguage,
+        onFixGrammar,
+        onStartQuiz,
+        onGenerateByTopic,
+        onAddWord,
+        onSendMessage,
+        onClearHistory,
+        onViewFlashcard,
+      });
+      setIsActionsPanelOpen(false);
+      scrollToBottom("smooth");
+      focusInput();
     }
-  ];
+  }));
 
   // Sorted quick action items by usage count or default index
   const quickActionItems = [...allQuickActionItems].sort((a, b) => {
@@ -1076,6 +904,9 @@ export default function ChatView({
                 </button>
               </div>
             </div>
+
+            {/* Default AI Model Config Widget for Quick Actions */}
+            <QuickActionsModelConfig llmConfig={llmConfig} onToast={showToast} />
 
             {/* Category Filter Pills & Sort Options */}
             <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">

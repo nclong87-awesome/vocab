@@ -37,7 +37,11 @@ import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
-import { getLockedModels, unlockModel, clearAllLocks } from "../utils/autoModeManager";
+import { 
+  getLockedModels, 
+  unlockModel, 
+  clearAllLocks
+} from "../utils/autoModeManager";
 import { testLlmConnection } from "../services/llmClientService";
 import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage, waitForVoices } from "../utils/ttsService";
 import { 
@@ -711,6 +715,8 @@ export default function SettingsView({
               )}
             </div>
           </div>
+
+
 
           {Object.keys(getLockedModels()).length === 0 ? (
             <div className="text-xs text-emerald-800 font-medium flex items-center gap-2 bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200">

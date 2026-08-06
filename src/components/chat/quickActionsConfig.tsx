@@ -1,5 +1,12 @@
-import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers, Cpu, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import { LLMConfig, LLMProvider } from "../../types";
+import PROVIDER_OPTIONS from "../../config/llmProviders";
+import { 
+  isModelLocked,
+  clearAllLocks,
+  getLockedModels
+} from "../../utils/autoModeManager";
 
 export interface QuickActionItem {
   id: string;
@@ -11,6 +18,7 @@ export interface QuickActionItem {
   description: string;
   className: string;
   defaultIndex: number;
+  defaultModel: string;
   getAction: (params: {
     targetLanguage: string;
     nativeLanguage: string;
@@ -22,6 +30,124 @@ export interface QuickActionItem {
     onClearHistory: () => void;
     onViewFlashcard?: () => void;
   }) => void;
+}
+
+export const DEFAULT_QUICK_ACTION_MODEL = {
+  provider: "groq",
+  model: "openai/gpt-oss-120b"
+};
+
+export function getDefaultQuickActionModel(): { provider: string; model: string } {
+  return DEFAULT_QUICK_ACTION_MODEL;
+}
+
+/**
+ * Find provider matching a specific model name across all available providers
+ */
+export function findProviderForModel(modelName: string): { provider: LLMProvider; model: string } | null {
+  for (const option of PROVIDER_OPTIONS) {
+    if (option.id === "auto") continue;
+    if (option.models.includes(modelName)) {
+      return { provider: option.id as LLMProvider, model: modelName };
+    }
+  }
+  if (modelName.includes(":")) {
+    const parts = modelName.split(":");
+    const prov = parts[0] as LLMProvider;
+    const mod = parts.slice(1).join(":");
+    const found = PROVIDER_OPTIONS.find(p => p.id === prov);
+    if (found && found.models.includes(mod)) {
+      return { provider: prov, model: mod };
+    }
+  }
+  return null;
+}
+
+/**
+ * UI Component displaying the hard-coded Default AI Model for Quick Actions & Auto Mode
+ */
+export function QuickActionsModelConfig({ 
+  llmConfig, 
+  onToast 
+}: { 
+  llmConfig?: LLMConfig; 
+  onToast?: (msg: string) => void; 
+}) {
+  const defaultModelObj = getDefaultQuickActionModel();
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    // Keep in sync on prop or refresh change
+  }, [llmConfig, refreshKey]);
+
+  const isLocked = isModelLocked(defaultModelObj.provider, defaultModelObj.model);
+  const lockedCount = Object.keys(getLockedModels()).length;
+
+  const handleResetLocks = () => {
+    clearAllLocks();
+    if (onToast) onToast("Cleared all model lockouts!");
+    setRefreshKey(prev => prev + 1);
+  };
+
+  return (
+    <div className="bg-stone-900 text-stone-100 p-3 sm:p-3.5 rounded-xl border border-stone-800 shadow-md space-y-2.5 my-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/80 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+            <Cpu className="w-4 h-4" />
+          </div>
+          <div>
+            <h5 className="text-xs font-bold text-stone-100 flex flex-wrap items-center gap-1.5">
+              Quick Actions Default AI Model
+              {isLocked ? (
+                <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-amber-400" /> Locked (Fallback Active)
+                </span>
+              ) : (
+                <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Default Primary
+                </span>
+              )}
+            </h5>
+            <p className="text-[11px] text-stone-400 leading-tight mt-0.5">
+              Actions bind to assigned default models (e.g. Add Word → <code>gemma4:31b</code>). Uses that model for the session.
+            </p>
+          </div>
+        </div>
+
+        {/* Read-Only Hard-Coded Model Display */}
+        <div className="shrink-0">
+          <div className="bg-stone-950 text-amber-300 border border-stone-700/80 rounded-lg px-3 py-1.5 text-xs font-bold font-mono flex items-center gap-1.5">
+            <span className="text-stone-400 text-[10px] font-sans font-medium uppercase">{defaultModelObj.provider}:</span>
+            <span>{defaultModelObj.model}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Auto Switch / Failover Status Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-stone-400 bg-stone-950/60 p-2 rounded-lg border border-stone-800/80 gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-amber-400 font-bold">⚡ Session Binding:</span>
+          <span>Quick action sets session model (e.g. <code className="text-amber-300 font-mono">gemma4:31b</code>). Next model used if locked.</span>
+        </div>
+
+        {lockedCount > 0 && (
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <span className="text-amber-300 text-[10px] font-medium">
+              ⚠️ {lockedCount} model(s) locked
+            </span>
+            <button
+              type="button"
+              onClick={handleResetLocks}
+              className="text-[10px] font-bold text-amber-400 hover:text-white underline cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Reset Locks
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function getQuickActionItems(): QuickActionItem[] {
@@ -36,6 +162,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Check spelling, grammar, and improve natural clarity",
       className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 0,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();
         onFixGrammar();
@@ -51,6 +178,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Interactive flashcards and recall challenge",
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 1,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ onStartQuiz, onClearHistory }) => {
         onClearHistory();
         onStartQuiz();
@@ -66,6 +194,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
       className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ onViewFlashcard, onClearHistory }) => {
         onClearHistory();
         onViewFlashcard?.();
@@ -81,6 +210,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Build vocabulary around travel, business, or custom topics",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 3,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ onGenerateByTopic, onClearHistory }) => {
         onClearHistory();
         onGenerateByTopic();
@@ -96,6 +226,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Manually store new words with notes & definitions",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
+      defaultModel: "gemma4:31b",
       getAction: ({ onAddWord, onClearHistory }) => {
         onClearHistory();
         onAddWord();
@@ -111,6 +242,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Ask AI coach for interactive guidance on Grammar Rules, Nuance Translation, or Situational Phrases",
       className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ targetLanguage: _targetLanguage, nativeLanguage: _nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -128,6 +260,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 6,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -145,6 +278,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Learn essential daily expressions & conversational idioms by topic or scenario",
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 7,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -162,6 +296,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Compare nuances between native phrasing and target language for custom sentences",
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 8,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -179,7 +314,10 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Clear current conversation thread and start fresh",
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 9,
+      defaultModel: "openai/gpt-oss-120b",
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];
 }
+
+
