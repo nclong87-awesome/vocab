@@ -9,12 +9,11 @@ import {
 import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider } from "../types";
 import { speakText, getLanguageCode } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
-import { isModelLocked } from "../utils/autoModeManager";
 import FormattedMessage from "./chat/FormattedMessage";
 import QuizImage from "./quiz/QuizImage";
 import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 import FlashcardMessageCard from "./chat/FlashcardMessageCard";
-import { QuickActionsModelConfig, getQuickActionItems, findProviderForModel } from "./chat/quickActionsConfig";
+import { QuickActionsModelConfig, getQuickActionItems, getRotatedDefaultModel } from "./chat/quickActionsConfig";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -222,16 +221,13 @@ export default function ChatView({
       handleIncrementActionCount(item.id);
       setSelectedImage(null);
 
-      // Check default models for quick action and set active model for session if available & not locked
+      // Check default models for quick action and set active model for session with rotation if available & not locked
       if (item.defaultModels && item.defaultModels.length > 0) {
-        for (const modelName of item.defaultModels) {
-          const match = findProviderForModel(modelName);
-          if (match && !isModelLocked(match.provider, match.model)) {
-            if (onSwitchProvider) {
-              onSwitchProvider(match.provider, match.model);
-              showToast(`⚡ Model set to ${match.provider.toUpperCase()}: ${match.model}`);
-            }
-            break;
+        const match = getRotatedDefaultModel(item.defaultModels);
+        if (match) {
+          if (onSwitchProvider) {
+            onSwitchProvider(match.provider, match.model);
+            showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
           }
         }
       }

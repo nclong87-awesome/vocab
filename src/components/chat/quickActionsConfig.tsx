@@ -64,6 +64,56 @@ export function findProviderForModel(modelName: string): { provider: LLMProvider
 }
 
 /**
+ * Sequential rotation for quick actions' default models list to avoid always using the first model.
+ * Persists the last-used starting index in localStorage to ensure balanced rotation across user sessions.
+ */
+export function getRotatedDefaultModel(defaultModels: string[]): { provider: LLMProvider; model: string } | null {
+  if (!defaultModels || defaultModels.length === 0) return null;
+
+  // Get current rotation index
+  let rotationIndex = 0;
+  const STORAGE_INDEX_KEY = "vocab_quick_actions_rotation_index";
+  try {
+    const saved = localStorage.getItem(STORAGE_INDEX_KEY);
+    if (saved) {
+      rotationIndex = parseInt(saved, 10);
+      if (isNaN(rotationIndex)) rotationIndex = 0;
+    }
+  } catch (e) {
+    console.error("Failed to read quick action rotation index:", e);
+  }
+
+  // Find the first matching model that is not locked, starting from rotationIndex
+  const len = defaultModels.length;
+  for (let i = 0; i < len; i++) {
+    const currentIndex = (rotationIndex + i) % len;
+    const modelName = defaultModels[currentIndex];
+    const match = findProviderForModel(modelName);
+    
+    if (match && !isModelLocked(match.provider, match.model)) {
+      // Found a valid and unlocked model!
+      // Update the index for next time to be the one after this chosen model
+      const nextIndex = (currentIndex + 1) % len;
+      try {
+        localStorage.setItem(STORAGE_INDEX_KEY, String(nextIndex));
+      } catch (e) {}
+      
+      return match;
+    }
+  }
+
+  // Fallback: if all of them starting from rotationIndex are locked or invalid, find any unlocked model starting from index 0
+  for (const modelName of defaultModels) {
+    const match = findProviderForModel(modelName);
+    if (match && !isModelLocked(match.provider, match.model)) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+/**
  * UI Component displaying the hard-coded Default AI Model for Quick Actions & Auto Mode
  */
 export function QuickActionsModelConfig({ 
