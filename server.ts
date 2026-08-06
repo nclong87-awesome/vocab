@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { cleanJsonResponse, cleanAndParseJson } from "./src/utils/jsonSanitizer";
 
 dotenv.config();
 
@@ -21,15 +22,7 @@ interface LLMRequestConfig {
   savedProviders?: Record<string, { proxyKey?: string; [key: string]: any }>;
 }
 
-// Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
-function sanitizeUnescapedJsonStrings(str: string): string {
-  return str.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
-    return match
-      .replace(/\n/g, "\\n")
-      .replace(/\r/g, "\\r")
-      .replace(/\t/g, "\\t");
-  });
-}
+
 
 export async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -112,71 +105,7 @@ export async function fetchWithTimeout(
   }
 }
 
-// Helper to clean JSON response text
-function cleanJsonResponse(rawText: string): string {
-  if (!rawText) return "";
-  let cleaned = rawText.trim();
 
-  // 1. If raw string is ALREADY valid JSON, return it immediately
-  try {
-    JSON.parse(cleaned);
-    return cleaned;
-  } catch {
-    // Continue cleaning
-  }
-
-  // 2. Handle markdown code fences wrapping the entire output
-  // e.g. ```json\n{ ... }\n``` or ```\n{ ... }\n```
-  if (cleaned.startsWith("```")) {
-    const unquoted = cleaned
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-    try {
-      JSON.parse(unquoted);
-      return unquoted;
-    } catch {
-      cleaned = unquoted;
-    }
-  }
-
-  // 3. Extract JSON object/array from surrounding conversational text or preambles
-  const firstSquare = cleaned.indexOf("[");
-  const lastSquare = cleaned.lastIndexOf("]");
-  const firstCurly = cleaned.indexOf("{");
-  const lastCurly = cleaned.lastIndexOf("}");
-
-  let startIdx = -1;
-  let endIdx = -1;
-
-  if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
-    startIdx = firstSquare;
-    endIdx = lastSquare;
-  } else if (firstCurly !== -1) {
-    startIdx = firstCurly;
-    endIdx = lastCurly;
-  }
-
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    const candidate = cleaned.substring(startIdx, endIdx + 1).trim();
-    try {
-      JSON.parse(candidate);
-      return candidate;
-    } catch {
-      cleaned = candidate;
-    }
-  }
-
-  // 4. Try fixing unescaped control characters inside JSON strings
-  try {
-    const sanitized = sanitizeUnescapedJsonStrings(cleaned);
-    JSON.parse(sanitized);
-    return sanitized;
-  } catch {
-    // Return best effort candidate string
-    return cleaned;
-  }
-}
 
 const VALID_GEMINI_MODELS = [
   "gemini-3.6-flash", 
@@ -464,7 +393,7 @@ async function callLLMSingle(
         throw new Error("Empty text response from Gemini worker proxy.");
       }
       const cleanedText = cleanJsonResponse(text);
-      const result = JSON.parse(cleanedText);
+      const result = cleanAndParseJson(cleanedText);
       result.model = sanitizeModel(provider, llmConfig?.model);
       result.provider = provider;
       result.responseTimeMs = Date.now() - startTime;
@@ -540,7 +469,7 @@ async function callLLMSingle(
 
   const text = await parseOpenAiStyleResponse(res);
   const responseTimeMs = Date.now() - startTime;
-  const result = JSON.parse(text);
+  const result = cleanAndParseJson(text);
   result.model = sanitizeModel(provider, llmConfig?.model);
   result.provider = provider;
   result.responseTimeMs = responseTimeMs;
@@ -580,7 +509,7 @@ async function callLLM(
         const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
         if (schemaDescription) {
           try {
-            JSON.parse(resultText);
+            cleanAndParseJson(resultText);
           } catch (jsonErr: any) {
             throw new Error(`Invalid JSON response from ${candKey}: ${jsonErr.message}`);
           }
@@ -898,7 +827,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error autofilling word:", error);
@@ -991,7 +920,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error checking word definitions:", error);
@@ -1039,7 +968,7 @@ CRITICAL INSTRUCTIONS:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error generating random words:", error);
@@ -1095,7 +1024,7 @@ CRITICAL INSTRUCTIONS:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error fixing grammar:", error);
@@ -1621,7 +1550,7 @@ Provide a structured AI analysis with constructive insights, memory retention st
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const rawParsed = JSON.parse(text);
+    const rawParsed = cleanAndParseJson(text);
     const result: any = normalizePerformanceAnalysis(rawParsed);
     if (rawParsed.provider) result.provider = rawParsed.provider;
     if (rawParsed.model) result.model = rawParsed.model;
@@ -1712,7 +1641,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error in AI chat:", error);
@@ -1782,7 +1711,7 @@ Output MUST be strictly valid JSON matching this schema:
     const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array of sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (array of useful words or expressions from example sentences with word, translation, partOfSpeech, definition).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = JSON.parse(text);
+    const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
     console.error("Error generating flashcard content:", error);
@@ -1898,7 +1827,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const cleaned = cleanJsonResponse(text);
-    const result = JSON.parse(cleaned);
+    const result = cleanAndParseJson(cleaned);
 
     let provider = result.provider || llmConfig?.provider || "gemini";
     let model = result.model || sanitizeModel(provider, llmConfig?.model);
@@ -1983,10 +1912,10 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
       const rawText = await workerRes.text();
       let result;
       try {
-        result = JSON.parse(rawText);
+        result = cleanAndParseJson(rawText);
       } catch {
         const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-        result = JSON.parse(cleaned);
+        result = cleanAndParseJson(cleaned);
       }
       if (result && (result.vocabularyItems || result.imageDescription)) {
         return res.json(result);

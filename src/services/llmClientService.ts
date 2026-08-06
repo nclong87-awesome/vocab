@@ -19,81 +19,8 @@ import {
   ModelStatusItem
 } from "../utils/autoModeManager";
 
-// Helper to fix unescaped control characters (newlines/tabs) inside string literals in JSON
-function sanitizeUnescapedJsonStrings(str: string): string {
-  return str.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
-    return match
-      .replace(/\n/g, "\\n")
-      .replace(/\r/g, "\\r")
-      .replace(/\t/g, "\\t");
-  });
-}
-
-// Clean raw JSON strings
-export function cleanJsonResponse(rawText: string): string {
-  if (!rawText) return "";
-  let cleaned = rawText.trim();
-
-  // 1. If raw string is ALREADY valid JSON, return it immediately
-  try {
-    JSON.parse(cleaned);
-    return cleaned;
-  } catch {
-    // Continue cleaning
-  }
-
-  // 2. Handle markdown code fences wrapping the entire output
-  // e.g. ```json\n{ ... }\n``` or ```\n{ ... }\n```
-  if (cleaned.startsWith("```")) {
-    const unquoted = cleaned
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-    try {
-      JSON.parse(unquoted);
-      return unquoted;
-    } catch {
-      cleaned = unquoted;
-    }
-  }
-
-  // 3. Extract JSON object/array from surrounding conversational text or preambles
-  const firstSquare = cleaned.indexOf("[");
-  const lastSquare = cleaned.lastIndexOf("]");
-  const firstCurly = cleaned.indexOf("{");
-  const lastCurly = cleaned.lastIndexOf("}");
-
-  let startIdx = -1;
-  let endIdx = -1;
-
-  if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
-    startIdx = firstSquare;
-    endIdx = lastSquare;
-  } else if (firstCurly !== -1) {
-    startIdx = firstCurly;
-    endIdx = lastCurly;
-  }
-
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    const candidate = cleaned.substring(startIdx, endIdx + 1).trim();
-    try {
-      JSON.parse(candidate);
-      return candidate;
-    } catch {
-      cleaned = candidate;
-    }
-  }
-
-  // 4. Try fixing unescaped control characters inside JSON strings
-  try {
-    const sanitized = sanitizeUnescapedJsonStrings(cleaned);
-    JSON.parse(sanitized);
-    return sanitized;
-  } catch {
-    // Return best effort candidate string
-    return cleaned;
-  }
-}
+import { cleanJsonResponse, cleanAndParseJson } from "../utils/jsonSanitizer";
+export { cleanJsonResponse, cleanAndParseJson };
 
 const VALID_GEMINI_MODELS = [
   "gemini-3.6-flash",
@@ -729,14 +656,20 @@ export async function callLLMClientSideWithMeta(
       const candidateStartTime = Date.now();
       try {
         console.log(`[Auto Mode - ${tierMeta.badgeLabel}] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
-        const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
+        let text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
         const candidateDuration = Date.now() - candidateStartTime;
 
         if (schemaDescription) {
           try {
+            text = cleanJsonResponse(text);
             JSON.parse(text);
           } catch (jsonErr: any) {
-            throw new Error(`Invalid JSON format response from ${candidateKey}: ${jsonErr.message}`);
+            try {
+              const repairedObj = cleanAndParseJson(text);
+              text = JSON.stringify(repairedObj);
+            } catch (repairErr: any) {
+              throw new Error(`Invalid JSON format response from ${candidateKey}: ${repairErr.message || jsonErr.message}`);
+            }
           }
         }
 
@@ -1197,7 +1130,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
     }
-    return JSON.parse(resWithMeta.text);
+    return cleanAndParseJson(resWithMeta.text);
   }
 
   try {
@@ -1224,7 +1157,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       if (resWithMeta.provider && resWithMeta.model) {
         recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
       }
-      return JSON.parse(resWithMeta.text);
+      return cleanAndParseJson(resWithMeta.text);
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
@@ -1234,7 +1167,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
     }
-    return JSON.parse(resWithMeta.text);
+    return cleanAndParseJson(resWithMeta.text);
   } catch (err: any) {
     console.warn("[autofillWordService] Server call failed:", err?.message || err, "Attempting client-side LLM fallback...");
     try {
@@ -1243,7 +1176,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       if (resWithMeta.provider && resWithMeta.model) {
         recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
       }
-      return JSON.parse(resWithMeta.text);
+      return cleanAndParseJson(resWithMeta.text);
     } catch (clientErr) {
       throw err;
     }
