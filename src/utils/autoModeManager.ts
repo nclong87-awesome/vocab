@@ -1,5 +1,5 @@
 import { LLMConfig, LLMProvider } from "../types";
-import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "../config/llmProviders";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -139,19 +139,24 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
   for (let i = 0; i < maxModels; i++) {
     for (const p of providersToInclude) {
       if (p.models[i] && p.models[i] !== "auto") {
-        candidates.push({ provider: p.id, model: p.models[i] });
+        const modelName = p.models[i];
+        // Only include if it's in the reliable models list or is custom provider
+        if (RELIABLE_MODELS.includes(modelName) || p.id === "custom") {
+          candidates.push({ provider: p.id, model: modelName });
+        }
       }
     }
   }
 
-  return candidates.length > 0 ? candidates : [
+  const fallbackCandidates: AutoCandidate[] = [
     { provider: "groq", model: "openai/gpt-oss-120b" },
     { provider: "openrouter", model: "inclusionai/ling-3.0-flash:free" },
     { provider: "gemini", model: "gemini-3.6-flash" },
     { provider: "9flare", model: "pro/claude-haiku-4-5" },
-    { provider: "openai", model: "gpt-5.4-mini" },
     { provider: "ollama", model: "gemma4:31b" }
   ];
+
+  return candidates.length > 0 ? candidates : fallbackCandidates;
 }
 
 export type ModelStatusIndicator = 'strong' | 'medium' | 'weak' | 'offline' | 'untested';

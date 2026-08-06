@@ -222,7 +222,7 @@ export default function ChatView({
       setSelectedImage(null);
 
       // Check default models for quick action and set active model for session with rotation if available & not locked
-      if (item.defaultModels && item.defaultModels.length > 0) {
+      if (llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
         const match = getRotatedDefaultModel(item.defaultModels);
         if (match) {
           if (onSwitchProvider) {

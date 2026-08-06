@@ -258,12 +258,12 @@ const SERVER_AUTO_CANDIDATES = [
   { provider: "openrouter", model: "inclusionai/ling-3.0-flash:free" },
   { provider: "gemini", model: "gemini-3.6-flash" },
   { provider: "9flare", model: "pro/claude-haiku-4-5" },
-  { provider: "openai", model: "gpt-5.4-mini" },
   { provider: "ollama", model: "gemma4:31b" },
   { provider: "groq", model: "llama-3.3-70b-versatile" },
-  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct" },
   { provider: "gemini", model: "gemini-3.5-flash" },
-  { provider: "ollama", model: "gpt-oss:20b" }
+  { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
+  { provider: "groq", model: "openai/gpt-oss-20b" },
+  { provider: "gemini", model: "gemini-3.5-flash-lite" }
 ];
 
 let serverAutoRotationIndex = 0;
