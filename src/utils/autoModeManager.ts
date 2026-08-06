@@ -423,14 +423,11 @@ export interface ModelStatusItem {
 export function getModelStatusIndicator(
   isLocked: boolean, 
   responseTimeMs?: number | null,
-  hasLastError?: boolean,
-  totalCalls?: number,
-  totalSuccesses?: number
+  _hasLastError?: boolean,
+  _totalCalls?: number,
+  _totalSuccesses?: number
 ): ModelStatusIndicator {
   if (isLocked) return 'offline';
-  if (hasLastError || (totalCalls !== undefined && totalCalls > 0 && totalSuccesses === 0)) {
-    return 'offline';
-  }
   if (responseTimeMs === null || responseTimeMs === undefined) return 'untested';
   if (responseTimeMs < 10000) return 'strong';
   if (responseTimeMs <= 20000) return 'medium';

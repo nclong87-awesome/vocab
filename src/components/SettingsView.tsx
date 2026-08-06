@@ -38,8 +38,8 @@ import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
 import { 
-  getLockedModels, 
-  unlockModel, 
+  getLockedModels,
+  unlockModel,
   clearAllLocks
 } from "../utils/autoModeManager";
 import { testLlmConnection } from "../services/llmClientService";
@@ -103,6 +103,9 @@ export default function SettingsView({
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
   const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
+  const [refreshCount, setRefreshCount] = useState(0);
+
+  const lockedModels = refreshCount >= 0 ? getLockedModels() : {};
 
   useEffect(() => {
     setSelectedTargetLang(targetLanguage);
@@ -701,11 +704,12 @@ export default function SettingsView({
                 <span>Model Statuses</span>
               </button>
 
-              {Object.keys(getLockedModels()).length > 0 && (
+              {Object.keys(lockedModels).length > 0 && (
                 <button
                   type="button"
                   onClick={() => {
                     clearAllLocks();
+                    setRefreshCount(prev => prev + 1);
                     setLlmTestResult({ success: true, msg: "All model lockouts successfully cleared!" });
                   }}
                   className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -716,9 +720,7 @@ export default function SettingsView({
             </div>
           </div>
 
-
-
-          {Object.keys(getLockedModels()).length === 0 ? (
+          {Object.keys(lockedModels).length === 0 ? (
             <div className="text-xs text-emerald-800 font-medium flex items-center gap-2 bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>All AI models across providers are healthy and unlocked.</span>
@@ -726,10 +728,10 @@ export default function SettingsView({
           ) : (
             <div className="space-y-2">
               <span className="text-[11px] font-bold text-amber-900 uppercase">
-                Currently Locked Models ({Object.keys(getLockedModels()).length}):
+                Currently Locked Models ({Object.keys(lockedModels).length}):
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                {Object.entries(getLockedModels()).map(([key, info]) => (
+                {Object.entries(lockedModels).map(([key, info]) => (
                   <div key={key} className="bg-white p-2.5 border border-amber-300 rounded-lg flex items-center justify-between gap-2 shadow-2xs">
                     <div className="min-w-0">
                       <div className="font-bold font-mono text-stone-900 truncate">{info.provider}:{info.model}</div>
@@ -741,6 +743,7 @@ export default function SettingsView({
                       type="button"
                       onClick={() => {
                         unlockModel(info.provider, info.model);
+                        setRefreshCount(prev => prev + 1);
                         setLlmTestResult({ success: true, msg: `Unlocked ${key}` });
                       }}
                       className="px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 text-[10px] font-bold rounded border border-stone-300 shrink-0 cursor-pointer"
@@ -2103,7 +2106,10 @@ export default function SettingsView({
       {/* Model Status Modal */}
       <ModelStatusModal
         isOpen={isModelStatusModalOpen}
-        onClose={() => setIsModelStatusModalOpen(false)}
+        onClose={() => {
+          setIsModelStatusModalOpen(false);
+          setRefreshCount(prev => prev + 1);
+        }}
         llmConfig={llmConfig}
       />
     </div>

@@ -257,7 +257,7 @@ export default function ModelStatusModal({
           <div className="p-4 overflow-y-auto space-y-3 flex-1">
             {/* Tier Filter Tabs */}
             <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-100 overflow-x-auto">
-              <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex items-center gap-1.5 text-xs shrink-0">
                 <span className="text-stone-500 font-medium flex items-center gap-1 text-[11px] shrink-0">
                   <Layers className="w-3.5 h-3.5 text-stone-400" />
                   <span>Filter Tier:</span>
@@ -318,6 +318,25 @@ export default function ModelStatusModal({
                   Tier 4: Slow ({modelStatuses.filter(m => m.performanceTier === 4).length})
                 </button>
               </div>
+
+              {modelStatuses.some(m => m.isLocked || m.failureLogs.length > 0 || m.lastError) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    modelStatuses.forEach(m => {
+                      if (m.isLocked || m.failureLogs.length > 0 || m.lastError) {
+                        clearModelFailureLogs(m.provider, m.model);
+                      }
+                    });
+                    refreshStatuses();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer shrink-0 mr-1"
+                  title="Unlock and reset stats for all models"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Reset All</span>
+                </button>
+              )}
             </div>
 
             {/* Model List Items */}
@@ -421,7 +440,7 @@ export default function ModelStatusModal({
                     </div>
                   </div>
 
-                  {/* Bottom Action Row: View Failure Logs Button & Set Default Button */}
+                  {/* Bottom Action Row: View Failure Logs Button & Reset Status Button */}
                   <div className="flex items-center justify-between pt-1.5 border-t border-stone-100/60 text-xs gap-2">
                     <button
                       type="button"
@@ -435,6 +454,18 @@ export default function ModelStatusModal({
                       <FileText className={`w-3.5 h-3.5 ${item.failureLogs.length > 0 ? "text-rose-500" : "text-stone-400"}`} />
                       <span>Failure Logs ({item.failureLogs.length})</span>
                     </button>
+
+                    {(item.isLocked || item.failureLogs.length > 0 || item.lastError) && (
+                      <button
+                        type="button"
+                        onClick={() => handleClearLogs(item.provider, item.model)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-800 hover:text-rose-900 transition-colors cursor-pointer animate-fade-in"
+                        title="Clear failure logs and unlock model"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Reset Status</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
