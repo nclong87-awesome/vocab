@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers, Cpu, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
-import PROVIDER_OPTIONS from "../../config/llmProviders";
+import PROVIDER_OPTIONS, { RELIABLE_MODELS } from "../../config/llmProviders";
 import { 
   isModelLocked,
   clearAllLocks,
@@ -162,7 +162,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Check spelling, grammar, and improve natural clarity",
       className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 0,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: [],
       getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();
         onFixGrammar();
@@ -178,7 +178,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Interactive flashcards and recall challenge",
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 1,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: [],
       getAction: ({ onStartQuiz, onClearHistory }) => {
         onClearHistory();
         onStartQuiz();
@@ -194,7 +194,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
       className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: [],
       getAction: ({ onViewFlashcard, onClearHistory }) => {
         onClearHistory();
         onViewFlashcard?.();
@@ -210,7 +210,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Build vocabulary around travel, business, or custom topics",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 3,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: RELIABLE_MODELS,
       getAction: ({ onGenerateByTopic, onClearHistory }) => {
         onClearHistory();
         onGenerateByTopic();
@@ -226,7 +226,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Manually store new words with notes & definitions",
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
-      defaultModels: ["gemma4:31b", "openai/gpt-oss-120b"],
+      defaultModels: RELIABLE_MODELS,
       getAction: ({ onAddWord, onClearHistory }) => {
         onClearHistory();
         onAddWord();
@@ -242,7 +242,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Ask AI coach for interactive guidance on Grammar Rules, Nuance Translation, or Situational Phrases",
       className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage: _targetLanguage, nativeLanguage: _nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -260,7 +260,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 6,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -278,7 +278,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Learn essential daily expressions & conversational idioms by topic or scenario",
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 7,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -296,7 +296,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Compare nuances between native phrasing and target language for custom sentences",
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 8,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -314,7 +314,7 @@ export function getQuickActionItems(): QuickActionItem[] {
       description: "Clear current conversation thread and start fresh",
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 9,
-      defaultModels: ["openai/gpt-oss-120b", "gemma4:31b"],
+      defaultModels: [],
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];

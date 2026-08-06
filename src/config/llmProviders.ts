@@ -132,4 +132,17 @@ export function getDefaultLLMConfig(): LLMConfig {
   };
 }
 
+export const RELIABLE_MODELS: string[] = [
+  "openai/gpt-oss-120b", 
+  "openai/gpt-oss-20b", 
+  "llama-3.3-70b-versatile",
+  "inclusionai/ling-3.0-flash:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "gemini-3.5-flash-lite", 
+  "gemini-3.5-flash", 
+  "gemini-3.6-flash",
+  "gemma4:31b",
+  "pro/claude-haiku-4-5"
+];
+
 export default PROVIDER_OPTIONS;
