@@ -164,15 +164,6 @@ export default function ModelStatusModal({
         <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3 bg-stone-50/80">
           {selectedLogsModel ? (
             <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setSelectedLogsModel(null)}
-                className="p-1 text-stone-500 hover:text-stone-800 hover:bg-stone-200/70 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-medium"
-                title="Back to model list"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
-              </button>
               <div>
                 <h2 className="text-base font-bold text-stone-900 leading-tight flex items-center gap-2">
                   <span>Failure Logs</span>
