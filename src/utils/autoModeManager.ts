@@ -251,7 +251,7 @@ export function deduplicateFailureLogs(logs: FailureLogEntry[]): FailureLogEntry
   return result;
 }
 
-export function recordModelFailure(provider: string, model: string, errorMsg?: string, durationMs?: number): void {
+export function recordModelFailure(provider: string, model: string, errorMsg?: string, _durationMs?: number): void {
   if (!provider || !model || provider === "auto" || model === "auto") return;
   const key = `${provider}:${model}`;
   const now = Date.now();
@@ -292,7 +292,7 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     ...existing,
     provider,
     model,
-    lastResponseTimeMs: durationMs ? Math.round(durationMs) : existing?.lastResponseTimeMs ?? null,
+    lastResponseTimeMs: null, // Reset response time on failure so failed models don't report stale or misleading latency
     lastTestedAt: now,
     lastError: reason,
     totalCalls: prevCalls + 1,
@@ -311,6 +311,7 @@ export function clearModelFailureLogs(provider: string, model: string): void {
     metrics[key].lastError = null;
     saveModelMetricsMap(metrics);
   }
+  unlockModel(provider, model);
 }
 
 export type PerformanceTierNumber = 1 | 2 | 3 | 4;
@@ -414,8 +415,17 @@ export interface ModelStatusItem {
   failureLogs: FailureLogEntry[];
 }
 
-export function getModelStatusIndicator(isLocked: boolean, responseTimeMs?: number | null): ModelStatusIndicator {
+export function getModelStatusIndicator(
+  isLocked: boolean, 
+  responseTimeMs?: number | null,
+  hasLastError?: boolean,
+  totalCalls?: number,
+  totalSuccesses?: number
+): ModelStatusIndicator {
   if (isLocked) return 'offline';
+  if (hasLastError || (totalCalls !== undefined && totalCalls > 0 && totalSuccesses === 0)) {
+    return 'offline';
+  }
   if (responseTimeMs === null || responseTimeMs === undefined) return 'untested';
   if (responseTimeMs < 10000) return 'strong';
   if (responseTimeMs <= 20000) return 'medium';
@@ -496,17 +506,23 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
       const lockedInfo = lockedMap[key];
       const isLocked = Boolean(lockedInfo && lockedInfo.expiresAt > Date.now());
       const metric = metricsMap[key];
+      const hasLastError = Boolean(metric?.lastError);
 
-      const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
-      const lastTestedAt = metric?.lastTestedAt ?? null;
-      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
-      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
       const { totalCalls, totalSuccesses, failureLogs } = extractModelStats(
         metric, 
         isLocked, 
         lockedInfo?.lockedAt, 
         metric?.lastError
       );
+
+      // Reset response time to null if model is locked, last attempt failed, or 0 successes out of total calls
+      const lastResponseTimeMs = (isLocked || hasLastError || (totalCalls > 0 && totalSuccesses === 0))
+        ? null
+        : (metric?.lastResponseTimeMs ?? null);
+
+      const lastTestedAt = metric?.lastTestedAt ?? null;
+      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
+      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
 
       result.push({
         provider: p.id,
@@ -548,17 +564,23 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
       const lockedInfo = lockedMap[key];
       const isLocked = Boolean(lockedInfo && lockedInfo.expiresAt > Date.now());
       const metric = metricsMap[key];
+      const hasLastError = Boolean(metric?.lastError);
 
-      const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
-      const lastTestedAt = metric?.lastTestedAt ?? null;
-      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
-      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
       const { totalCalls, totalSuccesses, failureLogs } = extractModelStats(
         metric, 
         isLocked, 
         lockedInfo?.lockedAt, 
         metric?.lastError
       );
+
+      // Reset response time to null if model is locked, last attempt failed, or 0 successes out of total calls
+      const lastResponseTimeMs = (isLocked || hasLastError || (totalCalls > 0 && totalSuccesses === 0))
+        ? null
+        : (metric?.lastResponseTimeMs ?? null);
+
+      const lastTestedAt = metric?.lastTestedAt ?? null;
+      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
+      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
 
       result.push({
         provider: pId,
@@ -709,10 +731,16 @@ export function getAutoCandidateWithMeta(
   const metricsMap = getModelMetricsMap();
   const metric = metricsMap[key];
   const isLocked = isModelLocked(candidate.provider, candidate.model);
-  const status = getModelStatusIndicator(isLocked, metric?.lastResponseTimeMs);
+  const hasLastError = Boolean(metric?.lastError);
+  const totalCalls = metric?.totalCalls ?? 0;
+  const totalSuccesses = metric?.totalSuccesses ?? 0;
+  const effectiveTime = (isLocked || hasLastError || (totalCalls > 0 && totalSuccesses === 0))
+    ? null
+    : (metric?.lastResponseTimeMs ?? null);
+  const status = getModelStatusIndicator(isLocked, effectiveTime, hasLastError, totalCalls, totalSuccesses);
   const isStale = isMetricStale(metric?.lastTestedAt ?? null);
-  const isUntestedOrStale = status === 'untested' || metric?.lastResponseTimeMs === null || isStale;
-  const tier = getModelPerformanceTier(status, metric?.lastResponseTimeMs, metric?.lastTestedAt);
+  const isUntestedOrStale = status === 'untested' || effectiveTime === null || isStale;
+  const tier = getModelPerformanceTier(status, effectiveTime, metric?.lastTestedAt);
   const tierMeta = getPerformanceTierMeta(tier, isUntestedOrStale);
 
   return { candidate, tier, tierMeta };

@@ -40,7 +40,6 @@ export default function ModelStatusModal({
 }: ModelStatusModalProps) {
   const [modelStatuses, setModelStatuses] = useState<ModelStatusItem[]>([]);
   const [selectedLogsModel, setSelectedLogsModel] = useState<ModelStatusItem | null>(null);
-  const [testingModelKey, setTestingModelKey] = useState<string | null>(null);
   const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
 
   const refreshStatuses = () => {
@@ -69,7 +68,6 @@ export default function ModelStatusModal({
       refreshStatuses();
     } else {
       setSelectedLogsModel(null);
-      setTestingModelKey(null);
     }
   }, [isOpen, llmConfig]);
 
@@ -339,7 +337,6 @@ export default function ModelStatusModal({
                 const isActive = llmConfig.provider === item.provider && llmConfig.model === item.model;
                 const rank = index + 1;
                 const itemKey = `${item.provider}:${item.model}`;
-                const isTesting = testingModelKey === itemKey;
                 const isStale = isMetricStale(item.lastTestedAt);
                 const isUntestedOrStale = item.status === 'untested' || item.lastResponseTimeMs === null || isStale;
                 const tierMeta = getPerformanceTierMeta(item.performanceTier, isUntestedOrStale);
