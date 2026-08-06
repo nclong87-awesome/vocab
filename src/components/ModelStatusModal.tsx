@@ -11,14 +11,10 @@ import {
   FileText,
   ArrowLeft,
   Trash2,
-  Play,
-  Loader2,
   Clock,
   BarChart2,
   Zap,
-  ShieldCheck,
   Layers,
-  Info
 } from "lucide-react";
 import { LLMConfig } from "../types";
 import { 
@@ -30,7 +26,6 @@ import {
   PerformanceTierNumber,
   isMetricStale
 } from "../utils/autoModeManager";
-import { testSingleModelStatus } from "../services/llmClientService";
 
 interface ModelStatusModalProps {
   isOpen: boolean;
@@ -47,7 +42,6 @@ export default function ModelStatusModal({
   const [selectedLogsModel, setSelectedLogsModel] = useState<ModelStatusItem | null>(null);
   const [testingModelKey, setTestingModelKey] = useState<string | null>(null);
   const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
-  const [showTierExplanation, setShowTierExplanation] = useState(true);
 
   const refreshStatuses = () => {
     const list = getAllModelStatuses(llmConfig);
@@ -62,6 +56,14 @@ export default function ModelStatusModal({
     }
   };
 
+  const handleClose = () => {
+    if (selectedLogsModel) {
+      setSelectedLogsModel(null);
+    } else {
+      onClose();
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       refreshStatuses();
@@ -72,17 +74,6 @@ export default function ModelStatusModal({
   }, [isOpen, llmConfig]);
 
   if (!isOpen) return null;
-
-  const handleTestModel = async (provider: any, model: string) => {
-    const key = `${provider}:${model}`;
-    setTestingModelKey(key);
-    try {
-      await testSingleModelStatus(provider, model, llmConfig);
-    } finally {
-      setTestingModelKey(null);
-      refreshStatuses();
-    }
-  };
 
   const handleClearLogs = (provider: string, model: string) => {
     clearModelFailureLogs(provider, model);
@@ -164,7 +155,7 @@ export default function ModelStatusModal({
   return (
     <div 
       className="fixed inset-0 bg-stone-950/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
-      onClick={onClose}
+      onClick={handleClose}
       id="model-status-modal"
     >
       <div 
@@ -210,7 +201,7 @@ export default function ModelStatusModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
             title="Close"
           >
@@ -276,49 +267,6 @@ export default function ModelStatusModal({
           </div>
         ) : (
           <div className="p-4 overflow-y-auto space-y-3 flex-1">
-            {/* Performance-Tiered Priority Routing Explanation Banner */}
-            {showTierExplanation && (
-              <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-50 to-amber-500/5 rounded-xl border border-amber-200/90 text-stone-800 text-xs space-y-2 relative animate-in fade-in duration-150">
-                <button
-                  type="button"
-                  onClick={() => setShowTierExplanation(false)}
-                  className="absolute top-2.5 right-2.5 p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-md transition-colors cursor-pointer"
-                  title="Dismiss explanation"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-
-                <div className="flex items-center gap-2 font-bold text-amber-900">
-                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Performance-Tiered Priority Routing & Dynamic Re-Evaluation Active</span>
-                </div>
-
-                <p className="text-stone-700 leading-relaxed text-[11px]">
-                  <strong>1. Untested Models:</strong> Newly added or untested models are automatically placed in <strong className="text-sky-800">Tier 1 (Probe Queue)</strong> to immediately benchmark their speed.<br/>
-                  <strong>2. Continuous Re-Evaluation:</strong> Slower models in Tier 2 and Tier 4 are re-evaluated via <strong>15% Epsilon Exploration</strong> and <strong>15m Metric Expiration</strong>. If their speed recovers, they are automatically promoted to Tier 1!
-                </p>
-
-                <div className="grid grid-cols-2 xs:grid-cols-4 gap-1.5 pt-1 text-[10px]">
-                  <div className="px-2 py-1 rounded bg-emerald-100/80 border border-emerald-200 text-emerald-900 font-medium flex items-center justify-between">
-                    <span>Tier 1: Fast / Probe</span>
-                    <span className="font-mono font-bold text-emerald-700">&lt;10s / New</span>
-                  </div>
-                  <div className="px-2 py-1 rounded bg-amber-100/80 border border-amber-200 text-amber-900 font-medium flex items-center justify-between">
-                    <span>Tier 2: Balanced</span>
-                    <span className="font-mono font-bold text-amber-700">10-20s</span>
-                  </div>
-                  <div className="px-2 py-1 rounded bg-stone-100 border border-stone-200 text-stone-800 font-medium flex items-center justify-between">
-                    <span>Tier 3: Backup</span>
-                    <span className="font-mono text-stone-600">Secondary</span>
-                  </div>
-                  <div className="px-2 py-1 rounded bg-orange-100/80 border border-orange-200 text-orange-900 font-medium flex items-center justify-between">
-                    <span>Tier 4: Demoted</span>
-                    <span className="font-mono font-bold text-orange-800">&gt;20s</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Tier Filter Tabs */}
             <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-100 overflow-x-auto">
               <div className="flex items-center gap-1.5 text-xs">
@@ -382,18 +330,6 @@ export default function ModelStatusModal({
                   Tier 4: Slow ({modelStatuses.filter(m => m.performanceTier === 4).length})
                 </button>
               </div>
-
-              {!showTierExplanation && (
-                <button
-                  type="button"
-                  onClick={() => setShowTierExplanation(true)}
-                  className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors cursor-pointer shrink-0 text-xs font-semibold flex items-center gap-1"
-                  title="Show Tier explanation"
-                >
-                  <Info className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Info</span>
-                </button>
-              )}
             </div>
 
             {/* Model List Items */}
@@ -513,25 +449,6 @@ export default function ModelStatusModal({
                       <span>Failure Logs ({item.failureLogs.length})</span>
                     </button>
 
-                    <button
-                      type="button"
-                      disabled={isTesting}
-                      onClick={() => handleTestModel(item.provider, item.model)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-stone-100 hover:bg-stone-200/80 text-stone-700 border border-stone-200/90 transition-colors disabled:opacity-50 cursor-pointer"
-                      title="Test connection and response time for this model"
-                    >
-                      {isTesting ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                          <span>Testing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3 h-3 text-stone-500 fill-stone-500" />
-                          <span>Test</span>
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
               );

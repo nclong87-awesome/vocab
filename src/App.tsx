@@ -376,7 +376,7 @@ export default function App() {
         quizSpeechText: (firstQ.type === 'listening' || firstQ.type === 'spelling') ? firstQ.word : firstQ.question,
         imageUrl: firstQ.imageUrl,
         imageKeyword: firstQ.imageKeyword,
-        suggestedActions: firstQ.options?.map(opt => ({
+        suggestedActions: firstQ.options?.map((opt: any) => ({
           label: opt,
           action: "quiz_answer",
           payload: { answer: opt, wordId: firstQ.wordId }

@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { LLMConfig, LLMProvider, Word, QuizQuestion, UserStats, SuggestedVocabularyWord } from "../types";
+import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord } from "../types";
 import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
@@ -10,13 +10,7 @@ import {
   getAutoCandidateWithMeta,
   lockModel, 
   recordModelResponse, 
-  recordModelFailure,
-  getModelMetricsMap,
-  getLockedModels,
-  getModelStatusIndicator,
-  getModelPerformanceTier,
-  getAllModelStatuses,
-  ModelStatusItem
+  recordModelFailure
 } from "../utils/autoModeManager";
 
 import { cleanJsonResponse, cleanAndParseJson } from "../utils/jsonSanitizer";
@@ -710,73 +704,6 @@ export async function callLLMClientSideWithMeta(
     recordModelFailure(activeProvider, activeModel, err?.message || String(err), singleDuration);
     throw err;
   }
-}
-
-/**
- * Benchmark or test a single model's response time and status.
- */
-export async function testSingleModelStatus(
-  provider: LLMProvider,
-  model: string,
-  llmConfig?: LLMConfig
-): Promise<ModelStatusItem> {
-  const savedProfile = llmConfig?.savedProviders?.[provider];
-  const testConfig: LLMConfig = {
-    provider,
-    model,
-    apiKey: savedProfile?.apiKey || (llmConfig?.provider === provider ? llmConfig.apiKey : ""),
-    proxyKey: savedProfile?.proxyKey || llmConfig?.proxyKey || "",
-    baseUrl: savedProfile?.baseUrl || "",
-    useProxy: savedProfile?.useProxy !== undefined ? savedProfile.useProxy : true,
-    isLoggedIn: true,
-    savedProviders: llmConfig?.savedProviders
-  };
-
-  const startTime = Date.now();
-  try {
-    const prompt = 'Say {"status":"ok"} in JSON format.';
-    const systemInstruction = "You are a speed test bot. Output valid JSON only.";
-    const schemaDescription = 'Object with status property set to "ok"';
-    await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, testConfig);
-    const durationMs = Date.now() - startTime;
-    recordModelResponse(provider, model, durationMs);
-  } catch (err: any) {
-    const durationMs = Date.now() - startTime;
-    recordModelFailure(provider, model, err?.message || String(err), durationMs);
-  }
-
-  const allStatuses = getAllModelStatuses(llmConfig);
-  const found = allStatuses.find(s => s.provider === provider && s.model === model);
-  if (found) return found;
-
-  const lockedMap = getLockedModels();
-  const metricsMap = getModelMetricsMap();
-  const key = `${provider}:${model}`;
-  const lockedInfo = lockedMap[key];
-  const isLocked = Boolean(lockedInfo && lockedInfo.expiresAt > Date.now());
-  const metric = metricsMap[key];
-  const lastResponseTimeMs = metric?.lastResponseTimeMs ?? null;
-
-  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
-
-  const status = getModelStatusIndicator(isLocked, lastResponseTimeMs);
-
-  return {
-    provider,
-    providerName: providerMeta?.name || provider,
-    model,
-    isLocked,
-    lockedAt: lockedInfo?.lockedAt,
-    expiresAt: lockedInfo?.expiresAt,
-    lastResponseTimeMs,
-    lastTestedAt: metric?.lastTestedAt ?? null,
-    lastError: metric?.lastError ?? null,
-    status,
-    performanceTier: getModelPerformanceTier(status, lastResponseTimeMs),
-    totalCalls: metric?.totalCalls ?? 0,
-    totalSuccesses: metric?.totalSuccesses ?? 0,
-    failureLogs: metric?.failureLogs ?? []
-  };
 }
 
 // Outer LLM invocation entry point supporting Auto Mode model rotation & circuit breaker lockouts
