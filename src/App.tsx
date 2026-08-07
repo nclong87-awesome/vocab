@@ -982,11 +982,6 @@ export default function App() {
           }
         ];
       });
-
-      // Show AI provider error fallback modal if API key or provider fails
-      handleAiApiError(err, configToUse, (newConfig) => {
-        handleAnalyzeImageVocab(imageDataUrl, customPrompt, newConfig);
-      });
     } finally {
       setIsTyping(false);
     }

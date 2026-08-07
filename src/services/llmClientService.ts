@@ -14,7 +14,6 @@ import {
 } from "../utils/autoModeManager";
 
 import { cleanJsonResponse, cleanAndParseJson } from "../utils/jsonSanitizer";
-import { th } from "motion/react-client";
 export { cleanJsonResponse, cleanAndParseJson };
 
 const VALID_GEMINI_MODELS = [
