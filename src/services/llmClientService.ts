@@ -2227,134 +2227,6 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 }
 
 /**
- * Helper function for client-side Gemini Vision analysis fallback
- */
-export async function analyzeImageVocabWithGeminiClient(params: {
-  imageDataUrl: string;
-  customPrompt?: string;
-  targetLanguage: string;
-  nativeLanguage: string;
-  llmConfig?: LLMConfig;
-}): Promise<{
-  imageDescription: string;
-  vocabularyItems: Array<{
-    word: string;
-    translation: string;
-    partOfSpeech?: string;
-    pronunciation?: string;
-    definition: string;
-    example?: string;
-    exampleTranslation?: string;
-    category?: string;
-    context?: string;
-  }>;
-}> {
-  const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
-
-  let base64Data = imageDataUrl;
-  let mimeType = "image/jpeg";
-
-  if (imageDataUrl.startsWith("data:")) {
-    const parts = imageDataUrl.split(";base64,");
-    base64Data = parts[1] || imageDataUrl;
-    const match = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9+-]+);base64,/);
-    if (match) {
-      mimeType = match[1];
-    }
-  }
-
-  const apiKey = llmConfig?.apiKey || "";
-  const sharedProxyKey = llmConfig?.proxyKey ||
-    (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
-    "";
-  const proxyKeyToUse = sharedProxyKey || apiKey;
-
-  const promptText = `Analyze this image for a language learner.
-Target Language to learn: "${targetLanguage}"
-Learner's Native Language for translations: "${nativeLanguage}"
-${customPrompt ? `User Prompt/Instructions: "${customPrompt}"` : ""}
-
-CRITICAL REQUIREMENTS:
-1. Identify 5 to 8 key objects, actions, scenes, or vocabulary words visible in or directly related to the photo.
-2. Provide a brief 1-2 sentence description of the image ("imageDescription") in "${targetLanguage}".
-3. For each vocabulary item ("vocabularyItems"), include:
-   - "word": string in "${targetLanguage}"
-   - "translation": string in "${nativeLanguage}"
-   - "partOfSpeech": string (e.g. noun, verb, adjective, phrase)
-   - "pronunciation": string (IPA or phonetic guide)
-   - "definition": string in "${targetLanguage}"
-   - "example": string in "${targetLanguage}"
-   - "exampleTranslation": string in "${nativeLanguage}"
-   - "category": string (e.g. "Food & Dining", "Travel", "Nature", "Everyday Objects")
-   - "context": string (short description of where/how it appears in the photo)
-
-Return strictly valid JSON matching this schema:
-{
-  "imageDescription": "string in ${targetLanguage}",
-  "vocabularyItems": [
-    {
-      "word": "string",
-      "translation": "string",
-      "partOfSpeech": "string",
-      "pronunciation": "string",
-      "definition": "string",
-      "example": "string",
-      "exampleTranslation": "string",
-      "category": "string",
-      "context": "string"
-    }
-  ]
-}`;
-
-  const imagePart = {
-    inlineData: {
-      mimeType: mimeType || "image/jpeg",
-      data: base64Data
-    }
-  };
-
-  const ai = new GoogleGenAI({
-    apiKey: apiKey || proxyKeyToUse || "dummy-key",
-    httpOptions: {
-      headers: {
-        ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
-      }
-    }
-  });
-
-  const modelsToTry = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
-  let lastErr: any = null;
-
-  for (const m of modelsToTry) {
-    try {
-      const response = await ai.models.generateContent({
-        model: m,
-        contents: [promptText, imagePart],
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-
-      if (response.text) {
-        const cleaned = cleanJsonResponse(response.text);
-        const parsed = JSON.parse(cleaned);
-        if (parsed && (parsed.vocabularyItems || parsed.imageDescription)) {
-          return {
-            imageDescription: parsed.imageDescription || "Image Vocabulary Analysis",
-            vocabularyItems: Array.isArray(parsed.vocabularyItems) ? parsed.vocabularyItems : []
-          };
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[Client Gemini Vision] Model ${m} failed:`, err.message || err);
-      lastErr = err;
-    }
-  }
-
-  throw lastErr || new Error("Failed to analyze image with client-side Gemini Vision");
-}
-
-/**
  * Service to analyze image for vocabulary using Cloudflare worker and Gemini Vision fallback
  */
 export async function analyzeImageVocabService(params: {
@@ -2441,71 +2313,44 @@ export async function analyzeImageVocabService(params: {
     headers["X-Proxy-Key"] = sharedProxyKey;
   }
 
-  try {
-    const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        nativeLanguage,
-        targetLanguage,
-        imageData: base64Data,
-        customPrompt
-      })
-    });
-
-    if (workerRes.ok) {
-      const rawText = await workerRes.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        const cleaned = cleanJsonResponse(rawText);
-        data = JSON.parse(cleaned);
-      }
-      if (data && (data.vocabularyItems || data.imageDescription)) {
-        const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
-        const prov = data.provider || "gemini";
-        const mod = data.model || "gemini-2.5-flash";
-        recordModelResponse(prov, mod, duration);
-        return {
-          ...data,
-          provider: prov,
-          model: mod,
-          responseTimeMs: duration
-        };
-      }
-    } else {
-      const errText = await workerRes.text().catch(() => workerRes.statusText);
-      serverOrWorkerError = new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
-    }
-  } catch (workerErr: any) {
-    console.warn("Direct Cloudflare Worker call failed, trying client Gemini Vision:", workerErr);
-    if (!serverOrWorkerError) serverOrWorkerError = workerErr;
-  }
-
-  // 3. Fallback to client-side Gemini Vision API
-  try {
-    const clientRes = await analyzeImageVocabWithGeminiClient({
-      imageDataUrl,
-      customPrompt,
-      targetLanguage,
+  const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
       nativeLanguage,
-      llmConfig
-    });
-    const duration = Math.round(performance.now() - startTime);
-    const prov = llmConfig?.provider || "gemini";
-    const mod = sanitizeModel(prov, llmConfig?.model || "gemini-2.5-flash");
-    recordModelResponse(prov, mod, duration);
-    return {
-      ...clientRes,
-      provider: prov,
-      model: mod,
-      responseTimeMs: duration
-    };
-  } catch (geminiClientErr: any) {
-    console.error("Client-side Gemini Vision fallback also failed:", geminiClientErr);
-    throw serverOrWorkerError || geminiClientErr;
+      targetLanguage,
+      imageData: base64Data,
+      customPrompt
+    })
+  });
+
+  if (workerRes.ok) {
+    const rawText = await workerRes.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      const cleaned = cleanJsonResponse(rawText);
+      data = JSON.parse(cleaned);
+    }
+    if (data && (data.vocabularyItems || data.imageDescription)) {
+      const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
+      const prov = data.provider || "";
+      const mod = data.model || "";
+      recordModelResponse(prov, mod, duration);
+      return {
+        ...data,
+        provider: prov,
+        model: mod,
+        responseTimeMs: duration
+      };
+    }
+  } else {
+    const errText = await workerRes.text().catch(() => workerRes.statusText);
+    serverOrWorkerError = new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
   }
+  
+  throw serverOrWorkerError || new Error("Image analysis failed without a specific error.");
 }
 
 export interface FlashcardGenerationRequest {
