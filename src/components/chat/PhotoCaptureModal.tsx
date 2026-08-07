@@ -10,7 +10,8 @@ import {
   Upload, 
   AlertCircle, 
   SwitchCamera,
-  ArrowLeft
+  ArrowLeft,
+  Clipboard
 } from "lucide-react";
 import { resizeImageDataUrl } from "../../utils/llmHelpers";
 
@@ -19,13 +20,15 @@ interface PhotoCaptureModalProps {
   onClose: () => void;
   onImageSelected: (dataUrl: string, name: string) => void;
   targetLanguage?: string;
+  onToast?: (msg: string) => void;
 }
 
 export default function PhotoCaptureModal({
   isOpen,
   onClose,
   onImageSelected,
-  targetLanguage = "English"
+  targetLanguage = "English",
+  onToast
 }: PhotoCaptureModalProps) {
   const [mode, setMode] = useState<"choose" | "camera" | "preview">("choose");
   const [capturedImage, setCapturedImage] = useState<{ dataUrl: string; name: string } | null>(null);
@@ -34,6 +37,7 @@ export default function PhotoCaptureModal({
   const [isCameraLoading, setIsCameraLoading] = useState<boolean>(false);
   const [_hasMultipleCameras, setHasMultipleCameras] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -121,6 +125,7 @@ export default function PhotoCaptureModal({
       setMode("choose");
       setCapturedImage(null);
       setCameraError(null);
+      setModalError(null);
     }
   }, [isOpen]);
 
@@ -164,7 +169,9 @@ export default function PhotoCaptureModal({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Please select a valid image file (PNG, JPG, WEBP)");
+      const errorMsg = "Please select a valid image file (PNG, JPG, WEBP)";
+      setModalError(errorMsg);
+      onToast?.(`⚠️ ${errorMsg}`);
       return;
     }
 
@@ -216,6 +223,84 @@ export default function PhotoCaptureModal({
     }
   };
 
+  // Paste from Clipboard directly via button click
+  const handlePasteFromClipboard = async () => {
+    try {
+      setModalError(null);
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        const imageTypes = item.types.filter(type => type.startsWith("image/"));
+        if (imageTypes.length > 0) {
+          const blob = await item.getType(imageTypes[0]);
+          const reader = new FileReader();
+          reader.onload = async () => {
+            if (typeof reader.result === "string") {
+              const rawDataUrl = reader.result;
+              try {
+                const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
+                setCapturedImage({ dataUrl: optimized, name: "Clipboard Image" });
+                setMode("preview");
+              } catch {
+                setCapturedImage({ dataUrl: rawDataUrl, name: "Clipboard Image" });
+                setMode("preview");
+              }
+            }
+          };
+          reader.readAsDataURL(blob);
+          onToast?.("📋 Image pasted from clipboard!");
+          return;
+        }
+      }
+      const errorMsg = "No image found in clipboard! Please copy an image or screenshot to your clipboard first, then click Paste.";
+      setModalError(errorMsg);
+      onToast?.(`⚠️ ${errorMsg}`);
+    } catch (err: any) {
+      console.warn("Direct clipboard reading permission or support missing:", err);
+      const errorMsg = "Could not access clipboard directly due to browser security or iframe constraints. Please try pressing Ctrl+V (or Cmd+V on Mac) anywhere on this screen to paste the image!";
+      setModalError(errorMsg);
+    }
+  };
+
+  // Global Ctrl+V / Cmd+V paste event listener
+  useEffect(() => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
+      if (!isOpen) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const blob = item.getAsFile();
+          if (blob) {
+            setModalError(null);
+            const reader = new FileReader();
+            reader.onload = async () => {
+              if (typeof reader.result === "string") {
+                const rawDataUrl = reader.result;
+                try {
+                  const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
+                  setCapturedImage({ dataUrl: optimized, name: "Pasted Clipboard Image" });
+                  setMode("preview");
+                } catch {
+                  setCapturedImage({ dataUrl: rawDataUrl, name: "Pasted Image" });
+                  setMode("preview");
+                }
+              }
+            };
+            reader.readAsDataURL(blob);
+            onToast?.("📋 Image pasted from clipboard!");
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => {
+      window.removeEventListener("paste", handleGlobalPaste);
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -226,7 +311,7 @@ export default function PhotoCaptureModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className="bg-white border border-stone-200 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col relative"
+          className="bg-white border border-stone-200 rounded-2xl shadow-2xl max-w-lg w-full max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col relative"
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-stone-200 bg-stone-50/80 flex items-center justify-between shrink-0">
@@ -295,7 +380,25 @@ export default function PhotoCaptureModal({
           <canvas ref={canvasRef} className="hidden" />
 
           {/* Body Content */}
-          <div className="p-5 flex-1 flex flex-col justify-center min-h-[300px]">
+          <div className="p-4 sm:p-5 flex-1 overflow-y-auto min-h-0">
+            {/* Modal Error Banner */}
+            {modalError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-red-900 shadow-2xs">
+                <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-xs sm:text-sm font-semibold">Clipboard Notice</p>
+                  <p className="text-xs text-red-700 mt-1 leading-normal break-words">{modalError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalError(null)}
+                  className="p-1 rounded hover:bg-red-100 text-red-500 hover:text-red-700 shrink-0 cursor-pointer"
+                  title="Dismiss"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             {/* Mode 1: Choice Screen */}
             {mode === "choose" && (
               <div 
@@ -304,7 +407,7 @@ export default function PhotoCaptureModal({
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Option A: Take a Picture (Live Camera Modal or Direct Shutter) */}
                   <button
                     type="button"
@@ -316,21 +419,24 @@ export default function PhotoCaptureModal({
                         cameraInputRef.current?.click();
                       }
                     }}
-                    className="p-5 rounded-2xl border-2 border-dashed border-stone-300 hover:border-blue-500 bg-stone-50/80 hover:bg-blue-50/50 transition-all text-left flex flex-col items-center sm:items-start text-center sm:text-left gap-3 group cursor-pointer shadow-2xs hover:shadow-md"
+                    className="p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-2 border-dashed border-stone-300 hover:border-blue-500 bg-stone-50/80 hover:bg-blue-50/50 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-3 sm:gap-3 group cursor-pointer shadow-2xs hover:shadow-md w-full"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-blue-600 group-hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
-                      <Camera className="w-6 h-6" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-600 group-hover:bg-blue-700 text-white flex items-center justify-center shadow-md transition-transform group-hover:scale-105 shrink-0">
+                      <Camera className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-stone-900 group-hover:text-blue-950 text-sm sm:text-base">
                         Take a Picture
                       </h4>
-                      <p className="text-xs text-stone-500 mt-1 leading-snug">
+                      <p className="text-xs text-stone-500 mt-0.5 leading-snug sm:block hidden">
                         Use your camera/webcam to snap a live photo right now
                       </p>
+                      <p className="text-[11px] text-stone-400 mt-0.5 leading-snug block sm:hidden">
+                        Snap a live photo right now
+                      </p>
                     </div>
-                    <span className="mt-auto px-2.5 py-1 bg-blue-100 group-hover:bg-blue-200 text-blue-900 text-[11px] font-bold rounded-lg transition-colors">
-                      📸 Snap Photo
+                    <span className="shrink-0 sm:mt-auto px-2 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 group-hover:bg-blue-200 text-blue-900 text-[10px] sm:text-[11px] font-bold rounded-lg transition-colors">
+                      📸 Snap
                     </span>
                   </button>
 
@@ -338,21 +444,49 @@ export default function PhotoCaptureModal({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-5 rounded-2xl border-2 border-dashed border-stone-300 hover:border-amber-500 bg-stone-50/80 hover:bg-amber-50/50 transition-all text-left flex flex-col items-center sm:items-start text-center sm:text-left gap-3 group cursor-pointer shadow-2xs hover:shadow-md"
+                    className="p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-2 border-dashed border-stone-300 hover:border-amber-500 bg-stone-50/80 hover:bg-amber-50/50 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-3 sm:gap-3 group cursor-pointer shadow-2xs hover:shadow-md w-full"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-stone-900 group-hover:bg-amber-600 text-amber-400 group-hover:text-white flex items-center justify-center shadow-md transition-transform group-hover:scale-105">
-                      <ImageIcon className="w-6 h-6" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-stone-900 group-hover:bg-amber-600 text-amber-400 group-hover:text-white flex items-center justify-center shadow-md transition-transform group-hover:scale-105 shrink-0">
+                      <ImageIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-stone-900 group-hover:text-amber-950 text-sm sm:text-base">
-                        Upload Image File
+                        Upload Image
                       </h4>
-                      <p className="text-xs text-stone-500 mt-1 leading-snug">
+                      <p className="text-xs text-stone-500 mt-0.5 leading-snug sm:block hidden">
                         Select an existing picture or screenshot from device gallery
                       </p>
+                      <p className="text-[11px] text-stone-400 mt-0.5 leading-snug block sm:hidden">
+                        Choose from device gallery
+                      </p>
                     </div>
-                    <span className="mt-auto px-2.5 py-1 bg-stone-200 group-hover:bg-amber-200 text-stone-800 group-hover:text-amber-950 text-[11px] font-bold rounded-lg transition-colors">
-                      🖼️ Browse Files
+                    <span className="shrink-0 sm:mt-auto px-2 py-0.5 sm:px-2.5 sm:py-1 bg-stone-200 group-hover:bg-amber-200 text-stone-800 group-hover:text-amber-950 text-[10px] sm:text-[11px] font-bold rounded-lg transition-colors">
+                      🖼️ Browse
+                    </span>
+                  </button>
+
+                  {/* Option C: Paste from Clipboard */}
+                  <button
+                    type="button"
+                    onClick={handlePasteFromClipboard}
+                    className="p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border-2 border-dashed border-stone-300 hover:border-violet-500 bg-stone-50/80 hover:bg-violet-50/50 transition-all text-left flex flex-row sm:flex-col items-center sm:items-start gap-3 sm:gap-3 group cursor-pointer shadow-2xs hover:shadow-md w-full"
+                  >
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-violet-600 group-hover:bg-violet-700 text-white flex items-center justify-center shadow-md transition-transform group-hover:scale-105 shrink-0">
+                      <Clipboard className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-stone-900 group-hover:text-violet-950 text-sm sm:text-base">
+                        Paste Clipboard
+                      </h4>
+                      <p className="text-xs text-stone-500 mt-0.5 leading-snug sm:block hidden">
+                        Instantly paste an image or screenshot from your clipboard
+                      </p>
+                      <p className="text-[11px] text-stone-400 mt-0.5 leading-snug block sm:hidden">
+                        Paste image from clipboard
+                      </p>
+                    </div>
+                    <span className="shrink-0 sm:mt-auto px-2 py-0.5 sm:px-2.5 sm:py-1 bg-violet-100 group-hover:bg-violet-200 text-violet-900 text-[10px] sm:text-[11px] font-bold rounded-lg transition-colors">
+                      📋 Paste
                     </span>
                   </button>
                 </div>
@@ -368,10 +502,10 @@ export default function PhotoCaptureModal({
                     <span>Open Phone Camera App directly</span>
                   </button>
 
-                  <div className={`w-full py-3 px-4 border border-dashed rounded-xl text-center transition-colors ${isDragging ? "border-blue-500 bg-blue-50" : "border-stone-200 bg-stone-50/50"}`}>
-                    <p className="text-xs text-stone-500 font-medium flex items-center justify-center gap-1.5">
+                  <div className={`hidden sm:block w-full py-3 px-4 border border-dashed rounded-xl text-center transition-colors ${isDragging ? "border-blue-500 bg-blue-50" : "border-stone-200 bg-stone-50/50"}`}>
+                    <p className="text-xs text-stone-500 font-medium flex items-center justify-center gap-1.5 flex-wrap">
                       <Upload className="w-3.5 h-3.5 text-stone-400" />
-                      Or drag and drop an image file here
+                      <span>Or drag & drop an image file, or press <b>Ctrl+V</b> / <b>Cmd+V</b> to paste</span>
                     </p>
                   </div>
                 </div>

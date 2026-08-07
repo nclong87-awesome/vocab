@@ -152,6 +152,12 @@ export interface ChatMessage {
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
   flashcardData?: FlashcardData;
+  suggestedReplies?: {
+    reply: string;
+    translation: string;
+    tone: string;
+    explanation: string;
+  }[];
   provider?: string;
   model?: string;
   responseTimeMs?: number;

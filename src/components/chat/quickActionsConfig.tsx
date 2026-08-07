@@ -29,6 +29,7 @@ export interface QuickActionItem {
     onSendMessage: (text: string) => void;
     onClearHistory: () => void;
     onViewFlashcard?: () => void;
+    onSuggestCasualReplyPrompt?: () => void;
   }) => void;
 }
 
@@ -216,6 +217,22 @@ export function getQuickActionItems(): QuickActionItem[] {
       getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();
         onFixGrammar();
+      }
+    },
+    {
+      id: "suggest_reply",
+      label: "Suggest Casual Reply",
+      category: "writing",
+      categoryLabel: "Writing",
+      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+      title: "Suggest Casual Reply",
+      description: "Suggest casual replies and target vocabulary from a screenshot or text of a conversation",
+      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 1,
+      defaultModels: [],
+      getAction: ({ onSuggestCasualReplyPrompt, onClearHistory }) => {
+        onClearHistory();
+        onSuggestCasualReplyPrompt?.();
       }
     },
     {

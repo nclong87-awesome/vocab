@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Send, Sparkles, Volume2, 
-  ChevronRight, Check,
+  ChevronRight, Check, Copy,
   LayoutGrid, X, Search,
   Camera, Image as _ImageIcon, Upload, ArrowUpDown, Clock
 } from "lucide-react";
@@ -29,11 +29,14 @@ interface ChatViewProps {
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
+  onSuggestCasualReplyPrompt?: () => void;
+  onSuggestCasualReply?: (imageDataUrl: string | null, customPrompt: string) => Promise<void>;
   onSelectDefinition?: (word: string, senseIndex: number, translation: string) => void;
   onSwitchProvider?: (provider: LLMProvider, model?: string) => void;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   words: Word[];
+  conversationalState?: string;
 }
 
 export default function ChatView({
@@ -50,10 +53,13 @@ export default function ChatView({
   onFixGrammar,
   onViewFlashcard,
   onAnalyzeImageVocab,
+  onSuggestCasualReplyPrompt,
+  onSuggestCasualReply,
   onSelectDefinition,
   onSwitchProvider,
   ttsConfig,
   llmConfig,
+  conversationalState = "none",
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
@@ -219,7 +225,9 @@ export default function ChatView({
     ...item,
     onClick: () => {
       handleIncrementActionCount(item.id);
-      setSelectedImage(null);
+      if (item.id !== "suggest_reply") {
+        setSelectedImage(null);
+      }
 
       // Check default models for quick action and set active model for session with rotation if available & not locked
       if (llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
@@ -242,6 +250,10 @@ export default function ChatView({
         onSendMessage,
         onClearHistory,
         onViewFlashcard,
+        onSuggestCasualReplyPrompt: () => {
+          setIsPhotoModalOpen(true);
+          onSuggestCasualReplyPrompt?.();
+        },
       });
       setIsActionsPanelOpen(false);
       scrollToBottom("smooth");
@@ -347,6 +359,19 @@ export default function ChatView({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (conversationalState === "suggesting_reply") {
+      const imgData = selectedImage ? selectedImage.dataUrl : null;
+      const promptText = inputText.trim();
+      if (!imgData && !promptText) return;
+      setSelectedImage(null);
+      setInputText("");
+      if (onSuggestCasualReply) {
+        onSuggestCasualReply(imgData, promptText);
+      }
+      scrollToBottom("smooth");
+      return;
+    }
+
     if (selectedImage && onAnalyzeImageVocab) {
       const imgData = selectedImage.dataUrl;
       const promptText = inputText.trim();
@@ -490,7 +515,7 @@ export default function ChatView({
               // Filter actions if this is NOT the latest message in the thread:
               // Hide interactive navigation actions ("send_message", "quiz_answer", "start_quiz") on old messages
               if (!isLatestMessage) {
-                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image");
+                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image" || a.action === "copy_text" || a.action === "copy_sentence");
               }
             }
 
@@ -574,6 +599,61 @@ export default function ChatView({
                               <Check className="w-3.5 h-3.5" />
                               <span>Copy</span>
                             </button>
+                          </div>
+                        )}
+
+                        {/* Suggested replies cards with direct Copy buttons */}
+                        {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (
+                          <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
+                            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block font-mono mb-2">
+                              Suggested Replies (Quick Copy):
+                            </span>
+                            <div className="grid grid-cols-1 gap-3">
+                              {msg.suggestedReplies.map((rep, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-3 bg-stone-50/80 hover:bg-stone-50 border border-stone-200/80 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition-colors"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10px] font-extrabold text-violet-700 font-mono bg-violet-100 px-1.5 py-0.5 rounded">
+                                        Option {idx + 1}
+                                      </span>
+                                      {rep.tone && (
+                                        <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200/40 px-1.5 py-0.5 rounded-md">
+                                          {rep.tone}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm font-semibold text-stone-900 mt-2 break-words bg-white/70 px-2 py-1.5 border border-stone-100 rounded-lg">
+                                      {rep.reply}
+                                    </p>
+                                    {rep.translation && (
+                                      <p className="text-xs text-stone-600 mt-1.5 italic px-1">
+                                        {rep.translation}
+                                      </p>
+                                    )}
+                                    {rep.explanation && (
+                                      <p className="text-xs text-stone-500 mt-1 px-1 leading-normal">
+                                        {rep.explanation}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(rep.reply);
+                                      showToast("📋 Copied suggestion to clipboard!");
+                                    }}
+                                    className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-102 active:scale-98 mt-1"
+                                    title="Copy suggestion to clipboard"
+                                  >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Copy</span>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -674,8 +754,12 @@ export default function ChatView({
                                 const textToCopy = act.payload?.text || msg.fixedSentence || "";
                                 if (textToCopy) {
                                   navigator.clipboard.writeText(textToCopy);
-                                  showToast("📋 Copied fixed sentence to clipboard!");
+                                  showToast("📋 Copied selection to clipboard!");
                                 }
+                              } else if (act.action === "suggest_another") {
+                                handleIncrementActionCount("suggest_reply");
+                                setIsPhotoModalOpen(true);
+                                onSuggestCasualReplyPrompt?.();
                               } else if (act.action === "fix_another") {
                                 handleIncrementActionCount("fix_grammar");
                                 onFixGrammar();
@@ -1075,7 +1159,9 @@ export default function ChatView({
                   Photo Attached: {selectedImage.name}
                 </span>
                 <span className="text-[10px] text-amber-800/80 block">
-                  Gemini Vision will extract & translate vocabulary items when submitted
+                  {conversationalState === "suggesting_reply"
+                    ? "Gemini Vision will analyze the screenshot to suggest casual replies when submitted"
+                    : "Gemini Vision will extract & translate vocabulary items when submitted"}
                 </span>
               </div>
             </div>
@@ -1150,6 +1236,7 @@ export default function ChatView({
           showToast("📷 Photo attached! Click Send or press Enter to analyze with AI Vision.");
         }}
         targetLanguage={targetLanguage}
+        onToast={showToast}
       />
     </div>
   );

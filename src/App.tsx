@@ -6,7 +6,7 @@ import { DEFAULT_WORDS } from "./defaultWords";
 import { calculateNewStreak } from "./utils";
 import { switchActiveProvider, getSavedProvidersMap } from "./utils/llmHelpers";
 import { lockModel } from "./utils/autoModeManager";
-import { sendChatMessageService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService, generateFlashcardContentService } from "./services/llmClientService";
+import { sendChatMessageService, checkWordDefinitionsService, generateRandomWordsService, generateAiQuizQuestionsService, fixGrammarService, analyzeImageVocabService, generateFlashcardContentService, suggestCasualReplyService } from "./services/llmClientService";
 import { QuizQuestion } from "./types";
 import { 
   getAllWordsFromDB, 
@@ -288,7 +288,7 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
 
   // Conversational state for prompting word addition & grammar fixing
-  const [conversationalState, setConversationalState] = useState<"none" | "adding_word" | "generating_topic_subject" | "generating_topic_count" | "fixing_grammar">("none");
+  const [conversationalState, setConversationalState] = useState<"none" | "adding_word" | "generating_topic_subject" | "generating_topic_count" | "fixing_grammar" | "suggesting_reply">("none");
   const [pendingTopicSubject, setPendingTopicSubject] = useState<string>("");
 
   // Pending word senses for multi-definition disambiguation
@@ -601,6 +601,12 @@ export default function App() {
     if (conversationalState === "fixing_grammar") {
       setConversationalState("none");
       await handleConversationalFixGrammar(text.trim(), configToUse);
+      return;
+    }
+
+    if (conversationalState === "suggesting_reply") {
+      setConversationalState("none");
+      await handleSuggestCasualReply(null, text.trim(), configToUse);
       return;
     }
 
@@ -1315,6 +1321,144 @@ export default function App() {
     }
   };
 
+  // Trigger Suggest Casual Reply flow from Chat Quick Actions
+  const handlePromptSuggestCasualReply = () => {
+    setActiveQuiz(null);
+    setPendingWordSenses(null);
+    setConversationalState("suggesting_reply");
+    const promptMsg: ChatMessage = {
+      id: `suggest-reply-prompt-${Date.now()}`,
+      role: "assistant",
+      content: `💬 **Suggest a Casual Reply**\n\nUpload an image (or screenshot) of a conversation, or enter some text to guide me (or both!).\n\nI will analyze the conversation and your guiding instructions, then return a few suggested replies along with candidate vocabulary words!`,
+      timestamp: new Date().toISOString()
+    };
+    setChatMessages([promptMsg]);
+  };
+
+  const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string, overrideConfig?: LLMConfig) => {
+    const configToUse = overrideConfig || llmConfig;
+    setIsTyping(true);
+    const statusMsgId = `suggest-reply-status-${Date.now()}`;
+
+    // Add user message to display what they provided
+    let userMsgContent = "";
+    if (customPrompt) {
+      userMsgContent += `Guiding text: "${customPrompt}"`;
+    }
+    if (imageDataUrl) {
+      userMsgContent += userMsgContent ? "\n[Conversation screenshot attached]" : "[Conversation screenshot attached]";
+    }
+
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: `user-reply-req-${Date.now()}`,
+        role: "user",
+        content: userMsgContent || "Suggest a casual reply based on the attached screenshot",
+        timestamp: new Date().toISOString()
+      },
+      {
+        id: statusMsgId,
+        role: "assistant",
+        content: `💬 *Analyzing conversation and suggesting replies...*`,
+        timestamp: new Date().toISOString()
+      }
+    ]);
+
+    try {
+      const res = await suggestCasualReplyService({
+        imageDataUrl,
+        customPrompt,
+        targetLanguage,
+        nativeLanguage,
+        llmConfig: configToUse
+      });
+
+      const replies = res.suggestedReplies || [];
+      const candidates = res.vocabularyCandidates || [];
+
+      // Construct suggested actions
+      const actions: any[] = [];
+
+      // Add a copy action for each reply option
+      if (replies.length > 0) {
+        replies.forEach((rep, idx) => {
+          if (rep.reply) {
+            actions.push({
+              label: `📋 Copy Suggestion ${idx + 1} (${rep.tone || "Casual"})`,
+              action: "copy_text",
+              payload: { text: rep.reply }
+            });
+          }
+        });
+      }
+
+      // Add collection save action for each candidate vocabulary
+      if (candidates && candidates.length > 0) {
+        candidates.forEach(cand => {
+          if (cand.word) {
+            actions.push({
+              label: `➕ Add "${cand.word}" to collection (${cand.reason || "Suggested vocabulary"})`,
+              action: "add_word",
+              payload: { word: cand.word, hint: cand.reason || cand.translation }
+            });
+          }
+        });
+      }
+
+      // Try suggesting another
+      actions.push({
+        label: "💬 Suggest Another Casual Reply",
+        action: "suggest_another"
+      });
+
+      let contentMarkdown = `### 💬 Suggested Casual Replies:\n\n`;
+      if (replies.length > 0) {
+        replies.forEach((rep, idx) => {
+          contentMarkdown += `**Option ${idx + 1}:** \`${rep.reply}\`\n`;
+          contentMarkdown += `- **Tone:** *${rep.tone || "General"}*\n`;
+          contentMarkdown += `- **Translation:** *${rep.translation}*\n`;
+          contentMarkdown += `- **Explanation:** ${rep.explanation}\n\n`;
+        });
+      } else {
+        contentMarkdown += `*No direct replies could be formulated. Try providing more text or a clearer screenshot.*\n\n`;
+      }
+
+      if (candidates && candidates.length > 0) {
+        contentMarkdown += `---\n### 📚 Useful Conversation Vocabulary:\n`;
+        candidates.forEach(c => {
+          contentMarkdown += `- **${c.word}**: *${c.translation}* — ${c.reason}\n`;
+        });
+      }
+
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `sys-reply-res-${Date.now()}`,
+            role: "assistant",
+            content: contentMarkdown.trim(),
+            timestamp: new Date().toISOString(),
+            suggestedActions: actions,
+            suggestedReplies: replies,
+            provider: res.provider,
+            model: res.model,
+            responseTimeMs: res.responseTimeMs
+          }
+        ];
+      });
+    } catch (err: any) {
+      console.error("Suggest Casual Reply Error:", err);
+      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
+      handleAiApiError(err, configToUse, (newConfig) => {
+        handleSuggestCasualReply(imageDataUrl, customPrompt, newConfig);
+      });
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   // Trigger Fix Grammar & Polish flow from Chat Quick Actions
   const handlePromptFixGrammar = () => {
     setActiveQuiz(null);
@@ -1977,6 +2121,9 @@ export default function App() {
                     words={words}
                     onAnalyzeImageVocab={handleAnalyzeImageVocab}
                     onAddMultipleWords={handleAddMultipleWords}
+                    onSuggestCasualReplyPrompt={handlePromptSuggestCasualReply}
+                    onSuggestCasualReply={handleSuggestCasualReply}
+                    conversationalState={conversationalState}
                   />
                 )}
               </motion.div>

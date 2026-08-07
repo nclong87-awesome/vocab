@@ -1882,6 +1882,177 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
   }
 });
 
+// 9.5. Suggest Casual Reply
+app.post("/api/suggest-casual-reply", async (req, res) => {
+  try {
+    const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = req.body;
+
+    const userTarget = targetLanguage || "English";
+    const userNative = nativeLanguage || "Vietnamese";
+
+    let prompt = `You are a friendly, natural language and culture assistant. Suggest a few natural, casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}").`;
+
+    if (customPrompt) {
+      prompt += `\nUser guidance/instruction: "${customPrompt}"`;
+    }
+
+    if (imageDataUrl) {
+      prompt += `\n\nAnalyze the attached conversation screenshot image to understand the context and flow, then provide customized replies.`;
+    }
+
+    prompt += `\n\nCRITICAL INSTRUCTIONS:
+1. Provide a list of "suggestedReplies". Each item must include:
+   - "reply": The suggested response in "${userTarget}". Keep them sounding highly natural, native, and casual.
+   - "translation": The exact translation of the response in "${userNative}".
+   - "tone": A description of the tone/vibe (e.g., "Casual & Chill", "Playful & Teasing", "Sincere & Warm", "Brief & Direct").
+   - "explanation": Nuance or context explaining when and how to use this response, written in "${userNative}".
+2. Provide a list of "vocabularyCandidates". Identify 1 to 4 useful vocabulary terms (words, phrases, slang, or idioms) from the conversation/screenshot or suggested replies. Each item must include:
+   - "word": The word or phrase in "${userTarget}".
+   - "translation": The translation in "${userNative}".
+   - "reason": A short explanation of its usage/meaning, written in "${userNative}".
+`;
+
+    const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies and candidate vocabulary words. Output strictly valid JSON-only output matching the schema. Do not include any markdown backticks or conversational text outside the JSON.`;
+
+    const schemaDesc = {
+      type: "object",
+      properties: {
+        suggestedReplies: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              reply: { type: "string" },
+              translation: { type: "string" },
+              tone: { type: "string" },
+              explanation: { type: "string" }
+            },
+            required: ["reply", "translation", "tone", "explanation"]
+          }
+        },
+        vocabularyCandidates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              word: { type: "string" },
+              translation: { type: "string" },
+              reason: { type: "string" }
+            },
+            required: ["word", "translation", "reason"]
+          }
+        }
+      },
+      required: ["suggestedReplies", "vocabularyCandidates"]
+    };
+
+    if (imageDataUrl) {
+      let base64Data = imageDataUrl;
+      let mimeType = "image/jpeg";
+      if (imageDataUrl.startsWith("data:")) {
+        const parts = imageDataUrl.split(";base64,");
+        const meta = parts[0];
+        base64Data = parts[1] || imageDataUrl;
+        const mimeMatch = meta.match(/data:([^;]+)/);
+        if (mimeMatch) {
+          mimeType = mimeMatch[1];
+        }
+      }
+
+      // 1. Try Cloudflare image-analysis worker
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json"
+        };
+        headers["X-Proxy-Key"] = process.env.PROXY_SECRET || "";
+
+        const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            nativeLanguage: userNative,
+            targetLanguage: userTarget,
+            imageData: base64Data,
+            customPrompt,
+            systemPrompt: systemInstruction,
+            userText: prompt
+          })
+        });
+
+        if (workerRes.ok) {
+          const rawText = await workerRes.text();
+          const cleanText = cleanJsonResponse(rawText);
+          const result = cleanAndParseJson(cleanText);
+          if (result && (result.suggestedReplies || result.vocabularyCandidates)) {
+            return res.json({
+              ...result,
+              provider: "cloudflare-worker",
+              model: "image-analysis-worker"
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Cloudflare worker image-analysis for suggest-casual-reply failed, falling back to direct Gemini:", err);
+      }
+
+      // 2. Direct Gemini fallback
+      const apiKey = llmConfig?.apiKey || process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ error: "Gemini API key is required to analyze images." });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey: apiKey,
+        httpOptions: { 
+          headers: { 
+            'User-Agent': 'aistudio-build',
+          } 
+        }
+      });
+
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType
+        }
+      };
+      const textPart = {
+        text: prompt
+      };
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: { parts: [imagePart, textPart] },
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json"
+        }
+      });
+
+      if (!response.text) {
+        throw new Error("Empty response received from Gemini Vision.");
+      }
+
+      const cleanText = cleanJsonResponse(response.text);
+      const result = cleanAndParseJson(cleanText);
+      return res.json({
+        ...result,
+        provider: "gemini",
+        model: "gemini-3.6-flash"
+      });
+    } else {
+      const text = await callLLM(prompt, systemInstruction, JSON.stringify(schemaDesc), llmConfig);
+      const result = cleanAndParseJson(text);
+      return res.json(result);
+    }
+  } catch (error: any) {
+    console.error("Error suggesting casual reply:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+  }
+});
+
 // 10. Multimodal Image Vocabulary Analysis endpoint with Worker + Gemini Fallback
 app.post("/api/analyze-image-vocab", async (req, res) => {
   try {
@@ -1902,6 +2073,28 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
     };
     headers["X-Proxy-Key"] = process.env.PROXY_SECRET || "";
 
+    const systemPrompt =
+      "You are a Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.\n" +
+      "Output MUST be strictly valid raw JSON-only matching:\n" +
+      "{\n" +
+      '  "imageDescription": "string",\n' +
+      '  "vocabularyItems": [\n' +
+      "    {\n" +
+      '      "word": "string",\n' +
+      '      "translation": "string",\n' +
+      '      "partOfSpeech": "string",\n' +
+      '      "pronunciation": "string",\n' +
+      '      "definition": "string",\n' +
+      '      "example": "string",\n' +
+      '      "exampleTranslation": "string",\n' +
+      '      "category": "string",\n' +
+      '      "context": "string"\n' +
+      "    }\n" +
+      "  ]\n" +
+      "}";
+
+    const userText = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.\nIdentify key objects, text, signs, items, actions, or scenes present in the image`;
+
     const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
       method: "POST",
       headers,
@@ -1909,7 +2102,9 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
         nativeLanguage,
         targetLanguage,
         imageData: base64Data,
-        customPrompt
+        customPrompt,
+        systemPrompt,
+        userText
       })
     });
 
