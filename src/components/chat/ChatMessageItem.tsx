@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Copy, Sparkles, Clock
+  Volume2, ChevronRight, Check, Sparkles, Clock
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -60,6 +61,14 @@ export default function ChatMessageItem({
   handleRecordActionUse,
 }: ChatMessageItemProps) {
   const isUser = msg.role === "user";
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (textToCopy: string, key: string, toastMessage: string) => {
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+    showToast(toastMessage);
+  };
 
   const parsedQuizOptions: { label: string; action: string; payload: any }[] = [];
   if (!isUser) {
@@ -193,7 +202,7 @@ export default function ChatMessageItem({
 
               {/* Fixed sentence copy card */}
               {msg.fixedSentence && (
-                <div className="mt-3 p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+                <div className="mt-3 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
                   <div className="min-w-0 flex-1">
                     <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block font-mono">
                       Polished Sentence:
@@ -204,70 +213,68 @@ export default function ChatMessageItem({
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(msg.fixedSentence!);
-                      showToast("📋 Copied fixed sentence to clipboard!");
-                    }}
+                    onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, "📋 Copied fixed sentence to clipboard!")}
                     className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
                     title="Copy fixed sentence to clipboard"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Copy</span>
+                    <span>{copiedKey === `fixed-${msg.id}` ? "Copied!" : "Copy"}</span>
                   </button>
                 </div>
               )}
 
               {/* Suggested replies cards with direct Copy buttons */}
               {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (
-                <div className="mt-4 space-y-3 border-t border-stone-100 pt-4">
+                <div className="mt-4 space-y-3 border-t border-stone-100/80 pt-3">
                   <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block font-mono mb-2">
                     Suggested Replies (Quick Copy):
                   </span>
                   <div className="grid grid-cols-1 gap-3">
-                    {msg.suggestedReplies.map((rep, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3 bg-stone-50/80 hover:bg-stone-50 border border-stone-200/80 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition-colors"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-extrabold text-violet-700 font-mono bg-violet-100 px-1.5 py-0.5 rounded">
-                              Option {idx + 1}
-                            </span>
-                            {rep.tone && (
-                              <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200/40 px-1.5 py-0.5 rounded-md">
-                                {rep.tone}
+                    {msg.suggestedReplies.map((rep, idx) => {
+                      const repKey = `reply-${msg.id}-${idx}`;
+                      const isCopied = copiedKey === repKey;
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition-all hover:border-amber-300/90"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <span className="text-[10px] font-extrabold text-amber-950 font-mono bg-amber-200/80 px-1.5 py-0.5 rounded">
+                                Option {idx + 1}
                               </span>
+                              {rep.tone && (
+                                <span className="text-[10px] font-semibold text-amber-900 bg-amber-100/90 border border-amber-300/50 px-1.5 py-0.5 rounded-md">
+                                  {rep.tone}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs sm:text-sm font-semibold text-stone-900 break-words mt-1">
+                              "{rep.reply}"
+                            </p>
+                            {rep.translation && (
+                              <p className="text-xs text-amber-900/80 italic mt-1.5 font-medium">
+                                {rep.translation}
+                              </p>
+                            )}
+                            {rep.explanation && (
+                              <p className="text-xs text-stone-600 mt-1 leading-normal">
+                                {rep.explanation}
+                              </p>
                             )}
                           </div>
-                          <p className="text-sm font-semibold text-stone-900 mt-2 break-words bg-white/70 px-2 py-1.5 border border-stone-100 rounded-lg">
-                            {rep.reply}
-                          </p>
-                          {rep.translation && (
-                            <p className="text-xs text-stone-600 mt-1.5 italic px-1">
-                              {rep.translation}
-                            </p>
-                          )}
-                          {rep.explanation && (
-                            <p className="text-xs text-stone-500 mt-1 px-1 leading-normal">
-                              {rep.explanation}
-                            </p>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(rep.reply, repKey, "📋 Copied suggestion to clipboard!")}
+                            className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95 mt-0.5"
+                            title="Copy suggestion to clipboard"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{isCopied ? "Copied!" : "Copy"}</span>
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(rep.reply);
-                            showToast("📋 Copied suggestion to clipboard!");
-                          }}
-                          className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-102 active:scale-98 mt-1"
-                          title="Copy suggestion to clipboard"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

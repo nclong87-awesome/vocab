@@ -1150,14 +1150,7 @@ export function useChat({
       });
 
       let contentMarkdown = `### 💬 Suggested Casual Replies:\n\n`;
-      if (replies.length > 0) {
-        replies.forEach((rep, idx) => {
-          contentMarkdown += `**Option ${idx + 1}:** \`${rep.reply}\`\n`;
-          contentMarkdown += `- **Tone:** *${rep.tone || "General"}*\n`;
-          contentMarkdown += `- **Translation:** *${rep.translation}*\n`;
-          contentMarkdown += `- **Explanation:** ${rep.explanation}\n\n`;
-        });
-      } else {
+      if (replies.length === 0) {
         contentMarkdown += `*No direct replies could be formulated. Try providing more text or a clearer screenshot.*\n\n`;
       }
 

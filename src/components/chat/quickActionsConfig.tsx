@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers, Cpu, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
-import { LLMConfig, LLMProvider } from "../../types";
+import React from "react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers } from "lucide-react";
+import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS, { RELIABLE_MODELS } from "../../config/llmProviders";
 import { 
-  isModelLocked,
-  clearAllLocks,
-  getLockedModels
+  isModelLocked
 } from "../../utils/autoModeManager";
 
 export interface QuickActionItem {
