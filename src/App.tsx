@@ -1376,19 +1376,6 @@ export default function App() {
       // Construct suggested actions
       const actions: any[] = [];
 
-      // Add a copy action for each reply option
-      if (replies.length > 0) {
-        replies.forEach((rep, idx) => {
-          if (rep.reply) {
-            actions.push({
-              label: `📋 Copy Suggestion ${idx + 1} (${rep.tone || "Casual"})`,
-              action: "copy_text",
-              payload: { text: rep.reply }
-            });
-          }
-        });
-      }
-
       // Add collection save action for each candidate vocabulary
       if (candidates && candidates.length > 0) {
         candidates.forEach(cand => {
