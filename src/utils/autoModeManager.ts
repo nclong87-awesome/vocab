@@ -28,7 +28,18 @@ export function getLockedModels(): LockedModelsMap {
 
     for (const key of Object.keys(parsed)) {
       if (parsed[key] && parsed[key].expiresAt > now) {
-        active[key] = parsed[key];
+        const info = parsed[key];
+        const providerOpt = PROVIDER_OPTIONS.find(p => p.id === info.provider);
+        if (providerOpt) {
+          if (info.provider !== "custom" && !providerOpt.models.includes(info.model)) {
+            changed = true; // Clean up removed model lockout
+            continue;
+          }
+        } else if (info.provider !== "custom") {
+          changed = true; // Clean up removed provider lockout
+          continue;
+        }
+        active[key] = info;
       } else {
         changed = true; // Clean up expired lockouts
       }
@@ -562,6 +573,16 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
       if (!pId || !m || m === "auto") continue;
 
       const providerOpt = PROVIDER_OPTIONS.find(p => p.id === pId);
+
+      // Filter out models belonging to standard providers that have been removed from PROVIDER_OPTIONS
+      if (providerOpt) {
+        if (pId !== "custom" && !providerOpt.models.includes(m)) {
+          continue;
+        }
+      } else if (pId !== "custom") {
+        continue;
+      }
+
       const providerName = providerOpt?.name || pId;
       const lockedInfo = lockedMap[key];
       const isLocked = Boolean(lockedInfo && lockedInfo.expiresAt > Date.now());
