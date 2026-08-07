@@ -2284,12 +2284,10 @@ export async function analyzeImageVocabService(params: {
         };
       }
       const errorJson = await res.json().catch(() => null);
-      if (errorJson?.error) {
-        serverOrWorkerError = new Error(errorJson.error);
-      }
+      throw new Error(errorJson?.error || `Server API analyze-image-vocab failed with status ${res.status}`);
     } catch (e: any) {
-      console.warn("Server API analyze-image-vocab failed, falling back to direct worker/Gemini:", e);
-      serverOrWorkerError = e;
+      console.error("Server API analyze-image-vocab failed:", e);
+      throw e;
     }
   }
 
@@ -2662,8 +2660,11 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
           responseTimeMs: duration
         };
       }
-    } catch (e) {
-      console.warn("Server API suggest-casual-reply failed, falling back to direct client-side:", e);
+      const errorJson = await res.json().catch(() => null);
+      throw new Error(errorJson?.error || `Server API suggest-casual-reply failed with status ${res.status}`);
+    } catch (e: any) {
+      console.error("Server API suggest-casual-reply failed:", e);
+      throw e;
     }
   }
 
@@ -2678,6 +2679,8 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
   if (customPrompt) {
     prompt += `\n\nUser guidance/instruction: "${customPrompt}"`;
   }
+
+  prompt += `\n\nCRITICAL DIRECTIVES:\n- NO REASONING OR THINKING: Do not include any chain of thought, reasoning, thinking process, explanation of reasoning, or commentary in your response. Do not use '<think>' tags or similar blocks. Output strictly valid raw JSON and absolutely nothing else.`;
 
   const schemaDesc = `{
     "suggestedReplies": [
@@ -2697,7 +2700,7 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
     ]
   }`;
 
-  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}") and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the following schema: \n
+  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}") and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the schema, with absolutely no thinking process, chain-of-thought, '<think>' tags, reasoning text, or conversational commentary included. Do not use any markdown code blocks: \n
 ${schemaDesc}`;
 
   try {
@@ -2735,8 +2738,9 @@ ${schemaDesc}`;
         })
       });
 
-      if (workerRes.ok) {
-        throw new Error("Unexpected successful response from image analysis worker for suggest casual reply. Expected JSON with suggestedReplies and vocabularyCandidates.");
+      if (!workerRes.ok) {
+        const errText = await workerRes.text().catch(() => workerRes.statusText);
+        throw new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
       }
 
       const rawText = await workerRes.text();

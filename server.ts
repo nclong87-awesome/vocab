@@ -1910,9 +1910,11 @@ app.post("/api/suggest-casual-reply", async (req, res) => {
    - "word": The word or phrase in "${userTarget}".
    - "translation": The translation in "${userNative}".
    - "reason": A short explanation of its usage/meaning, written in "${userNative}".
+
+3. NO REASONING OR THINKING: Do not include any chain of thought, reasoning, thinking process, explanation of reasoning, or commentary in your response. Do not use '<think>' tags or any tags like that. Output strictly the requested JSON block and absolutely nothing else.
 `;
 
-    const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies and candidate vocabulary words. Output strictly valid JSON-only output matching the schema. Do not include any markdown backticks or conversational text outside the JSON.`;
+    const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the schema, with absolutely no thinking process, chain-of-thought, '<think>' tags, reasoning text, or conversational commentary included. Do not include any markdown backticks or conversational text outside the JSON.`;
 
     const schemaDesc = {
       type: "object",
@@ -2122,6 +2124,62 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
       }
     }
     console.warn(`Cloudflare Image Worker returned non-ok status (${workerRes.status}), falling back to Gemini Vision...`);
+
+    // Direct Gemini fallback
+    const apiKey = _llmConfig?.apiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({ error: "Gemini API key is required to analyze images." });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: { 
+        headers: { 
+          'User-Agent': 'aistudio-build',
+        } 
+      }
+    });
+
+    let mimeType = "image/jpeg";
+    if (imageDataUrl.startsWith("data:")) {
+      const parts = imageDataUrl.split(";base64,");
+      const meta = parts[0];
+      const mimeMatch = meta.match(/data:([^;]+)/);
+      if (mimeMatch) {
+        mimeType = mimeMatch[1];
+      }
+    }
+
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: mimeType
+      }
+    };
+    const textPart = {
+      text: userText + (customPrompt ? `\nUser instruction: ${customPrompt}` : "")
+    };
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: { parts: [imagePart, textPart] },
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json"
+      }
+    });
+
+    if (!response.text) {
+      throw new Error("Empty response received from Gemini Vision.");
+    }
+
+    const cleanText = cleanJsonResponse(response.text);
+    const result = cleanAndParseJson(cleanText);
+    return res.json({
+      ...result,
+      provider: "gemini",
+      model: "gemini-3.6-flash"
+    });
   } catch (error: any) {
     console.error("Error analyzing image vocabulary:", error);
     res.status(500).json({ error: error.message || "Failed to analyze image vocabulary" });

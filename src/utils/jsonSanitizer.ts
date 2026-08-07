@@ -108,6 +108,9 @@ export function cleanJsonResponse(rawText: string): string {
   if (!rawText) return "";
   let text = String(rawText).trim();
 
+  // Strip <think>...</think> tags if present from chain-of-thought models
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
   // 1. Return immediately if already strictly valid JSON
   try {
     JSON.parse(text);
