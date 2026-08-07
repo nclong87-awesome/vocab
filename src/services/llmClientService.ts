@@ -14,6 +14,7 @@ import {
 } from "../utils/autoModeManager";
 
 import { cleanJsonResponse, cleanAndParseJson } from "../utils/jsonSanitizer";
+import { th } from "motion/react-client";
 export { cleanJsonResponse, cleanAndParseJson };
 
 const VALID_GEMINI_MODELS = [
@@ -2339,10 +2340,7 @@ export async function analyzeImageVocabService(params: {
     method: "POST",
     headers,
     body: JSON.stringify({
-      nativeLanguage,
-      targetLanguage,
       imageData: base64Data,
-      customPrompt,
       systemPrompt,
       userText
     })
@@ -2670,19 +2668,6 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
     }
   }
 
-  // 2. Direct client-side Gemini fallback
-  const effectiveApiKey = llmConfig?.apiKey;
-  const proxyKeyToUse = llmConfig?.proxyKey || (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "");
-
-  const ai = new GoogleGenAI({
-    apiKey: effectiveApiKey || proxyKeyToUse || "dummy-key",
-    httpOptions: { 
-      headers: { 
-        ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
-      } 
-    }
-  });
-
   let prompt = `You are a friendly, natural language and culture assistant. Suggest a few natural, casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}").`;
 
   if (customPrompt) {
@@ -2693,129 +2678,94 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
     prompt += `\n\nAnalyze the attached conversation screenshot image to understand the context and flow, then provide customized replies.`;
   }
 
-  prompt += `\n\nCRITICAL INSTRUCTIONS:
-1. Provide a list of "suggestedReplies". Each item must include:
-   - "reply": The suggested response in "${userTarget}". Keep them sounding highly natural, native, and casual.
-   - "translation": The exact translation of the response in "${userNative}".
-   - "tone": A description of the tone/vibe (e.g., "Casual & Chill", "Playful & Teasing", "Sincere & Warm", "Brief & Direct").
-   - "explanation": Nuance or context explaining when and how to use this response, written in "${userNative}".
-2. Provide a list of "vocabularyCandidates". Identify 1 to 4 useful vocabulary terms (words, phrases, slang, or idioms) from the conversation/screenshot or suggested replies. Each item must include:
-   - "word": The word or phrase in "${userTarget}".
-   - "translation": The translation in "${userNative}".
-   - "reason": A short explanation of its usage/meaning, written in "${userNative}".
-`;
+  const schemaDesc = `{
+    "suggestedReplies": [
+      {
+        "reply": "string (The suggested response in \"${userTarget}\". Keep them sounding highly natural, native, and casual.)",
+        "translation": "string (exact translation in \"${userNative}\")",
+        "tone": "string (tone/vibe description)",
+        "explanation": "string (nuance/usage explanation in \"${userNative}\")"
+      }
+    ],
+    "vocabularyCandidates": [
+      {
+        "word": "string (useful vocabulary term in ${userTarget})",
+        "translation": "string (translation in ${userNative})",
+        "reason": "string (short explanation of usage/meaning in ${userNative})"
+      }
+    ]
+  }`;
 
-  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies and candidate vocabulary words. Output strictly valid JSON-only output matching the schema. Do not include any markdown backticks or conversational text outside the JSON.`;
+  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the following schema: \n
+${schemaDesc}`;
 
   try {
-    let response;
     if (imageDataUrl) {
       let base64Data = imageDataUrl;
-      let mimeType = "image/jpeg";
       if (imageDataUrl.startsWith("data:")) {
         const parts = imageDataUrl.split(";base64,");
-        const meta = parts[0];
         base64Data = parts[1] || imageDataUrl;
-        const mimeMatch = meta.match(/data:([^;]+)/);
-        if (mimeMatch) {
-          mimeType = mimeMatch[1];
-        }
       }
 
-      // 1. Try Cloudflare image-analysis worker client-side
-      try {
-        const sharedProxyKey =
-          llmConfig?.proxyKey ||
-          (llmConfig?.savedProviders
-            ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) =>
-                Boolean(p?.proxyKey)
-              )?.proxyKey
-            : "") ||
-          "";
+      const sharedProxyKey =
+        llmConfig?.proxyKey ||
+        (llmConfig?.savedProviders
+          ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) =>
+              Boolean(p?.proxyKey)
+            )?.proxyKey
+          : "") ||
+        "";
 
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json"
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      };
+
+      if (sharedProxyKey) {
+        headers["X-Proxy-Key"] = sharedProxyKey;
+      }
+
+      const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          imageData: base64Data,
+          systemPrompt: systemInstruction,
+          userText: prompt
+        })
+      });
+
+      if (workerRes.ok) {
+        throw new Error("Unexpected successful response from image analysis worker for suggest casual reply. Expected JSON with suggestedReplies and vocabularyCandidates.");
+      }
+
+      const rawText = await workerRes.text();
+      const cleanText = cleanJsonResponse(rawText);
+      const parsed = JSON.parse(cleanText);
+      if (parsed && (parsed.suggestedReplies || parsed.vocabularyCandidates)) {
+        const duration = Math.round(performance.now() - startTime);
+        return {
+          ...parsed,
+          provider: "groq",
+          model: "qwen/qwen3.6-27b",
+          responseTimeMs: duration
         };
-
-        if (sharedProxyKey) {
-          headers["X-Proxy-Key"] = sharedProxyKey;
-        }
-
-        const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            nativeLanguage: userNative,
-            targetLanguage: userTarget,
-            imageData: base64Data,
-            customPrompt,
-            systemPrompt: systemInstruction,
-            userText: prompt
-          })
-        });
-
-        if (workerRes.ok) {
-          const rawText = await workerRes.text();
-          const cleanText = cleanJsonResponse(rawText);
-          const parsed = JSON.parse(cleanText);
-          if (parsed && (parsed.suggestedReplies || parsed.vocabularyCandidates)) {
-            const duration = Math.round(performance.now() - startTime);
-            return {
-              ...parsed,
-              provider: "cloudflare-worker",
-              model: "image-analysis-worker",
-              responseTimeMs: duration
-            };
-          }
-        }
-      } catch (err) {
-        console.warn("Client-side Cloudflare worker failed for suggestCasualReplyService, falling back to direct Gemini:", err);
       }
-
-      // 2. Direct Gemini fallback client-side
-      const imagePart = {
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType
-        }
-      };
-      const textPart = {
-        text: prompt
-      };
-
-      response = await ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: { parts: [imagePart, textPart] },
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
     } else {
-      response = await ai.models.generateContent({
-        model: llmConfig?.model || "gemini-3.6-flash",
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: "application/json"
-        }
-      });
+      // no image, just use the prompt directly with the LLM
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const cleaned = cleanJsonResponse(resWithMeta.text);
+      const parsed = JSON.parse(cleaned);
+      if (parsed && (parsed.suggestedReplies || parsed.vocabularyCandidates)) {
+        const duration = Math.round(performance.now() - startTime);
+        return {
+          ...parsed,
+          provider: resWithMeta.provider,
+          model: resWithMeta.model,
+          responseTimeMs: duration
+        };
+      }
     }
-
-    if (!response.text) {
-      throw new Error("Empty response from Gemini API.");
-    }
-
-    const cleanText = cleanJsonResponse(response.text);
-    const parsed = JSON.parse(cleanText);
-    const duration = Math.round(performance.now() - startTime);
-
-    return {
-      ...parsed,
-      provider: "gemini",
-      model: llmConfig?.model || "gemini-3.6-flash",
-      responseTimeMs: duration
-    };
+    throw new Error("Image analysis worker did not return valid JSON with suggestedReplies and vocabularyCandidates.");
   } catch (err: any) {
     console.error("Client side suggest casual reply error:", err);
     throw err;
