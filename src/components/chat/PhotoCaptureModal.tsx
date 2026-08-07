@@ -412,7 +412,7 @@ export default function PhotoCaptureModal({
                   <button
                     type="button"
                     onClick={() => {
-                      if (navigator.mediaDevices?.getUserMedia) {
+                      if (!!navigator.mediaDevices?.getUserMedia) {
                         setMode("camera");
                       } else {
                         // Fallback to native camera input
@@ -618,7 +618,7 @@ export default function PhotoCaptureModal({
 
                 <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 font-medium flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Gemini Vision will extract and translate key vocabulary items from this image!</span>
+                  <span>AI Vision will extract and translate key vocabulary items from this image!</span>
                 </div>
 
                 <div className="flex items-center gap-3 w-full pt-1">

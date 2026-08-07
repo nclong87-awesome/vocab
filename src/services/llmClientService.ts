@@ -2215,7 +2215,7 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
 }
 
 /**
- * Service to analyze image for vocabulary using Cloudflare worker and Gemini Vision fallback
+ * Service to analyze image for vocabulary using Cloudflare worker
  */
 export async function analyzeImageVocabService(params: {
   imageDataUrl: string;

@@ -48,8 +48,8 @@ export default function ChatInputForm({
               </span>
               <span className="text-[10px] text-amber-800/80 block">
                 {conversationalState === "suggesting_reply"
-                  ? "Gemini Vision will analyze the screenshot to suggest casual replies when submitted"
-                  : "Gemini Vision will extract & translate vocabulary items when submitted"}
+                  ? "AI Vision will analyze the screenshot to suggest casual replies when submitted"
+                  : "AI Vision will extract & translate vocabulary items when submitted"}
               </span>
             </div>
           </div>

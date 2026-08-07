@@ -337,7 +337,7 @@ export default function ChatView({
             <div className="space-y-1">
               <h3 className="text-lg font-bold">Drop Image to Extract Vocabulary</h3>
               <p className="text-xs text-blue-100 max-w-xs font-medium">
-                Gemini Vision will analyze the image and extract key vocabulary items in {targetLanguage}
+                AI Vision will analyze the image and extract key vocabulary items in {targetLanguage}
               </p>
             </div>
           </motion.div>
