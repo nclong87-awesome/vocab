@@ -29,9 +29,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "openai/gpt-oss-20b", 
       "openai/gpt-oss-safeguard-20b",
       "llama-3.3-70b-versatile",
-      "qwen/qwen3.6-27b"
-      // "groq/compound"
     ],
+    visionModels: ["qwen/qwen3.6-27b"],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
     directBaseUrl: "https://api.groq.com/openai/v1",
     requiresKey: false
@@ -92,6 +91,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "pro/gpt-5.6-luna"
       // "pro/glm-5"
     ],
+    visionModels: ["pro/gpt-5.6-luna"],
     defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://9flare.com/api/v1",
     requiresKey: false
@@ -145,9 +145,19 @@ export const RELIABLE_MODELS: string[] = [
   "pro/gpt-5.6-luna"
 ];
 
-export const VISION_MODELS: string[] = [
-  "qwen/qwen3.6-27b",
-  "pro/gpt-5.6-luna",
-]
+export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {
+  const visionModels = PROVIDER_OPTIONS.flatMap(p => (p.visionModels || []).map(m => ({ provider: p.id, model: m })));
+  if (visionModels.length === 0) return null;
+
+  const lastUsedModel = localStorage.getItem("last_used_vision_model");
+  let nextIndex = 0;
+  if (lastUsedModel) {
+    const lastIndex = visionModels.findIndex(m => `${m.provider}/${m.model}` === lastUsedModel);
+    nextIndex = (lastIndex + 1) % visionModels.length;
+  }
+  const nextModel = visionModels[nextIndex];
+  localStorage.setItem("last_used_vision_model", `${nextModel.provider}/${nextModel.model}`);
+  return nextModel;
+}
 
 export default PROVIDER_OPTIONS;

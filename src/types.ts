@@ -20,6 +20,7 @@ export interface LLMProviderOption {
   tagline: string;
   defaultModel: string;
   models: string[];
+  visionModels?: string[];
   tts_models?: string[];
   defaultBaseUrl?: string;
   directBaseUrl?: string;

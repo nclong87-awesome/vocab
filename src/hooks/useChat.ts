@@ -13,8 +13,7 @@ import {
 import { getQuizCandidateWords, getCandidateWordForFlashcard } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB } from "../db/indexedDB";
-import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
-import { VISION_MODELS } from "../config/llmProviders";
+import { getRotatedVisionModel } from "../config/llmProviders";
 
 interface UseChatProps {
   words: Word[];
@@ -505,7 +504,7 @@ export function useChat({
   };
 
   const getVisionModelConfig = (): LLMConfig | undefined => {
-    const match = getRotatedDefaultModel(VISION_MODELS);
+    const match = getRotatedVisionModel();
     if (match) {
       return {
         provider: match.provider,
