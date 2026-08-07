@@ -174,10 +174,10 @@ export default function ChatView({
     };
   }, []);
 
-  // Quick Actions Usage Counter (persisted in localStorage)
-  const [actionCounts, setActionCounts] = useState<Record<string, number>>(() => {
+  // Quick Actions Last Used Timestamps (persisted in localStorage)
+  const [actionLastUsed, setActionLastUsed] = useState<Record<string, number>>(() => {
     try {
-      const stored = localStorage.getItem("vocab_action_usage_counts");
+      const stored = localStorage.getItem("vocab_action_last_used");
       if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
@@ -185,11 +185,11 @@ export default function ChatView({
     return {};
   });
 
-  const handleIncrementActionCount = (actionId: string) => {
-    setActionCounts(prev => {
-      const updated = { ...prev, [actionId]: (prev[actionId] || 0) + 1 };
+  const handleRecordActionUse = (actionId: string) => {
+    setActionLastUsed(prev => {
+      const updated = { ...prev, [actionId]: Date.now() };
       try {
-        localStorage.setItem("vocab_action_usage_counts", JSON.stringify(updated));
+        localStorage.setItem("vocab_action_last_used", JSON.stringify(updated));
       } catch (e) {
         console.error(e);
       }
@@ -197,14 +197,14 @@ export default function ChatView({
     });
   };
 
-  const handleResetActionCounts = () => {
-    setActionCounts({});
+  const handleResetActionLastUsed = () => {
+    setActionLastUsed({});
     try {
-      localStorage.removeItem("vocab_action_usage_counts");
+      localStorage.removeItem("vocab_action_last_used");
     } catch (e) {
       console.error(e);
     }
-    showToast("🧹 Quick action usage counters reset!");
+    showToast("🧹 Quick action order reset!");
   };
 
   const showToast = (msgText: string) => {
@@ -382,7 +382,7 @@ export default function ChatView({
         scrollToBottom={scrollToBottom}
         focusInput={focusInput}
         setIsPhotoModalOpen={setIsPhotoModalOpen}
-        handleIncrementActionCount={handleIncrementActionCount}
+        handleRecordActionUse={handleRecordActionUse}
         messagesEndRef={messagesEndRef}
         latestMessageRef={latestMessageRef}
       />
@@ -392,9 +392,9 @@ export default function ChatView({
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
         llmConfig={llmConfig}
-        actionCounts={actionCounts}
-        handleIncrementActionCount={handleIncrementActionCount}
-        handleResetActionCounts={handleResetActionCounts}
+        actionLastUsed={actionLastUsed}
+        handleRecordActionUse={handleRecordActionUse}
+        handleResetActionLastUsed={handleResetActionLastUsed}
         onSendMessage={onSendMessage}
         onClearHistory={onClearHistory}
         onAddWord={onAddWord}

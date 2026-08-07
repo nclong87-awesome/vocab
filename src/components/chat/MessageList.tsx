@@ -25,7 +25,7 @@ interface MessageListProps {
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   focusInput: () => void;
   setIsPhotoModalOpen: (open: boolean) => void;
-  handleIncrementActionCount: (actionId: string) => void;
+  handleRecordActionUse: (actionId: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   latestMessageRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -52,7 +52,7 @@ export default function MessageList({
   scrollToBottom,
   focusInput,
   setIsPhotoModalOpen,
-  handleIncrementActionCount,
+  handleRecordActionUse,
   messagesEndRef,
   latestMessageRef,
 }: MessageListProps) {
@@ -92,7 +92,7 @@ export default function MessageList({
                 scrollToBottom={scrollToBottom}
                 focusInput={focusInput}
                 setIsPhotoModalOpen={setIsPhotoModalOpen}
-                handleIncrementActionCount={handleIncrementActionCount}
+                handleRecordActionUse={handleRecordActionUse}
               />
             </Fragment>
           );

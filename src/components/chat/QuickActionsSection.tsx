@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Search, X, ArrowUpDown, LayoutGrid } from "lucide-react";
+import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { QuickActionsModelConfig, getQuickActionItems, getRotatedDefaultModel } from "./quickActionsConfig";
 
@@ -8,9 +8,9 @@ interface QuickActionsSectionProps {
   targetLanguage: string;
   nativeLanguage: string;
   llmConfig: LLMConfig;
-  actionCounts: Record<string, number>;
-  handleIncrementActionCount: (actionId: string) => void;
-  handleResetActionCounts: () => void;
+  actionLastUsed: Record<string, number>;
+  handleRecordActionUse: (actionId: string) => void;
+  handleResetActionLastUsed: () => void;
   onSendMessage: (text: string) => Promise<void>;
   onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
@@ -30,9 +30,9 @@ export default function QuickActionsSection({
   targetLanguage,
   nativeLanguage,
   llmConfig,
-  actionCounts,
-  handleIncrementActionCount,
-  handleResetActionCounts,
+  actionLastUsed,
+  handleRecordActionUse,
+  handleResetActionLastUsed,
   onSendMessage,
   onClearHistory,
   onAddWord,
@@ -50,14 +50,13 @@ export default function QuickActionsSection({
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat">("all");
   const [actionSearchQuery, setActionSearchQuery] = useState("");
-  const [sortMode, setSortMode] = useState<"most_used" | "default">("most_used");
   const dockScrollRef = useRef<HTMLDivElement>(null);
 
   const quickActionItems = useMemo(() => {
     const allQuickActionItems = getQuickActionItems().map((item) => ({
       ...item,
       onClick: () => {
-        handleIncrementActionCount(item.id);
+        handleRecordActionUse(item.id);
         if (item.id !== "suggest_reply") {
           setSelectedImage(null);
         }
@@ -92,17 +91,16 @@ export default function QuickActionsSection({
         focusInput();
       }
     }));
+
     return [...allQuickActionItems].sort((a, b) => {
-      if (sortMode === "most_used") {
-        const countA = actionCounts[a.id] || 0;
-        const countB = actionCounts[b.id] || 0;
-        if (countB !== countA) {
-          return countB - countA;
-        }
+      const timeA = actionLastUsed[a.id] || 0;
+      const timeB = actionLastUsed[b.id] || 0;
+      if (timeB !== timeA) {
+        return timeB - timeA;
       }
       return a.defaultIndex - b.defaultIndex;
     });
-  }, [sortMode, actionCounts, llmConfig, targetLanguage, nativeLanguage, onSwitchProvider]);
+  }, [actionLastUsed, llmConfig, targetLanguage, nativeLanguage, onSwitchProvider, handleRecordActionUse, onAddWord, onClearHistory, onFixGrammar, onSendMessage, onStartQuiz, onSuggestCasualReplyPrompt, onViewFlashcard, focusInput, scrollToBottom, setIsPhotoModalOpen, setSelectedImage, showToast]);
 
   const filteredActionItems = quickActionItems.filter((item) => {
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
@@ -214,25 +212,11 @@ export default function QuickActionsSection({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSortMode(prev => prev === "most_used" ? "default" : "most_used")}
-                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                    sortMode === "most_used"
-                      ? "bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-300 shadow-2xs"
-                      : "bg-white hover:bg-stone-100 text-stone-700 border-stone-200"
-                  }`}
-                  title={sortMode === "most_used" ? "Sorting by Most Used. Click for Default Order." : "Sorting by Default Order. Click for Most Used."}
-                >
-                  <ArrowUpDown className="w-3.5 h-3.5" />
-                  <span>{sortMode === "most_used" ? "🔥 Sort: Most Used" : "📋 Sort: Default"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleResetActionCounts}
+                  onClick={handleResetActionLastUsed}
                   className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 hover:bg-stone-200/60 px-2 py-1 rounded-md transition-colors cursor-pointer"
-                  title="Reset usage counters for all actions"
+                  title="Reset recent use history to restore default action order"
                 >
-                  Reset Counts
+                  Reset Order
                 </button>
               </div>
             </div>
@@ -241,8 +225,6 @@ export default function QuickActionsSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto pr-1">
               {filteredActionItems.length > 0 ? (
                 filteredActionItems.map((item) => {
-                  const count = actionCounts[item.id] || 0;
-
                   return (
                     <button
                       key={item.id}
@@ -264,12 +246,6 @@ export default function QuickActionsSection({
                             </span>
                           </div>
                         </div>
-
-                        {count > 0 && (
-                          <span className="bg-stone-100 group-hover:bg-amber-200/80 text-stone-600 group-hover:text-amber-950 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md shrink-0">
-                            {count}x
-                          </span>
-                        )}
                       </div>
 
                       <p className="text-[11px] text-stone-500 group-hover:text-stone-700 leading-snug line-clamp-2">
@@ -298,14 +274,12 @@ export default function QuickActionsSection({
           className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5"
         >
           {quickActionItems.map((item) => {
-            const count = actionCounts[item.id] || 0;
-
             return (
               <button
                 key={item.id}
                 onClick={item.onClick}
                 className={`${item.className} relative group`}
-                title={`${item.title}${count > 0 ? ` (Used ${count} time${count === 1 ? '' : 's'})` : ''}`}
+                title={item.title}
                 id={`quick-action-btn-${item.id}`}
               >
                 {item.icon}

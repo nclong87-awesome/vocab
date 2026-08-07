@@ -31,7 +31,7 @@ interface ChatMessageItemProps {
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   focusInput: () => void;
   setIsPhotoModalOpen: (open: boolean) => void;
-  handleIncrementActionCount: (actionId: string) => void;
+  handleRecordActionUse: (actionId: string) => void;
 }
 
 export default function ChatMessageItem({
@@ -57,7 +57,7 @@ export default function ChatMessageItem({
   scrollToBottom,
   focusInput,
   setIsPhotoModalOpen,
-  handleIncrementActionCount,
+  handleRecordActionUse,
 }: ChatMessageItemProps) {
   const isUser = msg.role === "user";
 
@@ -372,33 +372,33 @@ export default function ChatMessageItem({
                         showToast("📋 Copied selection to clipboard!");
                       }
                     } else if (act.action === "suggest_another") {
-                      handleIncrementActionCount("suggest_reply");
+                      handleRecordActionUse("suggest_reply");
                       setIsPhotoModalOpen(true);
                       onSuggestCasualReplyPrompt?.();
                     } else if (act.action === "fix_another") {
-                      handleIncrementActionCount("fix_grammar");
+                      handleRecordActionUse("fix_grammar");
                       onFixGrammar();
                     } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
                       onAddMultipleWords([act.payload]);
                       showToast(`🎉 Added "${act.payload.word}" to collection!`);
                     } else if (act.action === "add_word" && act.payload?.word) {
-                      handleIncrementActionCount("add_word");
+                      handleRecordActionUse("add_word");
                       onAddWord(act.payload.word, act.payload?.hint);
                     } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
                       onAddMultipleWords(act.payload.words);
                       showToast(`🎉 Added ${act.payload.words.length} vocabulary words to collection!`);
                     } else if (act.action === "start_quiz") {
-                      handleIncrementActionCount("start_quiz");
+                      handleRecordActionUse("start_quiz");
                       onStartQuiz();
                     } else if (act.action === "view_flashcard") {
-                      handleIncrementActionCount("view_flashcard");
+                      handleRecordActionUse("view_flashcard");
                       onViewFlashcard?.();
                     } else if (act.action === "quiz_answer" && act.payload?.answer) {
                       onSendMessage(act.payload.answer);
                     } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
                       onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
                     } else if (act.action === "common_phrases") {
-                      handleIncrementActionCount("common_phrases");
+                      handleRecordActionUse("common_phrases");
                       onClearHistory();
                       onSendMessage(
                         `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
@@ -406,7 +406,7 @@ export default function ChatMessageItem({
                       scrollToBottom("smooth");
                       focusInput();
                     } else if (act.action === "explain_grammar") {
-                      handleIncrementActionCount("explain_grammar");
+                      handleRecordActionUse("explain_grammar");
                       onClearHistory();
                       onSendMessage(
                         `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
@@ -414,7 +414,7 @@ export default function ChatMessageItem({
                       scrollToBottom("smooth");
                       focusInput();
                     } else if (act.action === "translate_contrast") {
-                      handleIncrementActionCount("translate_contrast");
+                      handleRecordActionUse("translate_contrast");
                       onClearHistory();
                       onSendMessage(
                         `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
