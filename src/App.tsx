@@ -1360,10 +1360,7 @@ export default function App() {
     // Add user message to display what they provided
     let userMsgContent = "";
     if (customPrompt) {
-      userMsgContent += `Guiding text: "${customPrompt}"`;
-    }
-    if (imageDataUrl) {
-      userMsgContent += userMsgContent ? "\n[Conversation screenshot attached]" : "[Conversation screenshot attached]";
+      userMsgContent += `Guiding: "${customPrompt}"`;
     }
 
     setChatMessages(prev => [
