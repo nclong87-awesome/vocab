@@ -1887,7 +1887,6 @@ app.post("/api/suggest-casual-reply", async (req, res) => {
   try {
     const { imageDataUrl, systemPrompt, userText, provider, model  } = req.body;
 
-    const startTime = performance.now();
     if (imageDataUrl) {
       let base64Data = imageDataUrl;
       if (imageDataUrl.startsWith("data:")) {
