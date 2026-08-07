@@ -16,20 +16,8 @@ import {
 import { cleanJsonResponse, cleanAndParseJson } from "../utils/jsonSanitizer";
 export { cleanJsonResponse, cleanAndParseJson };
 
-const VALID_GEMINI_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-3.6-flash-lite",
-  "gemini-3.5-flash",
-  "gemini-3.5-flash-lite"
-];
-
 // Sanitize model names for provider
 export function sanitizeModel(provider: string, model?: string): string {
-  if (provider === "gemini") {
-    if (!model || !VALID_GEMINI_MODELS.includes(model)) {
-      return "gemini-3.6-flash";
-    }
-  }
   if (model) return model;
   const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
   if (providerMeta?.defaultModel) return providerMeta.defaultModel;
@@ -562,7 +550,7 @@ async function callLLMClientSideSingleCandidate(
   }
 
   const reqBody: any = {
-    model: model || (provider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : provider === "gemini" ? "gemini-3.6-flash" : provider === "ollama" ? "llama3.2" : "inclusionai/ling-3.0-flash:free"),
+    model: model,
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
       { role: "user", content: prompt }

@@ -1732,23 +1732,11 @@ export default function App() {
       const defaultConfig = getDefaultLLMConfig();
       const loadedConfig = await getLLMConfigFromDB(defaultConfig);
 
-      const sanitizedProvider = loadedConfig.provider || DEFAULT_PROVIDER_ID;
-      let sanitizedModel = loadedConfig.model || (sanitizedProvider === "groq" ? "openai/gpt-oss-120b" : sanitizedProvider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : sanitizedProvider === "openai" ? "gpt-5.4-mini" : sanitizedProvider === "ollama" ? "gemma4:31b" : "gemini-3.6-flash");
-      const validGeminiModels = [
-        "gemini-3.6-flash",
-        "gemini-3.6-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-3.5-flash-lite"
-      ];
-      if (sanitizedProvider === "gemini" && !validGeminiModels.includes(sanitizedModel)) {
-        sanitizedModel = "gemini-3.6-flash";
-      }
-
       const activeConfig: LLMConfig = {
         ...loadedConfig,
-        provider: sanitizedProvider as any,
-        model: sanitizedModel,
-        isLoggedIn: loadedConfig.isLoggedIn || sanitizedProvider === "groq" || sanitizedProvider === "openrouter" || sanitizedProvider === "openai" || sanitizedProvider === "gemini" || sanitizedProvider === "ollama"
+        provider: loadedConfig.provider,
+        model: loadedConfig.model,
+        isLoggedIn: loadedConfig.isLoggedIn
       };
 
       setLlmConfig(activeConfig);

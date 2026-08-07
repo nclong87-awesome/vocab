@@ -224,8 +224,6 @@ export default function ChatView({
     setTimeout(() => {
       if (latestMessageRef.current) {
         latestMessageRef.current.scrollIntoView({ behavior, block: "start" });
-      } else if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: "auto", block: "end" });
       }
     }, 50);
   };

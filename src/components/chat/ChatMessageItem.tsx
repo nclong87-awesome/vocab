@@ -32,7 +32,6 @@ interface ChatMessageItemProps {
   focusInput: () => void;
   setIsPhotoModalOpen: (open: boolean) => void;
   handleIncrementActionCount: (actionId: string) => void;
-  messageRef?: React.Ref<HTMLDivElement | null>;
 }
 
 export default function ChatMessageItem({
@@ -59,7 +58,6 @@ export default function ChatMessageItem({
   focusInput,
   setIsPhotoModalOpen,
   handleIncrementActionCount,
-  messageRef,
 }: ChatMessageItemProps) {
   const isUser = msg.role === "user";
 
@@ -138,18 +136,18 @@ export default function ChatMessageItem({
   }
 
   const effectiveActions = actionsList;
+  let className = isUser ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end" : "flex flex-col max-w-full w-full mr-auto items-stretch";
+  if (isLatestMessage) {
+    // paddingTop for the latest message for auto-scroll to work properly
+    className += " pt-1";
+  }
 
   return (
     <motion.div
-      ref={messageRef}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className={
-        isUser
-          ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end"
-          : "flex flex-col max-w-full w-full mr-auto items-stretch"
-      }
+      className={className}
     >
       {/* Message Content Bubble */}
       <div className="space-y-2 w-full flex flex-col">

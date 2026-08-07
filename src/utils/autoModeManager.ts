@@ -158,16 +158,14 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
       }
     }
   }
-
-  const fallbackCandidates: AutoCandidate[] = [
-    { provider: "groq", model: "openai/gpt-oss-120b" },
-    { provider: "openrouter", model: "inclusionai/ling-3.0-flash:free" },
-    { provider: "gemini", model: "gemini-3.6-flash" },
-    { provider: "9flare", model: "pro/claude-haiku-4-5" },
-    { provider: "ollama", model: "gemma4:31b" }
-  ];
-
-  return candidates.length > 0 ? candidates : fallbackCandidates;
+  if (candidates.length > 0) {
+    return candidates;
+  }
+  const fallbackCandidates = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom").map(p => ({
+    provider: p.id,
+    model: p.defaultModel
+  }));
+  return fallbackCandidates;
 }
 
 export type ModelStatusIndicator = 'strong' | 'medium' | 'weak' | 'offline' | 'untested';

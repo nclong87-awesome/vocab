@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { cleanJsonResponse, cleanAndParseJson } from "./src/utils/jsonSanitizer";
+import { PROVIDER_OPTIONS } from "./src/config/llmProviders";
 
 dotenv.config();
 
@@ -118,18 +119,7 @@ function sanitizeModel(provider: string, model?: string): string {
   if (provider === "auto") {
     return "auto";
   }
-  if (provider === "groq") {
-    return model || "openai/gpt-oss-120b";
-  }
-  if (provider === "openrouter") {
-    return model || "inclusionai/ling-3.0-flash:free";
-  }
-  if (provider === "gemini") {
-    if (!model || !VALID_GEMINI_MODELS.includes(model)) {
-      return "gemini-3.6-flash";
-    }
-  }
-  return model || (provider === "groq" ? "openai/gpt-oss-120b" : provider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : provider === "gemini" ? "gemini-3.6-flash" : "openai/gpt-oss-120b");
+  return model || PROVIDER_OPTIONS.find(p => p.id === provider)?.defaultModel || "auto";
 }
 
 
@@ -248,18 +238,10 @@ function isServerModelLocked(provider: string, model: string): boolean {
   return false;
 }
 
-const SERVER_AUTO_CANDIDATES = [
-  { provider: "groq", model: "openai/gpt-oss-120b" },
-  { provider: "openrouter", model: "inclusionai/ling-3.0-flash:free" },
-  { provider: "gemini", model: "gemini-3.6-flash" },
-  { provider: "9flare", model: "pro/claude-haiku-4-5" },
-  { provider: "ollama", model: "gemma4:31b" },
-  { provider: "groq", model: "llama-3.3-70b-versatile" },
-  { provider: "gemini", model: "gemini-3.5-flash" },
-  { provider: "openrouter", model: "nvidia/nemotron-3-super-120b-a12b:free" },
-  { provider: "groq", model: "openai/gpt-oss-20b" },
-  { provider: "gemini", model: "gemini-3.5-flash-lite" }
-];
+const SERVER_AUTO_CANDIDATES = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom").map(p => ({
+  provider: p.id,
+  model: p.defaultModel
+}));
 
 let serverAutoRotationIndex = 0;
 
@@ -422,7 +404,7 @@ async function callLLMSingle(
   }
 
   const reqBody: any = {
-    model: model || (provider === "openrouter" ? "inclusionai/ling-3.0-flash:free" : provider === "gemini" ? "gemini-3.6-flash" : "inclusionai/ling-3.0-flash:free"),
+    model: model,
     messages: [
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
       { role: "user", content: prompt }

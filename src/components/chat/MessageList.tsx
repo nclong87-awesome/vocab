@@ -64,33 +64,37 @@ export default function MessageList({
         {messages.map((msg, idx) => {
           const isLatestMessage = idx === messages.length - 1;
           return (
-            <ChatMessageItem
-              key={msg.id}
-              msg={msg}
-              isLatestMessage={isLatestMessage}
-              messages={messages}
-              targetLanguage={targetLanguage}
-              nativeLanguage={nativeLanguage}
-              ttsConfig={ttsConfig}
-              llmConfig={llmConfig}
-              onSendMessage={onSendMessage}
-              onClearHistory={onClearHistory}
-              onAddWord={onAddWord}
-              onAddMultipleWords={onAddMultipleWords}
-              onStartQuiz={onStartQuiz}
-              onFixGrammar={onFixGrammar}
-              onViewFlashcard={onViewFlashcard}
-              onAnalyzeImageVocab={onAnalyzeImageVocab}
-              onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
-              onSuggestCasualReply={onSuggestCasualReply}
-              onSelectDefinition={onSelectDefinition}
-              showToast={showToast}
-              scrollToBottom={scrollToBottom}
-              focusInput={focusInput}
-              setIsPhotoModalOpen={setIsPhotoModalOpen}
-              handleIncrementActionCount={handleIncrementActionCount}
-              messageRef={isLatestMessage ? latestMessageRef : null}
-            />
+            <>
+              {isLatestMessage && (
+                <div ref={latestMessageRef} />
+              )}
+              <ChatMessageItem
+                key={msg.id}
+                msg={msg}
+                isLatestMessage={isLatestMessage}
+                messages={messages}
+                targetLanguage={targetLanguage}
+                nativeLanguage={nativeLanguage}
+                ttsConfig={ttsConfig}
+                llmConfig={llmConfig}
+                onSendMessage={onSendMessage}
+                onClearHistory={onClearHistory}
+                onAddWord={onAddWord}
+                onAddMultipleWords={onAddMultipleWords}
+                onStartQuiz={onStartQuiz}
+                onFixGrammar={onFixGrammar}
+                onViewFlashcard={onViewFlashcard}
+                onAnalyzeImageVocab={onAnalyzeImageVocab}
+                onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
+                onSuggestCasualReply={onSuggestCasualReply}
+                onSelectDefinition={onSelectDefinition}
+                showToast={showToast}
+                scrollToBottom={scrollToBottom}
+                focusInput={focusInput}
+                setIsPhotoModalOpen={setIsPhotoModalOpen}
+                handleIncrementActionCount={handleIncrementActionCount}
+              />
+            </>
           );
         })}
 
