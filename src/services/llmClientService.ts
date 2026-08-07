@@ -2253,7 +2253,7 @@ export async function analyzeImageVocabService(params: {
   responseTimeMs?: number;
 }> {
   const startTime = performance.now();
-  let { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
+  let { imageDataUrl, targetLanguage, nativeLanguage, llmConfig } = params;
 
   // Resize client-side before sending to server or worker if image is large
   if (typeof window !== "undefined" && imageDataUrl && imageDataUrl.startsWith("data:image")) {
@@ -2265,6 +2265,29 @@ export async function analyzeImageVocabService(params: {
   }
 
   let serverOrWorkerError: any = null;
+  const provider = llmConfig?.provider || "gemini";
+  const model = sanitizeModel(provider, llmConfig?.model);
+  const systemPrompt =
+    "You are a Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.\n" +
+    "Output MUST be strictly valid raw JSON-only matching:\n" +
+    "{\n" +
+    '  "imageDescription": "string",\n' +
+    '  "vocabularyItems": [\n' +
+    "    {\n" +
+    '      "word": "string",\n' +
+    '      "translation": "string",\n' +
+    '      "partOfSpeech": "string",\n' +
+    '      "pronunciation": "string",\n' +
+    '      "definition": "string",\n' +
+    '      "example": "string",\n' +
+    '      "exampleTranslation": "string",\n' +
+    '      "category": "string",\n' +
+    '      "context": "string"\n' +
+    "    }\n" +
+    "  ]\n" +
+    "}";
+
+  const userText = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.\nIdentify key objects, text, signs, items, actions, or scenes present in the image`;
 
   // 1. Attempt call through Node server API route if not running on static host
   if (!isStaticHost()) {
@@ -2272,14 +2295,14 @@ export async function analyzeImageVocabService(params: {
       const res = await fetchWithTimeout("/api/analyze-image-vocab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig })
+        body: JSON.stringify({ imageDataUrl, systemPrompt, userText, provider, model })
       });
       if (res.ok) {
         const data = await res.json();
         return {
           ...data,
-          provider: data.provider || llmConfig?.provider || "gemini",
-          model: data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+          provider,
+          model,
           responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
         };
       }
@@ -2311,35 +2334,15 @@ export async function analyzeImageVocabService(params: {
     headers["X-Proxy-Key"] = sharedProxyKey;
   }
 
-  const systemPrompt =
-    "You are a Multilingual Computer Vision & AI Language Pedagogy Engine. You analyze photographs and visual media to extract relevant vocabulary for language learners. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.\n" +
-    "Output MUST be strictly valid raw JSON-only matching:\n" +
-    "{\n" +
-    '  "imageDescription": "string",\n' +
-    '  "vocabularyItems": [\n' +
-    "    {\n" +
-    '      "word": "string",\n' +
-    '      "translation": "string",\n' +
-    '      "partOfSpeech": "string",\n' +
-    '      "pronunciation": "string",\n' +
-    '      "definition": "string",\n' +
-    '      "example": "string",\n' +
-    '      "exampleTranslation": "string",\n' +
-    '      "category": "string",\n' +
-    '      "context": "string"\n' +
-    "    }\n" +
-    "  ]\n" +
-    "}";
-
-  const userText = `Analyze this image for vocabulary learning in "${targetLanguage}" for a native "${nativeLanguage}" speaker.\nIdentify key objects, text, signs, items, actions, or scenes present in the image`;
-
   const workerRes = await fetchWithTimeout("https://image-analysis.nclong87.workers.dev/", {
     method: "POST",
     headers,
     body: JSON.stringify({
       imageData: base64Data,
       systemPrompt,
-      userText
+      userText,
+      provider,
+      model
     })
   });
 
@@ -2354,13 +2357,11 @@ export async function analyzeImageVocabService(params: {
     }
     if (data && (data.vocabularyItems || data.imageDescription)) {
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
-      const prov = data.provider || "";
-      const mod = data.model || "";
-      recordModelResponse(prov, mod, duration);
+      recordModelResponse(provider, model, duration);
       return {
         ...data,
-        provider: prov,
-        model: mod,
+        provider,
+        model,
         responseTimeMs: duration
       };
     }
@@ -2636,13 +2637,51 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
   const userTarget = targetLanguage || "English";
   const userNative = nativeLanguage || "Vietnamese";
 
+  let userText = '';
+
+  if (imageDataUrl) {
+    userText += `\n\nAnalyze the attached conversation screenshot image to understand the context and flow, then provide customized replies.`;
+  } else {
+    userText += `\n\nAnalyze the provided text prompt to understand the context and flow, then provide customized replies.`;
+  }
+
+  if (customPrompt) {
+    userText += `\n\nUser guidance/instruction: "${customPrompt}"`;
+  }
+
+  userText += `\n\nCRITICAL DIRECTIVES:\n- NO REASONING OR THINKING: Do not include any chain of thought, reasoning, thinking process, explanation of reasoning, or commentary in your response. Do not use '<think>' tags or similar blocks. Output strictly valid raw JSON and absolutely nothing else.`;
+
+  const schemaDesc = `{
+    "suggestedReplies": [
+      {
+        "reply": "string (The suggested response in \"${userTarget}\". Keep them sounding highly natural, native, and casual.)",
+        "translation": "string (exact translation in \"${userNative}\")",
+        "tone": "string (tone/vibe description)",
+        "explanation": "string (nuance/usage explanation in \"${userNative}\")"
+      }
+    ],
+    "vocabularyCandidates": [
+      {
+        "word": "string (useful vocabulary term in ${userTarget})",
+        "translation": "string (translation in ${userNative})",
+        "reason": "string (short explanation of usage/meaning in ${userNative})"
+      }
+    ]
+  }`;
+
+  const systemPrompt = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}") and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the schema, with absolutely no thinking process, chain-of-thought, '<think>' tags, reasoning text, or conversational commentary included. Do not use any markdown code blocks: \n
+${schemaDesc}`;
+
+  const provider = llmConfig?.provider || "gemini";
+  const model = sanitizeModel(provider, llmConfig?.model);
+
   // 1. Try server API route if not running on static host
   if (!isStaticHost()) {
     try {
       const res = await fetchWithTimeout("/api/suggest-casual-reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, customPrompt, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
+        body: JSON.stringify({ imageDataUrl, systemPrompt, userText, provider, model })
       });
 
       if (res.ok) {
@@ -2667,42 +2706,7 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
       throw e;
     }
   }
-
-  let prompt = '';
-
-  if (imageDataUrl) {
-    prompt += `\n\nAnalyze the attached conversation screenshot image to understand the context and flow, then provide customized replies.`;
-  } else {
-    prompt += `\n\nAnalyze the provided text prompt to understand the context and flow, then provide customized replies.`;
-  }
-
-  if (customPrompt) {
-    prompt += `\n\nUser guidance/instruction: "${customPrompt}"`;
-  }
-
-  prompt += `\n\nCRITICAL DIRECTIVES:\n- NO REASONING OR THINKING: Do not include any chain of thought, reasoning, thinking process, explanation of reasoning, or commentary in your response. Do not use '<think>' tags or similar blocks. Output strictly valid raw JSON and absolutely nothing else.`;
-
-  const schemaDesc = `{
-    "suggestedReplies": [
-      {
-        "reply": "string (The suggested response in \"${userTarget}\". Keep them sounding highly natural, native, and casual.)",
-        "translation": "string (exact translation in \"${userNative}\")",
-        "tone": "string (tone/vibe description)",
-        "explanation": "string (nuance/usage explanation in \"${userNative}\")"
-      }
-    ],
-    "vocabularyCandidates": [
-      {
-        "word": "string (useful vocabulary term in ${userTarget})",
-        "translation": "string (translation in ${userNative})",
-        "reason": "string (short explanation of usage/meaning in ${userNative})"
-      }
-    ]
-  }`;
-
-  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}") and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the schema, with absolutely no thinking process, chain-of-thought, '<think>' tags, reasoning text, or conversational commentary included. Do not use any markdown code blocks: \n
-${schemaDesc}`;
-
+  let rawText = "";
   try {
     if (imageDataUrl) {
       let base64Data = imageDataUrl;
@@ -2733,8 +2737,10 @@ ${schemaDesc}`;
         headers,
         body: JSON.stringify({
           imageData: base64Data,
-          systemPrompt: systemInstruction,
-          userText: prompt
+          systemPrompt,
+          userText,
+          provider,
+          model
         })
       });
 
@@ -2743,33 +2749,27 @@ ${schemaDesc}`;
         throw new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
       }
 
-      const rawText = await workerRes.text();
-      const cleanText = cleanJsonResponse(rawText);
-      const parsed = JSON.parse(cleanText);
-      if (parsed && (parsed.suggestedReplies || parsed.vocabularyCandidates)) {
-        const duration = Math.round(performance.now() - startTime);
-        return {
-          ...parsed,
-          provider: "groq",
-          model: "qwen/qwen3.6-27b",
-          responseTimeMs: duration
-        };
-      }
+      rawText = await workerRes.text();
     } else {
       // no image, just use the prompt directly with the LLM
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const cleaned = cleanJsonResponse(resWithMeta.text);
+      const resWithMeta = await callLLMClientSideWithMeta(userText, systemPrompt, schemaDesc, llmConfig);
+      rawText = resWithMeta.text;
+    }
+
+    if (rawText) {
+      const cleaned = cleanJsonResponse(rawText);
       const parsed = JSON.parse(cleaned);
       if (parsed && (parsed.suggestedReplies || parsed.vocabularyCandidates)) {
         const duration = Math.round(performance.now() - startTime);
         return {
           ...parsed,
-          provider: resWithMeta.provider,
-          model: resWithMeta.model,
+          provider: provider,
+          model: model,
           responseTimeMs: duration
         };
       }
     }
+
     throw new Error("Image analysis worker did not return valid JSON with suggestedReplies and vocabularyCandidates.");
   } catch (err: any) {
     console.error("Client side suggest casual reply error:", err);

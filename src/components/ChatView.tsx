@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Send, Sparkles, Volume2, 
@@ -219,59 +219,59 @@ export default function ChatView({
     }
     showToast("🧹 Quick action usage counters reset!");
   };
+  
+  const quickActionItems = useMemo(() => {
+    // Ordered quick action items with categories, descriptions, and icons sourced from quickActionsConfig
+    const allQuickActionItems = getQuickActionItems().map((item) => ({
+      ...item,
+      onClick: () => {
+        handleIncrementActionCount(item.id);
+        if (item.id !== "suggest_reply") {
+          setSelectedImage(null);
+        }
 
-  // Ordered quick action items with categories, descriptions, and icons sourced from quickActionsConfig
-  const allQuickActionItems = getQuickActionItems().map((item) => ({
-    ...item,
-    onClick: () => {
-      handleIncrementActionCount(item.id);
-      if (item.id !== "suggest_reply") {
-        setSelectedImage(null);
-      }
-
-      // Check default models for quick action and set active model for session with rotation if available & not locked
-      if (llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
-        const match = getRotatedDefaultModel(item.defaultModels);
-        if (match) {
-          if (onSwitchProvider) {
-            onSwitchProvider(match.provider, match.model);
-            showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
+        // Check default models for quick action and set active model for session with rotation if available & not locked
+        if (llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
+          const match = getRotatedDefaultModel(item.defaultModels);
+          if (match) {
+            if (onSwitchProvider) {
+              onSwitchProvider(match.provider, match.model);
+              showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
+            }
           }
         }
-      }
 
-      item.getAction({
-        targetLanguage,
-        nativeLanguage,
-        onFixGrammar,
-        onStartQuiz,
-        onGenerateByTopic,
-        onAddWord,
-        onSendMessage,
-        onClearHistory,
-        onViewFlashcard,
-        onSuggestCasualReplyPrompt: () => {
-          setIsPhotoModalOpen(true);
-          onSuggestCasualReplyPrompt?.();
-        },
-      });
-      setIsActionsPanelOpen(false);
-      scrollToBottom("smooth");
-      focusInput();
-    }
-  }));
-
-  // Sorted quick action items by usage count or default index
-  const quickActionItems = [...allQuickActionItems].sort((a, b) => {
-    if (sortMode === "most_used") {
-      const countA = actionCounts[a.id] || 0;
-      const countB = actionCounts[b.id] || 0;
-      if (countB !== countA) {
-        return countB - countA;
+        item.getAction({
+          targetLanguage,
+          nativeLanguage,
+          onFixGrammar,
+          onStartQuiz,
+          onGenerateByTopic,
+          onAddWord,
+          onSendMessage,
+          onClearHistory,
+          onViewFlashcard,
+          onSuggestCasualReplyPrompt: () => {
+            setIsPhotoModalOpen(true);
+            onSuggestCasualReplyPrompt?.();
+          },
+        });
+        setIsActionsPanelOpen(false);
+        scrollToBottom("smooth");
+        focusInput();
       }
-    }
-    return a.defaultIndex - b.defaultIndex;
-  });
+    }));
+    return [...allQuickActionItems].sort((a, b) => {
+      if (sortMode === "most_used") {
+        const countA = actionCounts[a.id] || 0;
+        const countB = actionCounts[b.id] || 0;
+        if (countB !== countA) {
+          return countB - countA;
+        }
+      }
+      return a.defaultIndex - b.defaultIndex;
+    });
+  }, [sortMode]);
 
   // Filtered items for the expanded modal grid
   const filteredActionItems = quickActionItems.filter((item) => {

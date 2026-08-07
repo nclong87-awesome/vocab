@@ -29,6 +29,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "openai/gpt-oss-20b", 
       "openai/gpt-oss-safeguard-20b",
       "llama-3.3-70b-versatile",
+      "qwen/qwen3.6-27b"
       // "groq/compound"
     ],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
@@ -143,5 +144,10 @@ export const RELIABLE_MODELS: string[] = [
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna"
 ];
+
+export const VISION_MODELS: string[] = [
+  "qwen/qwen3.6-27b",
+  "pro/gpt-5.6-luna",
+]
 
 export default PROVIDER_OPTIONS;

@@ -221,7 +221,7 @@ export function getQuickActionItems(): QuickActionItem[] {
     },
     {
       id: "suggest_reply",
-      label: "Suggest Casual Reply",
+      label: "Suggest Reply",
       category: "writing",
       categoryLabel: "Writing",
       icon: <Sparkles className="w-4 h-4 text-amber-500" />,

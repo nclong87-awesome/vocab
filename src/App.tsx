@@ -23,7 +23,7 @@ import {
 import { DEFAULT_TTS_CONFIG, stopSpeech, unlockAudioElement } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay, getQuizCandidateWords, getCandidateWordForFlashcard } from "./utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "./config/topicSuggestions";
-import { DEFAULT_PROVIDER_ID, getDefaultLLMConfig } from "./config/llmProviders";
+import { DEFAULT_PROVIDER_ID, getDefaultLLMConfig, VISION_MODELS } from "./config/llmProviders";
 
 import ChatView from "./components/ChatView";
 import CollectionManager from "./components/CollectionManager";
@@ -35,6 +35,7 @@ import OnboardingModal from "./components/OnboardingModal";
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
 import AiErrorFallbackModal from "./components/layout/AiErrorFallbackModal";
+import { getRotatedDefaultModel } from "./components/chat/quickActionsConfig";
 
 export default function App() {
   const [words, setWords] = useState<Word[]>([]);
@@ -600,13 +601,13 @@ export default function App() {
 
     if (conversationalState === "fixing_grammar") {
       setConversationalState("none");
-      await handleConversationalFixGrammar(text.trim(), configToUse);
+      await handleConversationalFixGrammar(text.trim());
       return;
     }
 
     if (conversationalState === "suggesting_reply") {
       setConversationalState("none");
-      await handleSuggestCasualReply(null, text.trim(), configToUse);
+      await handleSuggestCasualReply(null, text.trim());
       return;
     }
 
@@ -872,7 +873,18 @@ export default function App() {
   };
 
   // Analyze image uploaded by user using selected AI model to extract vocabulary
-  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string, overrideConfig?: LLMConfig) => {
+  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string) => {
+    let overrideConfig: LLMConfig | undefined = undefined;
+    const match = getRotatedDefaultModel(VISION_MODELS);
+    console.log("Suggest Casual Reply using model:", match);
+    if (match) {
+      overrideConfig = {
+        provider: match.provider,
+        model: match.model,
+        apiKey: "",
+        isLoggedIn: false
+      };
+    }
     const configToUse = overrideConfig || llmConfig;
     const userMsgId = `user-img-${Date.now()}`;
     const statusMsgId = `status-img-${Date.now()}`;
@@ -952,7 +964,10 @@ export default function App() {
             content: `🔍 **Photo Analysis**: *"${res.imageDescription || "Visual scene"}"*\n\nFound **${items.length}** vocabulary items:\n\n${formattedItems.join("\n")}\n\n*Click below to confirm and add items to your collection:*`,
             imageUrl: '',
             timestamp: new Date().toISOString(),
-            suggestedActions: actions
+            suggestedActions: actions,
+            provider: res.provider,
+            model: res.model,
+            responseTimeMs: res.responseTimeMs
           }
         ];
       });
@@ -1330,8 +1345,19 @@ export default function App() {
     setChatMessages([promptMsg]);
   };
 
-  const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string, overrideConfig?: LLMConfig) => {
+  const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string) => {
     setConversationalState("none");
+    let overrideConfig: LLMConfig | undefined = undefined;
+    const match = getRotatedDefaultModel(VISION_MODELS);
+    console.log("Suggest Casual Reply using model:", match);
+    if (match) {
+      overrideConfig = {
+        provider: match.provider,
+        model: match.model,
+        apiKey: "",
+        isLoggedIn: false
+      };
+    }
     const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
@@ -1351,7 +1377,8 @@ export default function App() {
         id: `user-reply-req-${Date.now()}`,
         role: "user",
         content: userMsgContent || "Suggest a casual reply based on the attached screenshot",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        imageUrl: imageDataUrl || undefined
       },
       {
         id: statusMsgId,
@@ -1449,7 +1476,7 @@ export default function App() {
                 action: "retry_suggest_reply",
                 payload: {
                   imageDataUrl,
-                  customPrompt
+                  customPrompt,
                 }
               }
             ]
@@ -1475,7 +1502,17 @@ export default function App() {
     setChatMessages([promptMsg]);
   };
 
-  const handleConversationalFixGrammar = async (userText: string, overrideConfig?: LLMConfig) => {
+  const handleConversationalFixGrammar = async (userText: string) => {
+    let overrideConfig: LLMConfig | undefined = undefined;
+    const match = getRotatedDefaultModel(VISION_MODELS);
+    if (match) {
+      overrideConfig = {
+        provider: match.provider,
+        model: match.model,
+        apiKey: "",
+        isLoggedIn: false
+      };
+    }
     const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
@@ -1562,8 +1599,8 @@ export default function App() {
     } catch (err: any) {
       console.error("Fix Grammar Error:", err);
       setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
-      handleAiApiError(err, configToUse, (newConfig) => {
-        handleConversationalFixGrammar(userText, newConfig);
+      handleAiApiError(err, configToUse, () => {
+        handleConversationalFixGrammar(userText);
       });
     } finally {
       setIsTyping(false);
