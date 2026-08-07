@@ -39,11 +39,10 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "openrouter",
     name: "OpenRouter",
     tagline: "Unified API gateway for 100+ AI models",
-    defaultModel: "inclusionai/ling-3.0-flash:free",
+    defaultModel: "poolside/laguna-xs-2.1:free",
     models: [
-      "inclusionai/ling-3.0-flash:free",
-      "nvidia/nemotron-3-super-120b-a12b:free",
       "poolside/laguna-xs-2.1:free",
+      "nvidia/nemotron-3-super-120b-a12b:free",
       "nvidia/nemotron-3-nano-30b-a3b:free",
       "google/gemma-4-26b-a4b-it:free",
       "openai/gpt-oss-20b:free"
@@ -89,6 +88,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       // "pro/minimax-m2.5", 
       "pro/claude-haiku-4-5", 
+      "pro/gpt-5.6-luna"
       // "pro/glm-5"
     ],
     defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
@@ -135,13 +135,13 @@ export const RELIABLE_MODELS: string[] = [
   "openai/gpt-oss-120b", 
   "openai/gpt-oss-20b", 
   "llama-3.3-70b-versatile",
-  "inclusionai/ling-3.0-flash:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "gemini-3.5-flash-lite", 
   "gemini-3.5-flash", 
   "gemini-3.6-flash",
   "gemma4:31b",
-  "pro/claude-haiku-4-5"
+  "pro/claude-haiku-4-5",
+  "pro/gpt-5.6-luna"
 ];
 
 export default PROVIDER_OPTIONS;

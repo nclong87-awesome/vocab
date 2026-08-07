@@ -236,7 +236,7 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     return {
       statusCode: 404,
       errorType: "NOT_FOUND",
-      userMessage: `Model Not Found (404): The requested ${provUpper} model is unavailable or endpoint path is invalid. Retrying with fallback model...`,
+      userMessage: `Model Not Found (404): The requested ${provUpper} model is unavailable or endpoint path is invalid.`,
       originalMessage,
       isRetryable: false,
       provider
@@ -257,7 +257,7 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     return {
       statusCode: code,
       errorType: "SERVER_ERROR",
-      userMessage: `${provUpper} Server Error (${code}): Google/Provider AI servers are temporarily busy or undergoing maintenance. Retrying...`,
+      userMessage: `${provUpper} Server Error (${code}): Google/Provider AI servers are temporarily busy or undergoing maintenance.`,
       originalMessage,
       isRetryable: true,
       provider
@@ -915,7 +915,7 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
       const parsed = parseLlmError(clientErr, provider);
       return {
         success: false,
-        error: parsed.userMessage,
+        error: parsed.originalMessage || parsed.userMessage,
         statusCode: parsed.statusCode,
         errorType: parsed.errorType,
         isRetryable: parsed.isRetryable,
@@ -981,7 +981,7 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
     const parsed = parseLlmError(clientErr, provider);
     return {
       success: false,
-      error: parsed.userMessage,
+      error: parsed.originalMessage || parsed.userMessage,
       statusCode: parsed.statusCode,
       errorType: parsed.errorType,
       isRetryable: parsed.isRetryable,
