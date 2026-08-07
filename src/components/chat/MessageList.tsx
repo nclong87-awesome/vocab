@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ChatMessage, LLMConfig, TTSConfig } from "../../types";
 import ChatMessageItem from "./ChatMessageItem";
@@ -64,12 +65,11 @@ export default function MessageList({
         {messages.map((msg, idx) => {
           const isLatestMessage = idx === messages.length - 1;
           return (
-            <>
+            <Fragment key={msg.id}>
               {isLatestMessage && (
                 <div ref={latestMessageRef} />
               )}
               <ChatMessageItem
-                key={msg.id}
                 msg={msg}
                 isLatestMessage={isLatestMessage}
                 messages={messages}
@@ -94,7 +94,7 @@ export default function MessageList({
                 setIsPhotoModalOpen={setIsPhotoModalOpen}
                 handleIncrementActionCount={handleIncrementActionCount}
               />
-            </>
+            </Fragment>
           );
         })}
 
