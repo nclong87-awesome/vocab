@@ -872,19 +872,24 @@ export default function App() {
     }
   };
 
-  // Analyze image uploaded by user using selected AI model to extract vocabulary
-  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string) => {
-    let overrideConfig: LLMConfig | undefined = undefined;
+  const getVisionModelConfig = (): LLMConfig | undefined => {
     const match = getRotatedDefaultModel(VISION_MODELS);
-    console.log("Suggest Casual Reply using model:", match);
     if (match) {
-      overrideConfig = {
+      return {
         provider: match.provider,
         model: match.model,
+        proxyKey: llmConfig.proxyKey || "",
+        savedProviders: llmConfig.savedProviders || {},
         apiKey: "",
         isLoggedIn: false
       };
     }
+    return undefined;
+  };
+
+  // Analyze image uploaded by user using selected AI model to extract vocabulary
+  const handleAnalyzeImageVocab = async (imageDataUrl: string, customPrompt?: string) => {
+    const overrideConfig = getVisionModelConfig();
     const configToUse = overrideConfig || llmConfig;
     const userMsgId = `user-img-${Date.now()}`;
     const statusMsgId = `status-img-${Date.now()}`;
@@ -1347,17 +1352,7 @@ export default function App() {
 
   const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string) => {
     setConversationalState("none");
-    let overrideConfig: LLMConfig | undefined = undefined;
-    const match = getRotatedDefaultModel(VISION_MODELS);
-    console.log("Suggest Casual Reply using model:", match);
-    if (match) {
-      overrideConfig = {
-        provider: match.provider,
-        model: match.model,
-        apiKey: "",
-        isLoggedIn: false
-      };
-    }
+    const overrideConfig = getVisionModelConfig();
     const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
@@ -1503,16 +1498,7 @@ export default function App() {
   };
 
   const handleConversationalFixGrammar = async (userText: string) => {
-    let overrideConfig: LLMConfig | undefined = undefined;
-    const match = getRotatedDefaultModel(VISION_MODELS);
-    if (match) {
-      overrideConfig = {
-        provider: match.provider,
-        model: match.model,
-        apiKey: "",
-        isLoggedIn: false
-      };
-    }
+    const overrideConfig = getVisionModelConfig();
     const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
