@@ -197,16 +197,6 @@ export default function ChatView({
     });
   };
 
-  const handleResetActionLastUsed = () => {
-    setActionLastUsed({});
-    try {
-      localStorage.removeItem("vocab_action_last_used");
-    } catch (e) {
-      console.error(e);
-    }
-    showToast("🧹 Quick action order reset!");
-  };
-
   const showToast = (msgText: string) => {
     setToast(msgText);
     setTimeout(() => setToast(null), 3000);
@@ -394,7 +384,6 @@ export default function ChatView({
         llmConfig={llmConfig}
         actionLastUsed={actionLastUsed}
         handleRecordActionUse={handleRecordActionUse}
-        handleResetActionLastUsed={handleResetActionLastUsed}
         onSendMessage={onSendMessage}
         onClearHistory={onClearHistory}
         onAddWord={onAddWord}

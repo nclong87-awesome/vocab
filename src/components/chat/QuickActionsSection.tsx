@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
-import { QuickActionsModelConfig, getQuickActionItems, getRotatedDefaultModel } from "./quickActionsConfig";
+import { getQuickActionItems, getRotatedDefaultModel } from "./quickActionsConfig";
 
 interface QuickActionsSectionProps {
   targetLanguage: string;
@@ -10,7 +10,6 @@ interface QuickActionsSectionProps {
   llmConfig: LLMConfig;
   actionLastUsed: Record<string, number>;
   handleRecordActionUse: (actionId: string) => void;
-  handleResetActionLastUsed: () => void;
   onSendMessage: (text: string) => Promise<void>;
   onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
@@ -32,7 +31,6 @@ export default function QuickActionsSection({
   llmConfig,
   actionLastUsed,
   handleRecordActionUse,
-  handleResetActionLastUsed,
   onSendMessage,
   onClearHistory,
   onAddWord,
@@ -100,7 +98,7 @@ export default function QuickActionsSection({
       }
       return a.defaultIndex - b.defaultIndex;
     });
-  }, [actionLastUsed, llmConfig, targetLanguage, nativeLanguage, onSwitchProvider, handleRecordActionUse, onAddWord, onClearHistory, onFixGrammar, onSendMessage, onStartQuiz, onSuggestCasualReplyPrompt, onViewFlashcard, focusInput, scrollToBottom, setIsPhotoModalOpen, setSelectedImage, showToast]);
+  }, []); // do not include any dependencies to avoid re-rendering and losing scroll position
 
   const filteredActionItems = quickActionItems.filter((item) => {
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
@@ -181,9 +179,6 @@ export default function QuickActionsSection({
               </div>
             </div>
 
-            {/* Default AI Model Config Widget for Quick Actions */}
-            <QuickActionsModelConfig llmConfig={llmConfig} onToast={showToast} />
-
             {/* Category Filter Pills & Sort Options */}
             <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
               <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
@@ -207,17 +202,6 @@ export default function QuickActionsSection({
                     {cat.label}
                   </button>
                 ))}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleResetActionLastUsed}
-                  className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 hover:bg-stone-200/60 px-2 py-1 rounded-md transition-colors cursor-pointer"
-                  title="Reset recent use history to restore default action order"
-                >
-                  Reset Order
-                </button>
               </div>
             </div>
 
