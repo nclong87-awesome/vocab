@@ -46,7 +46,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "poolside/laguna-xs-2.1:free",
       "nvidia/nemotron-3-nano-30b-a3b:free",
       "google/gemma-4-26b-a4b-it:free",
-      "google/gemma-4-31b-it:free",
       "openai/gpt-oss-20b:free"
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
