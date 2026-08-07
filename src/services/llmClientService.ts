@@ -2667,14 +2667,16 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
     }
   }
 
-  let prompt = `You are a friendly, natural language and culture assistant. Suggest a few natural, casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}").`;
-
-  if (customPrompt) {
-    prompt += `\nUser guidance/instruction: "${customPrompt}"`;
-  }
+  let prompt = '';
 
   if (imageDataUrl) {
     prompt += `\n\nAnalyze the attached conversation screenshot image to understand the context and flow, then provide customized replies.`;
+  } else {
+    prompt += `\n\nAnalyze the provided text prompt to understand the context and flow, then provide customized replies.`;
+  }
+
+  if (customPrompt) {
+    prompt += `\n\nUser guidance/instruction: "${customPrompt}"`;
   }
 
   const schemaDesc = `{
@@ -2695,7 +2697,7 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
     ]
   }`;
 
-  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the following schema: \n
+  const systemInstruction = `You are a friendly, natural AI Language Coach. Analyze the conversation or guiding prompt, and suggest natural casual replies in "${userTarget}" (with translation, tone description, and nuance/usage explanations in "${userNative}") and candidate vocabulary words. Output MUST be strictly valid raw JSON-only matching the following schema: \n
 ${schemaDesc}`;
 
   try {

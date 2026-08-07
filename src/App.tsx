@@ -1445,9 +1445,28 @@ export default function App() {
       });
     } catch (err: any) {
       console.error("Suggest Casual Reply Error:", err);
-      setChatMessages(prev => prev.filter(m => m.id !== statusMsgId));
-      handleAiApiError(err, configToUse, (newConfig) => {
-        handleSuggestCasualReply(imageDataUrl, customPrompt, newConfig);
+      const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to suggest casual reply.");
+      setChatMessages(prev => {
+        const filtered = prev.filter(m => m.id !== statusMsgId);
+        return [
+          ...filtered,
+          {
+            id: `err-reply-${Date.now()}`,
+            role: "assistant",
+            content: `⚠️ **Unable to generate suggested replies.**\n\n*Error*: ${rawMsg}`,
+            timestamp: new Date().toISOString(),
+            suggestedActions: [
+              {
+                label: "🔄 Try again suggesting reply",
+                action: "retry_suggest_reply",
+                payload: {
+                  imageDataUrl,
+                  customPrompt
+                }
+              }
+            ]
+          }
+        ];
       });
     } finally {
       setIsTyping(false);

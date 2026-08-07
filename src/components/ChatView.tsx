@@ -515,7 +515,7 @@ export default function ChatView({
               // Filter actions if this is NOT the latest message in the thread:
               // Hide interactive navigation actions ("send_message", "quiz_answer", "start_quiz") on old messages
               if (!isLatestMessage) {
-                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image" || a.action === "copy_text" || a.action === "copy_sentence");
+                actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image" || a.action === "retry_suggest_reply" || a.action === "copy_text" || a.action === "copy_sentence");
               }
             }
 
@@ -815,6 +815,9 @@ export default function ChatView({
                                   showToast("📷 Please upload or select a photo to analyze");
                                   setIsPhotoModalOpen(true);
                                 }
+                              } else if (act.action === "retry_suggest_reply" && onSuggestCasualReply) {
+                                showToast("🔄 Retrying suggest casual reply...");
+                                onSuggestCasualReply(act.payload?.imageDataUrl || null, act.payload?.customPrompt || "");
                               } else if (act.action === "send_message" && act.payload?.message) {
                                 onSendMessage(act.payload.message);
                               }
