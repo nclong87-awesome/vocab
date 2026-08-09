@@ -33,7 +33,7 @@ interface AnalyticsDashboardProps {
 }
 
 export default function AnalyticsDashboard({
-  words,
+  words = [],
   stats,
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
@@ -42,6 +42,8 @@ export default function AnalyticsDashboard({
   onToggleStarWord,
   onLlmApiError
 }: AnalyticsDashboardProps) {
+  const safeWords = Array.isArray(words) ? words : [];
+
   // AI analysis state
   const [aiReport, setAiReport] = useState<PerformanceAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -55,29 +57,29 @@ export default function AnalyticsDashboard({
   // TTS audio state
   const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
 
-  const totalWordsCount = words.length;
+  const totalWordsCount = safeWords.length;
 
   // Mastered words: learned === true OR strength >= 80
   const masteredWords = useMemo(() => {
-    return words.filter(w => w.learned || w.strength >= 80);
-  }, [words]);
+    return safeWords.filter(w => w.learned || w.strength >= 80);
+  }, [safeWords]);
 
   // Words needing improvement: !learned AND strength < 50
   const improvingWords = useMemo(() => {
-    return words.filter(w => !w.learned && w.strength < 50);
-  }, [words]);
+    return safeWords.filter(w => !w.learned && w.strength < 50);
+  }, [safeWords]);
 
   // Words needing memory refresher (decayed or overdue >= 5 days)
   const decayedWords = useMemo(() => {
-    return words.filter(w => {
+    return safeWords.filter(w => {
       const days = getDaysSinceLastReview(w);
       return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
     });
-  }, [words]);
+  }, [safeWords]);
 
   const starredWords = useMemo(() => {
-    return words.filter(w => w.starred);
-  }, [words]);
+    return safeWords.filter(w => w.starred);
+  }, [safeWords]);
 
 
 
@@ -129,7 +131,7 @@ export default function AnalyticsDashboard({
 
   // Filtered Words List according to active tab, search, and sorting
   const filteredWords = useMemo(() => {
-    let source = words;
+    let source = safeWords;
 
     if (activeTab === 'improving') {
       source = improvingWords;

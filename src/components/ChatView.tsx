@@ -30,6 +30,7 @@ interface ChatViewProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   words: Word[];
+  onUpdateWords?: (updatedWords: Word[]) => void;
   conversationalState?: string;
 }
 
@@ -39,9 +40,10 @@ export default function ChatView({
   onClearHistory,
   isTyping,
   targetLanguage,
- nativeLanguage,
+  nativeLanguage,
   onAddWord,
   onAddMultipleWords,
+  onGenerateByTopic,
   onStartQuiz,
   onFixGrammar,
   onViewFlashcard,
@@ -52,6 +54,8 @@ export default function ChatView({
   onSwitchProvider,
   ttsConfig,
   llmConfig,
+  words,
+  onUpdateWords,
   conversationalState = "none",
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
@@ -375,6 +379,8 @@ export default function ChatView({
         handleRecordActionUse={handleRecordActionUse}
         messagesEndRef={messagesEndRef}
         latestMessageRef={latestMessageRef}
+        words={words}
+        onUpdateWords={onUpdateWords}
       />
 
       {/* Quick Actions Component */}
@@ -387,6 +393,7 @@ export default function ChatView({
         onSendMessage={onSendMessage}
         onClearHistory={onClearHistory}
         onAddWord={onAddWord}
+        onGenerateByTopic={onGenerateByTopic}
         onStartQuiz={onStartQuiz}
         onFixGrammar={onFixGrammar}
         onViewFlashcard={onViewFlashcard}

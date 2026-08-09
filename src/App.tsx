@@ -307,7 +307,10 @@ export default function App() {
       const storedChat = localStorage.getItem("vocab_learner_chat_history");
       if (storedChat) {
         try {
-          setChatMessages(JSON.parse(storedChat));
+          const parsed = JSON.parse(storedChat);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatMessages(parsed);
+          }
         } catch (e) {
           // ignore
         }
@@ -447,6 +450,7 @@ export default function App() {
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}
+                    onUpdateWords={handleUpdateWords}
                     onAnalyzeImageVocab={handleAnalyzeImageVocab}
                     onAddMultipleWords={handleAddMultipleWords}
                     onSuggestCasualReplyPrompt={handlePromptSuggestCasualReply}

@@ -18,9 +18,22 @@ export { cleanJsonResponse, cleanAndParseJson };
 
 // Sanitize model names for provider
 export function sanitizeModel(provider: string, model?: string): string {
-  if (model) return model;
+  if (provider === "auto") return "auto";
   const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
-  if (providerMeta?.defaultModel) return providerMeta.defaultModel;
+  if (providerMeta) {
+    if (
+      model &&
+      (
+        providerMeta.models.includes(model) ||
+        Boolean(providerMeta.visionModels?.includes(model)) ||
+        Boolean(providerMeta.tts_models?.includes(model))
+      )
+    ) {
+      return model;
+    }
+    return providerMeta.defaultModel;
+  }
+  if (model) return model;
   const defaultMeta = PROVIDER_OPTIONS.find(p => p.id === DEFAULT_PROVIDER_ID) || PROVIDER_OPTIONS[0];
   return defaultMeta.defaultModel;
 }

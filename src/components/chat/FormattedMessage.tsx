@@ -2,6 +2,8 @@ import React from "react";
 
 // Inline custom markdown-like parser for formatting AI messages
 export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] | string {
+  if (!text) return "";
+  const safeText = typeof text === "string" ? text : String(text);
   const parts: (string | React.ReactNode)[] = [];
   let index = 0;
   
@@ -9,10 +11,10 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
   const tokenRegex = /(\*\*|`)(.*?)\1/g;
   let match: RegExpExecArray | null;
   
-  while ((match = tokenRegex.exec(text)) !== null) {
+  while ((match = tokenRegex.exec(safeText)) !== null) {
     // Add text before match
     if (match.index > index) {
-      parts.push(text.substring(index, match.index));
+      parts.push(safeText.substring(index, match.index));
     }
     
     const type = match[1];
@@ -27,11 +29,11 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
     index = tokenRegex.lastIndex;
   }
   
-  if (index < text.length) {
-    parts.push(text.substring(index));
+  if (index < safeText.length) {
+    parts.push(safeText.substring(index));
   }
   
-  return parts.length > 0 ? parts : text;
+  return parts.length > 0 ? parts : safeText;
 }
 
 interface FormattedMessageProps {
@@ -39,7 +41,8 @@ interface FormattedMessageProps {
 }
 
 export default function FormattedMessage({ text }: FormattedMessageProps) {
-  const lines = text.split("\n");
+  const safeText = typeof text === "string" ? text : (text ? String(text) : "");
+  const lines = safeText.split("\n");
   
   return (
     <div className="space-y-1.5 text-sm sm:text-base leading-relaxed break-words">

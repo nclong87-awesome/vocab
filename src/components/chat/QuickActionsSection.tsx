@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
@@ -13,6 +13,7 @@ interface QuickActionsSectionProps {
   onSendMessage: (text: string) => Promise<void>;
   onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
+  onGenerateByTopic?: () => void;
   onStartQuiz: () => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
@@ -34,6 +35,7 @@ export default function QuickActionsSection({
   onSendMessage,
   onClearHistory,
   onAddWord,
+  onGenerateByTopic,
   onStartQuiz,
   onFixGrammar,
   onViewFlashcard,
@@ -50,43 +52,94 @@ export default function QuickActionsSection({
   const [actionSearchQuery, setActionSearchQuery] = useState("");
   const dockScrollRef = useRef<HTMLDivElement>(null);
 
+  const propsRef = useRef({
+    targetLanguage,
+    nativeLanguage,
+    llmConfig,
+    actionLastUsed,
+    handleRecordActionUse,
+    onSendMessage,
+    onClearHistory,
+    onAddWord,
+    onGenerateByTopic,
+    onStartQuiz,
+    onFixGrammar,
+    onViewFlashcard,
+    onSuggestCasualReplyPrompt,
+    onSwitchProvider,
+    showToast,
+    scrollToBottom,
+    focusInput,
+    setIsPhotoModalOpen,
+    setSelectedImage,
+  });
+
+  useEffect(() => {
+    propsRef.current = {
+      targetLanguage,
+      nativeLanguage,
+      llmConfig,
+      actionLastUsed,
+      handleRecordActionUse,
+      onSendMessage,
+      onClearHistory,
+      onAddWord,
+      onGenerateByTopic,
+      onStartQuiz,
+      onFixGrammar,
+      onViewFlashcard,
+      onSuggestCasualReplyPrompt,
+      onSwitchProvider,
+      showToast,
+      scrollToBottom,
+      focusInput,
+      setIsPhotoModalOpen,
+      setSelectedImage,
+    };
+  });
+
   const quickActionItems = useMemo(() => {
     const allQuickActionItems = getQuickActionItems().map((item) => ({
       ...item,
       onClick: () => {
-        handleRecordActionUse(item.id);
+        const p = propsRef.current;
+        p.handleRecordActionUse(item.id);
         if (item.id !== "suggest_reply") {
-          setSelectedImage(null);
+          p.setSelectedImage(null);
         }
 
-        if (llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
+        if (p.llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
           const match = getRotatedDefaultModel(item.defaultModels);
           if (match) {
-            if (onSwitchProvider) {
-              onSwitchProvider(match.provider, match.model);
-              showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
+            if (p.onSwitchProvider) {
+              p.onSwitchProvider(match.provider, match.model);
+              p.showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
             }
           }
         }
 
         item.getAction({
-          targetLanguage,
-          nativeLanguage,
-          onFixGrammar,
-          onStartQuiz,
-          onGenerateByTopic: () => {}, // empty as fallback
-          onAddWord,
-          onSendMessage,
-          onClearHistory,
-          onViewFlashcard,
+          targetLanguage: p.targetLanguage,
+          nativeLanguage: p.nativeLanguage,
+          onFixGrammar: p.onFixGrammar,
+          onStartQuiz: p.onStartQuiz,
+          onGenerateByTopic: () => {
+            if (p.onGenerateByTopic) {
+              p.onGenerateByTopic();
+            }
+          },
+          onAddWord: p.onAddWord,
+          onSendMessage: p.onSendMessage,
+          onClearHistory: p.onClearHistory,
+          onViewFlashcard: p.onViewFlashcard,
           onSuggestCasualReplyPrompt: () => {
-            setIsPhotoModalOpen(true);
-            onSuggestCasualReplyPrompt?.();
+            p.setIsPhotoModalOpen(true);
+            p.onSuggestCasualReplyPrompt?.();
           },
         });
         setIsActionsPanelOpen(false);
-        scrollToBottom("smooth");
-        focusInput();
+        p.scrollToBottom("smooth");
+        p.focusInput();
       }
     }));
 

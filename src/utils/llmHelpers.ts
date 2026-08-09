@@ -1,31 +1,91 @@
 import { LLMConfig, LLMProvider, SavedProviderConfig, SavedProvidersMap } from "../types";
-import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, getDefaultLLMConfig } from "../config/llmProviders";
+
+/**
+ * Sanitizes LLMConfig against current PROVIDER_OPTIONS in code.
+ * Strips out any deprecated or removed model names and falls back to provider defaultModel.
+ */
+export function sanitizeLlmConfig(config: LLMConfig): LLMConfig {
+  if (!config) return getDefaultLLMConfig();
+
+  const provider = config.provider || DEFAULT_PROVIDER_ID;
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
+
+  let sanitizedModel = config.model;
+  if (providerMeta && provider !== "custom" && provider !== "auto") {
+    const isModelValid = 
+      Boolean(sanitizedModel) && (
+        providerMeta.models.includes(sanitizedModel) ||
+        Boolean(providerMeta.visionModels?.includes(sanitizedModel)) ||
+        Boolean(providerMeta.tts_models?.includes(sanitizedModel))
+      );
+    
+    if (!isModelValid) {
+      sanitizedModel = providerMeta.defaultModel;
+    }
+  }
+
+  const rawSavedMap = config.savedProviders || {};
+  const sanitizedSavedMap: SavedProvidersMap = {};
+
+  for (const [pKey, pVal] of Object.entries(rawSavedMap)) {
+    if (!pVal) continue;
+    const pMeta = PROVIDER_OPTIONS.find(p => p.id === pKey);
+    let pModel = pVal.model;
+
+    if (pMeta && pKey !== "custom" && pKey !== "auto") {
+      const isPModelValid = 
+        Boolean(pModel) && (
+          pMeta.models.includes(pModel) ||
+          Boolean(pMeta.visionModels?.includes(pModel)) ||
+          Boolean(pMeta.tts_models?.includes(pModel))
+        );
+
+      if (!isPModelValid) {
+        pModel = pMeta.defaultModel;
+      }
+    }
+
+    sanitizedSavedMap[pKey] = {
+      ...pVal,
+      model: pModel
+    };
+  }
+
+  return {
+    ...config,
+    provider,
+    model: sanitizedModel,
+    savedProviders: sanitizedSavedMap
+  };
+}
 
 /**
  * Gets saved providers map from LLMConfig with safety fallbacks
  * Automatically shares proxyKey across all providers if present
  */
 export function getSavedProvidersMap(config: LLMConfig): SavedProvidersMap {
-  const map: SavedProvidersMap = config.savedProviders ? { ...config.savedProviders } : {};
+  const sanitizedConfig = sanitizeLlmConfig(config);
+  const map: SavedProvidersMap = sanitizedConfig.savedProviders ? { ...sanitizedConfig.savedProviders } : {};
   
   // Find single shared proxyKey from config or any saved provider profile
-  const sharedProxyKey = config.proxyKey || Object.values(map).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+  const sharedProxyKey = sanitizedConfig.proxyKey || Object.values(map).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
 
   // Ensure current active provider is present in map if logged in
-  if (config.provider && config.isLoggedIn) {
+  if (sanitizedConfig.provider && sanitizedConfig.isLoggedIn) {
     if (
-      !map[config.provider] || 
-      config.apiKey !== map[config.provider].apiKey || 
-      (sharedProxyKey && config.proxyKey !== map[config.provider].proxyKey) ||
-      config.model !== map[config.provider].model
+      !map[sanitizedConfig.provider] || 
+      sanitizedConfig.apiKey !== map[sanitizedConfig.provider].apiKey || 
+      (sharedProxyKey && sanitizedConfig.proxyKey !== map[sanitizedConfig.provider].proxyKey) ||
+      sanitizedConfig.model !== map[sanitizedConfig.provider].model
     ) {
-      map[config.provider] = {
-        provider: config.provider,
-        model: config.model,
-        apiKey: config.apiKey,
-        proxyKey: sharedProxyKey || config.proxyKey || map[config.provider]?.proxyKey || "",
-        baseUrl: config.baseUrl,
-        isLoggedIn: config.isLoggedIn,
+      map[sanitizedConfig.provider] = {
+        provider: sanitizedConfig.provider,
+        model: sanitizedConfig.model,
+        apiKey: sanitizedConfig.apiKey,
+        proxyKey: sharedProxyKey || sanitizedConfig.proxyKey || map[sanitizedConfig.provider]?.proxyKey || "",
+        baseUrl: sanitizedConfig.baseUrl,
+        isLoggedIn: sanitizedConfig.isLoggedIn,
         lastUsedAt: new Date().toISOString()
       };
     }
@@ -55,15 +115,32 @@ export function updateProviderProfile(
   profile: SavedProviderConfig,
   makeActive: boolean = true
 ): LLMConfig {
-  const savedMap = getSavedProvidersMap(currentConfig);
+  const sanitizedCurrent = sanitizeLlmConfig(currentConfig);
+  const savedMap = getSavedProvidersMap(sanitizedCurrent);
   
+  // Validate profile model against PROVIDER_OPTIONS
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === profile.provider);
+  let validatedModel = profile.model;
+  if (providerMeta && profile.provider !== "custom" && profile.provider !== "auto") {
+    const isValid = 
+      Boolean(validatedModel) && (
+        providerMeta.models.includes(validatedModel) ||
+        Boolean(providerMeta.visionModels?.includes(validatedModel)) ||
+        Boolean(providerMeta.tts_models?.includes(validatedModel))
+      );
+    if (!isValid) {
+      validatedModel = providerMeta.defaultModel;
+    }
+  }
+
   // Determine shared proxyKey: explicit profile proxyKey if set, or existing sharedProxyKey
   const sharedProxyKey = (profile.proxyKey !== undefined && profile.proxyKey !== "")
     ? profile.proxyKey 
-    : (currentConfig.proxyKey || Object.values(savedMap).find(p => Boolean(p?.proxyKey))?.proxyKey || "");
+    : (sanitizedCurrent.proxyKey || Object.values(savedMap).find(p => Boolean(p?.proxyKey))?.proxyKey || "");
 
   const updatedProfile: SavedProviderConfig = {
     ...profile,
+    model: validatedModel,
     proxyKey: sharedProxyKey,
     isLoggedIn: true,
     lastUsedAt: new Date().toISOString()
@@ -82,22 +159,22 @@ export function updateProviderProfile(
   }
 
   if (makeActive) {
-    return {
+    return sanitizeLlmConfig({
       provider: profile.provider,
-      model: profile.model,
+      model: validatedModel,
       apiKey: profile.apiKey,
       proxyKey: sharedProxyKey,
       baseUrl: profile.baseUrl || "",
       isLoggedIn: true,
       savedProviders: savedMap
-    };
+    });
   }
 
-  return {
-    ...currentConfig,
+  return sanitizeLlmConfig({
+    ...sanitizedCurrent,
     proxyKey: sharedProxyKey,
     savedProviders: savedMap
-  };
+  });
 }
 
 /**
@@ -107,37 +184,49 @@ export function switchActiveProvider(
   currentConfig: LLMConfig,
   targetProviderId: LLMProvider
 ): LLMConfig {
-  const savedMap = getSavedProvidersMap(currentConfig);
-  const sharedProxyKey = currentConfig.proxyKey || Object.values(savedMap).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+  const sanitizedCurrent = sanitizeLlmConfig(currentConfig);
+  const savedMap = getSavedProvidersMap(sanitizedCurrent);
+  const sharedProxyKey = sanitizedCurrent.proxyKey || Object.values(savedMap).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
   const targetSaved = savedMap[targetProviderId];
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === targetProviderId) || PROVIDER_OPTIONS[0];
 
   if (targetSaved) {
     const effectiveProxyKey = targetSaved.proxyKey || sharedProxyKey;
+    const isModelValid = 
+      targetProviderId === "custom" || 
+      targetProviderId === "auto" || 
+      (Boolean(targetSaved.model) && (
+        providerMeta.models.includes(targetSaved.model) ||
+        Boolean(providerMeta.visionModels?.includes(targetSaved.model)) ||
+        Boolean(providerMeta.tts_models?.includes(targetSaved.model))
+      ));
+
+    const effectiveModel = isModelValid ? targetSaved.model : providerMeta.defaultModel;
+
     const updatedMap = {
       ...savedMap,
       [targetProviderId]: {
         ...targetSaved,
+        model: effectiveModel,
         proxyKey: effectiveProxyKey,
         lastUsedAt: new Date().toISOString()
       }
     };
 
-    return {
+    return sanitizeLlmConfig({
       provider: targetProviderId,
-      model: targetSaved.model || PROVIDER_OPTIONS.find(p => p.id === targetProviderId)?.defaultModel || "openai/gpt-oss-120b",
+      model: effectiveModel,
       apiKey: targetSaved.apiKey || "",
       proxyKey: effectiveProxyKey,
       baseUrl: targetSaved.baseUrl || "",
       useProxy: targetSaved.useProxy !== undefined ? targetSaved.useProxy : true,
       isLoggedIn: true,
       savedProviders: updatedMap
-    };
+    });
   }
 
   // Fallback to provider defaults (proxy worker)
-  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === targetProviderId) || PROVIDER_OPTIONS[0];
-
-  return {
+  return sanitizeLlmConfig({
     provider: targetProviderId,
     model: providerMeta.defaultModel,
     apiKey: "",
@@ -146,7 +235,7 @@ export function switchActiveProvider(
     useProxy: true,
     isLoggedIn: true,
     savedProviders: savedMap
-  };
+  });
 }
 
 /**

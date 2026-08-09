@@ -97,6 +97,7 @@ export default function LlmLoginModal({
       const sharedProxy = currentConfig.proxyKey || Object.values(profiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
 
       const activeP = currentConfig.provider || DEFAULT_PROVIDER_ID;
+      const activeMeta = PROVIDER_OPTIONS.find(p => p.id === activeP);
       setProvider(activeP);
 
       const activeSaved = profiles[activeP];
@@ -105,13 +106,19 @@ export default function LlmLoginModal({
         : (currentConfig.useProxy !== undefined ? currentConfig.useProxy : true);
       setUseProxy(initialUseProxy);
 
+      const rawModel = activeSaved?.model || currentConfig.model || activeMeta?.defaultModel || "openai/gpt-oss-120b";
+      const isRawValid = activeMeta && activeP !== "custom" && activeP !== "auto"
+        ? (activeMeta.models.includes(rawModel) || Boolean(activeMeta.visionModels?.includes(rawModel)))
+        : true;
+      const effectiveInitialModel = isRawValid ? rawModel : (activeMeta?.defaultModel || "openai/gpt-oss-120b");
+
       if (activeSaved) {
-        setModel(activeSaved.model || currentConfig.model || "openai/gpt-oss-120b");
+        setModel(effectiveInitialModel);
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
         setProxyKey(activeSaved.proxyKey || sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
       } else {
-        setModel(currentConfig.model || "openai/gpt-oss-120b");
+        setModel(effectiveInitialModel);
         setApiKey(currentConfig.apiKey || "");
         setProxyKey(sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(currentConfig.baseUrl || "");
@@ -157,13 +164,17 @@ export default function LlmLoginModal({
         setBaseUrl(saved.baseUrl !== undefined ? saved.baseUrl : (meta?.defaultBaseUrl || ""));
       }
       
-      if (meta && meta.models.includes(saved.model)) {
+      if (meta && (meta.models.includes(saved.model) || Boolean(meta.visionModels?.includes(saved.model)))) {
         setModel(saved.model);
         setIsCustomModelMode(false);
-      } else {
+      } else if (pId === "custom") {
         setModel(saved.model || meta?.defaultModel || "");
         setCustomModel(saved.model || "");
-        setIsCustomModelMode(meta ? !meta.models.includes(saved.model) : false);
+        setIsCustomModelMode(Boolean(saved.model));
+      } else if (meta) {
+        setModel(meta.defaultModel);
+        setCustomModel("");
+        setIsCustomModelMode(false);
       }
     } else if (meta) {
       setModel(meta.defaultModel);

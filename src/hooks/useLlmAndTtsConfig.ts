@@ -2,13 +2,13 @@ import { useState, useCallback } from "react";
 import { LLMConfig, TTSConfig, LLMProvider } from "../types";
 import { getDefaultLLMConfig } from "../config/llmProviders";
 import { DEFAULT_TTS_CONFIG } from "../utils/ttsService";
-import { switchActiveProvider } from "../utils/llmHelpers";
+import { switchActiveProvider, sanitizeLlmConfig } from "../utils/llmHelpers";
 import { lockModel } from "../utils/autoModeManager";
 import { saveLLMConfigToDB, saveTTSConfigToDB } from "../db/indexedDB";
 import { DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 
 export function useLlmAndTtsConfig() {
-  const [llmConfig, setLlmConfig] = useState<LLMConfig>(getDefaultLLMConfig());
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => sanitizeLlmConfig(getDefaultLLMConfig()));
   const [ttsConfig, setTtsConfig] = useState<TTSConfig>(DEFAULT_TTS_CONFIG);
   const [isLlmModalOpen, setIsLlmModalOpen] = useState<boolean>(false);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState<boolean>(false);
@@ -50,11 +50,11 @@ export function useLlmAndTtsConfig() {
         return;
       }
 
-      const updatedConfig: LLMConfig = {
+      const updatedConfig: LLMConfig = sanitizeLlmConfig({
         ...currentConfig,
         provider: "auto",
         model: "auto"
-      };
+      });
 
       if (retryAction) {
         setTimeout(() => {
@@ -99,10 +99,11 @@ export function useLlmAndTtsConfig() {
   }, []);
 
   const handleSaveLlmConfig = useCallback((newConfig: LLMConfig) => {
-    setLlmConfig(newConfig);
-    saveLLMConfigToDB(newConfig).catch(e => console.error("IndexedDB config save error:", e));
+    const sanitized = sanitizeLlmConfig(newConfig);
+    setLlmConfig(sanitized);
+    saveLLMConfigToDB(sanitized).catch(e => console.error("IndexedDB config save error:", e));
     try {
-      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(newConfig));
+      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(sanitized));
     } catch (e) {
       console.error("Failed to save LLM config to localStorage", e);
     }
@@ -112,7 +113,7 @@ export function useLlmAndTtsConfig() {
   const handleSwitchProviderQuick = useCallback((providerId: LLMProvider, modelOverride?: string) => {
     let switched = switchActiveProvider(llmConfig, providerId);
     if (modelOverride) {
-      switched = { ...switched, model: modelOverride };
+      switched = sanitizeLlmConfig({ ...switched, model: modelOverride });
     }
     setLlmConfig(switched);
     saveLLMConfigToDB(switched).catch(e => console.error("IndexedDB config save error:", e));

@@ -3,11 +3,12 @@ import { motion } from "motion/react";
 import { 
   Volume2, ChevronRight, Check, Sparkles, Clock
 } from "lucide-react";
-import { ChatMessage, LLMConfig, TTSConfig } from "../../types";
+import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage from "./FormattedMessage";
 import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
+import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 
 interface ChatMessageItemProps {
   msg: ChatMessage;
@@ -33,6 +34,8 @@ interface ChatMessageItemProps {
   focusInput: () => void;
   setIsPhotoModalOpen: (open: boolean) => void;
   handleRecordActionUse: (actionId: string) => void;
+  words?: Word[];
+  onUpdateWords?: (updatedWords: Word[]) => void;
 }
 
 export default function ChatMessageItem({
@@ -59,6 +62,8 @@ export default function ChatMessageItem({
   focusInput,
   setIsPhotoModalOpen,
   handleRecordActionUse,
+  words,
+  onUpdateWords,
 }: ChatMessageItemProps) {
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -71,8 +76,9 @@ export default function ChatMessageItem({
   };
 
   const parsedQuizOptions: { label: string; action: string; payload: any }[] = [];
-  if (!isUser) {
-    const lines = msg.content.split("\n");
+  const safeMsgContent = typeof msg.content === "string" ? msg.content : (msg.content ? String(msg.content) : "");
+  if (!isUser && safeMsgContent) {
+    const lines = safeMsgContent.split("\n");
     for (const line of lines) {
       const cleanLine = line.trim();
       const match = cleanLine.match(/^\s*(?:\*\*)?\s*([A-E])\s*[\)\.]\s*(?:\*\*)?\s*(.+)$/i);
@@ -99,15 +105,28 @@ export default function ChatMessageItem({
       actionsList = [...msg.suggestedActions];
     }
 
-    // On the latest message, if no quiz options are present, detect if AI asks to move on to the next question
+    // On the latest message, if no quiz options are present, extract or generate topic choices
     if (isLatestMessage && !hasQuizOptions) {
-      const content = msg.content;
-      const hasNextAction = actionsList.some(a => 
-        a.label.toLowerCase().includes("question") || 
-        a.label.toLowerCase().includes("move on") || 
-        a.label.toLowerCase().includes("continue to") || 
-        a.label.toLowerCase().includes("next question")
+      const content = safeMsgContent;
+      const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
+
+      actionsList = extractOrGenerateTopicActions(
+        content,
+        actionsList,
+        lastUserMessage,
+        targetLanguage,
+        nativeLanguage
       );
+
+      const hasNextAction = actionsList.some(a => {
+        const lbl = (a && typeof a.label === "string") ? a.label.toLowerCase() : "";
+        return (
+          lbl.includes("question") || 
+          lbl.includes("move on") || 
+          lbl.includes("continue to") || 
+          lbl.includes("next question")
+        );
+      });
 
       if (!hasNextAction) {
         const questionMatch = content.match(/(?:move\s+on\s+to|continue\s+to|proceed\s+to|shall\s+we\s+(?:move\s+on\s+to|try|start|go\s+to)?)\s*\*{0,2}(Question\s*\d+|the\s+next\s+question)\*{0,2}/i)
@@ -144,7 +163,24 @@ export default function ChatMessageItem({
     }
   }
 
-  const effectiveActions = actionsList;
+  const effectiveActions = (actionsList || [])
+    .filter(act => {
+      if (!act || typeof act !== "object") return false;
+      if (act.action === "select_definition") return Boolean(act.payload?.definition);
+      const lbl = act.label ? String(act.label).trim() : "";
+      const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
+      const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
+      return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
+    })
+    .map(act => {
+      const cleaned = { ...act };
+      if (!cleaned.label || !String(cleaned.label).trim()) {
+        if (cleaned.payload?.message) cleaned.label = cleaned.payload.message;
+        else if (cleaned.payload?.word) cleaned.label = `Add "${cleaned.payload.word}" to collection`;
+        else if ((cleaned as any).word) cleaned.label = `Add "${(cleaned as any).word}" to collection`;
+      }
+      return cleaned;
+    });
   let className = isUser ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end" : "flex flex-col max-w-full w-full mr-auto items-stretch";
   if (isLatestMessage) {
     // paddingTop for the latest message for auto-scroll to work properly
@@ -195,6 +231,9 @@ export default function ChatMessageItem({
               provider={msg.provider}
               model={msg.model}
               responseTimeMs={msg.responseTimeMs}
+              words={words}
+              onUpdateWords={onUpdateWords}
+              showToast={showToast}
             />
           ) : (
             <>
@@ -362,10 +401,11 @@ export default function ChatMessageItem({
         {!isUser && effectiveActions && effectiveActions.length > 0 && (
           <div className="flex flex-col gap-1.5 pt-1 w-full">
             {effectiveActions.map((act, aIdx) => {
+              const actLbl = (act && typeof act.label === "string") ? act.label.toLowerCase() : "";
               const isNextQ = act.action === "send_message" && (
-                act.label.toLowerCase().startsWith("move on") ||
-                act.label.toLowerCase().startsWith("next question") ||
-                act.label.toLowerCase().includes("continue to question")
+                actLbl.startsWith("move on") ||
+                actLbl.startsWith("next question") ||
+                actLbl.includes("continue to question")
               );
 
               return (

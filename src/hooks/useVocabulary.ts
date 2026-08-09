@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Word, UserStats } from "../types";
+import { DEFAULT_WORDS } from "../defaultWords";
 import { calculateNewStreak } from "../utils";
 import { 
   saveWordToDB, 
@@ -7,9 +8,10 @@ import {
   deleteWordFromDB, 
   saveStatsToDB 
 } from "../db/indexedDB";
+import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 
 export function useVocabulary() {
-  const [words, setWords] = useState<Word[]>([]);
+  const [words, setWords] = useState<Word[]>(DEFAULT_WORDS);
   const [stats, setStats] = useState<UserStats>({
     totalQuizzesTaken: 0,
     totalCorrectAnswers: 0,
@@ -34,12 +36,9 @@ export function useVocabulary() {
       return prevWords.map(w => {
         if (w.id === wordId) {
           const isNowMastered = !w.learned;
-          const updated = {
-            ...w,
-            learned: isNowMastered,
-            lastReviewed: new Date().toISOString(),
-            strength: isNowMastered ? 100 : 0
-          };
+          const targetStrength = isNowMastered ? 100 : 0;
+          const reason = isNowMastered ? 'mastered' : 'unmastered';
+          const updated = recordStrengthHistory(w, targetStrength, reason);
           saveWordToDB(updated).catch(e => console.error("IndexedDB learned save error:", e));
           return updated;
         }
@@ -71,15 +70,19 @@ export function useVocabulary() {
         console.warn(`Word "${wordData.word}" already exists in collection. Skipping duplicate.`);
         return prev;
       }
-      const newWord: Word = {
-        ...wordData,
-        id: `manual-word-${Date.now()}`,
-        learned: false,
-        starred: wordData.starred || false,
-        createdAt: new Date().toISOString(),
-        lastReviewed: null,
-        strength: 0
-      };
+      const newWord: Word = recordStrengthHistory(
+        {
+          ...wordData,
+          id: `manual-word-${Date.now()}`,
+          learned: false,
+          starred: wordData.starred || false,
+          createdAt: new Date().toISOString(),
+          lastReviewed: null,
+          strength: 0
+        },
+        0,
+        "created"
+      );
       const updated = [newWord, ...prev];
       saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add word save error:", e));
       return updated;
@@ -115,20 +118,11 @@ export function useVocabulary() {
           
           if (correctWordIds?.includes(originalId) || correctWordIds?.includes(virtualId)) {
             const newStrength = Math.min(100, word.strength + 20);
-            return {
-              ...word,
-              strength: newStrength,
-              learned: newStrength >= 80 ? true : word.learned,
-              lastReviewed: new Date().toISOString()
-            };
+            return recordStrengthHistory(word, newStrength, 'quiz_correct', 'Practiced in Quiz (Correct)');
           }
           if (incorrectWordIds?.includes(originalId) || incorrectWordIds?.includes(virtualId)) {
             const newStrength = Math.max(0, word.strength - 20);
-            return {
-              ...word,
-              strength: newStrength,
-              lastReviewed: new Date().toISOString()
-            };
+            return recordStrengthHistory(word, newStrength, 'quiz_incorrect', 'Practiced in Quiz (Incorrect)');
           }
           return word;
         });

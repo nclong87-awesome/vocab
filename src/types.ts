@@ -51,6 +51,15 @@ export interface LLMConfig {
   savedProviders?: SavedProvidersMap;
 }
 
+export interface StrengthHistoryEntry {
+  id: string;
+  timestamp: string;
+  strength: number;
+  delta?: number;
+  reason: 'created' | 'quiz_correct' | 'quiz_incorrect' | 'mastered' | 'unmastered' | 'memory_decay' | 'manual_adjust' | 'flashcard_review';
+  note?: string;
+}
+
 export interface Word {
   id: string;
   word: string;
@@ -69,6 +78,7 @@ export interface Word {
   imageKeyword?: string;
   category?: string;
   context?: string;
+  strengthHistory?: StrengthHistoryEntry[];
 }
 
 export interface WordSense {
@@ -138,6 +148,9 @@ export interface FlashcardData {
   imageUrl?: string;
   imageKeyword?: string;
   suggestedVocabulary?: SuggestedVocabularyWord[];
+  previousStrength?: number;
+  newStrength?: number;
+  strengthGained?: number;
 }
 
 export interface ChatMessage {

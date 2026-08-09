@@ -1,6 +1,7 @@
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { DEFAULT_WORDS } from "../defaultWords";
 import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
+import { sanitizeLlmConfig } from "../utils/llmHelpers";
 
 const DB_NAME = "VocabLearnerDB";
 
@@ -479,17 +480,24 @@ export async function saveStatsToDB(stats: UserStats): Promise<void> {
 export async function getLLMConfigFromDB(defaultConfig: LLMConfig): Promise<LLMConfig> {
   try {
     const stored = await readRecordData<LLMConfig>("config", KEYS.llmConfig);
-    if (stored) return stored;
+    if (stored) {
+      const sanitized = sanitizeLlmConfig(stored);
+      if (JSON.stringify(sanitized) !== JSON.stringify(stored)) {
+        await saveLLMConfigToDB(sanitized);
+      }
+      return sanitized;
+    }
 
     const legacy = parseJSON<LLMConfig>(lsGet(LEGACY_KEYS.llmConfig), "llm config");
     if (legacy) {
-      await saveLLMConfigToDB(legacy);
-      return legacy;
+      const sanitized = sanitizeLlmConfig(legacy);
+      await saveLLMConfigToDB(sanitized);
+      return sanitized;
     }
-    return defaultConfig;
+    return sanitizeLlmConfig(defaultConfig);
   } catch (err) {
     console.error("Error loading LLM config from IndexedDB:", err);
-    return defaultConfig;
+    return sanitizeLlmConfig(defaultConfig);
   }
 }
 

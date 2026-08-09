@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { cleanJsonResponse, cleanAndParseJson } from "./src/utils/jsonSanitizer";
+import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { PROVIDER_OPTIONS } from "./src/config/llmProviders";
 
 dotenv.config();
@@ -273,10 +274,11 @@ async function callLLMSingle(
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey;
   const proxyKey = process.env.PROXY_SECRET;
-  const baseUrl = llmConfig?.baseUrl || "";
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
+  const baseUrl = llmConfig?.baseUrl || providerMeta?.defaultBaseUrl || "";
 
   if (provider === "gemini") {
-    const effectiveGeminiUrl = baseUrl || "https://gemini.nclong87.workers.dev/v1beta";
+    const effectiveGeminiUrl = baseUrl || providerMeta?.defaultBaseUrl || "https://gemini.nclong87.workers.dev/v1beta";
     const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
 
     if (!isCustomOrProxyUrl) {
@@ -472,12 +474,13 @@ async function callLLM(
       excludedKeys.add(candKey);
 
       const candProfile = llmConfig?.savedProviders?.[cand.provider];
+      const candMeta = PROVIDER_OPTIONS.find(p => p.id === cand.provider);
       const candConfig: LLMRequestConfig = {
         provider: cand.provider,
         model: cand.model,
         apiKey: candProfile?.apiKey || (llmConfig?.provider === cand.provider ? llmConfig.apiKey : ""),
         proxyKey: process.env.PROXY_SECRET,
-        baseUrl: candProfile?.baseUrl || "",
+        baseUrl: candProfile?.baseUrl || candMeta?.defaultBaseUrl || "",
         savedProviders: llmConfig?.savedProviders
       };
 
@@ -698,6 +701,31 @@ async function generateWorkerImage(keyword: string): Promise<string> {
 // 1. Health check endpoint
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
+});
+
+// Error Reporting Endpoint
+app.post("/api/report-error", (req, res) => {
+  try {
+    const { error, stack, componentStack, recipientEmail, userAgent, url, timestamp } = req.body || {};
+    console.error("=== CLIENT ERROR REPORT RECEIVED ===");
+    console.error(`Recipient: ${recipientEmail || "nclong87@gmail.com"}`);
+    console.error(`Timestamp: ${timestamp || new Date().toISOString()}`);
+    console.error(`URL: ${url || "N/A"}`);
+    console.error(`User Agent: ${userAgent || "N/A"}`);
+    console.error(`Error: ${error}`);
+    console.error(`Stack: ${stack}`);
+    console.error(`Component Stack: ${componentStack}`);
+    console.error("=====================================");
+
+    return res.json({
+      success: true,
+      message: "Error report successfully received and logged on server.",
+      recipient: recipientEmail || "nclong87@gmail.com",
+    });
+  } catch (err: any) {
+    console.error("Failed to process error report:", err);
+    return res.status(500).json({ error: "Failed to process error report" });
+  }
 });
 
 // Image Generation Endpoint via worker https://image.nclong87.workers.dev
@@ -1618,8 +1646,60 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = cleanAndParseJson(text);
-    res.json(result);
+    let parsed: any;
+    try {
+      parsed = cleanAndParseJson(text);
+    } catch {
+      parsed = { text: text };
+    }
+
+    if (typeof parsed === "string") {
+      parsed = { text: parsed };
+    } else if (!parsed || typeof parsed !== "object") {
+      parsed = { text: String(parsed || "") };
+    }
+
+    // Extract text from any common property names returned by various models
+    const mainText = parsed.text || parsed.message || parsed.content || parsed.response || parsed.reply || parsed.answer || parsed.result || (typeof text === "string" ? text : "");
+
+    // Normalize and sanitize suggestedActions
+    let rawActions = Array.isArray(parsed.suggestedActions) 
+      ? parsed.suggestedActions 
+      : (Array.isArray(parsed.suggested_actions) ? parsed.suggested_actions : (Array.isArray(parsed.actions) ? parsed.actions : []));
+
+    const sanitizedActions = rawActions
+      .filter((act: any) => {
+        if (!act || typeof act !== "object") return false;
+        if (act.action === "select_definition") return Boolean(act.payload?.definition);
+        const lbl = act.label ? String(act.label).trim() : "";
+        const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
+        const wordPayload = act.payload?.word || act.word ? String(act.payload?.word || act.word).trim() : "";
+        return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
+      })
+      .map((act: any) => {
+        const cleaned = { ...act };
+        if (!cleaned.label || !String(cleaned.label).trim()) {
+          if (cleaned.payload?.message) cleaned.label = cleaned.payload.message;
+          else if (cleaned.payload?.word) cleaned.label = `Add "${cleaned.payload.word}" to collection`;
+          else if (cleaned.word) cleaned.label = `Add "${cleaned.word}" to collection`;
+        }
+        return cleaned;
+      });
+
+    const lastUserMsg = messages[messages.length - 1]?.content || "";
+    const finalActions = extractOrGenerateTopicActions(
+      mainText,
+      sanitizedActions,
+      lastUserMsg,
+      targetLanguage,
+      nativeLanguage
+    );
+
+    res.json({
+      ...parsed,
+      text: mainText,
+      suggestedActions: finalActions
+    });
   } catch (error: any) {
     console.error("Error in AI chat:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");

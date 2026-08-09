@@ -196,7 +196,40 @@ export function getModelMetricsMap(): ModelMetricsMap {
   try {
     const raw = localStorage.getItem(METRICS_STORAGE_KEY);
     if (!raw) return {};
-    return JSON.parse(raw) as ModelMetricsMap;
+    const parsed = JSON.parse(raw) as ModelMetricsMap;
+    const active: ModelMetricsMap = {};
+    let changed = false;
+
+    for (const key of Object.keys(parsed)) {
+      const entry = parsed[key];
+      if (!entry || !entry.provider || !entry.model) {
+        changed = true;
+        continue;
+      }
+      const providerOpt = PROVIDER_OPTIONS.find(p => p.id === entry.provider);
+      if (providerOpt) {
+        const isModelValid = 
+          entry.provider === "custom" || 
+          providerOpt.models.includes(entry.model) ||
+          Boolean(providerOpt.visionModels?.includes(entry.model)) ||
+          Boolean(providerOpt.tts_models?.includes(entry.model));
+
+        if (!isModelValid) {
+          changed = true;
+          continue;
+        }
+      } else if (entry.provider !== "custom") {
+        changed = true;
+        continue;
+      }
+      active[key] = entry;
+    }
+
+    if (changed) {
+      saveModelMetricsMap(active);
+    }
+
+    return active;
   } catch (e) {
     return {};
   }

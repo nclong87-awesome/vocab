@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ChatMessage, LLMConfig, TTSConfig } from "../../types";
+import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import ChatMessageItem from "./ChatMessageItem";
 
 interface MessageListProps {
@@ -28,6 +28,8 @@ interface MessageListProps {
   handleRecordActionUse: (actionId: string) => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   latestMessageRef: React.RefObject<HTMLDivElement | null>;
+  words?: Word[];
+  onUpdateWords?: (updatedWords: Word[]) => void;
 }
 
 export default function MessageList({
@@ -55,6 +57,8 @@ export default function MessageList({
   handleRecordActionUse,
   messagesEndRef,
   latestMessageRef,
+  words,
+  onUpdateWords,
 }: MessageListProps) {
   return (
     <div 
@@ -93,6 +97,8 @@ export default function MessageList({
                 focusInput={focusInput}
                 setIsPhotoModalOpen={setIsPhotoModalOpen}
                 handleRecordActionUse={handleRecordActionUse}
+                words={words}
+                onUpdateWords={onUpdateWords}
               />
             </Fragment>
           );

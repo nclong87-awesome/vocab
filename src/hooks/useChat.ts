@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChatMessage, Word, WordSense, LLMConfig, UserStats, QuizQuestion } from "../types";
 import {
   sendChatMessageService,
@@ -12,8 +12,10 @@ import {
 } from "../services/llmClientService";
 import { getQuizCandidateWords, getCandidateWordForFlashcard } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
-import { saveAllWordsToDB } from "../db/indexedDB";
+import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
+import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { getRotatedVisionModel } from "../config/llmProviders";
+import { extractOrGenerateTopicActions } from "../utils/actionExtractor";
 
 interface UseChatProps {
   words: Word[];
@@ -39,7 +41,10 @@ export function useChat({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
     try {
       const stored = localStorage.getItem("vocab_learner_chat_history");
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {
       console.error(e);
     }
@@ -76,6 +81,31 @@ export function useChat({
     incorrectIds: string[];
   } | null>(null);
 
+  const wordsRef = useRef(words);
+  useEffect(() => {
+    wordsRef.current = words;
+  }, [words]);
+
+  const getEffectiveWords = async (): Promise<Word[]> => {
+    if (wordsRef.current && wordsRef.current.length > 0) {
+      return wordsRef.current;
+    }
+    if (words && words.length > 0) {
+      return words;
+    }
+    try {
+      const dbWords = await getAllWordsFromDB();
+      if (dbWords && dbWords.length > 0) {
+        setWords(dbWords);
+        wordsRef.current = dbWords;
+        return dbWords;
+      }
+    } catch (e) {
+      console.error("Failed to load words from DB in getEffectiveWords:", e);
+    }
+    return [];
+  };
+
   // Sync to local storage
   useEffect(() => {
     try {
@@ -93,7 +123,9 @@ export function useChat({
     setPendingWordSenses(null);
     setPendingTopicSubject("");
 
-    if (words.length === 0) {
+    const activeWords = await getEffectiveWords();
+
+    if (activeWords.length === 0) {
       const noWordsMsg: ChatMessage = {
         id: `quiz-no-words-${Date.now()}`,
         role: "assistant",
@@ -104,7 +136,7 @@ export function useChat({
       return;
     }
 
-    const quizWords = getQuizCandidateWords(words, { maxCandidates: 5, cooldownHours: 12 });
+    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5, cooldownHours: 12 });
     if (quizWords.length < 2) {
       const noCandidateMsg: ChatMessage = {
         id: `quiz-no-candidates-${Date.now()}`,
@@ -557,12 +589,13 @@ export function useChat({
       const countMsg: ChatMessage = {
         id: `gen-count-prompt-${Date.now()}`,
         role: "assistant",
-        content: `🔢 **How many vocabulary words would you like to generate for "${topic}"?**\n\nPlease select or type a number below (default is 5):`,
+        content: `🔢 **How many vocabulary words would you like to generate for "${topic}"?**\n\nPlease select an option below or type any custom number (e.g. 5, 10, 15, 20):`,
         timestamp: new Date().toISOString(),
         suggestedActions: [
           { label: "Generate 5 words", action: "send_message", payload: { message: "5" } },
           { label: "Generate 10 words", action: "send_message", payload: { message: "10" } },
           { label: "Generate 15 words", action: "send_message", payload: { message: "15" } },
+          { label: "Generate 20 words", action: "send_message", payload: { message: "20" } },
         ],
       };
       setChatMessages((prev) => [...prev, countMsg]);
@@ -608,12 +641,43 @@ export function useChat({
         llmConfig: configToUse,
       });
 
+      const resAny = result as any;
+      const rawTextContent = result.text || resAny.content || resAny.message || resAny.response || resAny.reply || resAny.answer || "";
+      const validActions = (result.suggestedActions || []).filter((act: any) => {
+        if (!act || typeof act !== "object") return false;
+        if (act.action === "select_definition") return Boolean(act.payload?.definition);
+        const lbl = act.label ? String(act.label).trim() : "";
+        const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
+        const wordPayload = act.payload?.word || act.word ? String(act.payload?.word || act.word).trim() : "";
+        return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
+      }).map((act: any) => {
+        const cleaned = { ...act };
+        if (!cleaned.label || !String(cleaned.label).trim()) {
+          if (cleaned.payload?.message) cleaned.label = cleaned.payload.message;
+          else if (cleaned.payload?.word) cleaned.label = `Add "${cleaned.payload.word}" to collection`;
+          else if (cleaned.word) cleaned.label = `Add "${cleaned.word}" to collection`;
+        }
+        return cleaned;
+      });
+
+      const finalActions = extractOrGenerateTopicActions(
+        rawTextContent,
+        validActions,
+        text,
+        targetLanguage,
+        nativeLanguage
+      );
+
+      const fallbackContent = finalActions.length > 0
+        ? `Here are some suggested topics and options for practicing ${targetLanguage}:`
+        : "I was unable to formulate a response. Please try asking again or selecting a topic below.";
+
       const newAssistantMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: result.text || "I was unable to formulate a response.",
+        content: rawTextContent || fallbackContent,
         timestamp: new Date().toISOString(),
-        suggestedActions: result.suggestedActions || [],
+        suggestedActions: finalActions,
         provider: result.provider,
         model: result.model,
         responseTimeMs: result.responseTimeMs,
@@ -1014,10 +1078,10 @@ export function useChat({
         return;
       }
 
-      const addedWords: Word[] = [];
+      const generatedWords: Word[] = [];
       newUniqueWords.forEach((item: any, idx: number) => {
         const newWord: Word = {
-          id: `ai-word-${Date.now()}-${idx}`,
+          id: `ai-word-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
           word: item.word,
           pronunciation: item.pronunciation || "/.../",
           partOfSpeech: item.partOfSpeech || "noun",
@@ -1033,23 +1097,35 @@ export function useChat({
           lastReviewed: null,
           strength: 0,
         };
-        addedWords.push(newWord);
+        generatedWords.push(newWord);
       });
 
-      setWords((prev) => {
-        const updated = [...addedWords, ...prev];
-        saveAllWordsToDB(updated).catch((e) => console.error("IndexedDB save generated words error:", e));
-        return updated;
-      });
-
-      const wordsListMarkdown = addedWords
+      const wordsListMarkdown = generatedWords
         .map(
           (w, idx) =>
-            `${idx + 1}. **${w.word}** (${w.partOfSpeech}) - *${w.translation}*\n   *Def:* ${w.definition}${
-              w.example ? `\n   *Ex:* "${w.example}" (${w.exampleTranslation})` : ""
+            `${idx + 1}. **${w.word}** \`${w.pronunciation}\` (${w.partOfSpeech}) - **${w.translation}**\n   *Def:* ${w.definition}${
+              w.example ? `\n   *Ex:* "${w.example}" (${w.exampleTranslation || ""})` : ""
             }`
         )
         .join("\n\n");
+
+      const suggestedActions: any[] = [
+        {
+          label: `✨ Add All (${generatedWords.length}) Words to Collection`,
+          action: "add_multiplewords",
+          payload: { words: generatedWords },
+        },
+        ...generatedWords.map((w) => ({
+          label: `➕ Add "${w.word}" (${w.translation})`,
+          action: "confirm_save_word",
+          payload: w,
+        })),
+        {
+          label: `🎨 Generate More Words for "${topic}"`,
+          action: "send_message",
+          payload: { message: topic },
+        },
+      ];
 
       setChatMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== statusMsgId);
@@ -1058,9 +1134,9 @@ export function useChat({
           {
             id: `gen-words-success-${Date.now()}`,
             role: "assistant",
-            content: `✨ **Successfully generated and added ${addedWords.length} words on the topic "${topic}" to your collection!**\n\n${wordsListMarkdown}`,
+            content: `✨ **Generated ${generatedWords.length} vocabulary words for topic "${topic}":**\n\n${wordsListMarkdown}\n\n👇 *Click "Add All Words to Collection" below or add individual words to your collection:*`,
             timestamp: new Date().toISOString(),
-            suggestedActions: [{ label: "Start Quiz", action: "start_quiz" }],
+            suggestedActions: suggestedActions,
           },
         ];
       });
@@ -1315,7 +1391,9 @@ export function useChat({
   const handleViewFlashcard = async (overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
 
-    if (words.length === 0) {
+    const activeWords = await getEffectiveWords();
+
+    if (activeWords.length === 0) {
       const noWordsMsg: ChatMessage = {
         id: `flashcard-no-words-${Date.now()}`,
         role: "assistant",
@@ -1326,7 +1404,7 @@ export function useChat({
       return;
     }
 
-    const candidateWord = getCandidateWordForFlashcard(words);
+    const candidateWord = getCandidateWordForFlashcard(activeWords);
     if (!candidateWord) {
       const noCandidateMsg: ChatMessage = {
         id: `flashcard-no-candidates-${Date.now()}`,
@@ -1348,16 +1426,19 @@ export function useChat({
         llmConfig: configToUse,
       });
 
+      const prevStrength = candidateWord.strength ?? 0;
+      const calcNewStrength = Math.min(100, prevStrength + 10);
+      const strengthGained = calcNewStrength - prevStrength;
+
       setWords((prevWords) => {
         const updatedWords = prevWords.map((w) => {
           if (w.id === candidateWord.id) {
-            const newStrength = Math.min(100, (w.strength ?? 0) + 10);
-            return {
-              ...w,
-              strength: newStrength,
-              learned: newStrength >= 80 ? true : w.learned,
-              lastReviewed: new Date().toISOString(),
-            };
+            return recordStrengthHistory(
+              w, 
+              calcNewStrength, 
+              'flashcard_review', 
+              `Studied Flashcard (+${strengthGained}% strength gained)`
+            );
           }
           return w;
         });
@@ -1396,6 +1477,9 @@ export function useChat({
           usageNotes: flashcardContent.usageNotes,
           imageKeyword: keywordText,
           suggestedVocabulary: flashcardContent.suggestedVocabulary,
+          previousStrength: prevStrength,
+          newStrength: calcNewStrength,
+          strengthGained: strengthGained
         },
         provider: flashcardContent.provider,
         model: flashcardContent.model,

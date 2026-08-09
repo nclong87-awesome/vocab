@@ -11,7 +11,12 @@ import {
   AlertCircle, 
   SwitchCamera,
   ArrowLeft,
-  Clipboard
+  Clipboard,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Plus,
+  Minus
 } from "lucide-react";
 import { resizeImageDataUrl } from "../../utils/llmHelpers";
 
@@ -39,12 +44,21 @@ export default function PhotoCaptureModal({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [modalError, setModalError] = useState<string | null>(null);
 
+  // Zoom State
+  const [zoom, setZoom] = useState<number>(1);
+  const [maxHardwareZoom, setMaxHardwareZoom] = useState<number>(5);
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Touch Pinch gesture tracking
+  const touchStartDistRef = useRef<number | null>(null);
+  const initialZoomRef = useRef<number>(1);
 
   // Stop camera stream cleanly
   const stopCameraStream = () => {
@@ -64,17 +78,45 @@ export default function PhotoCaptureModal({
     }
   }, [isOpen]);
 
+  // Apply Hardware Zoom constraint if supported by hardware
+  const applyHardwareZoom = (zoomVal: number) => {
+    if (!mediaStreamRef.current) return;
+    const track = mediaStreamRef.current.getVideoTracks()?.[0];
+    if (track && typeof track.getCapabilities === "function") {
+      try {
+        const caps = track.getCapabilities() as any;
+        if (caps && caps.zoom) {
+          const minZ = caps.zoom.min || 1;
+          const maxZ = caps.zoom.max || 10;
+          setMaxHardwareZoom(Math.min(maxZ, 8));
+          const targetZ = Math.min(Math.max(zoomVal, minZ), maxZ);
+          track.applyConstraints({ advanced: [{ zoom: targetZ }] } as any).catch(() => {});
+        }
+      } catch (e) {
+        // Fallback to digital zoom
+      }
+    }
+  };
+
+  const handleSetZoom = (newZoom: number) => {
+    const clamped = Math.min(Math.max(1, Math.round(newZoom * 10) / 10), 8);
+    setZoom(clamped);
+    applyHardwareZoom(clamped);
+  };
+
   // Start webcam / mobile camera stream
   const startCamera = async (facing: "environment" | "user" = facingMode) => {
     setCameraError(null);
     setIsCameraLoading(true);
+    setZoom(1);
     stopCameraStream();
 
     try {
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: facing },
-          width: { ideal: 1920 },
+          aspectRatio: { ideal: 1 },
+          width: { ideal: 1080 },
           height: { ideal: 1080 }
         },
         audio: false
@@ -82,6 +124,16 @@ export default function PhotoCaptureModal({
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       mediaStreamRef.current = stream;
+      
+      // Query capabilities for zoom
+      const track = stream.getVideoTracks()?.[0];
+      if (track && typeof track.getCapabilities === "function") {
+        const caps = track.getCapabilities() as any;
+        if (caps?.zoom) {
+          setMaxHardwareZoom(Math.min(caps.zoom.max || 5, 8));
+        }
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -105,6 +157,33 @@ export default function PhotoCaptureModal({
     startCamera(nextFacing);
   };
 
+  // Pinch-to-zoom touch event handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].pageX - e.touches[1].pageX,
+        e.touches[0].pageY - e.touches[1].pageY
+      );
+      touchStartDistRef.current = dist;
+      initialZoomRef.current = zoom;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartDistRef.current !== null) {
+      const dist = Math.hypot(
+        e.touches[0].pageX - e.touches[1].pageX,
+        e.touches[0].pageY - e.touches[1].pageY
+      );
+      const scale = dist / touchStartDistRef.current;
+      handleSetZoom(initialZoomRef.current * scale);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartDistRef.current = null;
+  };
+
   // Handle mode transitions
   useEffect(() => {
     if (isOpen && mode === "camera") {
@@ -126,20 +205,67 @@ export default function PhotoCaptureModal({
       setCapturedImage(null);
       setCameraError(null);
       setModalError(null);
+      setZoom(1);
+      setPreviewZoom(1);
     }
   }, [isOpen]);
 
-  // Take photo from live stream
+  // Take photo from live stream matching exact viewfinder aspect ratio & zoom crop
   const handleSnapPhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
     
+    const vWidth = video.videoWidth || 1280;
+    const vHeight = video.videoHeight || 720;
+
+    // Get the exact display aspect ratio of the camera viewfinder container (1:1 square)
+    const container = video.parentElement;
+    let AR_view = 1; // Default 1:1 square aspect ratio
+    if (container && container.clientHeight > 0) {
+      AR_view = container.clientWidth / container.clientHeight;
+    }
+
+    const AR_video = vWidth / vHeight;
+
+    // Calculate base visible crop box on the raw video stream matching CSS object-cover
+    let visW = vWidth;
+    let visH = vHeight;
+    let visX = 0;
+    let visY = 0;
+
+    if (AR_video < AR_view) {
+      // Video is taller (more portrait) than container -> cropped vertically
+      visW = vWidth;
+      visH = vWidth / AR_view;
+      visX = 0;
+      visY = (vHeight - visH) / 2;
+    } else {
+      // Video is wider (more landscape) than container -> cropped horizontally
+      visH = vHeight;
+      visW = vHeight * AR_view;
+      visX = (vWidth - visW) / 2;
+      visY = 0;
+    }
+
+    // Apply digital zoom level into the center of the visible viewfinder box
+    const zoomLevel = Math.max(1, zoom);
+    const finalW = visW / zoomLevel;
+    const finalH = visH / zoomLevel;
+    const finalX = visX + (visW - finalW) / 2;
+    const finalY = visY + (visH - finalH) / 2;
+
     const canvas = canvasRef.current || document.createElement("canvas");
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    
+    // Ensure high quality output with the exact viewfinder aspect ratio
+    const outputWidth = Math.min(1600, Math.max(960, Math.round(finalW)));
+    const outputHeight = Math.round(outputWidth / AR_view);
+
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    ctx.save();
 
     // Mirror image if using front user camera
     if (facingMode === "user") {
@@ -147,7 +273,20 @@ export default function PhotoCaptureModal({
       ctx.scale(-1, 1);
     }
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(
+      video,
+      finalX,
+      finalY,
+      finalW,
+      finalH,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    ctx.restore();
+
     const rawDataUrl = canvas.toDataURL("image/jpeg", 0.9);
 
     stopCameraStream();
@@ -157,9 +296,11 @@ export default function PhotoCaptureModal({
       const name = `Camera Photo (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
       setCapturedImage({ dataUrl: optimized, name });
       setMode("preview");
+      setPreviewZoom(1);
     } catch (err) {
       setCapturedImage({ dataUrl: rawDataUrl, name: "Camera Snapshot" });
       setMode("preview");
+      setPreviewZoom(1);
     }
   };
 
@@ -186,9 +327,11 @@ export default function PhotoCaptureModal({
             : file.name || "Uploaded Photo";
           setCapturedImage({ dataUrl: optimized, name });
           setMode("preview");
+          setPreviewZoom(1);
         } catch (err) {
           setCapturedImage({ dataUrl: rawDataUrl, name: file.name || "Photo" });
           setMode("preview");
+          setPreviewZoom(1);
         }
       }
     };
@@ -217,6 +360,7 @@ export default function PhotoCaptureModal({
           const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
           setCapturedImage({ dataUrl: optimized, name: file.name || "Dropped Image" });
           setMode("preview");
+          setPreviewZoom(1);
         }
       };
       reader.readAsDataURL(file);
@@ -240,9 +384,11 @@ export default function PhotoCaptureModal({
                 const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
                 setCapturedImage({ dataUrl: optimized, name: "Clipboard Image" });
                 setMode("preview");
+                setPreviewZoom(1);
               } catch {
                 setCapturedImage({ dataUrl: rawDataUrl, name: "Clipboard Image" });
                 setMode("preview");
+                setPreviewZoom(1);
               }
             }
           };
@@ -280,9 +426,11 @@ export default function PhotoCaptureModal({
                   const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
                   setCapturedImage({ dataUrl: optimized, name: "Pasted Clipboard Image" });
                   setMode("preview");
+                  setPreviewZoom(1);
                 } catch {
                   setCapturedImage({ dataUrl: rawDataUrl, name: "Pasted Image" });
                   setMode("preview");
+                  setPreviewZoom(1);
                 }
               }
             };
@@ -302,6 +450,8 @@ export default function PhotoCaptureModal({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const zoomPresets = [1, 1.5, 2, 3, 5];
 
   return (
     <AnimatePresence>
@@ -399,6 +549,7 @@ export default function PhotoCaptureModal({
                 </button>
               </div>
             )}
+
             {/* Mode 1: Choice Screen */}
             {mode === "choose" && (
               <div 
@@ -408,14 +559,13 @@ export default function PhotoCaptureModal({
                 onDrop={handleDrop}
               >
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Option A: Take a Picture (Live Camera Modal or Direct Shutter) */}
+                  {/* Option A: Take a Picture */}
                   <button
                     type="button"
                     onClick={() => {
                       if (!!navigator.mediaDevices?.getUserMedia) {
                         setMode("camera");
                       } else {
-                        // Fallback to native camera input
                         cameraInputRef.current?.click();
                       }
                     }}
@@ -429,10 +579,10 @@ export default function PhotoCaptureModal({
                         Take a Picture
                       </h4>
                       <p className="text-xs text-stone-500 mt-0.5 leading-snug sm:block hidden">
-                        Use your camera/webcam to snap a live photo right now
+                        Use camera with live preview & zoom support
                       </p>
                       <p className="text-[11px] text-stone-400 mt-0.5 leading-snug block sm:hidden">
-                        Snap a live photo right now
+                        Live photo with zoom
                       </p>
                     </div>
                     <span className="shrink-0 sm:mt-auto px-2 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 group-hover:bg-blue-200 text-blue-900 text-[10px] sm:text-[11px] font-bold rounded-lg transition-colors">
@@ -440,7 +590,7 @@ export default function PhotoCaptureModal({
                     </span>
                   </button>
 
-                  {/* Option B: Choose from Gallery / Computer */}
+                  {/* Option B: Choose from Gallery */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -454,10 +604,10 @@ export default function PhotoCaptureModal({
                         Upload Image
                       </h4>
                       <p className="text-xs text-stone-500 mt-0.5 leading-snug sm:block hidden">
-                        Select an existing picture or screenshot from device gallery
+                        Select an existing picture or screenshot
                       </p>
                       <p className="text-[11px] text-stone-400 mt-0.5 leading-snug block sm:hidden">
-                        Choose from device gallery
+                        Choose from gallery
                       </p>
                     </div>
                     <span className="shrink-0 sm:mt-auto px-2 py-0.5 sm:px-2.5 sm:py-1 bg-stone-200 group-hover:bg-amber-200 text-stone-800 group-hover:text-amber-950 text-[10px] sm:text-[11px] font-bold rounded-lg transition-colors">
@@ -465,7 +615,7 @@ export default function PhotoCaptureModal({
                     </span>
                   </button>
 
-                  {/* Option C: Paste from Clipboard */}
+                  {/* Option C: Paste Clipboard */}
                   <button
                     type="button"
                     onClick={handlePasteFromClipboard}
@@ -479,7 +629,7 @@ export default function PhotoCaptureModal({
                         Paste Clipboard
                       </h4>
                       <p className="text-xs text-stone-500 mt-0.5 leading-snug sm:block hidden">
-                        Instantly paste an image or screenshot from your clipboard
+                        Instantly paste an image from your clipboard
                       </p>
                       <p className="text-[11px] text-stone-400 mt-0.5 leading-snug block sm:hidden">
                         Paste image from clipboard
@@ -491,7 +641,7 @@ export default function PhotoCaptureModal({
                   </button>
                 </div>
 
-                {/* Direct Native System Camera Shortcut Button */}
+                {/* Direct Native System Camera Shortcut */}
                 <div className="pt-2 border-t border-stone-100 flex flex-col items-center gap-2">
                   <button
                     type="button"
@@ -512,18 +662,36 @@ export default function PhotoCaptureModal({
               </div>
             )}
 
-            {/* Mode 2: Live Camera Viewfinder */}
+            {/* Mode 2: Live Camera Viewfinder with Zoom Controls */}
             {mode === "camera" && (
-              <div className="flex flex-col items-center space-y-4">
-                <div className="relative w-full max-w-sm aspect-[4/3] bg-black rounded-2xl overflow-hidden shadow-inner border border-stone-800 flex items-center justify-center">
-                  {/* Live video feed */}
+              <div className="flex flex-col items-center space-y-3">
+                <div 
+                  className="relative w-full max-w-sm aspect-square bg-black rounded-2xl overflow-hidden shadow-inner border border-stone-800 flex items-center justify-center touch-none select-none"
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                >
+                  {/* Live video feed with Digital/CSS Zoom Scale */}
                   <video
                     ref={videoRef}
                     playsInline
                     muted
                     autoPlay
-                    className={`w-full h-full object-cover ${facingMode === "user" ? "scale-x-[-1]" : ""}`}
+                    style={{
+                      transform: `scale(${zoom}) ${facingMode === "user" ? "rotateY(180deg)" : ""}`,
+                      transformOrigin: "center center",
+                      transition: "transform 0.1s ease-out"
+                    }}
+                    className="w-full h-full object-cover"
                   />
+
+                  {/* Active Zoom Badge */}
+                  {zoom > 1 && !isCameraLoading && !cameraError && (
+                    <div className="absolute top-3 right-3 px-2.5 py-1 bg-stone-900/80 backdrop-blur-md border border-amber-400/40 text-amber-400 text-xs font-mono font-bold rounded-full shadow-md flex items-center gap-1">
+                      <ZoomIn className="w-3.5 h-3.5" />
+                      <span>{zoom.toFixed(1)}x</span>
+                    </div>
+                  )}
 
                   {/* Loading spinner */}
                   {isCameraLoading && (
@@ -551,7 +719,7 @@ export default function PhotoCaptureModal({
                     </div>
                   )}
 
-                  {/* Camera Framing Overlay */}
+                  {/* Framing Overlay */}
                   {!isCameraLoading && !cameraError && (
                     <div className="absolute inset-0 pointer-events-none border-2 border-white/20 rounded-2xl flex flex-col justify-between p-3">
                       <div className="flex justify-between">
@@ -565,6 +733,69 @@ export default function PhotoCaptureModal({
                     </div>
                   )}
                 </div>
+
+                {/* ZOOM CONTROLS PANEL */}
+                {!isCameraLoading && !cameraError && (
+                  <div className="w-full max-w-sm bg-stone-100/90 border border-stone-200/90 rounded-xl p-2.5 space-y-2 shadow-2xs">
+                    {/* Preset Zoom Pills & +/- buttons */}
+                    <div className="flex items-center justify-between gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSetZoom(zoom - 0.5)}
+                        disabled={zoom <= 1}
+                        className="p-1.5 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 disabled:opacity-40 transition-all cursor-pointer shrink-0"
+                        title="Zoom Out"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+
+                      <div className="flex items-center justify-center gap-1 flex-1 overflow-x-auto py-0.5">
+                        {zoomPresets.map((preset) => {
+                          const isActive = Math.abs(zoom - preset) < 0.08;
+                          return (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => handleSetZoom(preset)}
+                              className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg transition-all cursor-pointer ${
+                                isActive
+                                  ? "bg-stone-900 text-amber-400 shadow-xs scale-105"
+                                  : "bg-white text-stone-700 hover:bg-stone-200/80 border border-stone-200"
+                              }`}
+                            >
+                              {preset}x
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSetZoom(zoom + 0.5)}
+                        disabled={zoom >= 8}
+                        className="p-1.5 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 disabled:opacity-40 transition-all cursor-pointer shrink-0"
+                        title="Zoom In"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Smooth Zoom Slider */}
+                    <div className="flex items-center gap-2 px-1">
+                      <ZoomOut className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                      <input
+                        type="range"
+                        min="1"
+                        max={Math.max(5, maxHardwareZoom)}
+                        step="0.1"
+                        value={zoom}
+                        onChange={(e) => handleSetZoom(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-stone-300 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                      <ZoomIn className="w-3.5 h-3.5 text-stone-600 shrink-0" />
+                    </div>
+                  </div>
+                )}
 
                 {/* Shutter & Switch Camera Controls */}
                 {!cameraError && (
@@ -605,15 +836,49 @@ export default function PhotoCaptureModal({
               </div>
             )}
 
-            {/* Mode 3: Preview Photo before uploading */}
+            {/* Mode 3: Preview Photo before uploading (with Preview Zoom inspection) */}
             {mode === "preview" && capturedImage && (
-              <div className="space-y-4 flex flex-col items-center">
-                <div className="relative max-w-sm w-full max-h-64 rounded-xl overflow-hidden border border-stone-200 bg-stone-900 shadow-md">
+              <div className="space-y-3 flex flex-col items-center">
+                <div className="relative max-w-sm w-full aspect-square rounded-2xl overflow-hidden border border-stone-200 bg-stone-900 shadow-md flex items-center justify-center">
                   <img
                     src={capturedImage.dataUrl}
                     alt="Captured photo preview"
-                    className="w-full h-full max-h-64 object-contain mx-auto"
+                    style={{
+                      transform: `scale(${previewZoom})`,
+                      transition: "transform 0.15s ease-out"
+                    }}
+                    className="w-full h-full object-cover"
                   />
+
+                  {/* Preview Zoom Indicator */}
+                  {previewZoom > 1 && (
+                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-stone-900/80 border border-amber-400/40 text-amber-400 text-[10px] font-mono font-bold rounded-full">
+                      Preview {previewZoom.toFixed(1)}x
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview Zoom Controls */}
+                <div className="flex items-center justify-between gap-2 w-full max-w-sm bg-stone-50 border border-stone-200 rounded-xl p-2">
+                  <span className="text-xs font-semibold text-stone-600 flex items-center gap-1 pl-1">
+                    <Maximize2 className="w-3.5 h-3.5 text-stone-500" /> Inspect text:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[1, 1.5, 2, 3].map((pz) => (
+                      <button
+                        key={pz}
+                        type="button"
+                        onClick={() => setPreviewZoom(pz)}
+                        className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md transition-colors cursor-pointer ${
+                          previewZoom === pz
+                            ? "bg-stone-900 text-amber-400"
+                            : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {pz}x
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 font-medium flex items-center gap-2">
