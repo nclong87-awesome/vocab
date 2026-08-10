@@ -1,6 +1,6 @@
 import { sanitizeDataForCloudSync, deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { IndexedDBExportData } from "../db/indexedDB";
-import { fetchWithTimeout } from "../utils";
+import { fetchWithTimeout, isStaticHost } from "../utils";
 
 export interface RateLimitCheckResult {
   allowed: boolean;
@@ -103,7 +103,7 @@ export function getGistEndpointAndHeaders(token?: string, gistId?: string) {
 
   const baseUrl = isDirectGitHubPat
     ? "https://api.github.com/gists"
-    : "/gist";
+    : isStaticHost() ? "/gist" : "/api/gist";
 
   const url = gistId ? `${baseUrl}/${gistId}` : baseUrl;
 

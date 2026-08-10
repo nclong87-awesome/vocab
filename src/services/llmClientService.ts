@@ -4,7 +4,7 @@ import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
-import { fetchWithTimeout } from "../utils";
+import { fetchWithTimeout, isStaticHost } from "../utils";
 import { 
   getAutoModelCandidates, 
   getAutoCandidateWithMeta,
@@ -872,18 +872,6 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
 
   // 3. Fallback to cleanJsonResponse on rawText
   return cleanJsonResponse(rawText);
-}
-
-// Helper to check if running in a pure static client host (e.g. GitHub Pages)
-function isStaticHost(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return (
-    host.endsWith("github.io") ||
-    host.endsWith("netlify.app") ||
-    host.endsWith("vercel.app") ||
-    window.location.protocol === "file:"
-  );
 }
 
 export interface ConnectionTestResult {

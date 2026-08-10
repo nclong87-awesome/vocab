@@ -134,3 +134,15 @@ export async function fetchWithTimeout(
     throw error;
   }
 }
+
+// Helper to check if running in a pure static client host (e.g. GitHub Pages)
+export function isStaticHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return (
+    host.endsWith("github.io") ||
+    host.endsWith("netlify.app") ||
+    host.endsWith("vercel.app") ||
+    window.location.protocol === "file:"
+  );
+}
