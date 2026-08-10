@@ -60,9 +60,6 @@ export function getStoredAccessCode(): string {
   if (typeof window === "undefined") return "";
   return (
     localStorage.getItem(ACCESS_CODE_STORAGE_KEY) ||
-    localStorage.getItem("vocab_learner_proxy_key") ||
-    localStorage.getItem("llm_proxy_key") ||
-    localStorage.getItem("proxy_key") ||
     ""
   ).trim();
 }
@@ -72,12 +69,8 @@ export function setStoredAccessCode(code: string): void {
   const trimmed = code.trim();
   if (trimmed) {
     localStorage.setItem(ACCESS_CODE_STORAGE_KEY, trimmed);
-    localStorage.setItem("vocab_learner_proxy_key", trimmed);
   } else {
     localStorage.removeItem(ACCESS_CODE_STORAGE_KEY);
-    localStorage.removeItem("vocab_learner_proxy_key");
-    localStorage.removeItem("llm_proxy_key");
-    localStorage.removeItem("proxy_key");
   }
 }
 
