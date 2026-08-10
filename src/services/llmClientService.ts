@@ -4,7 +4,7 @@ import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
-import { fetchWithTimeout, isStaticHost } from "../utils";
+import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
   getAutoModelCandidates, 
   getAutoCandidateWithMeta,
@@ -384,16 +384,11 @@ async function callLLMClientSideSingleCandidate(
   const provider = llmConfig?.provider || "openrouter";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey || "";
-  
-  // Single shared proxyKey across providers (checking current config and saved provider map)
-  const sharedProxyKey = llmConfig?.proxyKey || 
-    (llmConfig?.savedProviders ? Object.values(llmConfig.savedProviders).find(p => Boolean(p?.proxyKey))?.proxyKey : "") || 
-    "";
-  const proxyKey = sharedProxyKey;
   const baseUrl = llmConfig?.baseUrl || "";
 
   const effectiveApiKey = apiKey || "";
-  const proxyKeyToUse = proxyKey || apiKey || "";
+  const accessCode = getStoredAccessCode();
+  const proxyKeyToUse = accessCode || apiKey || "";
 
   // Gemini API client-side handling
   if (provider === "gemini") {
@@ -641,7 +636,6 @@ export async function callLLMClientSideWithMeta(
         provider: candidate.provider,
         model: candidate.model,
         apiKey: candidateSavedProfile?.apiKey || (llmConfig?.provider === candidate.provider ? llmConfig.apiKey : ""),
-        proxyKey: candidateSavedProfile?.proxyKey || llmConfig?.proxyKey || "",
         baseUrl: candidateSavedProfile?.baseUrl || "",
         useProxy: candidateSavedProfile?.useProxy !== undefined ? candidateSavedProfile.useProxy : true,
         isLoggedIn: true,
@@ -2311,10 +2305,7 @@ export async function analyzeImageVocabService(params: {
     base64Data = parts[1] || imageDataUrl;
   }
 
-  const sharedProxyKey = llmConfig?.proxyKey ||
-    (llmConfig?.savedProviders ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) => Boolean(p?.proxyKey))?.proxyKey : "") ||
-    llmConfig?.apiKey ||
-    "";
+  const sharedProxyKey = getStoredAccessCode() || llmConfig?.apiKey || "";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json"
@@ -2705,14 +2696,7 @@ ${schemaDesc}`;
         base64Data = parts[1] || imageDataUrl;
       }
 
-      const sharedProxyKey =
-        llmConfig?.proxyKey ||
-        (llmConfig?.savedProviders
-          ? (Object.values(llmConfig.savedProviders) as any[]).find((p: any) =>
-              Boolean(p?.proxyKey)
-            )?.proxyKey
-          : "") ||
-        "";
+      const sharedProxyKey = getStoredAccessCode();
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json"

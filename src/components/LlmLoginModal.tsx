@@ -25,6 +25,7 @@ import { LLMConfig, LLMProvider, SavedProviderConfig, SavedProvidersMap } from "
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 import { getSavedProvidersMap } from "../utils/llmHelpers";
 import { testLlmConnection } from "../services/llmClientService";
+import { getStoredAccessCode, setStoredAccessCode } from "../utils";
 
 import { SUPPORTED_LANGUAGES, LanguageOption } from "../config/languages";
 
@@ -80,7 +81,7 @@ export default function LlmLoginModal({
   const [isCustomModelMode, setIsCustomModelMode] = useState<boolean>(false);
   const [useProxy, setUseProxy] = useState<boolean>(currentConfig.useProxy !== undefined ? currentConfig.useProxy : true);
   const [apiKey, setApiKey] = useState<string>(currentConfig.apiKey || "");
-  const [proxyKey, setProxyKey] = useState<string>(currentConfig.proxyKey || "");
+  const [proxyKey, setProxyKey] = useState<string>(getStoredAccessCode());
   const [baseUrl, setBaseUrl] = useState<string>(currentConfig.baseUrl || "");
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
 
@@ -94,7 +95,7 @@ export default function LlmLoginModal({
       const profiles = getSavedProvidersMap(currentConfig);
       setSavedProfiles(profiles);
 
-      const sharedProxy = currentConfig.proxyKey || Object.values(profiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+      setProxyKey(getStoredAccessCode());
 
       const activeP = currentConfig.provider || DEFAULT_PROVIDER_ID;
       const activeMeta = PROVIDER_OPTIONS.find(p => p.id === activeP);
@@ -115,12 +116,10 @@ export default function LlmLoginModal({
       if (activeSaved) {
         setModel(effectiveInitialModel);
         setApiKey(activeSaved.apiKey || currentConfig.apiKey || "");
-        setProxyKey(activeSaved.proxyKey || sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(activeSaved.baseUrl || currentConfig.baseUrl || "");
       } else {
         setModel(effectiveInitialModel);
         setApiKey(currentConfig.apiKey || "");
-        setProxyKey(sharedProxy || currentConfig.proxyKey || "");
         setBaseUrl(currentConfig.baseUrl || "");
       }
 
@@ -144,16 +143,15 @@ export default function LlmLoginModal({
     setTestingStatus("idle");
     setTestMessage("");
 
-    // Auto-fill from saved profile if available, preserving single shared proxyKey
+    // Auto-fill from saved profile if available
     const saved = savedProfiles[pId];
-    const sharedProxy = proxyKey || currentConfig.proxyKey || Object.values(savedProfiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
 
     const savedUseProxy = saved?.useProxy !== undefined ? saved.useProxy : useProxy;
     setUseProxy(savedUseProxy);
 
     if (saved) {
       setApiKey(saved.apiKey || "");
-      setProxyKey(saved.proxyKey || sharedProxy);
+      setProxyKey(getStoredAccessCode());
       
       const defaultDirectUrl = meta?.directBaseUrl || meta?.defaultBaseUrl || "";
       const isWorkerUrl = saved.baseUrl && saved.baseUrl.includes("workers.dev");
@@ -179,7 +177,7 @@ export default function LlmLoginModal({
     } else if (meta) {
       setModel(meta.defaultModel);
       setApiKey("");
-      setProxyKey(sharedProxy);
+      setProxyKey(getStoredAccessCode());
       setBaseUrl(savedUseProxy ? (meta.defaultBaseUrl || "") : (meta.directBaseUrl || meta.defaultBaseUrl || ""));
       setIsCustomModelMode(false);
     }
@@ -202,7 +200,11 @@ export default function LlmLoginModal({
     setTestingStatus("testing");
     setTestMessage("Verifying LLM provider connection...");
 
-    const sharedProxy = proxyKey.trim() || currentConfig.proxyKey || Object.values(savedProfiles).find(p => Boolean(p?.proxyKey))?.proxyKey || "";
+    const effectiveProxyKey = proxyKey.trim();
+    if (effectiveProxyKey) {
+      setStoredAccessCode(effectiveProxyKey);
+    }
+
     const effectiveBaseUrl = useProxy 
       ? (currentProviderMeta.defaultBaseUrl || baseUrl.trim() || "")
       : baseUrl.trim();
@@ -212,7 +214,6 @@ export default function LlmLoginModal({
         provider,
         model: activeModel,
         apiKey: useProxy ? "" : apiKey.trim(),
-        proxyKey: proxyKey.trim() || sharedProxy,
         baseUrl: effectiveBaseUrl,
         useProxy,
         isLoggedIn: true,
@@ -252,18 +253,20 @@ export default function LlmLoginModal({
     }
 
     const effectiveProxyKey = proxyKey.trim();
+    if (effectiveProxyKey) {
+      setStoredAccessCode(effectiveProxyKey);
+    }
+
     const effectiveApiKey = useProxy ? "" : apiKey.trim();
     const effectiveBaseUrl = useProxy 
       ? (currentProviderMeta.defaultBaseUrl || baseUrl.trim() || "")
       : baseUrl.trim();
 
-    // Propagate single shared proxyKey and useProxy to ALL stored provider profiles
     const updatedSavedProfiles: SavedProvidersMap = { ...savedProfiles };
     for (const k of Object.keys(updatedSavedProfiles)) {
       if (updatedSavedProfiles[k]) {
         updatedSavedProfiles[k] = {
           ...updatedSavedProfiles[k],
-          proxyKey: effectiveProxyKey,
           useProxy
         };
       }
@@ -273,7 +276,6 @@ export default function LlmLoginModal({
       provider,
       model: activeModel,
       apiKey: effectiveApiKey,
-      proxyKey: effectiveProxyKey,
       baseUrl: effectiveBaseUrl,
       useProxy,
       isLoggedIn: true,
@@ -284,7 +286,6 @@ export default function LlmLoginModal({
       provider,
       model: activeModel,
       apiKey: effectiveApiKey,
-      proxyKey: effectiveProxyKey,
       baseUrl: effectiveBaseUrl,
       useProxy,
       isLoggedIn: true,

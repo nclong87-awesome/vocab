@@ -54,6 +54,33 @@ export function calculateNewStreak(currentStreak?: Streak): Streak {
   };
 }
 
+export const ACCESS_CODE_STORAGE_KEY = "vocab_app_access_code";
+
+export function getStoredAccessCode(): string {
+  if (typeof window === "undefined") return "";
+  return (
+    localStorage.getItem(ACCESS_CODE_STORAGE_KEY) ||
+    localStorage.getItem("vocab_learner_proxy_key") ||
+    localStorage.getItem("llm_proxy_key") ||
+    localStorage.getItem("proxy_key") ||
+    ""
+  ).trim();
+}
+
+export function setStoredAccessCode(code: string): void {
+  if (typeof window === "undefined") return;
+  const trimmed = code.trim();
+  if (trimmed) {
+    localStorage.setItem(ACCESS_CODE_STORAGE_KEY, trimmed);
+    localStorage.setItem("vocab_learner_proxy_key", trimmed);
+  } else {
+    localStorage.removeItem(ACCESS_CODE_STORAGE_KEY);
+    localStorage.removeItem("vocab_learner_proxy_key");
+    localStorage.removeItem("llm_proxy_key");
+    localStorage.removeItem("proxy_key");
+  }
+}
+
 export async function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit & { timeoutMs?: number }
@@ -62,8 +89,20 @@ export async function fetchWithTimeout(
   const isImageAnalysisWorker = urlString.includes("image-analysis.nclong87.workers.dev");
   const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 60000);
 
+  const { timeoutMs: _, ...fetchInit } = init || {};
+
+  // Auto-inject X-Proxy-Key for any request to Cloudflare workers (*.worker.dev or *.workers.dev)
+  const isWorkerEndpoint = urlString.includes("worker.dev") || urlString.includes("workers.dev");
+  const accessCode = getStoredAccessCode();
+  if (isWorkerEndpoint && accessCode) {
+    const reqHeaders = new Headers(fetchInit.headers || {});
+    if (!reqHeaders.has("X-Proxy-Key")) {
+      reqHeaders.set("X-Proxy-Key", accessCode);
+    }
+    fetchInit.headers = reqHeaders;
+  }
+
   if (timeoutMs <= 0) {
-    const { timeoutMs: _, ...fetchInit } = init || {};
     return fetch(input, fetchInit);
   }
 
@@ -71,8 +110,6 @@ export async function fetchWithTimeout(
   const id = setTimeout(() => {
     controller.abort();
   }, timeoutMs);
-
-  const { timeoutMs: _, ...fetchInit } = init || {};
 
   if (fetchInit.signal) {
     if (fetchInit.signal.aborted) {

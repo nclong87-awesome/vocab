@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { ChatMessage, LLMConfig } from "./types";
-import { getSavedProvidersMap } from "./utils/llmHelpers";
 import { saveLLMConfigToDB } from "./db/indexedDB";
 import { stopSpeech, unlockAudioElement } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay } from "./utils/spacedRepetition";
 import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
 import { getDefaultLLMConfig } from "./config/llmProviders";
 import { t } from "./config/i18n";
+import { getStoredAccessCode, setStoredAccessCode } from "./utils";
 
 import { 
   getAllWordsFromDB, 
@@ -158,23 +158,12 @@ export default function App() {
   }) => {
     handleSelectLanguages(data.targetLanguage, data.nativeLanguage, data.appLanguage);
 
-    const newProxyKey = data.accessCode.trim();
-    setLlmConfig((prevConfig) => {
-      const savedMap = getSavedProvidersMap(prevConfig);
-      const updatedSavedMap: Record<string, any> = {};
-      for (const k of Object.keys(savedMap)) {
-        if (savedMap[k]) {
-          updatedSavedMap[k] = {
-            ...savedMap[k],
-            proxyKey: newProxyKey,
-          };
-        }
-      }
+    const newAccessCode = data.accessCode.trim();
+    setStoredAccessCode(newAccessCode);
 
+    setLlmConfig((prevConfig) => {
       const updatedConfig: LLMConfig = {
         ...prevConfig,
-        proxyKey: newProxyKey,
-        savedProviders: updatedSavedMap,
       };
 
       saveLLMConfigToDB(updatedConfig);
@@ -301,7 +290,7 @@ export default function App() {
       setAppLanguage(refreshedApp);
 
       const onboardingCompleted = localStorage.getItem("vocab_learner_onboarding_completed") === "true";
-      const hasProxyKey = Boolean(activeConfig.proxyKey && activeConfig.proxyKey.trim() !== "");
+      const hasProxyKey = Boolean(getStoredAccessCode());
       if (!onboardingCompleted || !hasProxyKey) {
         setIsOnboardingModalOpen(true);
       }
@@ -487,7 +476,7 @@ export default function App() {
       {/* Onboarding Setup & Access Code Modal */}
       <OnboardingModal
         isOpen={isOnboardingModalOpen}
-        initialProxyKey={llmConfig.proxyKey || ""}
+        initialProxyKey={getStoredAccessCode()}
         initialTargetLanguage={targetLanguage}
         initialNativeLanguage={nativeLanguage}
         initialAppLanguage={appLanguage}
@@ -495,7 +484,7 @@ export default function App() {
         onClose={() => setIsOnboardingModalOpen(false)}
         canDismiss={
           localStorage.getItem("vocab_learner_onboarding_completed") === "true" && 
-          Boolean(llmConfig.proxyKey && llmConfig.proxyKey.trim() !== "")
+          Boolean(getStoredAccessCode())
         }
       />
 

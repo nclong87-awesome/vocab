@@ -1,5 +1,5 @@
 import { Word, QuizQuestion } from "../types";
-import { fetchWithTimeout } from "../utils";
+import { fetchWithTimeout, getStoredAccessCode } from "../utils";
 
 // Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Spanish/etc.)
 export function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
@@ -29,26 +29,10 @@ export function getImageKeyword(word: Word | string): string {
 }
 
 // Helper function to fetch image URL from Cloudflare Worker endpoint using keyword query
-export async function fetchWorkerImageUrl(keyword: string, proxyKey?: string): Promise<string> {
+export async function fetchWorkerImageUrl(keyword: string): Promise<string> {
   if (!keyword) return "";
 
-  let effectiveProxyKey = proxyKey || "";
-  if (!effectiveProxyKey) {
-    try {
-      const rawConfig = localStorage.getItem("vocab_learner_llm_config");
-      if (rawConfig) {
-        const parsed = JSON.parse(rawConfig);
-        effectiveProxyKey = parsed.proxyKey || "";
-        if (!effectiveProxyKey && parsed.savedProviders) {
-          const found = Object.values(parsed.savedProviders).find((p: any) => Boolean(p?.proxyKey)) as any;
-          if (found) effectiveProxyKey = found.proxyKey;
-        }
-      }
-    } catch (e) {}
-  }
-  if (!effectiveProxyKey) {
-    effectiveProxyKey = localStorage.getItem("llm_proxy_key") || localStorage.getItem("proxy_key") || "";
-  }
+  const effectiveProxyKey = getStoredAccessCode();
 
   try {
     const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;

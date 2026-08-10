@@ -476,20 +476,16 @@ export function sanitizeDataForCloudSync(data: IndexedDBExportData): IndexedDBEx
       if (typeof recData.apiKey === "string") {
         recData.apiKey = "";
       }
-
-      if (typeof recData.proxyKey === "string") {
-        recData.proxyKey = "";
-      }
+      delete recData.proxyKey;
 
       if (recData.savedProviders && typeof recData.savedProviders === "object") {
         const sanitizedProviders: Record<string, any> = {};
         for (const [pKey, pVal] of Object.entries(recData.savedProviders)) {
           if (pVal && typeof pVal === "object") {
-            sanitizedProviders[pKey] = {
-              ...(pVal as object),
-              apiKey: "",
-              proxyKey: ""
-            };
+            const providerCopy = { ...(pVal as any) };
+            delete providerCopy.proxyKey;
+            providerCopy.apiKey = "";
+            sanitizedProviders[pKey] = providerCopy;
           } else {
             sanitizedProviders[pKey] = pVal;
           }

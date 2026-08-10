@@ -602,7 +602,6 @@ export function useChat({
       return {
         provider: match.provider,
         model: match.model,
-        proxyKey: llmConfig.proxyKey || "",
         savedProviders: llmConfig.savedProviders || {},
         apiKey: "",
         isLoggedIn: false,

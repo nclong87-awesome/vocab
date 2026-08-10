@@ -5,6 +5,7 @@ import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getProviderDisplayName } from "../../utils/llmHelpers";
 import { isModelLocked } from "../../utils/autoModeManager";
+import { getStoredAccessCode } from "../../utils";
 
 interface AiErrorFallbackModalProps {
   isOpen: boolean;
@@ -118,7 +119,7 @@ export default function AiErrorFallbackModal({
                 {alternativeProviders.map((provider) => {
                   const isSelected = selectedProvider === provider.id;
                   const savedProfile = llmConfig.savedProviders?.[provider.id];
-                  const hasKeyOrWorker = !provider.requiresKey || Boolean(savedProfile?.apiKey) || Boolean(llmConfig.proxyKey);
+                  const hasKeyOrWorker = !provider.requiresKey || Boolean(savedProfile?.apiKey) || Boolean(getStoredAccessCode());
 
                   return (
                     <button

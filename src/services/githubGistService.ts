@@ -1,6 +1,6 @@
 import { sanitizeDataForCloudSync, deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { IndexedDBExportData } from "../db/indexedDB";
-import { fetchWithTimeout, isStaticHost } from "../utils";
+import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 
 export interface RateLimitCheckResult {
   allowed: boolean;
@@ -116,21 +116,7 @@ export function getGistEndpointAndHeaders(token?: string, gistId?: string) {
     headers['Authorization'] = `Bearer ${token}`;
   } else {
     // Inject proxy key into header for Worker
-    let proxyKeyToUse = token && !token.startsWith("http") ? token : "";
-    if (!proxyKeyToUse) {
-      try {
-        const rawConfig = localStorage.getItem("vocab_learner_llm_config");
-        if (rawConfig) {
-          const parsed = JSON.parse(rawConfig);
-          if (parsed?.proxyKey) {
-            proxyKeyToUse = parsed.proxyKey;
-          }
-        }
-      } catch {}
-      if (!proxyKeyToUse) {
-        proxyKeyToUse = localStorage.getItem("llm_proxy_key") || "";
-      }
-    }
+    const proxyKeyToUse = (token && !token.startsWith("http")) ? token : getStoredAccessCode();
 
     if (proxyKeyToUse) {
       headers['X-Proxy-Key'] = proxyKeyToUse;
