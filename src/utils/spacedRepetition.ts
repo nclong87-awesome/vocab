@@ -50,7 +50,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   const memoryDecay = eligibleWords.filter(w => {
     if (starred.includes(w)) return false;
     const days = getDaysSinceLastReview(w, now);
-    return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
+    return days >= 5 || (w.strength < 80 && w.lastReviewed !== null && days >= 1);
   });
 
   const neverReviewed = eligibleWords.filter(w => 
@@ -186,7 +186,7 @@ export function getCandidateWordForFlashcard(words: Word[]): Word | null {
   const memoryDecay = words.filter(w => {
     if (starred.includes(w)) return false;
     const days = getDaysSinceLastReview(w, now);
-    return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
+    return days >= 5 || (w.strength < 80 && w.lastReviewed !== null && days >= 1);
   });
 
   const neverReviewed = words.filter(w => 

@@ -1867,10 +1867,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
 1. Target-Language Immersion Restrictions:
    - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
    - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
-2. Distractor Logic:
-   - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
-   - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
-   - Never put the same option twice.
+2. Distractor Logic & Challenging Distractors:
+   - CRITICAL: Do NOT pull or use wrong answers from other words in the user's vocabulary collection or list.
+   - The AI MUST generate the wrong answers (distractors) itself specifically for each question.
+   - Exactly 4 options per multiple-choice question (1 correct answer + 3 AI-generated distractors).
+   - Ensure distractors are tricky enough to challenge and confuse the user (e.g. phonetically/spelling close words, subtle contextually plausible alternatives, or closely related morphological variations in ${targetLanguage}).
+   - Options must be unique, non-overlapping, and grammatically similar (same part of speech). Never put the same option twice.
 3. Adaptive Difficulty & Spaced Repetition Personalization:
    - Use each word's mastery stats (strength 0-4, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
      * Memory Decay / Overdue Words (daysSinceLastReview >= 5, or recalculated strength): The student may have forgotten this word since it hasn't been reviewed in a while. Generate targeted context fill-in-the-blank or usage questions with challenging distractors to test active memory recall.

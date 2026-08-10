@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord } from "../types";
-import { generateQuizQuestions, generateConfusers, getImageKeyword } from "../utils/quizGenerator";
+import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
@@ -2029,10 +2029,8 @@ export async function generateAiQuizQuestionsService(
     return { questions: [] };
   }
 
-  const fallbackQuestions = generateQuizQuestions(words, targetLanguage);
-
   if (!llmConfig || !llmConfig.isLoggedIn) {
-    return { questions: fallbackQuestions };
+    throw new Error("AI provider configuration or login is required to generate quiz questions.");
   }
 
   const wordDataSummary = words.map(w => {
@@ -2080,10 +2078,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
 1. Target-Language Immersion Restrictions:
    - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
    - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
-2. Distractor Logic:
-   - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
-   - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
-   - Never put the same option twice.
+2. Distractor Logic & Challenging Distractors:
+   - CRITICAL: Do NOT pull or use wrong answers from other words in the user's vocabulary collection or list.
+   - The AI MUST generate the wrong answers (distractors) itself specifically for each question.
+   - Exactly 4 options per multiple-choice question (1 correct answer + 3 AI-generated distractors).
+   - Ensure distractors are tricky enough to challenge and confuse the user (e.g. phonetically/spelling close words, subtle contextually plausible alternatives, or closely related morphological variations in ${targetLanguage}).
+   - Options must be unique, non-overlapping, and grammatically similar (same part of speech). Never put the same option twice.
 3. Adaptive Difficulty & Spaced Repetition Personalization:
    - Use each word's mastery stats (strength 0-100, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
      * Memory Decay / Overdue Words (daysSinceLastReview >= 5, or recalculated strength): The student may have forgotten this word since it hasn't been reviewed in a while. Generate targeted context fill-in-the-blank or usage questions with challenging distractors to test active memory recall.
@@ -2222,14 +2222,11 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
         responseTimeMs
       };
     }
+    throw new Error("Failed to generate quiz questions from AI provider. Please try again or switch model.");
   } catch (err: any) {
     console.warn("AI Quiz Generation failed:", err);
-    if (llmConfig && llmConfig.isLoggedIn) {
-      throw err;
-    }
+    throw err;
   }
-
-  return { questions: fallbackQuestions };
 }
 
 /**

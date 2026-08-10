@@ -100,6 +100,9 @@ export function generateConfusers(w: string): string[] {
     w + "e",
     w.endsWith('e') ? w.slice(0, -1) : w + "s",
     w + "ing",
+    w + "ed",
+    w + "ly",
+    w + "er",
     w.replace(/[aeiou]/i, (v) => v === 'a' ? 'e' : v === 'e' ? 'a' : v === 'i' ? 'e' : v === 'o' ? 'u' : 'o'),
     w.replace(/[aeiou]/ig, 'a'),
     w.replace(/[aeiou]/ig, 'e'),
@@ -113,7 +116,6 @@ export function generateConfusers(w: string): string[] {
 export function generateQuizQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
   if (!wordList || wordList.length === 0) return [];
   
-  // If only 1 word in collection, generate confusers to create distractors
   const allWords = wordList;
   const generated: QuizQuestion[] = [];
 
@@ -142,36 +144,21 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
 
     let imageKeyword: string | undefined = undefined;
 
+    // Generate tricky confuser distractors without pulling wrong answers from other words in the collection
+    const confusers = generateConfusers(word.word).sort(() => 0.5 - Math.random());
+
     if (type === 'definition') {
       correctAnswer = word.word;
       questionText = `Which word matches the following definition?\n"${word.definition}"`;
       
-      // Sort words by length similarity to make distractors challenging
-      let potentialWrongs = allWords
-        .filter(w => w.id !== word.id)
-        .sort((a, b) => Math.abs(a.word.length - word.word.length) - Math.abs(b.word.length - word.word.length))
-        .map(w => w.word);
-        
-      let distractors = potentialWrongs.slice(0, 6).sort(() => 0.5 - Math.random());
-      
-      if (distractors.length < 3) {
-        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
-      }
-      
-      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
+      const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
     else if (type === 'listening') {
       correctAnswer = word.word;
       questionText = `Listen to the audio clip and select the correct matching word:`;
       
-      // Phonetic and morphological variations for listening
-      const confusers = generateConfusers(word.word).sort(() => 0.5 - Math.random());
-      const potentialWrongsFromCollection = allWords.filter(w => w.id !== word.id).map(w => w.word).sort(() => 0.5 - Math.random());
-      
-      const mixedWrongs = [...confusers, ...potentialWrongsFromCollection];
-      const uniqueDistractors = Array.from(new Set(mixedWrongs)).filter(w => w !== correctAnswer).slice(0, 3);
-      
+      const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
     else if (type === 'picture') {
@@ -180,18 +167,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       imageKeyword = getImageKeyword(word);
       imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(imageKeyword)}`;
 
-      let potentialWrongs = allWords
-        .filter(w => w.id !== word.id)
-        .sort((a, b) => Math.abs(a.word.length - word.word.length) - Math.abs(b.word.length - word.word.length))
-        .map(w => w.word);
-        
-      let distractors = potentialWrongs.slice(0, 6).sort(() => 0.5 - Math.random());
-      
-      if (distractors.length < 3) {
-        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
-      }
-      
-      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
+      const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
     else {
@@ -201,14 +177,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       const hiddenSentence = word.example ? word.example.replace(regex, "______") : `Please select the correct word: ${word.word}`;
       questionText = `Fill in the blank for the sentence:\n"${hiddenSentence}"`;
       
-      let potentialWrongs = allWords.filter(w => w.id !== word.id).map(w => w.word);
-      let distractors = potentialWrongs.sort(() => 0.5 - Math.random());
-      
-      if (distractors.length < 3) {
-        distractors = [...distractors, ...generateConfusers(word.word)].sort(() => 0.5 - Math.random());
-      }
-      
-      const uniqueDistractors = Array.from(new Set(distractors)).filter(w => w !== correctAnswer).slice(0, 3);
+      const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
 

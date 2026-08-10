@@ -76,7 +76,7 @@ export default function AnalyticsDashboard({
   const decayedWords = useMemo(() => {
     return safeWords.filter(w => {
       const days = getDaysSinceLastReview(w);
-      return days >= 5 || (w.strength < 80 && w.lastReviewed !== null);
+      return days >= 5 || (w.strength < 80 && w.lastReviewed !== null && days >= 1);
     });
   }, [safeWords]);
 

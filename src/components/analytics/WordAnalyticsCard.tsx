@@ -31,7 +31,7 @@ export default function WordAnalyticsCard({
   const isMastered = word.learned || word.strength >= 80;
   const strengthLevel = word.strength ?? 0;
   const daysSinceReview = getDaysSinceLastReview(word);
-  const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80);
+  const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80 && daysSinceReview >= 1);
 
   const handleModalWordUpdate = (updated: Word) => {
     setLocalWord(updated);
