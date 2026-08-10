@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Upload } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider } from "../types";
@@ -35,7 +35,7 @@ interface ChatViewProps {
   conversationalState?: string;
 }
 
-export default function ChatView({
+function ChatView({
   messages,
   onSendMessage,
   onClearHistory,
@@ -72,15 +72,20 @@ export default function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
-  const focusInput = () => {
+  const focusInput = useCallback(() => {
     // if mobile, skip focusing to avoid keyboard pop-up
     if (/Mobi|Android/i.test(navigator.userAgent)) return;
     setTimeout(() => {
       inputRef.current?.focus();
     }, 50);
-  };
+  }, []);
 
-  const processImageFile = async (file: File, defaultName?: string) => {
+  const showToast = useCallback((msgText: string) => {
+    setToast(msgText);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const processImageFile = useCallback(async (file: File, defaultName?: string) => {
     if (!file.type.startsWith("image/")) {
       showToast("⚠️ Please select or paste a valid image file (PNG, JPG, WEBP)");
       return;
@@ -91,7 +96,6 @@ export default function ChatView({
         const name = defaultName || file.name || "Attached Photo";
         const rawDataUrl = reader.result;
         
-        // Compress / resize large images to max 1600px dimension for fast & reliable AI Vision analysis
         try {
           const optimizedDataUrl = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
           setSelectedImage({
@@ -108,29 +112,29 @@ export default function ChatView({
       }
     };
     reader.readAsDataURL(file);
-  };
+  }, [showToast]);
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     processImageFile(file);
     e.target.value = "";
-  };
+  }, [processImageFile]);
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isDragging) setIsDragging(true);
-  };
+    setIsDragging(true);
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDragging(false);
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -138,9 +142,9 @@ export default function ChatView({
     if (file) {
       processImageFile(file, `Dropped Image (${file.name})`);
     }
-  };
+  }, [processImageFile]);
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
@@ -154,7 +158,7 @@ export default function ChatView({
         break;
       }
     }
-  };
+  }, [processImageFile]);
 
   // Listen for global window paste events when chat is active
   useEffect(() => {
@@ -178,7 +182,7 @@ export default function ChatView({
     return () => {
       window.removeEventListener("paste", handleGlobalPaste);
     };
-  }, []);
+  }, [processImageFile]);
 
   // Quick Actions Last Used Timestamps (persisted in localStorage)
   const [actionLastUsed, setActionLastUsed] = useState<Record<string, number>>(() => {
@@ -191,7 +195,7 @@ export default function ChatView({
     return {};
   });
 
-  const handleRecordActionUse = (actionId: string) => {
+  const handleRecordActionUse = useCallback((actionId: string) => {
     setActionLastUsed(prev => {
       const updated = { ...prev, [actionId]: Date.now() };
       try {
@@ -201,28 +205,23 @@ export default function ChatView({
       }
       return updated;
     });
-  };
-
-  const showToast = (msgText: string) => {
-    setToast(msgText);
-    setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   // Helper to auto scroll to bottom
-  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
     }, 50);
-  };
+  }, []);
 
   // Helper to auto scroll to the top of the newly added message
-  const scrollToTopOfLatestMessage = (behavior: ScrollBehavior = "smooth") => {
+  const scrollToTopOfLatestMessage = useCallback((behavior: ScrollBehavior = "smooth") => {
     setTimeout(() => {
       if (latestMessageRef.current) {
         latestMessageRef.current.scrollIntoView({ behavior, block: "start" });
       }
     }, 50);
-  };
+  }, []);
 
   // Auto scroll to top of message when a new message is added to the conversation
   useEffect(() => {
@@ -250,7 +249,6 @@ export default function ChatView({
               langCode,
               undefined,
               () => {
-                // Small gap keeps the sequence natural and prevents overlap.
                 setTimeout(() => {
                   speakText(nextQuestionText, ttsConfig, llmConfig, langCode);
                 }, 180);
@@ -268,14 +266,14 @@ export default function ChatView({
     } else {
       lastMessageIdRef.current = null;
     }
-  }, [messages, ttsConfig, llmConfig, targetLanguage]);
+  }, [messages, ttsConfig, llmConfig, targetLanguage, scrollToTopOfLatestMessage]);
 
   // Auto focus textbox on mount
   useEffect(() => {
     focusInput();
-  }, []);
+  }, [focusInput]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (conversationalState === "suggesting_reply") {
       const imgData = selectedImage ? selectedImage.dataUrl : null;
@@ -305,7 +303,7 @@ export default function ChatView({
     setInputText("");
     onSendMessage(txt);
     scrollToBottom("smooth");
-  };
+  }, [conversationalState, selectedImage, inputText, isTyping, onSuggestCasualReply, onAnalyzeImageVocab, onSendMessage, scrollToBottom]);
 
   return (
     <div 
@@ -442,3 +440,5 @@ export default function ChatView({
     </div>
   );
 }
+
+export default React.memo(ChatView);

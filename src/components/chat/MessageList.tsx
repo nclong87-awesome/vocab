@@ -1,5 +1,4 @@
-import { Fragment } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import React, { Fragment } from "react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import ChatMessageItem from "./ChatMessageItem";
 
@@ -33,7 +32,7 @@ interface MessageListProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
 }
 
-export default function MessageList({
+function MessageList({
   messages,
   isTyping,
   targetLanguage,
@@ -67,62 +66,58 @@ export default function MessageList({
       className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-stone-50/50 chat-message-body" 
       id="chat-messages-body"
     >
-      <AnimatePresence initial={false}>
-        {messages.map((msg, idx) => {
-          const isLatestMessage = idx === messages.length - 1;
-          return (
-            <Fragment key={msg.id}>
-              {isLatestMessage && (
-                <div ref={latestMessageRef} />
-              )}
-              <ChatMessageItem
-                msg={msg}
-                isLatestMessage={isLatestMessage}
-                messages={messages}
-                targetLanguage={targetLanguage}
-                nativeLanguage={nativeLanguage}
-                appLanguage={appLanguage}
-                ttsConfig={ttsConfig}
-                llmConfig={llmConfig}
-                onSendMessage={onSendMessage}
-                onClearHistory={onClearHistory}
-                onAddWord={onAddWord}
-                onAddMultipleWords={onAddMultipleWords}
-                onStartQuiz={onStartQuiz}
-                onFixGrammar={onFixGrammar}
-                onViewFlashcard={onViewFlashcard}
-                onAnalyzeImageVocab={onAnalyzeImageVocab}
-                onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
-                onSuggestCasualReply={onSuggestCasualReply}
-                onSelectDefinition={onSelectDefinition}
-                showToast={showToast}
-                scrollToBottom={scrollToBottom}
-                focusInput={focusInput}
-                setIsPhotoModalOpen={setIsPhotoModalOpen}
-                handleRecordActionUse={handleRecordActionUse}
-                words={words}
-                onUpdateWords={onUpdateWords}
-              />
-            </Fragment>
-          );
-        })}
+      {messages.map((msg, idx) => {
+        const isLatestMessage = idx === messages.length - 1;
+        return (
+          <Fragment key={msg.id}>
+            {isLatestMessage && (
+              <div ref={latestMessageRef} />
+            )}
+            <ChatMessageItem
+              msg={msg}
+              isLatestMessage={isLatestMessage}
+              messages={messages}
+              targetLanguage={targetLanguage}
+              nativeLanguage={nativeLanguage}
+              appLanguage={appLanguage}
+              ttsConfig={ttsConfig}
+              llmConfig={llmConfig}
+              onSendMessage={onSendMessage}
+              onClearHistory={onClearHistory}
+              onAddWord={onAddWord}
+              onAddMultipleWords={onAddMultipleWords}
+              onStartQuiz={onStartQuiz}
+              onFixGrammar={onFixGrammar}
+              onViewFlashcard={onViewFlashcard}
+              onAnalyzeImageVocab={onAnalyzeImageVocab}
+              onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
+              onSuggestCasualReply={onSuggestCasualReply}
+              onSelectDefinition={onSelectDefinition}
+              showToast={showToast}
+              scrollToBottom={scrollToBottom}
+              focusInput={focusInput}
+              setIsPhotoModalOpen={setIsPhotoModalOpen}
+              handleRecordActionUse={handleRecordActionUse}
+              words={words}
+              onUpdateWords={onUpdateWords}
+            />
+          </Fragment>
+        );
+      })}
 
-        {/* Typing Indicator */}
-        {isTyping && (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex mr-auto"
-          >
-            <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm">
-              <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
-              <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
-              <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Typing Indicator */}
+      {isTyping && (
+        <div className="flex mr-auto animate-chat-msg">
+          <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm">
+            <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+            <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
+            <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+          </div>
+        </div>
+      )}
       <div ref={messagesEndRef} />
     </div>
   );
 }
+
+export default React.memo(MessageList);

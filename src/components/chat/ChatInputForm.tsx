@@ -1,3 +1,4 @@
+import React from "react";
 import { Camera, Send, X } from "lucide-react";
 
 interface ChatInputFormProps {
@@ -17,7 +18,7 @@ interface ChatInputFormProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-export default function ChatInputForm({
+function ChatInputForm({
   inputText,
   setInputText,
   selectedImage,
@@ -118,3 +119,5 @@ export default function ChatInputForm({
     </form>
   );
 }
+
+export default React.memo(ChatInputForm);

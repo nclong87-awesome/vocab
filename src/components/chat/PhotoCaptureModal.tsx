@@ -28,7 +28,7 @@ interface PhotoCaptureModalProps {
   onToast?: (msg: string) => void;
 }
 
-export default function PhotoCaptureModal({
+function PhotoCaptureModal({
   isOpen,
   onClose,
   onImageSelected,
@@ -916,3 +916,5 @@ export default function PhotoCaptureModal({
     </AnimatePresence>
   );
 }
+
+export default React.memo(PhotoCaptureModal);

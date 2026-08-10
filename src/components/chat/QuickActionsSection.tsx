@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
@@ -28,7 +28,7 @@ interface QuickActionsSectionProps {
   setSelectedImage: (img: { dataUrl: string; name: string } | null) => void;
 }
 
-export default function QuickActionsSection({
+function QuickActionsSection({
   targetLanguage,
   nativeLanguage,
   appLanguage = "Vietnamese",
@@ -353,3 +353,5 @@ export default function QuickActionsSection({
     </>
   );
 }
+
+export default React.memo(QuickActionsSection);

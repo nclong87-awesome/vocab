@@ -40,68 +40,74 @@ interface FormattedMessageProps {
   text: string;
 }
 
-export default function FormattedMessage({ text }: FormattedMessageProps) {
+function FormattedMessage({ text }: FormattedMessageProps) {
   const safeText = typeof text === "string" ? text : (text ? String(text) : "");
-  const lines = safeText.split("\n");
-  
+
+  const renderedContent = React.useMemo(() => {
+    const lines = safeText.split("\n");
+    return lines.map((line, i) => {
+      // Handle Bullet Points
+      if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
+        const content = line.trim().substring(2);
+        return (
+          <ul key={i} className="list-disc pl-5 my-1 text-stone-800">
+            <li>{parseInlineMarkdown(content)}</li>
+          </ul>
+        );
+      }
+      
+      // Handle Numbered List
+      const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)/);
+      if (numberedMatch) {
+        return (
+          <ol key={i} className="list-decimal pl-5 my-1 text-stone-800">
+            <li value={parseInt(numberedMatch[1], 10)}>
+              {parseInlineMarkdown(numberedMatch[2])}
+            </li>
+          </ol>
+        );
+      }
+
+      // Handle Blockquotes
+      if (line.trim().startsWith("> ")) {
+        const content = line.trim().substring(2);
+        return (
+          <blockquote key={i} className="border-l-4 border-amber-400 bg-amber-50/70 pl-3 py-2 pr-2 my-2 text-stone-900 font-semibold rounded-r-lg shadow-2xs">
+            {parseInlineMarkdown(content)}
+          </blockquote>
+        );
+      }
+
+      // Handle Headers
+      if (line.trim().startsWith("### ")) {
+        return (
+          <h4 key={i} className="text-base font-bold text-stone-900 pt-2 pb-1">
+            {parseInlineMarkdown(line.trim().substring(4))}
+          </h4>
+        );
+      }
+      if (line.trim().startsWith("## ")) {
+        return (
+          <h3 key={i} className="text-lg font-bold text-stone-900 pt-3 pb-1 border-b border-stone-100">
+            {parseInlineMarkdown(line.trim().substring(3))}
+          </h3>
+        );
+      }
+
+      // Default paragraph
+      if (line.trim() === "") {
+        return <div key={i} className="h-2" />;
+      }
+
+      return <p key={i} className="text-stone-800">{parseInlineMarkdown(line)}</p>;
+    });
+  }, [safeText]);
+
   return (
     <div className="space-y-1.5 text-sm sm:text-base leading-relaxed break-words">
-      {lines.map((line, i) => {
-        // Handle Bullet Points
-        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-          const content = line.trim().substring(2);
-          return (
-            <ul key={i} className="list-disc pl-5 my-1 text-stone-800">
-              <li>{parseInlineMarkdown(content)}</li>
-            </ul>
-          );
-        }
-        
-        // Handle Numbered List
-        const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)/);
-        if (numberedMatch) {
-          return (
-            <ol key={i} className="list-decimal pl-5 my-1 text-stone-800">
-              <li value={parseInt(numberedMatch[1], 10)}>
-                {parseInlineMarkdown(numberedMatch[2])}
-              </li>
-            </ol>
-          );
-        }
-
-        // Handle Blockquotes
-        if (line.trim().startsWith("> ")) {
-          const content = line.trim().substring(2);
-          return (
-            <blockquote key={i} className="border-l-4 border-amber-400 bg-amber-50/70 pl-3 py-2 pr-2 my-2 text-stone-900 font-semibold rounded-r-lg shadow-2xs">
-              {parseInlineMarkdown(content)}
-            </blockquote>
-          );
-        }
-
-        // Handle Headers
-        if (line.trim().startsWith("### ")) {
-          return (
-            <h4 key={i} className="text-base font-bold text-stone-900 pt-2 pb-1">
-              {parseInlineMarkdown(line.trim().substring(4))}
-            </h4>
-          );
-        }
-        if (line.trim().startsWith("## ")) {
-          return (
-            <h3 key={i} className="text-lg font-bold text-stone-900 pt-3 pb-1 border-b border-stone-100">
-              {parseInlineMarkdown(line.trim().substring(3))}
-            </h3>
-          );
-        }
-
-        // Default paragraph
-        if (line.trim() === "") {
-          return <div key={i} className="h-2" />;
-        }
-
-        return <p key={i} className="text-stone-800">{parseInlineMarkdown(line)}</p>;
-      })}
+      {renderedContent}
     </div>
   );
 }
+
+export default React.memo(FormattedMessage);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Volume2, Sparkles, Lightbulb, Clock, TrendingUp, CheckCircle, RotateCcw } from "lucide-react";
 import { FlashcardData, TTSConfig, LLMConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -21,7 +21,7 @@ interface FlashcardMessageCardProps {
   showToast?: (msg: string) => void;
 }
 
-export default function FlashcardMessageCard({
+function FlashcardMessageCard({
   data,
   targetLanguage,
   nativeLanguage,
@@ -390,3 +390,5 @@ export default function FlashcardMessageCard({
     </div>
   );
 }
+
+export default React.memo(FlashcardMessageCard);

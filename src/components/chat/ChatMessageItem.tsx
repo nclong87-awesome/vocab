@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { motion } from "motion/react";
+import React, { useState, useMemo } from "react";
 import { 
   Volume2, ChevronRight, Check, Sparkles, Clock
 } from "lucide-react";
@@ -102,7 +101,7 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
   return rawLabel;
 }
 
-export default function ChatMessageItem({
+function ChatMessageItem({
   msg,
   isLatestMessage,
   messages,
@@ -143,125 +142,126 @@ export default function ChatMessageItem({
     showToast(toastMessage);
   };
 
-  const parsedQuizOptions: { label: string; action: string; payload: any }[] = [];
   const safeMsgContent = typeof msg.content === "string" ? msg.content : (msg.content ? String(msg.content) : "");
-  if (!isUser && safeMsgContent) {
-    const lines = safeMsgContent.split("\n");
-    for (const line of lines) {
-      const cleanLine = line.trim();
-      const match = cleanLine.match(/^\s*(?:\*\*)?\s*([A-E])\s*[\)\.]\s*(?:\*\*)?\s*(.+)$/i);
-      if (match) {
-        const optionLabel = cleanLine.replace(/\*\*|`/g, "").trim();
-        const optionText = match[2].replace(/\*\*|`/g, "").trim();
-        parsedQuizOptions.push({
-          label: optionLabel,
-          action: "quiz_answer",
-          payload: { answer: optionText }
-        });
-      }
-    }
-  }
 
-  let actionsList: { label: string; action: string; payload?: any }[] = [];
-
-  if (!isUser) {
-    const hasQuizOptions = parsedQuizOptions.length >= 2 && parsedQuizOptions.length <= 5;
-    
-    if (hasQuizOptions) {
-      actionsList = [...parsedQuizOptions];
-    } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
-      actionsList = [...msg.suggestedActions];
-    }
-
-    // On the latest message, if no quiz options are present, extract or generate topic choices
-    if (isLatestMessage && !hasQuizOptions) {
-      const content = safeMsgContent;
-      const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
-
-      actionsList = extractOrGenerateTopicActions(
-        content,
-        actionsList,
-        lastUserMessage,
-        targetLanguage,
-        nativeLanguage
-      );
-
-      const hasNextAction = actionsList.some(a => {
-        const lbl = (a && typeof a.label === "string") ? a.label.toLowerCase() : "";
-        return (
-          lbl.includes("question") || 
-          lbl.includes("move on") || 
-          lbl.includes("continue to") || 
-          lbl.includes("next question")
-        );
-      });
-
-      if (!hasNextAction) {
-        const questionMatch = content.match(/(?:move\s+on\s+to|continue\s+to|proceed\s+to|shall\s+we\s+(?:move\s+on\s+to|try|start|go\s+to)?)\s*\*{0,2}(Question\s*\d+|the\s+next\s+question)\*{0,2}/i)
-          || content.match(/move\s+on\s+to\s+\*{0,2}(Question\s*\d+)\*{0,2}/i)
-          || content.match(/shall\s+we\s+move\s+on\s+to\s+\*{0,2}(Question\s*\d+)\*{0,2}/i);
-
-        if (questionMatch) {
-          const qStr = questionMatch[1] ? questionMatch[1].replace(/\*/g, "").trim() : "";
-          const labelText = qStr ? `Move on to ${qStr}` : "Move on to next question";
-          actionsList.push({
-            label: labelText,
-            action: "send_message",
-            payload: { message: labelText }
-          });
-        } else if (
-          content.toLowerCase().includes("move on to") || 
-          content.toLowerCase().includes("shall we move on") || 
-          content.toLowerCase().includes("next question") ||
-          content.toLowerCase().includes("ready for the next")
-        ) {
-          actionsList.push({
-            label: "Move on to next question",
-            action: "send_message",
-            payload: { message: "Move on to next question" }
+  const parsedQuizOptions = useMemo(() => {
+    const opts: { label: string; action: string; payload: any }[] = [];
+    if (!isUser && safeMsgContent) {
+      const lines = safeMsgContent.split("\n");
+      for (const line of lines) {
+        const cleanLine = line.trim();
+        const match = cleanLine.match(/^\s*(?:\*\*)?\s*([A-E])\s*[\)\.]\s*(?:\*\*)?\s*(.+)$/i);
+        if (match) {
+          const optionLabel = cleanLine.replace(/\*\*|`/g, "").trim();
+          const optionText = match[2].replace(/\*\*|`/g, "").trim();
+          opts.push({
+            label: optionLabel,
+            action: "quiz_answer",
+            payload: { answer: optionText }
           });
         }
       }
     }
+    return opts;
+  }, [isUser, safeMsgContent]);
 
-    // Filter actions if this is NOT the latest message in the thread:
-    // Hide interactive navigation actions ("send_message", "quiz_answer", "start_quiz") on old messages
-    if (!isLatestMessage) {
-      actionsList = actionsList.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image" || a.action === "retry_suggest_reply" || a.action === "copy_text" || a.action === "copy_sentence");
-    }
-  }
+  const effectiveActions = useMemo(() => {
+    let rawActions: { label: string; action: string; payload?: any }[] = [];
 
-  const effectiveActions = (actionsList || [])
-    .filter(act => {
-      if (!act || typeof act !== "object") return false;
-      if (act.action === "select_definition") return Boolean(act.payload?.definition);
-      const lbl = act.label ? String(act.label).trim() : "";
-      const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
-      const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
-      return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
-    })
-    .map(act => {
-      const cleaned = { ...act };
-      if (!cleaned.label || !String(cleaned.label).trim()) {
-        if (cleaned.payload?.message) cleaned.label = cleaned.payload.message;
-        else if (cleaned.payload?.word) cleaned.label = `Add "${cleaned.payload.word}" to collection`;
-        else if ((cleaned as any).word) cleaned.label = `Add "${(cleaned as any).word}" to collection`;
+    if (!isUser) {
+      const hasQuizOptions = parsedQuizOptions.length >= 2 && parsedQuizOptions.length <= 5;
+      
+      if (hasQuizOptions) {
+        rawActions = [...parsedQuizOptions];
+      } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
+        rawActions = [...msg.suggestedActions];
       }
-      return cleaned;
-    });
+
+      // On the latest message, if no quiz options are present, extract or generate topic choices
+      if (isLatestMessage && !hasQuizOptions) {
+        const content = safeMsgContent;
+        const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
+
+        rawActions = extractOrGenerateTopicActions(
+          content,
+          rawActions,
+          lastUserMessage,
+          targetLanguage,
+          nativeLanguage
+        );
+
+        const hasNextAction = rawActions.some(a => {
+          const lbl = (a && typeof a.label === "string") ? a.label.toLowerCase() : "";
+          return (
+            lbl.includes("question") || 
+            lbl.includes("move on") || 
+            lbl.includes("continue to") || 
+            lbl.includes("next question")
+          );
+        });
+
+        if (!hasNextAction) {
+          const questionMatch = content.match(/(?:move\s+on\s+to|continue\s+to|proceed\s+to|shall\s+we\s+(?:move\s+on\s+to|try|start|go\s+to)?)\s*\*{0,2}(Question\s*\d+|the\s+next\s+question)\*{0,2}/i)
+            || content.match(/move\s+on\s+to\s+\*{0,2}(Question\s*\d+)\*{0,2}/i)
+            || content.match(/shall\s+we\s+move\s+on\s+to\s+\*{0,2}(Question\s*\d+)\*{0,2}/i);
+
+          if (questionMatch) {
+            const qStr = questionMatch[1] ? questionMatch[1].replace(/\*/g, "").trim() : "";
+            const labelText = qStr ? `Move on to ${qStr}` : "Move on to next question";
+            rawActions.push({
+              label: labelText,
+              action: "send_message",
+              payload: { message: labelText }
+            });
+          } else if (
+            content.toLowerCase().includes("move on to") || 
+            content.toLowerCase().includes("shall we move on") || 
+            content.toLowerCase().includes("next question") ||
+            content.toLowerCase().includes("ready for the next")
+          ) {
+            rawActions.push({
+              label: "Move on to next question",
+              action: "send_message",
+              payload: { message: "Move on to next question" }
+            });
+          }
+        }
+      }
+
+      // Filter actions if this is NOT the latest message in the thread:
+      if (!isLatestMessage) {
+        rawActions = rawActions.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image" || a.action === "retry_suggest_reply" || a.action === "copy_text" || a.action === "copy_sentence");
+      }
+    }
+
+    return (rawActions || [])
+      .filter(act => {
+        if (!act || typeof act !== "object") return false;
+        if (act.action === "select_definition") return Boolean(act.payload?.definition);
+        const lbl = act.label ? String(act.label).trim() : "";
+        const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
+        const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
+        return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
+      })
+      .map(act => {
+        const cleaned = { ...act };
+        if (!cleaned.label || !String(cleaned.label).trim()) {
+          if (cleaned.payload?.message) cleaned.label = cleaned.payload.message;
+          else if (cleaned.payload?.word) cleaned.label = `Add "${cleaned.payload.word}" to collection`;
+          else if ((cleaned as any).word) cleaned.label = `Add "${(cleaned as any).word}" to collection`;
+        }
+        return cleaned;
+      });
+  }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage]);
+
   let className = isUser ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end" : "flex flex-col max-w-full w-full mr-auto items-stretch";
   if (isLatestMessage) {
-    // paddingTop for the latest message for auto-scroll to work properly
     className += " pt-1";
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className={className}
-    >
+    <div className={`${className} animate-chat-msg`}>
+      {/* Message Content Bubble */}
       {/* Message Content Bubble */}
       <div className="space-y-2 w-full flex flex-col">
         <div 
@@ -632,6 +632,8 @@ export default function ChatMessageItem({
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
+
+export default React.memo(ChatMessageItem);
