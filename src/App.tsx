@@ -301,7 +301,8 @@ export default function App() {
       setAppLanguage(refreshedApp);
 
       const onboardingCompleted = localStorage.getItem("vocab_learner_onboarding_completed") === "true";
-      if (!onboardingCompleted) {
+      const hasProxyKey = Boolean(activeConfig.proxyKey && activeConfig.proxyKey.trim() !== "");
+      if (!onboardingCompleted || !hasProxyKey) {
         setIsOnboardingModalOpen(true);
       }
 
@@ -492,7 +493,10 @@ export default function App() {
         initialAppLanguage={appLanguage}
         onCompleteOnboarding={handleCompleteOnboarding}
         onClose={() => setIsOnboardingModalOpen(false)}
-        canDismiss={localStorage.getItem("vocab_learner_onboarding_completed") === "true"}
+        canDismiss={
+          localStorage.getItem("vocab_learner_onboarding_completed") === "true" && 
+          Boolean(llmConfig.proxyKey && llmConfig.proxyKey.trim() !== "")
+        }
       />
 
       {/* AI Error & Provider Switch Fallback Modal */}

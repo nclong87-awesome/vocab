@@ -728,17 +728,17 @@ export default function LlmLoginModal({
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
                   <label className="text-xs font-semibold text-stone-900 flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-stone-900" /> Proxy Secret (X-Proxy-Key)
+                    <ShieldCheck className="w-3.5 h-3.5 text-stone-900" /> Access Code (Proxy Key) <span className="text-red-500 font-bold">*</span>
                   </label>
-                  <span className="text-[10px] text-stone-400 font-mono">
-                    Optional (Sent in X-Proxy-Key header)
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 border border-amber-300 rounded">
+                    Required to use app
                   </span>
                 </div>
                 <input
                   type="password"
                   value={proxyKey}
                   onChange={(e) => setProxyKey(e.target.value)}
-                  placeholder="Enter proxy secret for Cloudflare worker..."
+                  placeholder="Enter your access code..."
                   className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs text-stone-900 font-mono focus:outline-none focus:border-stone-900"
                 />
               </div>
