@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, History } from "lucide-react";
 import { Word } from "../../types";
 import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
@@ -22,13 +23,10 @@ export default function WordAnalyticsCard({
   onToggleLearnedWord: _onToggleLearnedWord,
   onUpdateWord
 }: WordAnalyticsCardProps) {
-  const [word, setWord] = useState<Word>(initialWord);
+  const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  // Keep internal word in sync if parent passes new word prop
-  React.useEffect(() => {
-    setWord(initialWord);
-  }, [initialWord]);
+  const word = localWord || initialWord;
 
   const isMastered = word.learned || word.strength >= 80;
   const strengthLevel = word.strength ?? 0;
@@ -36,7 +34,7 @@ export default function WordAnalyticsCard({
   const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80);
 
   const handleModalWordUpdate = (updated: Word) => {
-    setWord(updated);
+    setLocalWord(updated);
     if (onUpdateWord) {
       onUpdateWord(updated);
     }
@@ -167,13 +165,15 @@ export default function WordAnalyticsCard({
         </div>
       </div>
 
-      {showHistoryModal && (
-        <StrengthHistoryModal
-          word={word}
-          onClose={() => setShowHistoryModal(false)}
-          onUpdateWord={handleModalWordUpdate}
-        />
-      )}
+      <AnimatePresence>
+        {showHistoryModal && (
+          <StrengthHistoryModal
+            word={word}
+            onClose={() => setShowHistoryModal(false)}
+            onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

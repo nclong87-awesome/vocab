@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History } from "lucide-react";
 import { Word } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -29,15 +30,13 @@ export default function WordRow({
   handleImageError: _handleImageError,
   onUpdateWord
 }: WordRowProps) {
-  const [word, setWord] = useState<Word>(initialWord);
+  const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
 
-  React.useEffect(() => {
-    setWord(initialWord);
-  }, [initialWord]);
+  const word = localWord || initialWord;
 
   const handleModalWordUpdate = (updated: Word) => {
-    setWord(updated);
+    setLocalWord(updated);
     if (onUpdateWord) {
       onUpdateWord(updated);
     }
@@ -168,13 +167,15 @@ export default function WordRow({
         </div>
       </div>
 
-      {showHistoryModal && (
-        <StrengthHistoryModal
-          word={word}
-          onClose={() => setShowHistoryModal(false)}
-          onUpdateWord={handleModalWordUpdate}
-        />
-      )}
+      <AnimatePresence>
+        {showHistoryModal && (
+          <StrengthHistoryModal
+            word={word}
+            onClose={() => setShowHistoryModal(false)}
+            onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

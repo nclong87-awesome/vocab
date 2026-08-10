@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { 
   X, 
@@ -23,6 +24,17 @@ export default function StrengthHistoryModal({
   onClose
 }: StrengthHistoryModalProps) {
   const [hoveredEntryId, setHoveredEntryId] = useState<string | null>(null);
+
+  // Close modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const historyEntries = getEffectiveStrengthHistory(word);
   const currentStrength = word.strength ?? 0;
@@ -98,13 +110,22 @@ export default function StrengthHistoryModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-stone-900/70 backdrop-blur-xs overflow-y-auto">
+  return createPortal(
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-stone-900/70 backdrop-blur-xs overflow-y-auto"
+      onClick={onClose}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         className="bg-white border border-stone-200 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="bg-stone-900 text-white p-4 sm:p-5 flex items-start justify-between gap-3 border-b border-stone-800 shrink-0">
@@ -299,20 +320,36 @@ export default function StrengthHistoryModal({
               </svg>
             </div>
 
-            {/* Hover Tooltip Box if active */}
-            {hoveredEntryId && (() => {
-              const active = historyEntries.find(e => e.id === hoveredEntryId);
-              if (!active) return null;
-              return (
-                <div className="bg-stone-800 border border-stone-700 text-stone-100 p-2 rounded-lg text-xs space-y-0.5">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-amber-400">
-                    <span>{formatDate(active.timestamp)}</span>
-                    <span>Strength: {Math.round(active.strength)}%</span>
+            {/* Hover Tooltip / Status Footer (Fixed Height to prevent layout shift on hover) */}
+            <div className="h-10 border-t border-stone-800 pt-1.5 flex items-center justify-between text-xs">
+              {hoveredEntryId ? (() => {
+                const active = historyEntries.find(e => e.id === hoveredEntryId);
+                if (!active) return null;
+                return (
+                  <div className="w-full flex items-center justify-between gap-2 text-stone-100 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[10px] font-bold text-amber-400 font-mono shrink-0">
+                        {formatDate(active.timestamp)}
+                      </span>
+                      <p className="text-[10px] text-stone-300 font-sans truncate">
+                        {active.note || "Strength updated"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold font-mono text-amber-400 shrink-0">
+                      {Math.round(active.strength)}%
+                    </span>
                   </div>
-                  <p className="text-[10px] text-stone-300 font-sans">{active.note}</p>
+                );
+              })() : (
+                <div className="w-full flex items-center justify-between text-[10px] text-stone-400 font-mono">
+                  <span className="flex items-center gap-1.5">
+                    <Info className="w-3 h-3 text-amber-500/80" />
+                    <span>Hover over chart point or timeline item to inspect</span>
+                  </span>
+                  <span className="text-[9px] text-stone-500">{historyEntries.length} entries</span>
                 </div>
-              );
-            })()}
+              )}
+            </div>
           </div>
 
           {/* Chronological History Event Log */}
@@ -331,9 +368,9 @@ export default function StrengthHistoryModal({
                 return (
                   <div
                     key={entry.id}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition-all ${
+                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition-colors ${
                       hoveredEntryId === entry.id
-                        ? "bg-amber-50/50 border-amber-300 shadow-3xs"
+                        ? "bg-amber-50/60 border-amber-300 shadow-xs"
                         : "bg-white border-stone-200/80 hover:border-stone-300"
                     }`}
                     onMouseEnter={() => setHoveredEntryId(entry.id)}
@@ -386,7 +423,8 @@ export default function StrengthHistoryModal({
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>,
+    document.body
   );
 }
 
