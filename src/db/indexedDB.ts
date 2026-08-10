@@ -1,5 +1,4 @@
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
-import { DEFAULT_WORDS } from "../defaultWords";
 import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { sanitizeLlmConfig } from "../utils/llmHelpers";
 
@@ -262,8 +261,8 @@ function migrateLegacyDecks(): Word[] | null {
 }
 
 /**
- * Loads all words, falling back to a legacy localStorage migration and then to
- * DEFAULT_WORDS on a fresh install. An initialized-but-empty DB stays empty.
+ * Loads all words, falling back to a legacy localStorage migration or an empty
+ * array on a fresh install. An initialized-but-empty DB stays empty.
  */
 export async function getAllWordsFromDB(): Promise<Word[]> {
   let initialized = lsGet(LEGACY_KEYS.initialized) === "true";
@@ -282,18 +281,20 @@ export async function getAllWordsFromDB(): Promise<Word[]> {
       return words;
     }
 
-    // Previously initialized and intentionally emptied by the user.
-    if (initialized) return [];
+    // Previously initialized or fresh install: start empty.
+    if (!initialized) await markInitialized();
 
-    const migrated = migrateLegacyDecks() ?? DEFAULT_WORDS;
-    await saveAllWordsToDB(migrated);
+    const migrated = migrateLegacyDecks() ?? [];
+    if (migrated.length > 0) {
+      await saveAllWordsToDB(migrated);
+    }
     return migrated;
   } catch (err) {
     // Reads failed entirely (storage blocked, corrupt DB, upgrade blocked by
-    // another tab). Serve something usable rather than an empty app, but make
+    // another tab). Serve something usable rather than failing, but make
     // the cause visible instead of looking like a fresh install.
     console.error("Could not read words from IndexedDB; serving in-memory fallback:", err);
-    return initialized ? [] : DEFAULT_WORDS;
+    return [];
   }
 }
 

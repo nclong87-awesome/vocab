@@ -14,6 +14,7 @@ import {
   BarChart2,
   Zap,
   Layers,
+  RotateCcw,
 } from "lucide-react";
 import { LLMConfig } from "../types";
 import { 
@@ -21,6 +22,8 @@ import {
   ModelStatusItem, 
   ModelStatusIndicator,
   clearModelFailureLogs,
+  resetModelFullState,
+  resetAllModelStates,
   getPerformanceTierMeta,
   PerformanceTierNumber,
   isMetricStale,
@@ -40,6 +43,7 @@ export default function ModelStatusModal({
   const [modelStatuses, setModelStatuses] = useState<ModelStatusItem[]>([]);
   const [selectedLogsModel, setSelectedLogsModel] = useState<ModelStatusItem | null>(null);
   const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const refreshStatuses = () => {
     const list = getAllModelStatuses(llmConfig);
@@ -60,6 +64,20 @@ export default function ModelStatusModal({
     } else {
       onClose();
     }
+  };
+
+  const handleResetEverything = () => {
+    resetAllModelStates();
+    refreshStatuses();
+    setToastMessage("All model states, response times, success rates, logs, and locks reset!");
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleResetSingleModel = (provider: string, model: string) => {
+    resetModelFullState(provider, model);
+    refreshStatuses();
+    setToastMessage(`Reset state for model ${model}!`);
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
   useEffect(() => {
@@ -159,42 +177,75 @@ export default function ModelStatusModal({
         className="bg-white rounded-2xl border border-stone-200 shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Toast Feedback Notification Banner */}
+        {toastMessage && (
+          <div className="bg-emerald-600 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between gap-2 shadow-sm animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-200 shrink-0" />
+              <span>{toastMessage}</span>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setToastMessage(null)}
+              className="text-emerald-200 hover:text-white cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3 bg-stone-50/80">
+        <div className="px-5 py-3.5 border-b border-stone-200 flex items-center justify-between gap-2 bg-stone-50/80 shrink-0">
           {selectedLogsModel ? (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 min-w-0">
               <div>
-                <h2 className="text-base font-bold text-stone-900 leading-tight flex items-center gap-2">
+                <h2 className="text-base font-bold text-stone-900 leading-tight flex items-center gap-2 truncate">
                   <span>Failure Logs</span>
-                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-stone-200 text-stone-700">
+                  <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 truncate">
                     {selectedLogsModel.model}
                   </span>
                 </h2>
-                <p className="text-xs text-stone-500">
-                  {selectedLogsModel.providerName} • Showing up to 10 most recent failures
+                <p className="text-xs text-stone-500 truncate">
+                  {selectedLogsModel.providerName} • Up to 10 recent failures
                 </p>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
               <Activity className="w-5 h-5 text-amber-500 shrink-0" />
-              <div>
-                <h2 className="text-base font-bold text-stone-900 leading-tight">
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-stone-900 leading-tight truncate">
                   Model Status
                 </h2>
-                <p className="text-xs text-stone-500">Sorted fastest response first</p>
+                <p className="text-xs text-stone-500 truncate">Sorted fastest response first</p>
               </div>
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
-            title="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {!selectedLogsModel && (
+              <button
+                type="button"
+                onClick={handleResetEverything}
+                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200/90 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Reset all models' metrics, response times, failure logs, and locks"
+                id="reset-model-state-header-btn"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                <span className="hidden sm:inline">Reset All State</span>
+                <span className="sm:hidden">Reset All</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer shrink-0"
+              title="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* View 1: Failure Logs View */}
@@ -256,87 +307,66 @@ export default function ModelStatusModal({
         ) : (
           <div className="p-4 overflow-y-auto space-y-3 flex-1">
             {/* Tier Filter Tabs */}
-            <div className="flex items-center justify-between gap-2 pb-1 border-b border-stone-100 overflow-x-auto">
-              <div className="flex items-center gap-1.5 text-xs shrink-0">
-                <span className="text-stone-500 font-medium flex items-center gap-1 text-[11px] shrink-0">
-                  <Layers className="w-3.5 h-3.5 text-stone-400" />
-                  <span>Filter Tier:</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setTierFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                    tierFilter === 'all'
-                      ? "bg-stone-900 text-white shadow-2xs"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200/80"
-                  }`}
-                >
-                  All ({modelStatuses.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTierFilter(1)}
-                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                    tierFilter === 1
-                      ? "bg-emerald-700 text-white shadow-2xs"
-                      : "bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100"
-                  }`}
-                >
-                  Tier 1: Fast ({modelStatuses.filter(m => m.performanceTier === 1).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTierFilter(2)}
-                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                    tierFilter === 2
-                      ? "bg-amber-700 text-white shadow-2xs"
-                      : "bg-amber-50 text-amber-800 border border-amber-200/80 hover:bg-amber-100"
-                  }`}
-                >
-                  Tier 2: Balanced ({modelStatuses.filter(m => m.performanceTier === 2).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTierFilter(3)}
-                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                    tierFilter === 3
-                      ? "bg-stone-800 text-white shadow-2xs"
-                      : "bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200/80"
-                  }`}
-                >
-                  Tier 3 ({modelStatuses.filter(m => m.performanceTier === 3).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTierFilter(4)}
-                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                    tierFilter === 4
-                      ? "bg-orange-800 text-white shadow-2xs"
-                      : "bg-orange-50 text-orange-900 border border-orange-200 hover:bg-orange-100"
-                  }`}
-                >
-                  Tier 4: Slow ({modelStatuses.filter(m => m.performanceTier === 4).length})
-                </button>
-              </div>
-
-              {modelStatuses.some(m => m.isLocked || m.failureLogs.length > 0 || m.lastError) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    modelStatuses.forEach(m => {
-                      if (m.isLocked || m.failureLogs.length > 0 || m.lastError) {
-                        clearModelFailureLogs(m.provider, m.model);
-                      }
-                    });
-                    refreshStatuses();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer shrink-0 mr-1"
-                  title="Unlock and reset stats for all models"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Reset All</span>
-                </button>
-              )}
+            <div className="flex items-center gap-1.5 pb-2 border-b border-stone-100 overflow-x-auto no-scrollbar shrink-0 text-xs">
+              <span className="text-stone-500 font-medium flex items-center gap-1 text-[11px] shrink-0 mr-1">
+                <Layers className="w-3.5 h-3.5 text-stone-400" />
+                <span>Filter Tier:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setTierFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                  tierFilter === 'all'
+                    ? "bg-stone-900 text-white shadow-2xs"
+                    : "bg-stone-100 text-stone-600 hover:bg-stone-200/80"
+                }`}
+              >
+                All ({modelStatuses.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTierFilter(1)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                  tierFilter === 1
+                    ? "bg-emerald-700 text-white shadow-2xs"
+                    : "bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100"
+                }`}
+              >
+                Tier 1: Fast ({modelStatuses.filter(m => m.performanceTier === 1).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTierFilter(2)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                  tierFilter === 2
+                    ? "bg-amber-700 text-white shadow-2xs"
+                    : "bg-amber-50 text-amber-800 border border-amber-200/80 hover:bg-amber-100"
+                }`}
+              >
+                Tier 2: Balanced ({modelStatuses.filter(m => m.performanceTier === 2).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTierFilter(3)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                  tierFilter === 3
+                    ? "bg-stone-800 text-white shadow-2xs"
+                    : "bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200/80"
+                }`}
+              >
+                Tier 3 ({modelStatuses.filter(m => m.performanceTier === 3).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTierFilter(4)}
+                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                  tierFilter === 4
+                    ? "bg-orange-800 text-white shadow-2xs"
+                    : "bg-orange-50 text-orange-900 border border-orange-200 hover:bg-orange-100"
+                }`}
+              >
+                Tier 4: Slow ({modelStatuses.filter(m => m.performanceTier === 4).length})
+              </button>
             </div>
 
             {/* Model List Items */}
@@ -440,7 +470,7 @@ export default function ModelStatusModal({
                     </div>
                   </div>
 
-                  {/* Bottom Action Row: View Failure Logs Button & Reset Status Button */}
+                  {/* Bottom Action Row: View Failure Logs Button & Reset Model State Button */}
                   <div className="flex items-center justify-between pt-1.5 border-t border-stone-100/60 text-xs gap-2">
                     <button
                       type="button"
@@ -455,17 +485,15 @@ export default function ModelStatusModal({
                       <span>Failure Logs ({item.failureLogs.length})</span>
                     </button>
 
-                    {(item.isLocked || item.failureLogs.length > 0 || item.lastError) && (
-                      <button
-                        type="button"
-                        onClick={() => handleClearLogs(item.provider, item.model)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-800 hover:text-rose-900 transition-colors cursor-pointer animate-fade-in"
-                        title="Clear failure logs and unlock model"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Reset Status</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleResetSingleModel(item.provider, item.model)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border border-stone-200/90 hover:border-rose-300 bg-stone-50 hover:bg-rose-50 text-stone-700 hover:text-rose-800 transition-colors cursor-pointer"
+                      title="Reset metrics, response times, logs, and locks for this model"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-stone-400 group-hover:text-rose-500" />
+                      <span>Reset Model State</span>
+                    </button>
                   </div>
                 </div>
               );

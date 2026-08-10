@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { ChatMessage, LLMConfig } from "./types";
-import { DEFAULT_WORDS } from "./defaultWords";
 import { getSavedProvidersMap } from "./utils/llmHelpers";
 import { saveLLMConfigToDB } from "./db/indexedDB";
 import { stopSpeech, unlockAudioElement } from "./utils/ttsService";
@@ -326,7 +325,7 @@ export default function App() {
       }
     } catch (e) {
       console.error("IndexedDB load error:", e);
-      setWords(DEFAULT_WORDS);
+      setWords([]);
     } finally {
       setIsDataLoaded(true);
     }

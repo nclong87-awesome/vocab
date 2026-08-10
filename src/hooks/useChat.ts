@@ -333,10 +333,11 @@ export function useChat({
         {
           id: `sys-exists-${Date.now()}`,
           role: "assistant",
-          content: `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n- **Translation**: ${existingMatch.translation}\n- **Definition**: *${existingMatch.definition}*\n\nSkipped adding duplicate entry.`,
+          content: `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n- **Translation**: ${existingMatch.translation}\n- **Definition**: *${existingMatch.definition}*\n\nSkipped adding duplicate entry.\n\n👇 **Type another word below** to add it to your collection!`,
           timestamp: new Date().toISOString(),
         },
       ]);
+      setConversationalState("adding_word");
       return;
     }
 
@@ -373,11 +374,12 @@ export function useChat({
             {
               id: `sys-not-found-${Date.now()}`,
               role: "assistant",
-              content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.`,
+              content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.\n\n👇 **Type another word below** to try again!`,
               timestamp: new Date().toISOString(),
             },
           ];
         });
+        setConversationalState("adding_word");
         return;
       }
 
@@ -434,6 +436,7 @@ export function useChat({
             },
           ];
         });
+        setConversationalState("adding_word");
       } else {
         const sense = validSenses[0];
 
@@ -452,7 +455,7 @@ export function useChat({
               {
                 id: `sys-not-found-${Date.now()}`,
                 role: "assistant",
-                content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.`,
+                content: `⚠️ **No valid definition found for "${wordText}"**${hint ? ` with context *"${hint}"*` : ""}.\n\nThis entry was **not** added to your collection.\n\n👇 **Type another word below** to try again!`,
                 timestamp: new Date().toISOString(),
                 provider: data.provider,
                 model: data.model,
@@ -460,6 +463,7 @@ export function useChat({
               },
             ];
           });
+          setConversationalState("adding_word");
           return;
         }
 
@@ -476,7 +480,7 @@ export function useChat({
               {
                 id: `sys-exists-${Date.now()}`,
                 role: "assistant",
-                content: `ℹ️ **"${finalMatch.word}" is already in your vocabulary collection!**\n\nSkipped adding duplicate entry.`,
+                content: `ℹ️ **"${finalMatch.word}" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!`,
                 timestamp: new Date().toISOString(),
                 provider: data.provider,
                 model: data.model,
@@ -484,10 +488,12 @@ export function useChat({
               },
             ];
           });
+          setConversationalState("adding_word");
           return;
         }
 
-        const candidateWordObj = {
+        const newWordObj: Word = {
+          id: `conv-word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           word: targetWordStr,
           pronunciation: pronunciationVal,
           partOfSpeech: partOfSpeechVal,
@@ -497,32 +503,39 @@ export function useChat({
           exampleTranslation: exampleTranslationVal,
           category: categoryVal,
           context: contextVal,
+          learned: false,
+          starred: false,
+          createdAt: new Date().toISOString(),
+          lastReviewed: null,
+          strength: 0,
         };
+
+        setWords((prev) => {
+          const exists = prev.some((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
+          if (exists) return prev;
+          const updated = [newWordObj, ...prev];
+          saveAllWordsToDB(updated).catch((e) => console.error("IndexedDB add word save error:", e));
+          return updated;
+        });
 
         setChatMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== statusMsgId);
           return [
             ...filtered,
             {
-              id: `sys-add-candidate-${Date.now()}`,
+              id: `sys-added-word-${Date.now()}`,
               role: "assistant",
-              content: `💡 **Deduced Vocabulary Candidate for "${wordText}":**\n\n### **${targetWordStr}** \`${pronunciationVal}\`\n- **Translation**: ${translationVal} (${partOfSpeechVal})\n- **Definition**: *${definitionVal}*${
+              content: `🎉 **Successfully added "${targetWordStr}" to your collection!**\n\n### **${targetWordStr}** \`${pronunciationVal}\` (${partOfSpeechVal})\n- **Translation**: ${translationVal}\n- **Definition**: *${definitionVal}*${
                 exampleVal ? `\n- **Example**: "${exampleVal}"` : ""
-              }${exampleTranslationVal ? `\n- **Example Translation**: "${exampleTranslationVal}"` : ""}\n\n*Click below to confirm and save to your collection:*`,
+              }${exampleTranslationVal ? `\n- **Example Translation**: "${exampleTranslationVal}"` : ""}\n\n👇 **Type another word below** to translate and add it to your collection!`,
               timestamp: new Date().toISOString(),
               provider: data.provider,
               model: data.model,
               responseTimeMs: data.responseTimeMs,
-              suggestedActions: [
-                {
-                  label: `➕ Confirm & Add "${targetWordStr}" (${translationVal})`,
-                  action: "confirm_save_word",
-                  payload: candidateWordObj,
-                },
-              ],
             },
           ];
         });
+        setConversationalState("adding_word");
       }
     } catch (err: any) {
       console.error(err);
@@ -532,6 +545,7 @@ export function useChat({
       });
     } finally {
       setIsTyping(false);
+      setConversationalState("adding_word");
     }
   };
 
@@ -577,7 +591,31 @@ export function useChat({
     }
 
     if (conversationalState === "adding_word") {
-      setConversationalState("none");
+      const lower = text.trim().toLowerCase();
+      if (
+        lower === "exit" ||
+        lower === "cancel" ||
+        lower === "stop" ||
+        lower === "done" ||
+        lower === "quit" ||
+        lower === "no" ||
+        lower === "stop adding" ||
+        lower === "exit adding" ||
+        lower === "done adding"
+      ) {
+        setConversationalState("none");
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `sys-exit-adding-${Date.now()}`,
+            role: "assistant",
+            content: `👍 **Exited word adding mode.** You are back in normal AI chat mode!\n\nFeel free to ask me questions, practice grammar, or pick a topic below.`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
+
       await handleConversationalAddWord(text.trim(), undefined, configToUse);
       return;
     }
@@ -873,12 +911,13 @@ export function useChat({
       {
         id: `sys-batch-success-${Date.now()}`,
         role: "assistant",
-        content: `🎉 **Successfully added ${newWordsToAdd.length} new words to your collection!**\n\n- **Added**: ${newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", ")}${
+        content: `🎉 **Successfully added ${newWordsToAdd.length} new word(s) to your collection!**\n\n- **Added**: ${newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", ")}${
           skippedNames.length > 0 ? `\n- *Skipped duplicates*: ${skippedNames.join(", ")}` : ""
-        }`,
+        }\n\n👇 **Type another word below** to keep adding to your collection!`,
         timestamp: new Date().toISOString(),
       },
     ]);
+    setConversationalState("adding_word");
   };
 
   const handleSelectDefinition = async (word: string, senseIndex: number, translation: string) => {
@@ -895,11 +934,12 @@ export function useChat({
         {
           id: `sys-exists-${Date.now()}`,
           role: "assistant",
-          content: `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\nSkipped adding duplicate entry.`,
+          content: `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!`,
           timestamp: new Date().toISOString(),
         },
       ]);
       setPendingWordSenses(null);
+      setConversationalState("adding_word");
       return;
     }
 
@@ -958,13 +998,14 @@ export function useChat({
           {
             id: `sys-add-${Date.now()}`,
             role: "assistant",
-            content: `🎉 **Successfully added "${newWord.word}" to your collection!**\n\n- **Translation**: ${newWord.translation}\n- **Pronunciation**: \`${newWord.pronunciation}\`\n- **Definition**: *${newWord.definition}*\n- **Example**: "${newWord.example || ""}"\n- **Example Translation**: "${newWord.exampleTranslation || ""}"\n\nI've designed a custom visual card and added it to your collection! You can study it anytime in the **My Words** panel on the right.`,
+            content: `🎉 **Successfully added "${newWord.word}" to your collection!**\n\n- **Translation**: ${newWord.translation}\n- **Pronunciation**: \`${newWord.pronunciation}\`\n- **Definition**: *${newWord.definition}*\n${newWord.example ? `- **Example**: "${newWord.example}"\n` : ""}\n👇 **Type another word below** to keep adding to your collection!`,
             timestamp: new Date().toISOString(),
           },
         ];
       });
 
       setPendingWordSenses(null);
+      setConversationalState("adding_word");
     } catch (err: any) {
       console.error(err);
       setChatMessages((prev) => {
@@ -1166,7 +1207,7 @@ export function useChat({
 
   const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string) => {
     setConversationalState("none");
-    const overrideConfig = getVisionModelConfig();
+    const overrideConfig = imageDataUrl ? getVisionModelConfig() : undefined;
     const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
@@ -1296,8 +1337,7 @@ export function useChat({
     setChatMessages([promptMsg]);
   };
 
-  const handleConversationalFixGrammar = async (userText: string) => {
-    const overrideConfig = getVisionModelConfig();
+  const handleConversationalFixGrammar = async (userText: string, overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
     setIsTyping(true);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;

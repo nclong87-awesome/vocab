@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react";
 import { Word, UserStats } from "../types";
-import { DEFAULT_WORDS } from "../defaultWords";
 import { calculateNewStreak } from "../utils";
 import { 
   saveWordToDB, 
@@ -11,7 +10,7 @@ import {
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 
 export function useVocabulary() {
-  const [words, setWords] = useState<Word[]>(DEFAULT_WORDS);
+  const [words, setWords] = useState<Word[]>([]);
   const [stats, setStats] = useState<UserStats>({
     totalQuizzesTaken: 0,
     totalCorrectAnswers: 0,

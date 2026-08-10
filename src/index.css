@@ -60,12 +60,6 @@ main {
   background-color: #fff;
 }
 
-.word-card-actions {
-  position: absolute;
-  right: 10px;
-  bottom: 18px;
-}
-
 .flashcard-message-card {
   padding: 0;
 }

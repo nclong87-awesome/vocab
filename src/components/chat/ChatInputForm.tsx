@@ -94,7 +94,9 @@ export default function ChatInputForm({
           onChange={(e) => setInputText(e.target.value)}
           disabled={isTyping}
           placeholder={
-            selectedImage
+            conversationalState === "adding_word"
+              ? "Type another word or expression to add..."
+              : selectedImage
               ? "Add an optional focus note (e.g. 'Focus on food items') or press Enter to analyze..."
               : `Chat or paste an image (Ctrl+V) / pick photo to extract vocabulary...`
           }

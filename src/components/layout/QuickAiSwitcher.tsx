@@ -9,12 +9,13 @@ import {
   CheckCircle2, 
   Cpu,
   X,
-  Server
+  Server,
+  RotateCcw
 } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
-import { getLockedModels, isModelLocked, clearAllLocks } from "../../utils/autoModeManager";
+import { getLockedModels, isModelLocked, clearAllLocks, resetAllModelStates } from "../../utils/autoModeManager";
 
 interface QuickAiSwitcherProps {
   llmConfig: LLMConfig;
@@ -368,8 +369,22 @@ export default function QuickAiSwitcher({
               })}
             </div>
 
-            {/* Footer Action Button */}
-            <div className="p-3 bg-stone-50/90 border-t border-stone-200/80 text-center">
+            {/* Footer Action Buttons */}
+            <div className="p-3 bg-stone-50/90 border-t border-stone-200/80 space-y-2 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  resetAllModelStates();
+                  setToastMessage("All model states & metrics reset!");
+                  setTimeout(() => setToastMessage(null), 2500);
+                }}
+                className="w-full py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-800 border border-rose-200 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                title="Reset all models' response times, metrics, failure logs, and locks"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                <span>Reset All Model States</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => {

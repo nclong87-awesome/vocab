@@ -23,6 +23,7 @@ import {
   Trash2,
   FileJson,
   CheckCircle2,
+  RotateCcw,
   Zap,
   BookmarkCheck,
   ExternalLink,
@@ -40,7 +41,8 @@ import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } fro
 import { 
   getLockedModels,
   unlockModel,
-  clearAllLocks
+  clearAllLocks,
+  resetAllModelStates,
 } from "../utils/autoModeManager";
 import { testLlmConnection } from "../services/llmClientService";
 import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage, waitForVoices } from "../utils/ttsService";
@@ -702,6 +704,21 @@ export default function SettingsView({
               >
                 <Gauge className="w-3.5 h-3.5 text-amber-400" />
                 <span>Model Statuses</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  resetAllModelStates();
+                  setRefreshCount(prev => prev + 1);
+                  setLlmTestResult({ success: true, msg: "All model states, metrics, failure logs, and locks have been completely reset!" });
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Reset all model states, performance metrics, failure logs, and locks"
+                id="reset-model-state-settings-btn"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                <span>Reset All Model States</span>
               </button>
 
               {Object.keys(lockedModels).length > 0 && (

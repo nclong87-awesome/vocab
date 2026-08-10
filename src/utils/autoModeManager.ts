@@ -123,6 +123,23 @@ export function clearAllLocks(): void {
   }
 }
 
+/**
+ * Resets all model states, including locks, failure logs, error messages, 
+ * total calls, success rates, response times, and internal rotation counters.
+ */
+export function resetAllModelStates(): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(METRICS_STORAGE_KEY);
+    } catch (e) {
+      console.error("Error clearing model storage keys from localStorage:", e);
+    }
+  }
+  autoRotationIndex = 0;
+  explorationCallCounter = 0;
+}
+
 export interface AutoCandidate {
   provider: LLMProvider;
   model: string;
@@ -356,6 +373,17 @@ export function clearModelFailureLogs(provider: string, model: string): void {
   if (metrics[key]) {
     metrics[key].failureLogs = [];
     metrics[key].lastError = null;
+    saveModelMetricsMap(metrics);
+  }
+  unlockModel(provider, model);
+}
+
+export function resetModelFullState(provider: string, model: string): void {
+  if (!provider || !model) return;
+  const key = `${provider}:${model}`;
+  const metrics = getModelMetricsMap();
+  if (metrics[key]) {
+    delete metrics[key];
     saveModelMetricsMap(metrics);
   }
   unlockModel(provider, model);

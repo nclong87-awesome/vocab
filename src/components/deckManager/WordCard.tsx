@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History } from "lucide-react";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History } from "lucide-react";
 import { Word } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 
@@ -24,8 +24,8 @@ export default function WordCard({
   handleRegenerateWord,
   regeneratingWordId,
   regeneratedSuccessWordId,
-  onToggleStar,
-  onToggleLearned,
+  onToggleStar: _onToggleStar,
+  onToggleLearned: _onToggleLearned,
   onDeleteWord,
   brokenImageIds: _brokenImageIds,
   handleImageError: _handleImageError,
@@ -55,57 +55,30 @@ export default function WordCard({
         } hover:-translate-y-0.5 hover:border-stone-350 hover:shadow-xs group relative`}
       >
         {/* Card Header & Controls */}
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-3 border-b border-stone-100 pb-3">
-            <div className="space-y-1.5 min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-base font-bold text-stone-900 tracking-tight leading-snug truncate">{word.word}</h4>
-                <button
-                  type="button"
-                  onClick={() => speakWord(word.word)}
-                  className="p-1.5 rounded-md text-stone-500 hover:text-stone-950 hover:bg-stone-50 border border-stone-200/60 bg-white transition-all cursor-pointer shadow-3xs"
-                  title="Listen Pronunciation"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {word.pronunciation && (
-                  <span className="text-[10px] font-mono text-stone-500 bg-stone-50 border border-stone-150 px-2 py-0.5 rounded">
-                    {word.pronunciation}
-                  </span>
-                )}
-                <span className="text-[10px] font-bold uppercase font-mono bg-stone-900 text-white px-2 py-0.5 rounded tracking-wider">
-                  {word.partOfSpeech || "noun"}
-                </span>
-                {word.category && (
-                  <span className="text-[10px] font-bold bg-amber-50 text-amber-850 border border-amber-200/50 px-2 py-0.5 rounded flex items-center gap-1">
-                    <span>🏷️</span>
-                    <span>{word.category}</span>
-                  </span>
-                )}
-              </div>
+        <div className="space-y-2.5 border-b border-stone-100 pb-3">
+          {/* Top Row: Word Title & Action Bar */}
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+              <h4 className="text-lg font-bold text-stone-900 tracking-tight leading-snug break-words max-w-full">{word.word}</h4>
             </div>
 
             {/* Action Buttons Bar */}
-            <div className="word-card-actions flex items-center gap-1">
+            <div className="flex items-center gap-0.5 bg-stone-50/80 p-0.5 border border-stone-200/80 rounded-lg shrink-0 shadow-2xs">
               <button
                 type="button"
-                onClick={() => setShowHistoryModal(true)}
-                className="p-1.5 rounded-md text-amber-700 hover:text-amber-950 bg-amber-50/80 border border-amber-200/60 hover:bg-amber-100 transition-all cursor-pointer"
-                title="View Strength History"
+                onClick={() => speakWord(word.word)}
+                className="p-1.5 rounded-md text-stone-500 hover:text-stone-950 hover:bg-stone-100 transition-all cursor-pointer"
+                title="Listen Pronunciation"
               >
-                <History className="w-3.5 h-3.5 text-amber-600" />
+                <Volume2 className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onClick={() => onToggleStar(word.id)}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                  word.starred ? "text-amber-500 fill-amber-500 bg-white shadow-3xs" : "text-stone-400 hover:text-stone-700"
-                }`}
-                title={word.starred ? "Unstar" : "Star"}
+                onClick={() => setShowHistoryModal(true)}
+                className="p-1.5 rounded-md text-amber-700 hover:text-amber-950 hover:bg-amber-100/80 transition-all cursor-pointer"
+                title="View Strength History"
               >
-                <Star className="w-3.5 h-3.5 fill-current" />
+                <History className="w-3.5 h-3.5 text-amber-600" />
               </button>
               <button
                 type="button"
@@ -118,16 +91,6 @@ export default function WordCard({
               </button>
               <button
                 type="button"
-                onClick={() => onToggleLearned(word.id)}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                  word.learned ? "text-emerald-600 bg-white shadow-3xs" : "text-stone-400 hover:text-stone-700"
-                }`}
-                title={word.learned ? "Mastered" : "Mark Mastered"}
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
                 onClick={() => onDeleteWord(word.id)}
                 className="p-1.5 rounded-md text-stone-400 hover:text-red-600 hover:bg-white transition-all cursor-pointer"
                 title="Delete Entry"
@@ -137,6 +100,27 @@ export default function WordCard({
             </div>
           </div>
 
+          {/* Meta Tags Row: Pronunciation, Part of Speech, Category */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {word.pronunciation && (
+              <span className="text-[10px] font-mono text-stone-600 bg-stone-100/80 border border-stone-200/80 px-2 py-0.5 rounded">
+                {word.pronunciation}
+              </span>
+            )}
+            <span className="text-[10px] font-bold uppercase font-mono bg-stone-900 text-white px-2 py-0.5 rounded tracking-wider">
+              {word.partOfSpeech || "noun"}
+            </span>
+            {word.category && (
+              <span className="text-[10px] font-medium bg-amber-50 text-amber-900 border border-amber-200/70 px-2 py-0.5 rounded flex items-center gap-1">
+                <span>🏷️</span>
+                <span>{word.category}</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Card Body Content */}
+        <div className="space-y-3 flex-1">
           {/* Success message badge after regeneration */}
           {regeneratedSuccessWordId === word.id && (
             <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1.5 rounded-lg">
@@ -180,39 +164,40 @@ export default function WordCard({
           )}
         </div>
 
-        {/* Card Footer Status Pill */}
-        <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-[11px]">
-          <div className="flex items-center gap-3">
-            <span className={`font-semibold px-2.5 py-0.5 rounded-full text-[10px] flex items-center gap-1.5 ${
-              word.learned 
-                ? "bg-emerald-50 text-emerald-800 border border-emerald-200/60" 
-                : "bg-stone-100 text-stone-600 border border-stone-200/60"
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${word.learned ? "bg-emerald-500" : "bg-stone-450"}`} />
-              {word.learned ? "Mastered" : "Learning"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowHistoryModal(true)}
-              className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-              title={`Memory Strength: ${word.strength || 0}%. Click for strength history.`}
-            >
-              <div className="h-1.5 w-12 bg-stone-100 border border-stone-150 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-500 ${
-                    (word.strength || 0) >= 80 ? 'bg-emerald-500' : 
-                    (word.strength || 0) >= 40 ? 'bg-amber-400' : 
-                    'bg-rose-400'
-                  }`} 
-                  style={{ width: `${Math.max(0, Math.min(100, word.strength || 0))}%` }}
-                />
-              </div>
-              <span className="text-[9px] font-bold text-stone-400">{Math.round(word.strength || 0)}%</span>
-            </button>
-          </div>
+        {/* Card Footer Status & Memory Strength */}
+        <div className="pt-3 border-t border-stone-100 flex items-center gap-2 text-[11px]">
+          <span className={`shrink-0 font-semibold px-2.5 py-1 rounded-full text-[10px] flex items-center gap-1.5 ${
+            word.learned 
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200/70" 
+              : "bg-amber-50/80 text-amber-900 border border-amber-200/70"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${word.learned ? "bg-emerald-500" : "bg-amber-500"}`} />
+            {word.learned ? "Mastered" : "Learning"}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setShowHistoryModal(true)}
+            className="flex-1 min-w-0 flex items-center justify-between gap-2 cursor-pointer hover:bg-stone-50 px-2.5 py-1 rounded-md border border-stone-200/70 transition-colors bg-white shadow-2xs"
+            title={`Memory Strength: ${word.strength || 0}%. Click for strength history.`}
+          >
+            <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider shrink-0">Strength</span>
+            <div className="h-1.5 flex-1 min-w-[2rem] bg-stone-150 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 ${
+                  (word.strength || 0) >= 80 ? 'bg-emerald-500' : 
+                  (word.strength || 0) >= 40 ? 'bg-amber-500' : 
+                  'bg-rose-450'
+                }`} 
+                style={{ width: `${Math.max(0, Math.min(100, word.strength || 0))}%` }}
+              />
+            </div>
+            <span className="text-[9px] font-mono font-bold text-stone-700 shrink-0">{Math.round(word.strength || 0)}%</span>
+          </button>
+
           {word.starred && (
-            <span className="text-amber-600 font-bold flex items-center gap-1 text-[10px] uppercase tracking-wide">
-              ★ Starred
+            <span className="shrink-0 text-amber-700 font-bold flex items-center gap-1 text-[10px] uppercase tracking-wide bg-amber-50 border border-amber-200/70 px-2 py-1 rounded-md">
+              ★
             </span>
           )}
         </div>
