@@ -103,7 +103,7 @@ export function getGistEndpointAndHeaders(token?: string, gistId?: string) {
 
   const baseUrl = isDirectGitHubPat
     ? "https://api.github.com/gists"
-    : isStaticHost() ? "/gist" : "/api/gist";
+    : isStaticHost() ? "https://storage.nclong87.workers.dev/gists" : "/api/gist";
 
   const url = gistId ? `${baseUrl}/${gistId}` : baseUrl;
 
