@@ -4,42 +4,64 @@ import { Word, StrengthHistoryEntry } from "../types";
  * Gets or synthesizes a clean, chronological strength history for a word.
  * If the word lacks history, creates a single initial creation checkpoint,
  * and a review entry only if the word has actually been reviewed later.
+ * Also appends current memory decay entry if strength is lower than the last recorded event.
  */
 export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] {
+  let history: StrengthHistoryEntry[] = [];
+
   if (word.strengthHistory && word.strengthHistory.length > 0) {
-    return [...word.strengthHistory].sort(
+    history = [...word.strengthHistory].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
+  } else {
+    // Synthesize history if none exists yet
+    const createdAt = word.createdAt || new Date().toISOString();
+
+    // 1. Single initial creation entry
+    const initialStrength = Math.max(0, Math.min(30, (word.strength || 0) > 50 ? 20 : 0));
+    history.push({
+      id: `hist-init-${word.id}`,
+      timestamp: createdAt,
+      strength: initialStrength,
+      delta: initialStrength,
+      reason: "created",
+      note: "Added to vocabulary collection"
+    });
+
+    // 2. Add review event ONLY if word was actually reviewed/practiced later
+    if (word.lastReviewed) {
+      const reviewDate = new Date(word.lastReviewed);
+      const createdDate = new Date(createdAt);
+      if (!isNaN(reviewDate.getTime()) && reviewDate.getTime() > createdDate.getTime() + 1000) {
+        const currentStrength = word.strength || 0;
+        history.push({
+          id: `hist-review-${word.id}`,
+          timestamp: word.lastReviewed,
+          strength: currentStrength,
+          delta: currentStrength - initialStrength,
+          reason: word.learned ? "mastered" : currentStrength > 50 ? "quiz_correct" : "manual_adjust",
+          note: word.learned ? "Marked as mastered" : `Practice review (Strength: ${Math.round(currentStrength)}%)`
+        });
+      }
+    }
   }
 
-  // Synthesize history if none exists yet
-  const createdAt = word.createdAt || new Date().toISOString();
-  const history: StrengthHistoryEntry[] = [];
+  // 3. Append memory decay entry if current strength is lower than last recorded entry
+  const currentStrength = Math.max(0, Math.min(100, Math.round(word.strength ?? 0)));
+  const lastEntry = history[history.length - 1];
 
-  // 1. Single initial creation entry
-  const initialStrength = Math.max(0, Math.min(30, (word.strength || 0) > 50 ? 20 : 0));
-  history.push({
-    id: `hist-init-${word.id}`,
-    timestamp: createdAt,
-    strength: initialStrength,
-    delta: initialStrength,
-    reason: "created",
-    note: "Added to vocabulary collection"
-  });
-
-  // 2. Add review event ONLY if word was actually reviewed/practiced later
-  if (word.lastReviewed) {
-    const reviewDate = new Date(word.lastReviewed);
-    const createdDate = new Date(createdAt);
-    if (!isNaN(reviewDate.getTime()) && reviewDate.getTime() > createdDate.getTime() + 1000) {
-      const currentStrength = word.strength || 0;
+  if (lastEntry && currentStrength < lastEntry.strength) {
+    const delta = currentStrength - lastEntry.strength;
+    const nowIso = new Date().toISOString();
+    // Prevent duplicate decay entries if last entry is already at the same strength
+    if (lastEntry.reason !== "memory_decay" || lastEntry.strength !== currentStrength) {
       history.push({
-        id: `hist-review-${word.id}`,
-        timestamp: word.lastReviewed,
+        id: `hist-decay-${word.id}-${Date.now()}`,
+        timestamp: nowIso,
         strength: currentStrength,
-        delta: currentStrength - initialStrength,
-        reason: word.learned ? "mastered" : currentStrength > 50 ? "quiz_correct" : "manual_adjust",
-        note: word.learned ? "Marked as mastered" : `Practice review (Strength: ${Math.round(currentStrength)}%)`
+        delta,
+        reason: "memory_decay",
+        note: `Memory strength decayed over time (${delta}% at -10%/day)`
       });
     }
   }
@@ -99,7 +121,8 @@ export function recordStrengthHistory(
     ...word,
     strength: boundedStrength,
     learned: boundedStrength >= 80 ? true : boundedStrength === 0 ? false : word.learned,
-    lastReviewed: nowIso,
+    // Keep original practice date if reason is memory_decay, otherwise set lastReviewed to now
+    lastReviewed: reason === "memory_decay" ? word.lastReviewed : nowIso,
     strengthHistory: updatedHistory
   };
 }

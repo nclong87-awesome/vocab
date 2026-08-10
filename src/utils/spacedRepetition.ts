@@ -1,4 +1,5 @@
 import { Word } from "../types";
+import { recordStrengthHistory } from "./strengthHistoryHelpers";
 
 /**
  * Calculates hours elapsed since the word was last reviewed or created.
@@ -104,12 +105,15 @@ export function getDaysSinceLastReview(word: Word, now: Date = new Date()): numb
 /**
  * Evaluates memory decay based on spaced repetition principles.
  * Returns the recalculated strength (0 to 100) and learned flag for a word.
+ * Rule: Starting from the last practice time (lastReviewed/createdAt), strength decreases
+ * by 10 points per day elapsed (1 day = -10 points).
  */
 export function calculateDecayedWordStrength(word: Word, now: Date = new Date()): {
   newStrength: number;
   newLearned: boolean;
   hasDecayed: boolean;
   daysSinceReview: number;
+  decayAmount: number;
 } {
   const daysSinceReview = getDaysSinceLastReview(word, now);
   const currentStrength = word.strength ?? 0;
@@ -119,12 +123,13 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
       newStrength: currentStrength,
       newLearned: word.learned,
       hasDecayed: false,
-      daysSinceReview: 0
+      daysSinceReview: 0,
+      decayAmount: 0
     };
   }
 
-  // Decay 2 points per day since review
-  const decayAmount = daysSinceReview * 2;
+  // Decay 10 points per day since last review/practice (1 day = -10 points)
+  const decayAmount = daysSinceReview * 10;
   const newStrength = Math.max(0, currentStrength - decayAmount);
 
   // A word is considered fully learned only if strength is >= 80
@@ -135,7 +140,8 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
     newStrength,
     newLearned,
     hasDecayed,
-    daysSinceReview
+    daysSinceReview,
+    decayAmount
   };
 }
 
@@ -149,14 +155,11 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
   let decayedCount = 0;
 
   const updatedWords = words.map(word => {
-    const { newStrength, newLearned, hasDecayed } = calculateDecayedWordStrength(word, now);
+    const { newStrength, hasDecayed, daysSinceReview, decayAmount } = calculateDecayedWordStrength(word, now);
     if (hasDecayed) {
       decayedCount++;
-      return {
-        ...word,
-        strength: newStrength,
-        learned: newLearned
-      };
+      const note = `Memory decayed by -${decayAmount}% (${daysSinceReview} day${daysSinceReview > 1 ? 's' : ''} since last practice at -10%/day)`;
+      return recordStrengthHistory(word, newStrength, "memory_decay", note);
     }
     return word;
   });

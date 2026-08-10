@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Word } from "../../types";
 import { getEffectiveStrengthHistory } from "../../utils/strengthHistoryHelpers";
+import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
 
 interface StrengthHistoryModalProps {
   word: Word;
@@ -38,6 +39,8 @@ export default function StrengthHistoryModal({
 
   const historyEntries = getEffectiveStrengthHistory(word);
   const currentStrength = word.strength ?? 0;
+  const daysSincePractice = getDaysSinceLastReview(word);
+  const estimatedDecay = daysSincePractice * 10;
   
   // Calculate peak and lowest strength from history
   const strengths = historyEntries.map(e => e.strength);
@@ -183,25 +186,31 @@ export default function StrengthHistoryModal({
             </div>
 
             <div className="bg-stone-50 border border-stone-200/80 p-2.5 sm:p-3 rounded-xl space-y-0.5">
-              <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Peak</span>
+              <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Last Practiced</span>
               <div className="flex items-baseline gap-1">
-                <span className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">{Math.round(peakStrength)}%</span>
-                <Award className="w-3 h-3 text-amber-500" />
+                <span className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
+                  {daysSincePractice === 0 ? "Today" : `${daysSincePractice}d ago`}
+                </span>
+                {daysSincePractice > 0 && (
+                  <span className="text-[9px] font-bold text-rose-600">(-{estimatedDecay}%)</span>
+                )}
               </div>
             </div>
 
             <div className="bg-stone-50 border border-stone-200/80 p-2.5 sm:p-3 rounded-xl space-y-0.5">
-              <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Lowest</span>
+              <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Peak / Lowest</span>
               <div className="flex items-baseline gap-1">
-                <span className="text-base sm:text-lg font-bold text-stone-700 tracking-tight">{Math.round(lowestStrength)}%</span>
+                <span className="text-sm sm:text-base font-bold text-stone-900 tracking-tight">{Math.round(peakStrength)}%</span>
+                <span className="text-xs text-stone-400">/</span>
+                <span className="text-xs font-bold text-stone-600">{Math.round(lowestStrength)}%</span>
               </div>
             </div>
 
             <div className="bg-stone-50 border border-stone-200/80 p-2.5 sm:p-3 rounded-xl space-y-0.5">
-              <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Reviews</span>
+              <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">History Events</span>
               <div className="flex items-baseline gap-1">
                 <span className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">{historyEntries.length}</span>
-                <span className="text-[9px] font-semibold text-stone-400">events</span>
+                <span className="text-[9px] font-semibold text-stone-400">entries</span>
               </div>
             </div>
           </div>
@@ -413,7 +422,7 @@ export default function StrengthHistoryModal({
         <div className="bg-stone-50 border-t border-stone-200 p-3 sm:p-4 flex items-center justify-between text-xs text-stone-500 shrink-0">
           <div className="flex items-center gap-1 text-[10px] sm:text-[11px]">
             <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="line-clamp-1">Spaced repetition updates strength after practice quizzes.</span>
+            <span className="line-clamp-1">Strength decreases by 10 points per day without practice (1 day = -10 points). Practicing in quizzes or flashcards restores strength.</span>
           </div>
           <button
             onClick={onClose}
