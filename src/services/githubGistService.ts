@@ -2,7 +2,110 @@ import { sanitizeDataForCloudSync, deduplicateDeletedWords } from "../utils/clou
 import { IndexedDBExportData } from "../db/indexedDB";
 import { fetchWithTimeout } from "../utils";
 
-export const syncToGist = async (token: string, data: string, gistId?: string): Promise<string> => {
+export interface RateLimitCheckResult {
+  allowed: boolean;
+  waitSeconds?: number;
+  reason?: string;
+}
+
+export interface GistSyncOptions {
+  isUserAction?: boolean;
+}
+
+const GIST_REQUEST_LOG_KEY = "gist_api_request_log";
+const LAST_GIST_CALL_KEY = "last_gist_api_call_time";
+
+/**
+ * Checks if a Gist API request is allowed according to local-storage rate limit guard.
+ */
+export function checkGistRateLimit(options: GistSyncOptions = {}): RateLimitCheckResult {
+  const isUserAction = options.isUserAction ?? true;
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  const maxRequestsPerWindow = 8; // Maximum 8 Gist requests per minute
+  const minIntervalUserMs = 3000; // Minimum 3s between manual user syncs
+  const minIntervalBackgroundMs = 15000; // Minimum 15s between background sync checks
+
+  let log: number[] = [];
+  try {
+    const raw = localStorage.getItem(GIST_REQUEST_LOG_KEY);
+    if (raw) {
+      log = JSON.parse(raw);
+    }
+  } catch {
+    log = [];
+  }
+
+  // Filter log to keep only timestamps within the last 60 seconds
+  log = log.filter((ts) => typeof ts === "number" && now - ts < windowMs);
+
+  const lastTs = log.length > 0 ? Math.max(...log) : 0;
+  const timeSinceLast = now - lastTs;
+
+  const minInterval = isUserAction ? minIntervalUserMs : minIntervalBackgroundMs;
+
+  if (lastTs > 0 && timeSinceLast < minInterval) {
+    const waitSeconds = Math.ceil((minInterval - timeSinceLast) / 1000);
+    return {
+      allowed: false,
+      waitSeconds,
+      reason: `Rate limit guard: Please wait ${waitSeconds}s before sending another request to GitHub Gist.`
+    };
+  }
+
+  if (log.length >= maxRequestsPerWindow) {
+    const oldestTs = Math.min(...log);
+    const waitSeconds = Math.ceil((windowMs - (now - oldestTs)) / 1000);
+    return {
+      allowed: false,
+      waitSeconds,
+      reason: `Rate limit guard: Maximum ${maxRequestsPerWindow} requests per minute reached. Please wait ${waitSeconds}s.`
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Enforces rate limit check and records request timestamp in local-storage.
+ */
+export function enforceAndRecordGistRateLimit(options: GistSyncOptions = {}): void {
+  const check = checkGistRateLimit(options);
+  if (!check.allowed) {
+    throw new Error(check.reason || "Rate limit guard: Request blocked to prevent excess requests to GitHub Gist.");
+  }
+
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  let log: number[] = [];
+  try {
+    const raw = localStorage.getItem(GIST_REQUEST_LOG_KEY);
+    if (raw) {
+      log = JSON.parse(raw);
+    }
+  } catch {
+    log = [];
+  }
+
+  log = log.filter((ts) => typeof ts === "number" && now - ts < windowMs);
+  log.push(now);
+
+  try {
+    localStorage.setItem(GIST_REQUEST_LOG_KEY, JSON.stringify(log));
+    localStorage.setItem(LAST_GIST_CALL_KEY, String(now));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+export const syncToGist = async (
+  token: string, 
+  data: string, 
+  gistId?: string,
+  options: GistSyncOptions = { isUserAction: true }
+): Promise<string> => {
+  enforceAndRecordGistRateLimit(options);
+
   let filesToUpdate: Record<string, any> = {};
 
   try {
@@ -105,7 +208,13 @@ export const syncToGist = async (token: string, data: string, gistId?: string): 
   return result.id;
 };
 
-export const syncFromGist = async (token: string, gistId: string): Promise<any> => {
+export const syncFromGist = async (
+  token: string, 
+  gistId: string, 
+  options: GistSyncOptions = { isUserAction: true }
+): Promise<any> => {
+  enforceAndRecordGistRateLimit(options);
+
   const response = await fetchWithTimeout(`https://api.github.com/gists/${gistId}`, {
     method: 'GET',
     headers: {

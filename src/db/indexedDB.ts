@@ -169,8 +169,18 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Transaction primitives                                                     */
+/* Transaction primitives & Notifications                                     */
 /* -------------------------------------------------------------------------- */
+
+function notifyLocalDBUpdated(): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-db-updated"));
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Resolves when the whole transaction commits, so writes are durable. */
 function txDone(tx: IDBTransaction): Promise<void> {
@@ -383,6 +393,7 @@ export async function saveAllWordsToDB(words: Word[]): Promise<void> {
 
     await withStores(["words"], "readwrite", (tx) => replaceAll(tx, "words", words));
     await markInitialized();
+    notifyLocalDBUpdated();
   } catch (err) {
     console.error("Error saving words to IndexedDB:", err);
   }
@@ -394,6 +405,7 @@ export async function saveWordToDB(word: Word): Promise<void> {
     await withStores(["words"], "readwrite", (tx) => {
       tx.objectStore(STORES.words).put(word);
     });
+    notifyLocalDBUpdated();
   } catch (err) {
     console.error("Error saving word to IndexedDB:", err);
   }
@@ -407,6 +419,7 @@ export async function saveWordsToDB(words: readonly Word[]): Promise<void> {
       const store = tx.objectStore(STORES.words);
       for (let i = 0; i < words.length; i++) store.put(words[i]);
     });
+    notifyLocalDBUpdated();
   } catch (err) {
     console.error("Error saving words to IndexedDB:", err);
   }
@@ -419,6 +432,7 @@ export async function deleteWordFromDB(wordId: string, wordText?: string): Promi
       tx.objectStore(STORES.words).delete(wordId);
     });
     await recordDeletedWordsInDB([{ id: wordId, word: wordText || "" }]);
+    notifyLocalDBUpdated();
   } catch (err) {
     console.error("Error deleting word from IndexedDB:", err);
   }
@@ -469,6 +483,7 @@ export async function saveStatsToDB(stats: UserStats): Promise<void> {
   try {
     const { totalWordsMastered, totalWordsStudied, ...cleanStats } = stats as any;
     await writeRecordData("stats", KEYS.stats, cleanStats);
+    notifyLocalDBUpdated();
   } catch (err) {
     console.error("Error saving stats to IndexedDB:", err);
   }

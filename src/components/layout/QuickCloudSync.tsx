@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { 
   Cloud, 
   RefreshCw, 
@@ -19,6 +19,8 @@ interface QuickCloudSyncProps {
 export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCloudSyncProps) {
   const [isCheckingSync, setIsCheckingSync] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"unconfigured" | "in-sync" | "has-changes">("unconfigured");
+  const [pendingCount, setPendingCount] = useState<number>(0);
   
   // Toast Notification state
   const [syncToast, setSyncToast] = useState<{
@@ -42,6 +44,105 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     }, duration);
   };
 
+  // Perform quiet background sync check without triggering toast messages
+  const performQuietBackgroundCheck = useCallback(async (token: string, gistId: string) => {
+    try {
+      setIsCheckingSync(true);
+      const localData = await exportIndexedDBDatabase();
+      const remoteData = await syncFromGist(token, gistId, { isUserAction: false });
+
+      const localWords = localData.stores?.words || [];
+      const remoteWords = remoteData.stores?.words || [];
+
+      if (localWords.length === 0 && remoteWords.length > 0) {
+        setSyncStatus("has-changes");
+        setPendingCount(remoteWords.length);
+        return;
+      }
+
+      const calculatedMerge = autoMergeLocalAndRemote(localData, remoteData);
+      if (calculatedMerge.hasChanges) {
+        setSyncStatus("has-changes");
+        const count =
+          calculatedMerge.diffDetails.newLocalWords.length +
+          calculatedMerge.diffDetails.newRemoteWords.length +
+          calculatedMerge.diffDetails.deletedWordsToSync.length +
+          calculatedMerge.diffDetails.updatedWords.length +
+          (calculatedMerge.diffDetails.statsChanged ? 1 : 0);
+        setPendingCount(count);
+      } else {
+        setSyncStatus("in-sync");
+        setPendingCount(0);
+        localStorage.setItem("last_gist_sync_check", String(Date.now()));
+      }
+    } catch (e) {
+      console.warn("Background cloud sync check skipped or failed:", e);
+    } finally {
+      setIsCheckingSync(false);
+    }
+  }, []);
+
+  // Check sync status on app launch / mount
+  useEffect(() => {
+    const token = localStorage.getItem("github_gist_token") || "";
+    const gistId = localStorage.getItem("github_gist_id") || "";
+
+    if (!token) {
+      setSyncStatus("unconfigured");
+      return;
+    }
+
+    if (!gistId) {
+      setSyncStatus("has-changes");
+      return;
+    }
+
+    // Schedule background check 1.2s after mount so initial UI renders smoothly
+    const timer = setTimeout(() => {
+      performQuietBackgroundCheck(token, gistId);
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [performQuietBackgroundCheck]);
+
+  // Listen to local database updates (e.g. adding words, taking quizzes) to immediately mark unsynced changes
+  useEffect(() => {
+    const handleDBUpdate = () => {
+      const token = localStorage.getItem("github_gist_token") || "";
+      if (token) {
+        setSyncStatus("has-changes");
+      }
+    };
+
+    window.addEventListener("vocab-db-updated", handleDBUpdate);
+    return () => {
+      window.removeEventListener("vocab-db-updated", handleDBUpdate);
+    };
+  }, []);
+
+  // Listen to tab focus (visibility change) for throttled background recheck (e.g. if 5+ minutes passed)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        const token = localStorage.getItem("github_gist_token") || "";
+        const gistId = localStorage.getItem("github_gist_id") || "";
+        if (!token || !gistId) return;
+
+        const lastCheck = Number(localStorage.getItem("last_gist_sync_check") || "0");
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (Date.now() - lastCheck > fiveMinutes) {
+          performQuietBackgroundCheck(token, gistId);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [performQuietBackgroundCheck]);
+
   // Quick Sync Button Handler
   const handleTriggerSync = async () => {
     const token = localStorage.getItem("github_gist_token") || "";
@@ -64,6 +165,9 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         const jsonString = JSON.stringify(sanitizeDataForCloudSync(localData));
         const newGistId = await syncToGist(token, jsonString);
         localStorage.setItem("github_gist_id", newGistId);
+        setSyncStatus("in-sync");
+        setPendingCount(0);
+        localStorage.setItem("last_gist_sync_check", String(Date.now()));
         showToast("success", "Created new GitHub Gist backup & synced cloud!");
         return;
       }
@@ -81,6 +185,9 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         if (onReloadData) {
           await onReloadData();
         }
+        setSyncStatus("in-sync");
+        setPendingCount(0);
+        localStorage.setItem("last_gist_sync_check", String(Date.now()));
         showToast("success", "Local database restored from cloud backup!");
         setTimeout(() => {
           window.location.reload();
@@ -92,6 +199,9 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       const calculatedMerge = autoMergeLocalAndRemote(localData, remoteData);
 
       if (!calculatedMerge.hasChanges) {
+        setSyncStatus("in-sync");
+        setPendingCount(0);
+        localStorage.setItem("last_gist_sync_check", String(Date.now()));
         showToast("success", "In Sync: Local database matches cloud backup!");
       } else {
         // Real changes/differences detected -> Show auto-merge confirmation modal with diff details
@@ -140,6 +250,10 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         await onReloadData();
       }
 
+      setSyncStatus("in-sync");
+      setPendingCount(0);
+      localStorage.setItem("last_gist_sync_check", String(Date.now()));
+
       setShowConfirmModal(false);
       showToast("success", "🎉 Auto-Merge Success! Local & Cloud fully synchronized.");
     } catch (error: any) {
@@ -171,6 +285,10 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         localStorage.setItem("github_gist_id", newGistId);
       }
 
+      setSyncStatus("in-sync");
+      setPendingCount(0);
+      localStorage.setItem("last_gist_sync_check", String(Date.now()));
+
       setShowConfirmModal(false);
       showToast("success", "Cloud backup overwritten with local database!");
     } catch (error: any) {
@@ -192,6 +310,10 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       if (onReloadData) {
         await onReloadData();
       }
+
+      setSyncStatus("in-sync");
+      setPendingCount(0);
+      localStorage.setItem("last_gist_sync_check", String(Date.now()));
 
       setShowConfirmModal(false);
       showToast("success", "Local database overwritten & restored from cloud!");
@@ -216,6 +338,34 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
 
   const hasToken = Boolean(localStorage.getItem("github_gist_token"));
 
+  let dotColorClass = "bg-stone-300";
+  let buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900";
+  let titleText = "Configure Cloud Sync (GitHub Gist)";
+
+  if (!hasToken) {
+    dotColorClass = "bg-stone-300";
+    buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-700";
+    titleText = "Click to set up Cloud Sync (GitHub Gist)";
+  } else if (isCheckingSync) {
+    dotColorClass = "bg-amber-400 animate-pulse";
+    buttonBorderBgClass = "bg-amber-50/70 border-amber-200 text-amber-900";
+    titleText = "Checking cloud backup...";
+  } else if (isSyncing) {
+    dotColorClass = "bg-amber-500 animate-pulse";
+    buttonBorderBgClass = "bg-amber-50 border-amber-300 text-amber-950";
+    titleText = "Syncing data with cloud...";
+  } else if (syncStatus === "has-changes") {
+    dotColorClass = "bg-amber-500 animate-pulse ring-2 ring-amber-300/80";
+    buttonBorderBgClass = "bg-amber-50/90 hover:bg-amber-100/90 border-amber-300/90 text-amber-950 font-semibold";
+    titleText = pendingCount > 0 
+      ? `${pendingCount} change${pendingCount > 1 ? "s" : ""} between local & cloud database. Click to sync.`
+      : "Changes detected between local & cloud database. Click to sync.";
+  } else if (syncStatus === "in-sync") {
+    dotColorClass = "bg-emerald-500";
+    buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900";
+    titleText = "In Sync: Local database matches cloud backup";
+  }
+
   return (
     <div className="relative inline-block text-left shrink-0" id="quick-cloud-sync-container">
       {/* Quick Cloud Sync Trigger Button */}
@@ -223,24 +373,18 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         type="button"
         onClick={handleTriggerSync}
         disabled={isCheckingSync || isSyncing}
-        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 ${
-          isCheckingSync || isSyncing
-            ? "bg-stone-900 text-white border-stone-900 opacity-90"
-            : "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900"
-        }`}
-        title={hasToken ? "Sync latest data with Cloud (GitHub Gist)" : "Configure Cloud Sync (GitHub Gist)"}
+        className={`flex items-center gap-1 sm:gap-1.5 px-1.5 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow-2xs shrink-0 relative ${buttonBorderBgClass}`}
+        title={titleText}
         id="quick-cloud-sync-btn"
       >
-        <span 
-          className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${
-            hasToken ? "bg-emerald-500 animate-pulse" : "bg-stone-300"
-          }`} 
-        />
+        <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 transition-all ${dotColorClass}`} />
 
         {isCheckingSync || isSyncing ? (
-          <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-500 shrink-0" />
         ) : (
-          <Cloud className="w-3.5 h-3.5 text-stone-700 shrink-0" />
+          <Cloud className={`w-3.5 h-3.5 shrink-0 ${
+            syncStatus === "has-changes" ? "text-amber-700" : syncStatus === "in-sync" ? "text-stone-800" : "text-stone-500"
+          }`} />
         )}
 
         <span className="font-bold hidden sm:inline">
@@ -248,6 +392,14 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         </span>
 
         <span className="font-bold sm:hidden">Sync</span>
+
+        {/* Small pulse ping dot when there are unsynced changes */}
+        {syncStatus === "has-changes" && !isCheckingSync && !isSyncing && (
+          <span className="flex h-2 w-2 relative -ml-0.5 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </span>
+        )}
       </button>
 
       {/* Floating Toast Notification */}
