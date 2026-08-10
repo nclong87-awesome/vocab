@@ -75,7 +75,7 @@ export default function CloudSyncConfigModal({
             </div>
             <div>
               <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-                Configure Cloud Sync Credentials
+                Configure Cloud Sync
               </h3>
               <p className="text-xs text-stone-400 font-normal mt-0.5">
                 Connect your private GitHub Gist to enable 1-click cloud sync across devices.
@@ -103,11 +103,8 @@ export default function CloudSyncConfigModal({
 
           <div className="space-y-1">
             <label className="block text-xs font-bold text-stone-900">
-              GitHub Personal Access Token or Proxy Key <span className="text-stone-400 font-normal">(Optional)</span>
+              GitHub Personal Access Token <span className="text-stone-400 font-normal">(Optional)</span>
             </label>
-            <p className="text-[11px] text-stone-500 font-serif italic">
-              Uses default Cloud Worker proxy (<code className="bg-stone-100 px-1 py-0.5 text-stone-900 not-italic border border-stone-200">storage.nclong87.workers.dev</code>) by default. Optionally enter a custom GitHub PAT or proxy key.
-            </p>
             <input
               type="password"
               value={token}
@@ -115,7 +112,7 @@ export default function CloudSyncConfigModal({
                 setToken(e.target.value);
                 setErrorMsg(null);
               }}
-              placeholder="Leave blank for default proxy Worker..."
+              placeholder="Leave blank for default Gist"
               className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs font-mono font-medium text-stone-900 focus:outline-none focus:border-stone-900 focus:bg-white transition-all"
             />
           </div>
@@ -127,7 +124,7 @@ export default function CloudSyncConfigModal({
             <p className="text-[11px] text-stone-500">
               {token.trim().startsWith("ghp_") || token.trim().startsWith("github_pat_")
                 ? "Leave blank to automatically create a new private Gist backup using your PAT."
-                : "Required when using default Worker proxy (existing Gist ID)."}
+                : "Required when using default Gist."}
             </p>
             <input
               type="text"
@@ -168,7 +165,7 @@ export default function CloudSyncConfigModal({
                 className="flex-1 sm:flex-none px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span>Save & Sync Now</span>
+                <span>Save & Sync</span>
               </button>
             </div>
           </div>

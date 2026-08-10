@@ -13,7 +13,6 @@ interface State {
   copied: boolean;
   reportSent: boolean;
   sendingReport: boolean;
-  customNote: string;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -25,7 +24,6 @@ export class ErrorBoundary extends Component<Props, State> {
     copied: false,
     reportSent: false,
     sendingReport: false,
-    customNote: "",
   };
 
   public static getDerivedStateFromError(error: Error): Partial<State> {
@@ -101,7 +99,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   private getFormattedReportText = (): string => {
-    const { error, errorInfo, customNote } = this.state;
+    const { error, errorInfo } = this.state;
     const timeStr = new Date().toLocaleString();
     const userAgent = navigator.userAgent;
     const url = window.location.href;
@@ -112,7 +110,6 @@ Target Recipient: nclong87@gmail.com
 Timestamp: ${timeStr}
 App URL: ${url}
 User Agent: ${userAgent}
-${customNote ? `\nUser Additional Context: ${customNote}\n` : ""}
 ERROR DETAILS:
 Name: ${error?.name || "Error"}
 Message: ${error?.message || "Unknown error occurred"}
@@ -170,7 +167,7 @@ ${errorInfo?.componentStack || "No component stack available"}
 
   public render() {
     if (this.state.hasError) {
-      const { error, errorInfo, isDetailsExpanded, copied, reportSent, sendingReport, customNote } = this.state;
+      const { error, errorInfo, isDetailsExpanded, copied, reportSent, sendingReport } = this.state;
 
       return (
         <div className="min-h-screen w-full bg-stone-900 text-stone-100 flex items-center justify-center p-4 sm:p-6 font-sans">
@@ -210,22 +207,6 @@ ${errorInfo?.componentStack || "No component stack available"}
               <p className="font-bold text-sm text-red-200">
                 {error?.name}: {error?.message || "Unknown Application Exception"}
               </p>
-            </div>
-
-            {/* User Note Input (Optional Context) */}
-            <div className="space-y-1.5">
-              <label htmlFor="customNote" className="text-xs font-semibold text-stone-300 flex items-center justify-between">
-                <span>What were you doing when the crash occurred? (Optional):</span>
-                <span className="text-stone-500 font-normal">Included in email report</span>
-              </label>
-              <textarea
-                id="customNote"
-                rows={2}
-                value={customNote}
-                onChange={(e) => this.setState({ customNote: e.target.value })}
-                placeholder="e.g., Pressed 'Common Phrases' in chat or clicked Generate Words..."
-                className="w-full bg-stone-900/80 border border-stone-700/80 rounded-xl p-3 text-xs text-stone-200 placeholder:text-stone-500 focus:outline-none focus:border-amber-500/80 transition-colors"
-              />
             </div>
 
             {/* Action Buttons Row */}

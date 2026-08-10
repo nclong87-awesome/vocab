@@ -55,7 +55,7 @@ export default function AnalyticsDashboard({
   // Filter & Search states for Words breakdown - default to 'all' so mastered words are visible
   const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'decayed' | 'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('strength-desc');
+  const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('recent');
 
   // TTS audio state
   const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
@@ -297,62 +297,6 @@ export default function AnalyticsDashboard({
       {/* DETAILED WORDS ANALYSIS & MANAGEMENT SECTION */}
       <div className="bg-white border border-stone-200/80 p-6 sm:p-8 space-y-6 rounded-2xl shadow-3xs" id="words-breakdown-section">
         
-        {/* Category Filter Tab Bar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 pb-4" id="words-filter-tabs">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-3.5 py-1.5 text-xs font-bold transition-all rounded-lg cursor-pointer ${
-              activeTab === 'all'
-                ? 'bg-stone-900 text-white'
-                : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-stone-900'
-            }`}
-          >
-            {t("analytics_all_words", appLanguage)} ({totalWordsCount})
-          </button>
-          <button
-            onClick={() => setActiveTab('improving')}
-            className={`px-3.5 py-1.5 text-xs font-bold transition-all rounded-lg cursor-pointer ${
-              activeTab === 'improving'
-                ? 'bg-rose-600 text-white shadow-3xs'
-                : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-rose-700'
-            }`}
-          >
-            {t("analytics_improving_words", appLanguage)} ({improvingWords.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('mastered')}
-            className={`px-3.5 py-1.5 text-xs font-bold transition-all rounded-lg cursor-pointer ${
-              activeTab === 'mastered'
-                ? 'bg-emerald-600 text-white shadow-3xs'
-                : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-emerald-700'
-            }`}
-          >
-            {t("analytics_mastered_words", appLanguage)} ({masteredWords.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('decayed')}
-            className={`px-3.5 py-1.5 text-xs font-bold transition-all rounded-lg cursor-pointer ${
-              activeTab === 'decayed'
-                ? 'bg-amber-600 text-white shadow-3xs'
-                : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-amber-700'
-            }`}
-          >
-            {t("analytics_refresher_due", appLanguage)} ({decayedWords.length})
-          </button>
-          {starredWords.length > 0 && (
-            <button
-              onClick={() => setActiveTab('starred')}
-              className={`px-3.5 py-1.5 text-xs font-bold transition-all rounded-lg cursor-pointer ${
-                activeTab === 'starred'
-                  ? 'bg-amber-500 text-white shadow-3xs'
-                  : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-amber-700'
-              }`}
-            >
-              {t("analytics_starred", appLanguage)} ({starredWords.length})
-            </button>
-          )}
-        </div>
-
         {/* Search & Sorting Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="relative">
