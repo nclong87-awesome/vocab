@@ -103,7 +103,7 @@ export function getGistEndpointAndHeaders(token?: string, gistId?: string) {
 
   const baseUrl = isDirectGitHubPat
     ? "https://api.github.com/gists"
-    : "/api/gist";
+    : "/gist";
 
   const url = gistId ? `${baseUrl}/${gistId}` : baseUrl;
 
