@@ -87,11 +87,6 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
 
-    if (!token) {
-      setSyncStatus("unconfigured");
-      return;
-    }
-
     if (!gistId) {
       setSyncStatus("has-changes");
       return;
@@ -108,10 +103,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
   // Listen to local database updates (e.g. adding words, taking quizzes) to immediately mark unsynced changes
   useEffect(() => {
     const handleDBUpdate = () => {
-      const token = localStorage.getItem("github_gist_token") || "";
-      if (token) {
-        setSyncStatus("has-changes");
-      }
+      setSyncStatus("has-changes");
     };
 
     window.addEventListener("vocab-db-updated", handleDBUpdate);
@@ -126,7 +118,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       if (document.visibilityState === "visible") {
         const token = localStorage.getItem("github_gist_token") || "";
         const gistId = localStorage.getItem("github_gist_id") || "";
-        if (!token || !gistId) return;
+        if (!gistId) return;
 
         const lastCheck = Number(localStorage.getItem("last_gist_sync_check") || "0");
         const fiveMinutes = 5 * 60 * 1000;
@@ -148,20 +140,25 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
 
-    if (!token) {
-      setShowConfigModal(true);
-      return;
-    }
-
     setIsCheckingSync(true);
     showToast("info", "Checking remote cloud backup...");
 
     try {
       const localData = await exportIndexedDBDatabase();
 
+      const isPat = Boolean(token && (token.startsWith("ghp_") || token.startsWith("github_pat_")));
+
       if (!gistId) {
-        // Token exists but no Gist ID yet -> Upload initial local database to cloud
-        showToast("info", "No Gist ID found. Uploading initial cloud backup...");
+        if (!isPat) {
+          // Worker proxy requires a Gist ID
+          setIsCheckingSync(false);
+          setShowConfigModal(true);
+          showToast("info", "Please configure an existing Gist ID to use Cloud Sync with default Worker proxy.");
+          return;
+        }
+
+        // Token is a direct PAT -> Create initial cloud backup via GitHub API POST
+        showToast("info", "Creating initial cloud backup...");
         const jsonString = JSON.stringify(sanitizeDataForCloudSync(localData));
         const newGistId = await syncToGist(token, jsonString);
         localStorage.setItem("github_gist_id", newGistId);
@@ -225,12 +222,6 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
 
-    if (!token) {
-      setShowConfirmModal(false);
-      setShowConfigModal(true);
-      return;
-    }
-
     try {
       setIsSyncing(true);
       showToast("info", "Applying auto-merged changes to local & cloud...");
@@ -268,12 +259,6 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
   const handleSyncLocalToCloud = async () => {
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
-
-    if (!token) {
-      setShowConfirmModal(false);
-      setShowConfigModal(true);
-      return;
-    }
 
     try {
       setIsSyncing(true);

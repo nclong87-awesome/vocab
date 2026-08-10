@@ -183,8 +183,9 @@ export default function SettingsView({
   };
 
   const handleSyncToCloud = async () => {
-    if (!gistToken) {
-      setDbStatusMessage({ type: "error", text: "GitHub Personal Access Token is required for Gist sync" });
+    const isPat = Boolean(gistToken && (gistToken.startsWith("ghp_") || gistToken.startsWith("github_pat_")));
+    if (!isPat && !gistId) {
+      setDbStatusMessage({ type: "error", text: "Gist ID is required when using the Worker proxy. Please enter a Gist ID or provide a Personal Access Token to create a new Gist." });
       return;
     }
 
@@ -241,8 +242,8 @@ export default function SettingsView({
   };
 
   const handleSyncFromCloud = async () => {
-    if (!gistToken || !gistId) {
-      setDbStatusMessage({ type: "error", text: "Token and Gist ID are required to restore from GitHub Gist" });
+    if (!gistId) {
+      setDbStatusMessage({ type: "error", text: "Gist ID is required to restore from GitHub Gist" });
       return;
     }
 
@@ -1049,19 +1050,19 @@ export default function SettingsView({
             <div className="space-y-3">
               <div>
                 <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                  GitHub Personal Access Token
+                  GitHub Personal Access Token or Proxy Key (Optional)
                 </label>
                 <input
                   type="password"
                   value={gistToken}
                   onChange={handleGistTokenChange}
-                  placeholder="ghp_..."
+                  placeholder="Leave blank to use default Worker proxy (storage.nclong87.workers.dev)..."
                   className="w-full bg-white border border-stone-200 p-2 text-xs font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                  Gist ID (Leave blank to create a new Gist)
+                  Gist ID {!gistToken.startsWith("ghp_") && !gistToken.startsWith("github_pat_") ? "(Required for Worker Proxy)" : "(Optional - creates new if blank)"}
                 </label>
                 <input
                   type="text"
@@ -1077,7 +1078,7 @@ export default function SettingsView({
               <button
                 type="button"
                 onClick={handleSyncToCloud}
-                disabled={isCloudSyncing || isExporting || isImporting || !gistToken}
+                disabled={isCloudSyncing || isExporting || isImporting}
                 className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -1086,7 +1087,7 @@ export default function SettingsView({
               <button
                 type="button"
                 onClick={handleSyncFromCloud}
-                disabled={isCloudSyncing || isExporting || isImporting || !gistToken || !gistId}
+                disabled={isCloudSyncing || isExporting || isImporting || !gistId}
                 className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
               >
                 <Download className="w-3.5 h-3.5" />

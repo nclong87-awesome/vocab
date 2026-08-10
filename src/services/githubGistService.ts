@@ -98,8 +98,54 @@ export function enforceAndRecordGistRateLimit(options: GistSyncOptions = {}): vo
   }
 }
 
+export function getGistEndpointAndHeaders(token?: string, gistId?: string) {
+  const isDirectGitHubPat = Boolean(token && (token.startsWith("ghp_") || token.startsWith("github_pat_")));
+
+  const baseUrl = isDirectGitHubPat
+    ? "https://api.github.com/gists"
+    : "/api/gist";
+
+  const url = gistId ? `${baseUrl}/${gistId}` : baseUrl;
+
+  const headers: Record<string, string> = {
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+
+  if (isDirectGitHubPat) {
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    // Inject proxy key into header for Worker
+    let proxyKeyToUse = token && !token.startsWith("http") ? token : "";
+    if (!proxyKeyToUse) {
+      try {
+        const rawConfig = localStorage.getItem("vocab_learner_llm_config");
+        if (rawConfig) {
+          const parsed = JSON.parse(rawConfig);
+          if (parsed?.proxyKey) {
+            proxyKeyToUse = parsed.proxyKey;
+          }
+        }
+      } catch {}
+      if (!proxyKeyToUse) {
+        proxyKeyToUse = localStorage.getItem("llm_proxy_key") || "";
+      }
+    }
+
+    if (proxyKeyToUse) {
+      headers['X-Proxy-Key'] = proxyKeyToUse;
+    }
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  return { url, headers };
+}
+
 export const syncToGist = async (
-  token: string, 
+  token: string = "", 
   data: string, 
   gistId?: string,
   options: GistSyncOptions = { isUserAction: true }
@@ -112,13 +158,10 @@ export const syncToGist = async (
     let existingFiles: Record<string, any> = {};
     if (gistId) {
       try {
-        const getResponse = await fetchWithTimeout(`https://api.github.com/gists/${gistId}`, {
+        const { url: getUrl, headers: getHeaders } = getGistEndpointAndHeaders(token, gistId);
+        const getResponse = await fetchWithTimeout(getUrl, {
           method: 'GET',
-          headers: {
-            'Accept': 'application/vnd.github+json',
-            'Authorization': `Bearer ${token}`,
-            'X-GitHub-Api-Version': '2022-11-28'
-          }
+          headers: getHeaders
         });
         if (getResponse.ok) {
           const getResult = await getResponse.json();
@@ -181,17 +224,13 @@ export const syncToGist = async (
     throw new Error("Failed to process local data for sync: " + (error as Error).message);
   }
 
-  const url = gistId 
-    ? `https://api.github.com/gists/${gistId}`
-    : 'https://api.github.com/gists';
+  const { url, headers } = getGistEndpointAndHeaders(token, gistId);
+  const isDirectGitHubPat = Boolean(token && (token.startsWith("ghp_") || token.startsWith("github_pat_")));
+  const methodToUse = (isDirectGitHubPat && !gistId) ? 'POST' : 'PATCH';
   
   const response = await fetchWithTimeout(url, {
-    method: gistId ? 'PATCH' : 'POST',
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28'
-    },
+    method: methodToUse,
+    headers,
     body: JSON.stringify({
       description: 'VocabLearner Backup',
       public: false,
@@ -200,7 +239,7 @@ export const syncToGist = async (
   });
 
   if (!response.ok) {
-    const err = await response.json();
+    const err = await response.json().catch(() => ({ message: response.statusText }));
     throw new Error(err.message || 'Failed to sync to GitHub Gist');
   }
 
@@ -209,19 +248,17 @@ export const syncToGist = async (
 };
 
 export const syncFromGist = async (
-  token: string, 
+  token: string = "", 
   gistId: string, 
   options: GistSyncOptions = { isUserAction: true }
 ): Promise<any> => {
   enforceAndRecordGistRateLimit(options);
 
-  const response = await fetchWithTimeout(`https://api.github.com/gists/${gistId}`, {
+  const { url, headers } = getGistEndpointAndHeaders(token, gistId);
+
+  const response = await fetchWithTimeout(url, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28'
-    }
+    headers
   });
 
   if (!response.ok) {

@@ -703,6 +703,80 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
 
+// Gist Proxy Endpoint for Cloud Sync
+app.all(["/api/gist", "/api/gist/*"], async (req, res) => {
+  const method = req.method.toUpperCase();
+
+  if (method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Proxy-Key");
+    return res.status(204).end();
+  }
+
+  if (method !== "GET" && method !== "PATCH") {
+    return res.status(405).json({ error: "Method Not Allowed. Only GET, PATCH, and OPTIONS are allowed." });
+  }
+
+  try {
+    const subPath = req.path.replace(/^\/api\/gist/, ""); // e.g. "" or "/<gistId>"
+    const authHeader = req.headers["authorization"] || "";
+    const token = typeof authHeader === "string" ? authHeader.replace(/^Bearer\s+/i, "").trim() : "";
+    const clientProxyKey = (req.headers["x-proxy-key"] as string) || "";
+
+    const isDirectGitHubPat = Boolean(token && (token.startsWith("ghp_") || token.startsWith("github_pat_")));
+
+    const baseUrl = isDirectGitHubPat
+      ? "https://api.github.com/gists"
+      : "https://storage.nclong87.workers.dev/gists";
+
+    const targetUrl = `${baseUrl}${subPath}`;
+
+    const headers: Record<string, string> = {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json"
+    };
+
+    if (isDirectGitHubPat) {
+      headers["Authorization"] = `Bearer ${token}`;
+    } else {
+      // Inject server-side PROXY_SECRET proxy key into header for Worker
+      const proxyKeyToInject = process.env.PROXY_SECRET || clientProxyKey || token || "";
+      if (proxyKeyToInject) {
+        headers["X-Proxy-Key"] = proxyKeyToInject;
+      }
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    const fetchOptions: RequestInit = {
+      method,
+      headers
+    };
+
+    if (method === "PATCH" && req.body && Object.keys(req.body).length > 0) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+
+    const response = await fetchWithTimeout(targetUrl, fetchOptions);
+    const dataText = await response.text();
+
+    let dataJson;
+    try {
+      dataJson = JSON.parse(dataText);
+    } catch {
+      dataJson = { message: dataText || response.statusText };
+    }
+
+    res.status(response.status).json(dataJson);
+  } catch (error: any) {
+    console.error("Gist proxy error:", error);
+    res.status(500).json({ error: error.message || "Failed to communicate with Gist service" });
+  }
+});
+
 // Error Reporting Endpoint
 app.post("/api/report-error", (req, res) => {
   try {

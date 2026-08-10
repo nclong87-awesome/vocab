@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Cloud, 
-  
   X, 
-  ExternalLink, 
   Check, 
   Sliders, 
   AlertCircle
@@ -38,12 +36,20 @@ export default function CloudSyncConfigModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token.trim()) {
-      setErrorMsg("GitHub Personal Access Token is required for Cloud Sync");
+
+    const isPat = Boolean(token.trim() && (token.trim().startsWith("ghp_") || token.trim().startsWith("github_pat_")));
+
+    if (!isPat && !gistId.trim()) {
+      setErrorMsg("Gist ID is required when using the default Worker proxy.");
       return;
     }
 
-    localStorage.setItem("github_gist_token", token.trim());
+    if (token.trim()) {
+      localStorage.setItem("github_gist_token", token.trim());
+    } else {
+      localStorage.removeItem("github_gist_token");
+    }
+
     if (gistId.trim()) {
       localStorage.setItem("github_gist_id", gistId.trim());
     }
@@ -97,18 +103,10 @@ export default function CloudSyncConfigModal({
 
           <div className="space-y-1">
             <label className="block text-xs font-bold text-stone-900">
-              GitHub Personal Access Token <span className="text-red-500">*</span>
+              GitHub Personal Access Token or Proxy Key <span className="text-stone-400 font-normal">(Optional)</span>
             </label>
             <p className="text-[11px] text-stone-500 font-serif italic">
-              Needs the <code className="bg-stone-100 px-1 py-0.5 text-stone-900 not-italic border border-stone-200">gist</code> scope. Create one at{" "}
-              <a 
-                href="https://github.com/settings/tokens/new" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline font-bold inline-flex items-center gap-0.5"
-              >
-                GitHub Settings <ExternalLink className="w-3 h-3" />
-              </a>
+              Uses default Cloud Worker proxy (<code className="bg-stone-100 px-1 py-0.5 text-stone-900 not-italic border border-stone-200">storage.nclong87.workers.dev</code>) by default. Optionally enter a custom GitHub PAT or proxy key.
             </p>
             <input
               type="password"
@@ -117,22 +115,27 @@ export default function CloudSyncConfigModal({
                 setToken(e.target.value);
                 setErrorMsg(null);
               }}
-              placeholder="ghp_..."
+              placeholder="Leave blank for default proxy Worker..."
               className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs font-mono font-medium text-stone-900 focus:outline-none focus:border-stone-900 focus:bg-white transition-all"
             />
           </div>
 
           <div className="space-y-1">
             <label className="block text-xs font-bold text-stone-900">
-              Gist ID <span className="text-stone-400 font-normal">(Optional)</span>
+              Gist ID {!token.trim().startsWith("ghp_") && !token.trim().startsWith("github_pat_") && <span className="text-red-500">*</span>}
             </label>
             <p className="text-[11px] text-stone-500">
-              Leave blank to automatically create a new private Gist backup.
+              {token.trim().startsWith("ghp_") || token.trim().startsWith("github_pat_")
+                ? "Leave blank to automatically create a new private Gist backup using your PAT."
+                : "Required when using default Worker proxy (existing Gist ID)."}
             </p>
             <input
               type="text"
               value={gistId}
-              onChange={(e) => setGistId(e.target.value)}
+              onChange={(e) => {
+                setGistId(e.target.value);
+                setErrorMsg(null);
+              }}
               placeholder="e.g. 64abc123def456..."
               className="w-full bg-stone-50 border border-stone-300 p-2.5 text-xs font-mono font-medium text-stone-900 focus:outline-none focus:border-stone-900 focus:bg-white transition-all"
             />
