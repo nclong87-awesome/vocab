@@ -222,7 +222,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
       defaultModels: RELIABLE_MODELS,
-      getAction: ({ targetLanguage: _targetLanguage, nativeLanguage: _nativeLanguage, onSendMessage, onClearHistory }) => {
+      getAction: ({ onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
           `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`

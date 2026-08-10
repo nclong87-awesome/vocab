@@ -363,7 +363,6 @@ function ChatView({
         ttsConfig={ttsConfig}
         llmConfig={llmConfig}
         onSendMessage={onSendMessage}
-        onClearHistory={onClearHistory}
         onAddWord={onAddWord}
         onAddMultipleWords={onAddMultipleWords}
         onStartQuiz={onStartQuiz}

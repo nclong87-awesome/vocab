@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History } from "lucide-react";
 import { Word } from "../../types";
@@ -18,7 +18,7 @@ interface WordRowProps {
   onUpdateWord?: (updatedWord: Word) => void;
 }
 
-export default function WordRow({
+function WordRow({
   word: initialWord,
   speakWord,
   handleRegenerateWord,
@@ -179,3 +179,5 @@ export default function WordRow({
     </>
   );
 }
+
+export default React.memo(WordRow);

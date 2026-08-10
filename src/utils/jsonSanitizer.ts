@@ -236,3 +236,45 @@ export function cleanAndParseJson<T = any>(rawText: string, fallbackDefault?: T)
     }
   }
 }
+
+/**
+ * Safely extracts an array of word objects from any AI payload structure.
+ * Handles top-level arrays `[ ... ]`, object properties `{ words: [ ... ] }`, `{ data: [ ... ] }`, `{ items: [ ... ] }`,
+ * or object maps with numeric keys `{ "0": { ... }, "1": { ... } }`.
+ */
+export function extractWordsFromPayload(data: any): any[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.words)) return data.words;
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.vocabulary)) return data.vocabulary;
+  if (Array.isArray(data.vocabularyCandidates)) return data.vocabularyCandidates;
+  if (Array.isArray(data.candidates)) return data.candidates;
+  if (Array.isArray(data.list)) return data.list;
+  if (Array.isArray(data.result)) return data.result;
+
+  if (typeof data === "object" && data !== null) {
+    // Check if data is an object map created by spreading an array ({ "0": { word: ... }, "1": ... })
+    const numericKeys = Object.keys(data).filter((k) => !isNaN(Number(k)));
+    if (numericKeys.length > 0) {
+      const arr = numericKeys
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => data[k])
+        .filter((item) => item && typeof item === "object");
+      if (arr.length > 0) return arr;
+    }
+
+    // Check if any key contains an array of objects with 'word' or 'term' or 'definition'
+    for (const key of Object.keys(data)) {
+      const val = data[key];
+      if (Array.isArray(val) && val.length > 0) {
+        if (typeof val[0] === "object" && val[0] !== null && ("word" in val[0] || "term" in val[0] || "definition" in val[0])) {
+          return val;
+        }
+      }
+    }
+  }
+
+  return [];
+}

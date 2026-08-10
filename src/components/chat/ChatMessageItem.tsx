@@ -19,7 +19,6 @@ interface ChatMessageItemProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
-  onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onStartQuiz: () => void;
@@ -111,7 +110,6 @@ function ChatMessageItem({
   ttsConfig,
   llmConfig,
   onSendMessage,
-  onClearHistory,
   onAddWord,
   onAddMultipleWords,
   onStartQuiz,
@@ -515,7 +513,6 @@ function ChatMessageItem({
                       onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
                     } else if (act.action === "common_phrases") {
                       handleRecordActionUse("common_phrases");
-                      onClearHistory();
                       onSendMessage(
                         `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
                       );
@@ -523,7 +520,6 @@ function ChatMessageItem({
                       focusInput();
                     } else if (act.action === "explain_grammar") {
                       handleRecordActionUse("explain_grammar");
-                      onClearHistory();
                       onSendMessage(
                         `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
                       );
@@ -531,7 +527,6 @@ function ChatMessageItem({
                       focusInput();
                     } else if (act.action === "translate_contrast") {
                       handleRecordActionUse("translate_contrast");
-                      onClearHistory();
                       onSendMessage(
                         `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
                       );

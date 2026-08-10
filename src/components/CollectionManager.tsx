@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { 
   BookOpen, 
   Search, 
@@ -35,7 +35,7 @@ interface CollectionManagerProps {
   onLlmApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
 }
 
-export default function CollectionManager({
+function CollectionManager({
   words,
   onAddWord: _onAddWord,
   onDeleteWord,
@@ -60,21 +60,21 @@ export default function CollectionManager({
   const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(new Set());
 
   // Handle image load errors gracefully
-  const handleImageError = (wordId: string) => {
+  const handleImageError = useCallback((wordId: string) => {
     setBrokenImageIds(prev => {
       const next = new Set(prev);
       next.add(wordId);
       return next;
     });
-  };
+  }, []);
 
   // Speak word TTS
-  const speakWord = (text: string) => {
+  const speakWord = useCallback((text: string) => {
     speakTextService(text, ttsConfig, llmConfig, targetLanguage);
-  };
+  }, [ttsConfig, llmConfig, targetLanguage]);
 
   // Re-generate details for an existing word using AI
-  const handleRegenerateWord = async (word: Word, overrideConfig?: LLMConfig) => {
+  const handleRegenerateWord = useCallback(async (word: Word, overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
     setRegeneratingWordId(word.id);
     setRegeneratedSuccessWordId(null);
@@ -125,7 +125,7 @@ export default function CollectionManager({
     } finally {
       setRegeneratingWordId(null);
     }
-  };
+  }, [llmConfig, targetLanguage, nativeLanguage, onUpdateWords, words, onLlmApiError]);
 
   // Filter and sort words by search query and selected sort mode (defaults to newest first)
   const filteredWords = useMemo(() => {
@@ -312,3 +312,5 @@ export default function CollectionManager({
     </div>
   );
 }
+
+export default React.memo(CollectionManager);

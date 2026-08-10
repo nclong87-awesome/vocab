@@ -11,7 +11,6 @@ interface MessageListProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
-  onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onStartQuiz: () => void;
@@ -41,7 +40,6 @@ function MessageList({
   ttsConfig,
   llmConfig,
   onSendMessage,
-  onClearHistory,
   onAddWord,
   onAddMultipleWords,
   onStartQuiz,
@@ -83,7 +81,6 @@ function MessageList({
               ttsConfig={ttsConfig}
               llmConfig={llmConfig}
               onSendMessage={onSendMessage}
-              onClearHistory={onClearHistory}
               onAddWord={onAddWord}
               onAddMultipleWords={onAddMultipleWords}
               onStartQuiz={onStartQuiz}

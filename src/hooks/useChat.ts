@@ -16,6 +16,7 @@ import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions } from "../utils/actionExtractor";
+import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { t } from "../config/i18n";
 
 interface UseChatProps {
@@ -126,6 +127,7 @@ export function useChat({
     setConversationalState("none");
     setPendingWordSenses(null);
     setPendingTopicSubject("");
+    setChatMessages([]);
 
     const activeWords = await getEffectiveWords();
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
@@ -1204,7 +1206,28 @@ export function useChat({
         llmConfig: configToUse,
       });
 
-      const generatedList = res.words || [];
+      const rawList = extractWordsFromPayload(res);
+      const generatedList = rawList
+        .map((item: any) => {
+          if (typeof item === "string") {
+            return { word: item };
+          }
+          if (!item || typeof item !== "object") return null;
+          return {
+            ...item,
+            word: item.word || item.term || item.vocab || item.headword || "",
+            pronunciation: item.pronunciation || item.ipa || item.phonetic || "/.../",
+            partOfSpeech: item.partOfSpeech || item.pos || item.type || "noun",
+            definition: item.definition || item.meaning || item.desc || item.explanation || "",
+            translation: item.translation || item.nativeTranslation || item.meaningNative || "",
+            example: item.example || item.sentence || "",
+            exampleTranslation: item.exampleTranslation || item.sentenceTranslation || "",
+            category: item.category || topic || "General",
+            context: item.context || item.usage || item.definition || "",
+          };
+        })
+        .filter((item: any) => item && item.word && typeof item.word === "string" && item.word.trim().length > 0);
+
       const newUniqueWords = generatedList.filter((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()));
 
       if (newUniqueWords.length === 0) {
@@ -1563,6 +1586,9 @@ export function useChat({
 
   const handleViewFlashcard = async (overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
+    setActiveQuiz(null);
+    setConversationalState("none");
+    setChatMessages([]);
 
     const activeWords = await getEffectiveWords();
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
@@ -1577,7 +1603,7 @@ export function useChat({
           : `📝 **Your vocabulary collection is empty!**\n\nTo view AI flash cards, please add some words to your collection first using the **+ Add Word** button or ask me to generate words by topic!`,
         timestamp: new Date().toISOString(),
       };
-      setChatMessages((prev) => [...prev, noWordsMsg]);
+      setChatMessages([noWordsMsg]);
       return;
     }
 
@@ -1591,7 +1617,7 @@ export function useChat({
           : `📝 **No vocabulary words found.** Please add words to your collection to view flash cards!`,
         timestamp: new Date().toISOString(),
       };
-      setChatMessages((prev) => [...prev, noCandidateMsg]);
+      setChatMessages([noCandidateMsg]);
       return;
     }
 
@@ -1670,7 +1696,7 @@ export function useChat({
         suggestedActions: [...vocabActions, { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" }],
       };
 
-      setChatMessages((prev) => [...prev, flashcardMsg]);
+      setChatMessages([flashcardMsg]);
     } catch (e: any) {
       console.error("Error generating flash card:", e);
       handleAiApiError(e, configToUse, (newConfig) => handleViewFlashcard(newConfig));

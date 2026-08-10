@@ -9,6 +9,22 @@ export function extractOrGenerateTopicActions(
   const resultActions = Array.isArray(existingActions) ? [...existingActions] : [];
   const isVi = appLang.toLowerCase().includes("vi") || appLang.toLowerCase().includes("vietnam");
 
+  const lowerMain = (mainText || "").toLowerCase();
+  const isWelcomeMsg =
+    lowerMain.includes("interactive ai language coach") ||
+    lowerMain.includes("trợ lý học ngôn ngữ ai") ||
+    lowerMain.includes("welcome to your interactive") ||
+    lowerMain.includes("chào mừng bạn đến với trợ lý") ||
+    lowerMain.includes("welcome-msg") ||
+    lowerMain.includes("quick actions below") ||
+    lowerMain.includes("thao tác nhanh bên dưới") ||
+    lowerMain.includes("try asking me:") ||
+    lowerMain.includes("hãy thử hỏi tôi:");
+
+  if (isWelcomeMsg) {
+    return resultActions;
+  }
+
   // Check if existingActions already has interactive navigation actions
   const hasInteractive = resultActions.some(act =>
     act && (

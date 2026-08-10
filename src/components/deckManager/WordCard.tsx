@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, CheckCircle, Trash2, History } from "lucide-react";
 import { Word } from "../../types";
@@ -19,7 +19,7 @@ interface WordCardProps {
   onUpdateWord?: (updatedWord: Word) => void;
 }
 
-export default function WordCard({
+function WordCard({
   word: initialWord,
   speakWord,
   handleRegenerateWord,
@@ -214,3 +214,6 @@ export default function WordCard({
     </>
   );
 }
+
+export default React.memo(WordCard);
+

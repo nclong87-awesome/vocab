@@ -13,8 +13,8 @@ import {
   recordModelFailure
 } from "../utils/autoModeManager";
 
-import { cleanJsonResponse, cleanAndParseJson } from "../utils/jsonSanitizer";
-export { cleanJsonResponse, cleanAndParseJson };
+import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "../utils/jsonSanitizer";
+export { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload };
 
 // Sanitize model names for provider
 export function sanitizeModel(provider: string, model?: string): string {
@@ -1327,13 +1327,14 @@ CRITICAL INSTRUCTIONS:
 
   if (isStaticHost()) {
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsed = JSON.parse(resWithMeta.text);
+    const parsed = cleanAndParseJson(resWithMeta.text);
+    const words = extractWordsFromPayload(parsed);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
     }
     return {
-      ...parsed,
+      words,
       provider: resWithMeta.provider,
       model: resWithMeta.model,
       responseTimeMs: duration
@@ -1349,6 +1350,7 @@ CRITICAL INSTRUCTIONS:
 
     if (res.ok) {
       const data = await res.json();
+      const words = extractWordsFromPayload(data);
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
       const prov = data.provider || llmConfig?.provider || "gemini";
       const mod = data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
@@ -1356,7 +1358,7 @@ CRITICAL INSTRUCTIONS:
         recordModelResponse(prov, mod, duration);
       }
       return {
-        ...data,
+        words,
         provider: prov,
         model: mod,
         responseTimeMs: duration
@@ -1365,13 +1367,14 @@ CRITICAL INSTRUCTIONS:
 
     if (res.status === 405 || res.status === 404) {
       const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
+      const parsed = cleanAndParseJson(resWithMeta.text);
+      const words = extractWordsFromPayload(parsed);
       const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
       if (resWithMeta.provider && resWithMeta.model) {
         recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
       }
       return {
-        ...parsed,
+        words,
         provider: resWithMeta.provider,
         model: resWithMeta.model,
         responseTimeMs: duration
@@ -1381,13 +1384,14 @@ CRITICAL INSTRUCTIONS:
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     console.warn("[generateRandomWordsService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsed = JSON.parse(resWithMeta.text);
+    const parsed = cleanAndParseJson(resWithMeta.text);
+    const words = extractWordsFromPayload(parsed);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
     }
     return {
-      ...parsed,
+      words,
       provider: resWithMeta.provider,
       model: resWithMeta.model,
       responseTimeMs: duration
@@ -1396,13 +1400,14 @@ CRITICAL INSTRUCTIONS:
     console.warn("[generateRandomWordsService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
     try {
       const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
+      const parsed = cleanAndParseJson(resWithMeta.text);
+      const words = extractWordsFromPayload(parsed);
       const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
       if (resWithMeta.provider && resWithMeta.model) {
         recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
       }
       return {
-        ...parsed,
+        words,
         provider: resWithMeta.provider,
         model: resWithMeta.model,
         responseTimeMs: duration

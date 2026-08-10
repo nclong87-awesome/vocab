@@ -3,7 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import { cleanJsonResponse, cleanAndParseJson } from "./src/utils/jsonSanitizer";
+import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "./src/utils/jsonSanitizer";
 import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { PROVIDER_OPTIONS } from "./src/config/llmProviders";
 
@@ -925,7 +925,22 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = cleanAndParseJson(text);
+    let result = cleanAndParseJson(text);
+    if (Array.isArray(result)) {
+      result = {
+        word: result[0]?.word || word,
+        notFound: false,
+        hasMultipleSenses: result.length > 1,
+        senses: result
+      };
+    } else if (result && !result.senses && (result.word || result.definition)) {
+      result = {
+        word: result.word || word,
+        notFound: false,
+        hasMultipleSenses: false,
+        senses: [result]
+      };
+    }
     res.json(result);
   } catch (error: any) {
     console.error("Error checking word definitions:", error);
@@ -955,7 +970,7 @@ CRITICAL INSTRUCTIONS:
 - "category": High-level category string (e.g. "${topic || "Vocabulary"}").
 - "context": Short description of the real-world situation or domain context where this word is used.`;
 
-    const systemInstruction = `You are an expert language teacher. Output strictly valid JSON-only output when requested containing an array of vocabulary words. Do not include any conversational filler outside the JSON.`;
+    const systemInstruction = `You are an expert language teacher. Output strictly valid JSON-only output when requested containing an array of vocabulary words in a "words" field or top-level array. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "words": [
     {
@@ -974,7 +989,11 @@ CRITICAL INSTRUCTIONS:
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const result = cleanAndParseJson(text);
-    res.json(result);
+    const words = extractWordsFromPayload(result);
+    res.json({
+      words,
+      ...(typeof result === "object" && !Array.isArray(result) ? result : {})
+    });
   } catch (error: any) {
     console.error("Error generating random words:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
