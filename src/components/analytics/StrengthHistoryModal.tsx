@@ -6,7 +6,6 @@ import {
   History, 
   TrendingUp, 
   Calendar, 
-  Award, 
   Clock, 
   Info
 } from "lucide-react";

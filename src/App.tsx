@@ -8,6 +8,7 @@ import { stopSpeech, unlockAudioElement } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay } from "./utils/spacedRepetition";
 import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
 import { getDefaultLLMConfig } from "./config/llmProviders";
+import { t } from "./config/i18n";
 
 import { 
   getAllWordsFromDB, 
@@ -106,6 +107,7 @@ export default function App() {
     llmConfig,
     targetLanguage,
     nativeLanguage,
+    appLanguage,
     handleAiApiError,
     handleFinishQuiz,
   });
@@ -188,7 +190,7 @@ export default function App() {
     const welcomeMsg: ChatMessage = {
       id: `welcome-msg-${Date.now()}`,
       role: "assistant",
-      content: `¡Hola! Welcome to your interactive AI Language Coach. I'm here to help you master **${data.targetLanguage}** from your native language **${data.nativeLanguage}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.\n\nTry asking me: *'What are some common idioms in ${data.targetLanguage}?'* or click one of the quick actions below to start learning!`,
+      content: t("chat_welcome_msg", data.appLanguage || data.nativeLanguage, { target: data.targetLanguage, native: data.nativeLanguage }),
       timestamp: new Date().toISOString(),
     };
     setChatMessages([welcomeMsg]);
@@ -318,7 +320,7 @@ export default function App() {
           {
             id: "welcome-msg",
             role: "assistant",
-            content: `¡Hola! Welcome to your interactive AI Language Coach. I'm here to help you master **${refreshedTarget}** from your native language **${refreshedNative}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.\n\nTry asking me: *'What are some common idioms in ${refreshedTarget}?'* or click one of the quick actions below to start learning!`,
+            content: t("chat_welcome_msg", refreshedApp, { target: refreshedTarget, native: refreshedNative }),
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -357,6 +359,7 @@ export default function App() {
               onUpdateWords={handleUpdateWords}
               targetLanguage={targetLanguage}
               nativeLanguage={nativeLanguage}
+              appLanguage={appLanguage}
               onLlmApiError={handleAiApiError}
             />
           )}
@@ -373,6 +376,7 @@ export default function App() {
               onToggleLearnedWord={(wordId) => handleToggleLearned(wordId)}
               onToggleStarWord={(wordId) => handleToggleStar(wordId)}
               onNavigateToView={(view) => handleSetView(view)}
+              appLanguage={appLanguage}
               onLlmApiError={handleAiApiError}
             />
           )}
@@ -446,6 +450,7 @@ export default function App() {
                     onSwitchProvider={handleSwitchProviderQuick}
                     targetLanguage={targetLanguage}
                     nativeLanguage={nativeLanguage}
+                    appLanguage={appLanguage}
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}

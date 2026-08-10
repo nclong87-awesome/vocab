@@ -10,6 +10,7 @@ interface FlashcardMessageCardProps {
   data: FlashcardData;
   targetLanguage: string;
   nativeLanguage: string;
+  appLanguage?: string;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   provider?: string;
@@ -24,6 +25,7 @@ export default function FlashcardMessageCard({
   data,
   targetLanguage,
   nativeLanguage,
+  appLanguage,
   ttsConfig,
   llmConfig,
   provider,
@@ -36,6 +38,9 @@ export default function FlashcardMessageCard({
   const [speakingText, setSpeakingText] = useState<string | null>(null);
 
   if (!data) return null;
+
+  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
+  const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
   const targetWord = words?.find(
     (w) => (data.wordId && w.id === data.wordId) || w.word.trim().toLowerCase() === data.word.trim().toLowerCase()
@@ -62,7 +67,7 @@ export default function FlashcardMessageCard({
     saveAllWordsToDB(updatedWords).catch((e) => console.error("Error saving updated strength:", e));
 
     if (showToast) {
-      showToast(`Updated memory strength for "${targetWord.word}": ${newStrength}% (${actualDelta >= 0 ? '+' : ''}${actualDelta}%)`);
+      showToast(isVi ? `Đã cập nhật độ ghi nhớ cho "${targetWord.word}": ${newStrength}% (${actualDelta >= 0 ? '+' : ''}${actualDelta}%)` : `Updated memory strength for "${targetWord.word}": ${newStrength}% (${actualDelta >= 0 ? '+' : ''}${actualDelta}%)`);
     }
   };
 
@@ -88,7 +93,7 @@ export default function FlashcardMessageCard({
             🃏
           </div>
           <span className="text-xs font-bold tracking-wide uppercase text-amber-300 truncate">
-            AI Word Flash Card
+            {isVi ? "Thẻ Ghi Nhớ AI" : "AI Word Flash Card"}
           </span>
         </div>
 
@@ -149,14 +154,14 @@ export default function FlashcardMessageCard({
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-stone-300">
-                    Flashcard Memory Strength
+                    {isVi ? "Độ Nhớ Thẻ Ghi Nhớ" : "Flashcard Memory Strength"}
                   </span>
                   <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold font-mono px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span>+{strengthGained > 0 ? strengthGained : 10}% Gained</span>
+                    <span>+{strengthGained > 0 ? strengthGained : 10}% {isVi ? "Tăng" : "Gained"}</span>
                   </span>
                 </div>
                 <p className="text-xs text-stone-300 mt-0.5">
-                  Current word strength: <span className="font-mono font-bold text-emerald-400">{Math.round(currentStrength)}%</span>
+                  {isVi ? "Mức độ ghi nhớ hiện tại:" : "Current word strength:"} <span className="font-mono font-bold text-emerald-400">{Math.round(currentStrength)}%</span>
                 </p>
               </div>
             </div>
@@ -179,7 +184,7 @@ export default function FlashcardMessageCard({
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
               >
                 <CheckCircle className="w-3.5 h-3.5" />
-                Got it! (+10% Strength)
+                {isVi ? "Đã thuộc! (+10% Độ nhớ)" : "Got it! (+10% Strength)"}
               </button>
               <button
                 type="button"
@@ -187,7 +192,7 @@ export default function FlashcardMessageCard({
                 className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                Needs Practice (-10%)
+                {isVi ? "Cần luyện tập (-10%)" : "Needs Practice (-10%)"}
               </button>
             </div>
           )}
@@ -197,7 +202,7 @@ export default function FlashcardMessageCard({
         <div className="space-y-2 bg-stone-50/80 p-3.5 rounded-xl border border-stone-100">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-0.5">
-              Native Translation ({nativeLanguage}):
+              {isVi ? `Bản dịch (${nativeLanguage}):` : `Native Translation (${nativeLanguage}):`}
             </span>
             <p className="text-base sm:text-lg font-bold text-stone-900">
               "{data.translation}"
@@ -206,7 +211,7 @@ export default function FlashcardMessageCard({
 
           <div className="pt-1 border-t border-stone-200/60">
             <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-0.5">
-              Definition ({targetLanguage}):
+              {isVi ? `Định nghĩa (${targetLanguage}):` : `Definition (${targetLanguage}):`}
             </span>
             <p className="text-xs sm:text-sm text-stone-700 font-medium leading-relaxed">
               {data.definition}
@@ -235,7 +240,7 @@ export default function FlashcardMessageCard({
             <div className="flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
               <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
-                Contextual Example Sentences ({data.category || "Contextual"}):
+                {isVi ? `Ví dụ trong ngữ cảnh (${data.category || "Ngữ cảnh"}):` : `Contextual Example Sentences (${data.category || "Contextual"}):`}
               </h4>
             </div>
 
@@ -257,7 +262,7 @@ export default function FlashcardMessageCard({
                           ? "bg-amber-400 text-stone-950"
                           : "bg-stone-100 hover:bg-stone-200 text-stone-700"
                       }`}
-                      title="Listen to example sentence"
+                      title={isVi ? "Nghe câu ví dụ" : "Listen to example sentence"}
                     >
                       <Volume2 className="w-3.5 h-3.5" />
                     </button>
@@ -284,7 +289,7 @@ export default function FlashcardMessageCard({
             <Lightbulb className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 block">
-                Nuance & Usage Tip:
+                {isVi ? "Mẹo sử dụng & sắc thái từ:" : "Nuance & Usage Tip:"}
               </span>
               <p className="text-xs text-stone-800 leading-relaxed font-medium">
                 {data.usageNotes}
@@ -299,7 +304,7 @@ export default function FlashcardMessageCard({
             <div className="flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-500" />
               <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
-                Suggested Vocabulary from Examples:
+                {isVi ? "Từ vựng đề xuất từ ví dụ:" : "Suggested Vocabulary from Examples:"}
               </h4>
             </div>
 
@@ -331,7 +336,7 @@ export default function FlashcardMessageCard({
                           ? "bg-amber-400 text-stone-950"
                           : "bg-stone-100 hover:bg-stone-200 text-stone-600"
                       }`}
-                      title="Listen to word"
+                      title={isVi ? "Nghe phát âm từ" : "Listen to word"}
                     >
                       <Volume2 className="w-3 h-3" />
                     </button>
@@ -378,7 +383,7 @@ export default function FlashcardMessageCard({
             onClick={(e) => handleSpeak(data.word, e)}
             className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-900 font-bold text-xs py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <Volume2 className="w-3.5 h-3.5" /> Speak Word
+            <Volume2 className="w-3.5 h-3.5" /> {isVi ? "Phát Âm Từ" : "Speak Word"}
           </button>
         </div>
       </div>

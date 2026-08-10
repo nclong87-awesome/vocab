@@ -13,6 +13,7 @@ import { autofillWordService } from "../services/llmClientService";
 
 import WordCard from "./deckManager/WordCard";
 import WordRow from "./deckManager/WordRow";
+import { t } from "../config/i18n";
 
 interface CollectionManagerProps {
   words: Word[];
@@ -30,6 +31,7 @@ interface CollectionManagerProps {
   ttsConfig?: TTSConfig;
   targetLanguage?: string;
   nativeLanguage?: string;
+  appLanguage?: string;
   onLlmApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
 }
 
@@ -44,6 +46,7 @@ export default function CollectionManager({
   ttsConfig = DEFAULT_TTS_CONFIG,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
+  appLanguage = "Vietnamese",
   onLlmApiError
 }: CollectionManagerProps) {
   // Re-generate individual word loading states
@@ -187,7 +190,7 @@ export default function CollectionManager({
                   <Globe2 className="w-3.5 h-3.5 text-stone-900" />
                   <span>{targetLanguage} ↔ {nativeLanguage}</span>
                   <span className="text-stone-300">•</span>
-                  <span className="text-stone-900">{words.length} terms</span>
+                  <span className="text-stone-900">{words.length} {t("col_terms_count", appLanguage)}</span>
                 </div>
               </div>
             </div>
@@ -200,7 +203,7 @@ export default function CollectionManager({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter terms by spelling, translation, or definition..."
+                  placeholder={t("col_filter_placeholder", appLanguage)}
                   className="w-full pl-9 pr-3 py-2 bg-white border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-950 font-medium"
                 />
                 {searchQuery && (
@@ -217,16 +220,16 @@ export default function CollectionManager({
                 {/* Sort Order Selector */}
                 <div className="flex items-center gap-1.5 bg-white border border-stone-200 px-2.5 py-1.5 shrink-0">
                   <ArrowUpDown className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider hidden sm:inline">Sort:</span>
+                  <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider hidden sm:inline">{t("col_sort_label", appLanguage)}</span>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as "newest" | "oldest" | "alpha" | "unlearned")}
                     className="text-xs font-bold text-stone-900 bg-transparent outline-none cursor-pointer"
                   >
-                    <option value="newest">New Words First</option>
-                    <option value="oldest">Oldest First</option>
-                    <option value="alpha">Alphabetical (A-Z)</option>
-                    <option value="unlearned">Unlearned First</option>
+                    <option value="newest">{t("col_sort_newest", appLanguage)}</option>
+                    <option value="oldest">{t("col_sort_oldest", appLanguage)}</option>
+                    <option value="alpha">{t("col_sort_alpha", appLanguage)}</option>
+                    <option value="unlearned">{t("col_sort_unlearned", appLanguage)}</option>
                   </select>
                 </div>
 
@@ -298,9 +301,9 @@ export default function CollectionManager({
             ) : (
               <div className="p-12 text-center bg-stone-50 border border-stone-200 space-y-3">
                 <BookOpen className="w-8 h-8 text-stone-400 mx-auto" />
-                <h4 className="font-bold text-sm text-stone-900">No Vocabulary Words Found</h4>
+                <h4 className="font-bold text-sm text-stone-900">{t("col_no_words_found", appLanguage)}</h4>
                 <p className="text-xs text-stone-500 font-serif italic max-w-sm mx-auto">
-                  {searchQuery ? "No terms match your search filter." : "Your vocabulary list is empty. Add new words through the Chat view!"}
+                  {searchQuery ? t("col_empty_search", appLanguage) : t("col_empty_list", appLanguage)}
                 </p>
               </div>
             )}

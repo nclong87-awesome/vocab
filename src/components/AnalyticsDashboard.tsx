@@ -16,6 +16,7 @@ import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { analyzePerformanceService, PerformanceAnalysisResult } from "../services/llmClientService";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
+import { t } from "../config/i18n";
 
 import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
@@ -25,6 +26,7 @@ interface AnalyticsDashboardProps {
   stats: UserStats;
   llmConfig?: LLMConfig;
   ttsConfig?: TTSConfig;
+  appLanguage?: string;
   onStartPracticeWeakWords: (weakWords: Word[]) => void;
   onToggleLearnedWord: (wordId: string) => void;
   onToggleStarWord: (wordId: string) => void;
@@ -37,6 +39,7 @@ export default function AnalyticsDashboard({
   stats,
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
+  appLanguage = "Vietnamese",
   onStartPracticeWeakWords,
   onToggleLearnedWord,
   onToggleStarWord,
@@ -190,11 +193,11 @@ export default function AnalyticsDashboard({
         <div className="space-y-2.5">
           <div className="inline-flex items-center gap-1.5 bg-amber-400 text-stone-950 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md">
             <BarChart2 className="w-3.5 h-3.5" />
-            <span>AI Vocabulary Analytics</span>
+            <span>{t("analytics_title", appLanguage)}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Performance & Mastery Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t("analytics_headline", appLanguage)}</h1>
           <p className="text-xs text-stone-300 font-serif italic max-w-2xl leading-relaxed">
-            "Track memory retention, identify weak words needing practice, view mastered terms, and receive AI-guided cognitive learning insights."
+            {t("analytics_quote", appLanguage)}
           </p>
         </div>
 
@@ -206,7 +209,7 @@ export default function AnalyticsDashboard({
               title="Launch a practice quiz focused on words needing improvement"
             >
               <Zap className="w-4 h-4 fill-stone-950" />
-              <span>Practice Weak Words ({improvingWords.length})</span>
+              <span>{t("analytics_practice_weak", appLanguage)} ({improvingWords.length})</span>
             </button>
           )}
 
@@ -218,12 +221,12 @@ export default function AnalyticsDashboard({
             {isAnalyzing ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                <span>Analyzing...</span>
+                <span>{t("analytics_analyzing", appLanguage)}</span>
               </>
             ) : (
               <>
                 <Brain className="w-4 h-4 text-amber-400" />
-                <span>{aiReport ? "Re-Analyze with AI" : "AI Performance Coach"}</span>
+                <span>{aiReport ? t("analytics_reanalyze", appLanguage) : t("analytics_coach", appLanguage)}</span>
               </>
             )}
           </button>
@@ -304,7 +307,7 @@ export default function AnalyticsDashboard({
                 : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-stone-900'
             }`}
           >
-            All Words ({totalWordsCount})
+            {t("analytics_all_words", appLanguage)} ({totalWordsCount})
           </button>
           <button
             onClick={() => setActiveTab('improving')}
@@ -314,7 +317,7 @@ export default function AnalyticsDashboard({
                 : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-rose-700'
             }`}
           >
-            Need Improvement ({improvingWords.length})
+            {t("analytics_improving_words", appLanguage)} ({improvingWords.length})
           </button>
           <button
             onClick={() => setActiveTab('mastered')}
@@ -324,7 +327,7 @@ export default function AnalyticsDashboard({
                 : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-emerald-700'
             }`}
           >
-            Mastered Words ({masteredWords.length})
+            {t("analytics_mastered_words", appLanguage)} ({masteredWords.length})
           </button>
           <button
             onClick={() => setActiveTab('decayed')}
@@ -334,7 +337,7 @@ export default function AnalyticsDashboard({
                 : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-amber-700'
             }`}
           >
-            Refresher Due ({decayedWords.length})
+            {t("analytics_refresher_due", appLanguage)} ({decayedWords.length})
           </button>
           {starredWords.length > 0 && (
             <button
@@ -345,7 +348,7 @@ export default function AnalyticsDashboard({
                   : 'bg-stone-50 border border-stone-200/60 text-stone-600 hover:bg-stone-100 hover:text-amber-700'
               }`}
             >
-              Starred ({starredWords.length})
+              {t("analytics_starred", appLanguage)} ({starredWords.length})
             </button>
           )}
         </div>
@@ -358,7 +361,7 @@ export default function AnalyticsDashboard({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search term, definition, or translation..."
+              placeholder={t("analytics_search_placeholder", appLanguage)}
               className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-400 focus:bg-white transition-all rounded-lg"
             />
             {searchQuery && (
@@ -372,16 +375,16 @@ export default function AnalyticsDashboard({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-stone-500 text-xs font-semibold shrink-0">Sort:</span>
+            <span className="text-stone-500 text-xs font-semibold shrink-0">{t("analytics_sort_label", appLanguage)}</span>
             <select
               value={sortBy}
               onChange={(e: any) => setSortBy(e.target.value)}
               className="w-full px-3 py-2 bg-stone-50 border border-stone-200 text-xs text-stone-900 outline-none focus:border-stone-400 focus:bg-white rounded-lg cursor-pointer"
             >
-              <option value="strength-asc">Weakest / Lowest Strength First</option>
-              <option value="strength-desc">Highest Strength / Mastered First</option>
-              <option value="alpha">Alphabetical (A - Z)</option>
-              <option value="recent">Recently Reviewed First</option>
+              <option value="strength-asc">{t("analytics_sort_weakest", appLanguage)}</option>
+              <option value="strength-desc">{t("analytics_sort_highest", appLanguage)}</option>
+              <option value="alpha">{t("analytics_sort_alpha", appLanguage)}</option>
+              <option value="recent">{t("analytics_sort_recent", appLanguage)}</option>
             </select>
           </div>
         </div>

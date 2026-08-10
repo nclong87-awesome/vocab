@@ -44,9 +44,120 @@ export type TranslationKey =
   | "studied_count"
   | "add_word_btn"
   | "search_placeholder"
-  | "ai_coach_title";
+  | "ai_coach_title"
+  | "chat_welcome_msg"
+  | "chat_placeholder_adding_word"
+  | "chat_placeholder_photo"
+  | "chat_placeholder_default"
+  | "photo_attached"
+  | "photo_suggest_hint"
+  | "photo_extract_hint"
+  | "polished_sentence"
+  | "suggested_replies"
+  | "audio_clip"
+  | "tap_play_audio"
+  | "play_clip"
+  | "copied"
+  | "copy"
+  | "option_label"
+  | "col_filter_placeholder"
+  | "col_sort_label"
+  | "col_sort_newest"
+  | "col_sort_oldest"
+  | "col_sort_alpha"
+  | "col_sort_unlearned"
+  | "col_no_words_found"
+  | "col_empty_search"
+  | "col_empty_list"
+  | "col_terms_count"
+  | "analytics_title"
+  | "analytics_headline"
+  | "analytics_quote"
+  | "analytics_practice_weak"
+  | "analytics_analyzing"
+  | "analytics_reanalyze"
+  | "analytics_coach"
+  | "analytics_mastered_title"
+  | "analytics_improving_title"
+  | "analytics_all_words"
+  | "analytics_improving_words"
+  | "analytics_mastered_words"
+  | "analytics_refresher_due"
+  | "analytics_starred"
+  | "analytics_search_placeholder"
+  | "analytics_sort_label"
+  | "analytics_sort_weakest"
+  | "analytics_sort_highest"
+  | "analytics_sort_alpha"
+  | "analytics_sort_recent"
+  | "quick_actions_title"
+  | "quick_actions_search_placeholder"
+  | "quick_cat_all"
+  | "quick_cat_writing"
+  | "quick_cat_study"
+  | "quick_cat_vocab"
+  | "quick_cat_chat"
+  | "quick_all_actions"
+  | "quick_close_grid"
+  | "flashcards_empty_title"
+  | "flashcards_empty_desc"
+  | "flashcards_back_dash"
+  | "flashcards_card_mode"
+  | "flashcards_list_mode"
+  | "flashcards_click_flip"
+  | "flashcards_meaning_trans"
+  | "flashcards_example_usage"
+  | "flashcards_memory_strength"
+  | "flashcards_got_it"
+  | "flashcards_practice_btn"
+  | "flashcards_mastered"
+  | "flashcards_mark_mastered"
+  | "flashcards_previous"
+  | "flashcards_next_word"
+  | "flashcards_take_quiz"
+  | "qa_fix_grammar_label"
+  | "qa_fix_grammar_title"
+  | "qa_fix_grammar_desc"
+  | "qa_suggest_reply_label"
+  | "qa_suggest_reply_title"
+  | "qa_suggest_reply_desc"
+  | "qa_start_quiz_label"
+  | "qa_start_quiz_title"
+  | "qa_start_quiz_desc"
+  | "qa_flash_card_label"
+  | "qa_flash_card_title"
+  | "qa_flash_card_desc"
+  | "qa_generate_words_label"
+  | "qa_generate_words_title"
+  | "qa_generate_words_desc"
+  | "qa_add_word_label"
+  | "qa_add_word_title"
+  | "qa_add_word_desc"
+  | "qa_interactive_prompts_label"
+  | "qa_interactive_prompts_title"
+  | "qa_interactive_prompts_desc"
+  | "qa_explain_grammar_label"
+  | "qa_explain_grammar_title"
+  | "qa_explain_grammar_desc"
+  | "qa_common_phrases_label"
+  | "qa_common_phrases_title"
+  | "qa_common_phrases_desc"
+  | "qa_translate_contrast_label"
+  | "qa_translate_contrast_title"
+  | "qa_translate_contrast_desc"
+  | "qa_new_chat_label"
+  | "qa_new_chat_title"
+  | "qa_new_chat_desc"
+  | "qa_cat_writing"
+  | "qa_cat_study"
+  | "qa_cat_vocab"
+  | "qa_cat_chat"
+  | "action_add_to_col"
+  | "action_confirm_add"
+  | "action_next_flashcard"
+  | "action_suggest_another";
 
-export type LanguageTranslations = Record<TranslationKey, string>;
+export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
 // Map language codes/names to dictionary keys
 function normalizeLangKey(langNameOrCode?: string): string {
@@ -121,7 +232,118 @@ export const translations: Record<string, LanguageTranslations> = {
     studied_count: "Studied",
     add_word_btn: "Add Word",
     search_placeholder: "Search vocabulary...",
-    ai_coach_title: "AI Study Companion"
+    ai_coach_title: "AI Study Companion",
+    chat_welcome_msg: "¡Hola! Welcome to your interactive AI Language Coach. I'm here to help you master **{target}** from your native language **{native}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.\n\nTry asking me: *'What are some common idioms in {target}?'* or click one of the quick actions below to start learning!",
+    chat_placeholder_adding_word: "Adding new word to collection...",
+    chat_placeholder_photo: "Ask AI Vision about this image or click Send to analyze...",
+    chat_placeholder_default: "Ask AI tutor, practice conversation, or request grammar feedback...",
+    photo_attached: "Photo Attached:",
+    photo_suggest_hint: "AI Vision will suggest casual responses and target vocabulary from this screenshot",
+    photo_extract_hint: "AI Vision will analyze and extract vocabulary",
+    polished_sentence: "Polished Sentence:",
+    suggested_replies: "Suggested Replies (Quick Copy):",
+    audio_clip: "Audio Clip",
+    tap_play_audio: "Tap play to listen to pronunciation",
+    play_clip: "Play Clip",
+    copied: "Copied!",
+    copy: "Copy",
+    option_label: "Option",
+    col_filter_placeholder: "Filter terms by spelling, translation, or definition...",
+    col_sort_label: "Sort:",
+    col_sort_newest: "New Words First",
+    col_sort_oldest: "Oldest First",
+    col_sort_alpha: "Alphabetical (A-Z)",
+    col_sort_unlearned: "Unlearned First",
+    col_no_words_found: "No Vocabulary Words Found",
+    col_empty_search: "No terms match your search filter.",
+    col_empty_list: "Your vocabulary list is empty. Add new words through the Chat view!",
+    col_terms_count: "terms",
+    analytics_title: "AI Vocabulary Analytics",
+    analytics_headline: "Performance & Mastery Dashboard",
+    analytics_quote: "\"Track memory retention, identify weak words needing practice, view mastered terms, and receive AI-guided cognitive learning insights.\"",
+    analytics_practice_weak: "Practice Weak Words",
+    analytics_analyzing: "Analyzing...",
+    analytics_reanalyze: "Re-Analyze with AI",
+    analytics_coach: "AI Performance Coach",
+    analytics_mastered_title: "Mastered Words",
+    analytics_improving_title: "Need Improvement",
+    analytics_all_words: "All Words",
+    analytics_improving_words: "Need Improvement",
+    analytics_mastered_words: "Mastered Words",
+    analytics_refresher_due: "Refresher Due",
+    analytics_starred: "Starred",
+    analytics_search_placeholder: "Search term, definition, or translation...",
+    analytics_sort_label: "Sort:",
+    analytics_sort_weakest: "Weakest / Lowest Strength First",
+    analytics_sort_highest: "Highest Strength / Mastered First",
+    analytics_sort_alpha: "Alphabetical (A - Z)",
+    analytics_sort_recent: "Recently Reviewed First",
+    quick_actions_title: "Quick AI Actions",
+    quick_actions_search_placeholder: "Search actions (e.g. grammar, quiz, topic)...",
+    quick_cat_all: "All Actions",
+    quick_cat_writing: "✍️ Writing & Polish",
+    quick_cat_study: "🧠 Quiz & Study",
+    quick_cat_vocab: "📚 Vocabulary",
+    quick_cat_chat: "💬 Chat Session",
+    quick_all_actions: "All Actions",
+    quick_close_grid: "Close Grid",
+    flashcards_empty_title: "Vocabulary list is empty",
+    flashcards_empty_desc: "This list doesn't have any words yet. You can add words manually or generate them with AI.",
+    flashcards_back_dash: "Back to Dashboard",
+    flashcards_card_mode: "Card Mode",
+    flashcards_list_mode: "List View",
+    flashcards_click_flip: "Click to Flip Card",
+    flashcards_meaning_trans: "Meaning & Translation",
+    flashcards_example_usage: "Example Usage",
+    flashcards_memory_strength: "Memory Strength:",
+    flashcards_got_it: "Got it (+10%)",
+    flashcards_practice_btn: "Practice (-10%)",
+    flashcards_mastered: "Mastered",
+    flashcards_mark_mastered: "Mark as Mastered",
+    flashcards_previous: "Previous",
+    flashcards_next_word: "Next Word",
+    flashcards_take_quiz: "Take Quiz",
+    qa_fix_grammar_label: "Fix Grammar",
+    qa_fix_grammar_title: "Fix Grammar & Polish",
+    qa_fix_grammar_desc: "Check spelling, grammar, and improve natural clarity",
+    qa_suggest_reply_label: "Suggest Reply",
+    qa_suggest_reply_title: "Suggest Casual Reply",
+    qa_suggest_reply_desc: "Suggest casual replies and target vocabulary from a screenshot or text of a conversation",
+    qa_start_quiz_label: "Start Quiz",
+    qa_start_quiz_title: "Start Today's Quiz",
+    qa_start_quiz_desc: "Interactive flashcards and recall challenge",
+    qa_flash_card_label: "Flash Card",
+    qa_flash_card_title: "Flash Card",
+    qa_flash_card_desc: "Practice candidate words as interactive AI flash cards with speech & extra contextual example sentences",
+    qa_generate_words_label: "Generate Words",
+    qa_generate_words_title: "Generate Words",
+    qa_generate_words_desc: "Build vocabulary around travel, business, or custom topics",
+    qa_add_word_label: "Add Word",
+    qa_add_word_title: "Add Word to Collection",
+    qa_add_word_desc: "Manually store new words with notes & definitions",
+    qa_interactive_prompts_label: "Interactive AI Prompts",
+    qa_interactive_prompts_title: "Interactive Language Coach",
+    qa_interactive_prompts_desc: "Ask AI coach for interactive guidance on Grammar Rules, Nuance Translation, or Situational Phrases",
+    qa_explain_grammar_label: "Explain Grammar Rules",
+    qa_explain_grammar_title: "Explain Grammar Rules (in Native Language)",
+    qa_explain_grammar_desc: "Ask AI coach for a breakdown of grammar rules & syntax in your native language",
+    qa_common_phrases_label: "Common Phrases",
+    qa_common_phrases_title: "Common Phrases & Idioms",
+    qa_common_phrases_desc: "Learn essential daily expressions & conversational idioms by topic or scenario",
+    qa_translate_contrast_label: "Translate & Compare",
+    qa_translate_contrast_title: "Translate & Contrast",
+    qa_translate_contrast_desc: "Compare nuances between native phrasing and target language for custom sentences",
+    qa_new_chat_label: "Start New Chat",
+    qa_new_chat_title: "Start Fresh Chat Session",
+    qa_new_chat_desc: "Clear current conversation thread and start fresh",
+    qa_cat_writing: "Writing",
+    qa_cat_study: "Study",
+    qa_cat_vocab: "Vocab",
+    qa_cat_chat: "Chat",
+    action_add_to_col: "Add \"{word}\" to collection",
+    action_confirm_add: "➕ Confirm & Add \"{word}\" ({translation})",
+    action_next_flashcard: "🃏 Next Flash Card",
+    action_suggest_another: "💬 Suggest Another Casual Reply"
   },
   vi: {
     app_title: "Học Từ Vựng AI",
@@ -169,7 +391,118 @@ export const translations: Record<string, LanguageTranslations> = {
     studied_count: "Đã Học",
     add_word_btn: "Thêm Từ",
     search_placeholder: "Tìm kiếm từ vựng...",
-    ai_coach_title: "Trợ Lý Học Tập AI"
+    ai_coach_title: "Trợ Lý Học Tập AI",
+    chat_welcome_msg: "Xin chào! Chào mừng bạn đến với Trợ Lý Học Ngôn Ngữ AI. Tôi ở đây để giúp bạn thành thạo **{target}** từ ngôn ngữ mẹ đẻ **{native}**.\n\nBạn có thể trò chuyện với tôi, yêu cầu tôi dịch cụm từ, giải thích ngữ pháp hoặc giới thiệu từ mới.\n\nHãy thử hỏi tôi: *'Một số thành ngữ phổ biến trong {target} là gì?'* hoặc nhấp vào một trong các thao tác nhanh bên dưới để bắt đầu học!",
+    chat_placeholder_adding_word: "Đang thêm từ mới vào bộ từ vựng...",
+    chat_placeholder_photo: "Hỏi AI Vision về hình ảnh này hoặc nhấn Gửi để phân tích...",
+    chat_placeholder_default: "Hỏi gia sư AI, luyện trò chuyện hoặc yêu cầu nhận xét ngữ pháp...",
+    photo_attached: "Ảnh Đã Đính Kèm:",
+    photo_suggest_hint: "AI Vision sẽ gợi ý các câu trả lời tự nhiên và từ vựng từ ảnh chụp màn hình này",
+    photo_extract_hint: "AI Vision sẽ phân tích và trích xuất từ vựng khi gửi",
+    polished_sentence: "Câu Tinh Chỉnh:",
+    suggested_replies: "Gợi Ý Trả Lời (Sao Chép Nhanh):",
+    audio_clip: "Đoạn Âm Thanh",
+    tap_play_audio: "Nhấn phát để nghe phát âm",
+    play_clip: "Phát Âm",
+    copied: "Đã sao chép!",
+    copy: "Sao chép",
+    option_label: "Lựa chọn",
+    col_filter_placeholder: "Lọc từ vựng theo chính tả, bản dịch hoặc định nghĩa...",
+    col_sort_label: "Sắp xếp:",
+    col_sort_newest: "Từ mới nhất",
+    col_sort_oldest: "Cũ nhất trước",
+    col_sort_alpha: "Bảng chữ cái (A-Z)",
+    col_sort_unlearned: "Chưa thuộc trước",
+    col_no_words_found: "Không Tìm Thấy Từ Vựng Nào",
+    col_empty_search: "Không có từ nào khớp với bộ lọc tìm kiếm.",
+    col_empty_list: "Bộ từ vựng của bạn đang trống. Thêm từ mới thông qua giao diện Trợ lý AI!",
+    col_terms_count: "từ vựng",
+    analytics_title: "Phân Tích Từ Vựng AI",
+    analytics_headline: "Bảng Phân Tích Hiệu Suất & Thành Thạo",
+    analytics_quote: "\"Theo dõi khả năng ghi nhớ, xác định từ yếu cần luyện tập, xem các từ đã thành thạo và nhận đánh giá từ gia sư AI.\"",
+    analytics_practice_weak: "Luyện Tập Từ Yếu",
+    analytics_analyzing: "Đang Phân Tích...",
+    analytics_reanalyze: "Phân Tích Lại Với AI",
+    analytics_coach: "Gia Sư Đánh Giá Hiệu Suất AI",
+    analytics_mastered_title: "Từ Đã Thành Thạo",
+    analytics_improving_title: "Cần Cải Thiện",
+    analytics_all_words: "Tất Cả Từ Vựng",
+    analytics_improving_words: "Từ Cần Cải Thiện",
+    analytics_mastered_words: "Từ Đã Thành Thạo",
+    analytics_refresher_due: "Đến Lịch Ôn Tập",
+    analytics_starred: "Đã Đánh Dấu Sao",
+    analytics_search_placeholder: "Tìm kiếm từ, định nghĩa hoặc bản dịch...",
+    analytics_sort_label: "Sắp xếp:",
+    analytics_sort_weakest: "Mức độ ghi nhớ thấp nhất trước",
+    analytics_sort_highest: "Mức độ ghi nhớ cao nhất trước",
+    analytics_sort_alpha: "Bảng chữ cái (A - Z)",
+    analytics_sort_recent: "Vừa ôn tập gần đây",
+    quick_actions_title: "Thao Tác AI Nhanh",
+    quick_actions_search_placeholder: "Tìm thao tác (ví dụ: ngữ pháp, quiz, chủ đề)...",
+    quick_cat_all: "Tất Cả Thao Tác",
+    quick_cat_writing: "✍️ Viết & Sửa Lỗi",
+    quick_cat_study: "🧠 Trắc Nghiệm & Luyện Tập",
+    quick_cat_vocab: "📚 Bộ Từ Vựng",
+    quick_cat_chat: "💬 Phiên Trò Chuyện",
+    quick_all_actions: "Tất Cả Thao Tác",
+    quick_close_grid: "Đóng Lưới",
+    flashcards_empty_title: "Danh sách từ vựng đang trống",
+    flashcards_empty_desc: "Danh sách này chưa có từ nào. Bạn có thể thêm từ thủ công hoặc tạo từ mới với AI.",
+    flashcards_back_dash: "Quay Lại Trang Chủ",
+    flashcards_card_mode: "Chế Độ Thẻ",
+    flashcards_list_mode: "Chế Độ Danh Sách",
+    flashcards_click_flip: "Nhấp Để Lật Thẻ",
+    flashcards_meaning_trans: "Ý Nghĩa & Bản Dịch",
+    flashcards_example_usage: "Ví Dụ Sử Dụng",
+    flashcards_memory_strength: "Độ Ghi Nhớ:",
+    flashcards_got_it: "Đã Nhớ (+10%)",
+    flashcards_practice_btn: "Cần Luyện (-10%)",
+    flashcards_mastered: "Thành Thạo",
+    flashcards_mark_mastered: "Đánh Dấu Thành Thạo",
+    flashcards_previous: "Từ Trước",
+    flashcards_next_word: "Từ Tiếp Theo",
+    flashcards_take_quiz: "Làm Bài Quiz",
+    qa_fix_grammar_label: "Sửa Ngữ Pháp",
+    qa_fix_grammar_title: "Sửa Ngữ Pháp & Tinh Chỉnh",
+    qa_fix_grammar_desc: "Kiểm tra chính tả, ngữ pháp và cải thiện độ tự nhiên",
+    qa_suggest_reply_label: "Gợi Ý Trả Lời",
+    qa_suggest_reply_title: "Gợi Ý Trả Lời Tự Nhiên",
+    qa_suggest_reply_desc: "Gợi ý câu trả lời và từ vựng từ ảnh chụp màn hình hoặc đoạn chat",
+    qa_start_quiz_label: "Làm Bài Quiz",
+    qa_start_quiz_title: "Bắt Đầu Bài Quiz Hôm Nay",
+    qa_start_quiz_desc: "Thử thách ghi nhớ qua thẻ ghi nhớ tương tác",
+    qa_flash_card_label: "Thẻ Ghi Nhớ",
+    qa_flash_card_title: "Thẻ Ghi Nhớ AI",
+    qa_flash_card_desc: "Luyện tập từ vựng dạng thẻ ghi nhớ AI tương tác có phát âm",
+    qa_generate_words_label: "Tạo Từ Vựng",
+    qa_generate_words_title: "Tạo Bộ Từ Vựng",
+    qa_generate_words_desc: "Xây dựng từ vựng theo chủ đề du lịch, công việc hoặc tùy chỉnh",
+    qa_add_word_label: "Thêm Từ Mới",
+    qa_add_word_title: "Thêm Từ Vào Bộ Từ Vựng",
+    qa_add_word_desc: "Thêm từ mới thủ công kèm ghi chú và định nghĩa",
+    qa_interactive_prompts_label: "Gợi Ý AI Tương Tác",
+    qa_interactive_prompts_title: "Gia Sư Ngôn Ngữ Tương Tác",
+    qa_interactive_prompts_desc: "Yêu cầu AI hướng dẫn ngữ pháp, dịch thuật hoặc mẫu câu tình huống",
+    qa_explain_grammar_label: "Giải Thích Ngữ Pháp",
+    qa_explain_grammar_title: "Giải Thích Quy Tắc Ngữ Pháp",
+    qa_explain_grammar_desc: "Yêu cầu gia sư AI giải thích ngữ pháp bằng tiếng mẹ đẻ",
+    qa_common_phrases_label: "Cụm Từ Phổ Biến",
+    qa_common_phrases_title: "Cụm Từ & Thành Ngữ Phổ Biến",
+    qa_common_phrases_desc: "Học các mẫu câu giao tiếp và thành ngữ thông dụng theo chủ đề",
+    qa_translate_contrast_label: "Dịch & So Sánh",
+    qa_translate_contrast_title: "Dịch & So Sánh Sắc Thái",
+    qa_translate_contrast_desc: "So sánh sắc thái giữa câu tiếng mẹ đẻ và ngôn ngữ đang học",
+    qa_new_chat_label: "Bắt Đầu Chat Mới",
+    qa_new_chat_title: "Tạo Phiên Trò Chuyện Mới",
+    qa_new_chat_desc: "Xóa lịch sử đoạn chat hiện tại và bắt đầu lại",
+    qa_cat_writing: "Sửa Lỗi",
+    qa_cat_study: "Luyện Tập",
+    qa_cat_vocab: "Từ Vựng",
+    qa_cat_chat: "Trò Chuyện",
+    action_add_to_col: "Thêm \"{word}\" vào bộ từ vựng",
+    action_confirm_add: "➕ Xác nhận & Thêm \"{word}\" ({translation})",
+    action_next_flashcard: "🃏 Thẻ Ghi Nhớ Tiếp Theo",
+    action_suggest_another: "💬 Gợi Ý Câu Trả Lời Khác"
   },
   es: {
     app_title: "Aprende Vocabulario AI",

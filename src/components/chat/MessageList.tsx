@@ -8,6 +8,7 @@ interface MessageListProps {
   isTyping: boolean;
   targetLanguage: string;
   nativeLanguage: string;
+  appLanguage?: string;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
@@ -37,6 +38,7 @@ export default function MessageList({
   isTyping,
   targetLanguage,
   nativeLanguage,
+  appLanguage,
   ttsConfig,
   llmConfig,
   onSendMessage,
@@ -79,6 +81,7 @@ export default function MessageList({
                 messages={messages}
                 targetLanguage={targetLanguage}
                 nativeLanguage={nativeLanguage}
+                appLanguage={appLanguage}
                 ttsConfig={ttsConfig}
                 llmConfig={llmConfig}
                 onSendMessage={onSendMessage}

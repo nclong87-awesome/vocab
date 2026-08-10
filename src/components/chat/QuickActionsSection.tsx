@@ -3,10 +3,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { getQuickActionItems, getRotatedDefaultModel } from "./quickActionsConfig";
+import { t } from "../../config/i18n";
 
 interface QuickActionsSectionProps {
   targetLanguage: string;
   nativeLanguage: string;
+  appLanguage?: string;
   llmConfig: LLMConfig;
   actionLastUsed: Record<string, number>;
   handleRecordActionUse: (actionId: string) => void;
@@ -29,6 +31,7 @@ interface QuickActionsSectionProps {
 export default function QuickActionsSection({
   targetLanguage,
   nativeLanguage,
+  appLanguage = "Vietnamese",
   llmConfig,
   actionLastUsed,
   handleRecordActionUse,
@@ -99,7 +102,7 @@ export default function QuickActionsSection({
   });
 
   const quickActionItems = useMemo(() => {
-    const allQuickActionItems = getQuickActionItems().map((item) => ({
+    const allQuickActionItems = getQuickActionItems(appLanguage).map((item) => ({
       ...item,
       onClick: () => {
         const p = propsRef.current;
@@ -151,7 +154,7 @@ export default function QuickActionsSection({
       }
       return a.defaultIndex - b.defaultIndex;
     });
-  }, []); // do not include any dependencies to avoid re-rendering and losing scroll position
+  }, [appLanguage]);
 
   const filteredActionItems = quickActionItems.filter((item) => {
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
@@ -183,7 +186,7 @@ export default function QuickActionsSection({
                     ⚡
                   </div>
                   <h4 className="text-xs sm:text-sm font-bold text-stone-900 flex items-center gap-1.5">
-                    Quick AI Actions
+                    {t("quick_actions_title", appLanguage)}
                     <span className="bg-stone-200 text-stone-700 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">
                       {quickActionItems.length}
                     </span>
@@ -207,7 +210,7 @@ export default function QuickActionsSection({
                     type="text"
                     value={actionSearchQuery}
                     onChange={(e) => setActionSearchQuery(e.target.value)}
-                    placeholder="Search actions (e.g. grammar, quiz, topic)..."
+                    placeholder={t("quick_actions_search_placeholder", appLanguage)}
                     className="w-full bg-white text-stone-900 text-xs border border-stone-200 focus:border-stone-400 rounded-lg pl-8 pr-7 py-1.5 focus:ring-0 transition-colors font-medium placeholder:text-stone-400"
                   />
                   {actionSearchQuery && (
@@ -236,11 +239,11 @@ export default function QuickActionsSection({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
               <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
                 {[
-                  { id: "all", label: "All Actions" },
-                  { id: "writing", label: "✍️ Writing & Polish" },
-                  { id: "study", label: "🧠 Quiz & Study" },
-                  { id: "vocab", label: "📚 Vocabulary" },
-                  { id: "chat", label: "💬 Chat Session" }
+                  { id: "all", label: t("quick_cat_all", appLanguage) },
+                  { id: "writing", label: t("quick_cat_writing", appLanguage) },
+                  { id: "study", label: t("quick_cat_study", appLanguage) },
+                  { id: "vocab", label: t("quick_cat_vocab", appLanguage) },
+                  { id: "chat", label: t("quick_cat_chat", appLanguage) }
                 ].map((cat) => (
                   <button
                     key={cat.id}
@@ -340,7 +343,7 @@ export default function QuickActionsSection({
         >
           <LayoutGrid className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">
-            {isActionsPanelOpen ? "Close Grid" : "All Actions"}
+            {isActionsPanelOpen ? t("quick_close_grid", appLanguage) : t("quick_all_actions", appLanguage)}
           </span>
           <span className="bg-stone-800 text-amber-300 text-[10px] font-mono px-1.5 py-0.2 rounded-full">
             {quickActionItems.length}

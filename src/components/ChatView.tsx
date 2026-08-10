@@ -16,6 +16,7 @@ interface ChatViewProps {
   isTyping: boolean;
   targetLanguage: string;
   nativeLanguage: string;
+  appLanguage?: string;
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic: () => void;
@@ -41,6 +42,7 @@ export default function ChatView({
   isTyping,
   targetLanguage,
   nativeLanguage,
+  appLanguage = "Vietnamese",
   onAddWord,
   onAddMultipleWords,
   onGenerateByTopic,
@@ -359,6 +361,7 @@ export default function ChatView({
         isTyping={isTyping}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
         ttsConfig={ttsConfig}
         llmConfig={llmConfig}
         onSendMessage={onSendMessage}
@@ -387,6 +390,7 @@ export default function ChatView({
       <QuickActionsSection
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
         llmConfig={llmConfig}
         actionLastUsed={actionLastUsed}
         handleRecordActionUse={handleRecordActionUse}

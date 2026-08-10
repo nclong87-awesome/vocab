@@ -3,9 +3,11 @@ export function extractOrGenerateTopicActions(
   existingActions: any[] = [],
   lastUserMsg = "",
   _targetLanguage = "English",
-  _nativeLanguage = "Vietnamese"
+  _nativeLanguage = "Vietnamese",
+  appLang = "Vietnamese"
 ): any[] {
   const resultActions = Array.isArray(existingActions) ? [...existingActions] : [];
+  const isVi = appLang.toLowerCase().includes("vi") || appLang.toLowerCase().includes("vietnam");
 
   // Check if existingActions already has interactive navigation actions
   const hasInteractive = resultActions.some(act =>
@@ -70,11 +72,16 @@ export function extractOrGenerateTopicActions(
   const isAskingToChoose = combinedText.includes("chủ đề") || combinedText.includes("gợi ý") || combinedText.includes("chọn") || combinedText.includes("lựa chọn") || combinedText.includes("topic") || combinedText.includes("scenario") || combinedText.includes("dưới đây") || combinedText.includes("choose") || combinedText.includes("select");
 
   if (isCommonPhrases || (isAskingToChoose && !isGrammar && !isTranslation)) {
-    const defaults = [
-      { label: "🍽️ Dining Out & Restaurants (Nhà hàng & Gọi món)", action: "send_message", payload: { message: "Dining Out & Restaurants" } },
-      { label: "✈️ Travel & Airports (Du lịch & Sân bay)", action: "send_message", payload: { message: "Travel & Airports" } },
-      { label: "💼 Workplace & Business Small Talk (Giao tiếp Công sở)", action: "send_message", payload: { message: "Workplace & Business Small Talk" } },
-      { label: "🗣️ Daily Conversations & Emotions (Giao tiếp Hàng ngày)", action: "send_message", payload: { message: "Daily Conversations & Emotions" } },
+    const defaults = isVi ? [
+      { label: "🍽️ Gọi Món & Nhà Hàng", action: "send_message", payload: { message: "Dining Out & Restaurants" } },
+      { label: "✈️ Du Lịch & Sân Bay", action: "send_message", payload: { message: "Travel & Airports" } },
+      { label: "💼 Giao Tiếp Công Sở", action: "send_message", payload: { message: "Workplace & Business Small Talk" } },
+      { label: "🗣️ Giao Tiếp Hàng Ngày", action: "send_message", payload: { message: "Daily Conversations & Emotions" } },
+    ] : [
+      { label: "🍽️ Dining Out & Restaurants", action: "send_message", payload: { message: "Dining Out & Restaurants" } },
+      { label: "✈️ Travel & Airports", action: "send_message", payload: { message: "Travel & Airports" } },
+      { label: "💼 Workplace & Business Small Talk", action: "send_message", payload: { message: "Workplace & Business Small Talk" } },
+      { label: "🗣️ Daily Conversations & Emotions", action: "send_message", payload: { message: "Daily Conversations & Emotions" } },
     ];
     for (const d of defaults) {
       if (!resultActions.some(a => a.label === d.label)) {
@@ -82,11 +89,16 @@ export function extractOrGenerateTopicActions(
       }
     }
   } else if (isGrammar) {
-    const defaults = [
+    const defaults = isVi ? [
+      { label: "⏳ Quá Khứ Đơn vs Hiện Tại Hoàn Thành", action: "send_message", payload: { message: "Past Simple vs Present Perfect" } },
+      { label: "💬 Câu Điều Kiện (If clauses)", action: "send_message", payload: { message: "Conditional Sentences (If clauses)" } },
+      { label: "🔗 Mệnh Đề Quan Hệ", action: "send_message", payload: { message: "Relative Clauses & Pronouns" } },
+      { label: "🔄 Thể Bị Động", action: "send_message", payload: { message: "Passive Voice & Formality" } },
+    ] : [
       { label: "⏳ Past Simple vs Present Perfect", action: "send_message", payload: { message: "Past Simple vs Present Perfect" } },
-      { label: "💬 Conditional Sentences (Câu điều kiện)", action: "send_message", payload: { message: "Conditional Sentences (If clauses)" } },
-      { label: "🔗 Relative Clauses & Pronouns (Mệnh đề quan hệ)", action: "send_message", payload: { message: "Relative Clauses & Pronouns" } },
-      { label: "🔄 Passive Voice & Formality (Thể bị động)", action: "send_message", payload: { message: "Passive Voice & Formality" } },
+      { label: "💬 Conditional Sentences", action: "send_message", payload: { message: "Conditional Sentences (If clauses)" } },
+      { label: "🔗 Relative Clauses & Pronouns", action: "send_message", payload: { message: "Relative Clauses & Pronouns" } },
+      { label: "🔄 Passive Voice & Formality", action: "send_message", payload: { message: "Passive Voice & Formality" } },
     ];
     for (const d of defaults) {
       if (!resultActions.some(a => a.label === d.label)) {
@@ -94,7 +106,11 @@ export function extractOrGenerateTopicActions(
       }
     }
   } else if (isTranslation) {
-    const defaults = [
+    const defaults = isVi ? [
+      { label: "☕ Gọi Cà Phê & Yêu Cầu Lịch Sự", action: "send_message", payload: { message: "Ordering Coffee & Polite Requests" } },
+      { label: "🤝 Bày Tỏ Quan Điểm & Bất Đồng", action: "send_message", payload: { message: "Expressing Opinions & Disagreeing" } },
+      { label: "👋 Chào Hỏi Trang Trọng vs Thân Mật", action: "send_message", payload: { message: "Formal vs Casual Greetings" } },
+    ] : [
       { label: "☕ Ordering Coffee & Polite Requests", action: "send_message", payload: { message: "Ordering Coffee & Polite Requests" } },
       { label: "🤝 Expressing Opinions & Disagreeing", action: "send_message", payload: { message: "Expressing Opinions & Disagreeing" } },
       { label: "👋 Formal vs Casual Greetings", action: "send_message", payload: { message: "Formal vs Casual Greetings" } },
@@ -105,7 +121,12 @@ export function extractOrGenerateTopicActions(
       }
     }
   } else if (isAskingToChoose) {
-    const defaults = [
+    const defaults = isVi ? [
+      { label: "🗣️ Đời Sống & Giao Tiếp", action: "send_message", payload: { message: "Daily Life & Small Talk" } },
+      { label: "🎓 Sự Nghiệp & Giáo Dục", action: "send_message", payload: { message: "Career & Education" } },
+      { label: "✈️ Du Lịch & Văn Hóa", action: "send_message", payload: { message: "Travel & Culture" } },
+      { label: "🎯 Sở Thích & Giải Trí", action: "send_message", payload: { message: "Hobbies & Free Time" } },
+    ] : [
       { label: "🗣️ Daily Life & Small Talk", action: "send_message", payload: { message: "Daily Life & Small Talk" } },
       { label: "🎓 Career & Education", action: "send_message", payload: { message: "Career & Education" } },
       { label: "✈️ Travel & Culture", action: "send_message", payload: { message: "Travel & Culture" } },

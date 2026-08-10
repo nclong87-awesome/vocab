@@ -19,6 +19,7 @@ import { Word, TTSConfig, LLMConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { saveAllWordsToDB } from "../db/indexedDB";
+import { t } from "../config/i18n";
 
 interface FlashcardsViewProps {
   words: Word[];
@@ -29,6 +30,7 @@ interface FlashcardsViewProps {
   ttsConfig?: TTSConfig;
   llmConfig?: LLMConfig;
   targetLanguage?: string;
+  appLanguage?: string;
   onUpdateWords?: (updatedWords: Word[]) => void;
 }
 
@@ -41,6 +43,7 @@ export default function FlashcardsView({
   ttsConfig = DEFAULT_TTS_CONFIG,
   llmConfig,
   targetLanguage = "English",
+  appLanguage = "Vietnamese",
   onUpdateWords
 }: FlashcardsViewProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -94,14 +97,14 @@ export default function FlashcardsView({
   if (!sortedWords || sortedWords.length === 0) {
     return (
       <div className="text-center py-16 space-y-4 max-w-md mx-auto">
-        <h2 className="text-xl font-bold text-stone-900 font-serif">Vocabulary list is empty</h2>
-        <p className="text-xs text-stone-500 font-serif italic">This list doesn't have any words yet. You can add words manually or generate them with AI.</p>
+        <h2 className="text-xl font-bold text-stone-900 font-serif">{t("flashcards_empty_title", appLanguage)}</h2>
+        <p className="text-xs text-stone-500 font-serif italic">{t("flashcards_empty_desc", appLanguage)}</p>
         <div className="flex justify-center gap-3 pt-2">
           <button 
             onClick={onGoBack}
             className="px-5 py-2.5 bg-stone-900 text-white font-semibold text-xs hover:bg-black transition-colors cursor-pointer"
           >
-            Back to Dashboard
+            {t("flashcards_back_dash", appLanguage)}
           </button>
         </div>
       </div>
@@ -155,10 +158,10 @@ export default function FlashcardsView({
             onClick={onGoBack}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-900 transition-colors mb-2 cursor-pointer"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+            <ArrowLeft className="w-3.5 h-3.5" /> {t("flashcards_back_dash", appLanguage)}
           </button>
           <h2 className="text-2xl font-bold tracking-tight text-stone-900">Vocabulary</h2>
-          <p className="text-xs text-stone-500 mt-1 font-serif italic">{sortedWords.length} words</p>
+          <p className="text-xs text-stone-500 mt-1 font-serif italic">{sortedWords.length} {t("col_terms_count", appLanguage)}</p>
         </div>
 
         {/* Mode Toggle Button */}
@@ -171,7 +174,7 @@ export default function FlashcardsView({
                 : "text-stone-500 hover:text-stone-900"
             }`}
           >
-            <Layers className="w-3.5 h-3.5" /> Card Mode
+            <Layers className="w-3.5 h-3.5" /> {t("flashcards_card_mode", appLanguage)}
           </button>
           <button
             onClick={() => setViewMode("list")}
@@ -181,7 +184,7 @@ export default function FlashcardsView({
                 : "text-stone-500 hover:text-stone-900"
             }`}
           >
-            <List className="w-3.5 h-3.5" /> List View
+            <List className="w-3.5 h-3.5" /> {t("flashcards_list_mode", appLanguage)}
           </button>
         </div>
       </div>
@@ -272,7 +275,7 @@ export default function FlashcardsView({
                               {currentWord.pronunciation}
                             </p>
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-50 text-stone-500 border border-stone-200 text-xs font-medium mt-4">
-                              <RefreshCw className="w-3 h-3 text-stone-400 animate-spin" /> Click to Flip Card
+                              <RefreshCw className="w-3 h-3 text-stone-400 animate-spin" /> {t("flashcards_click_flip", appLanguage)}
                             </span>
                           </motion.div>
                         ) : (
@@ -284,7 +287,7 @@ export default function FlashcardsView({
                             className="space-y-3 w-full my-auto"
                           >
                             <div className="space-y-1.5">
-                              <span className="text-xs font-semibold text-stone-500 font-mono">Meaning & Translation</span>
+                              <span className="text-xs font-semibold text-stone-500 font-mono">{t("flashcards_meaning_trans", appLanguage)}</span>
                               <h4 className="text-xl sm:text-2xl font-bold text-stone-900 leading-tight font-serif italic">
                                 "{currentWord.translation}"
                               </h4>
@@ -297,7 +300,7 @@ export default function FlashcardsView({
                               className="bg-stone-50 p-3.5 border border-stone-200 text-left space-y-1.5 mt-2 max-h-48 overflow-y-auto"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="text-xs font-semibold text-stone-500 font-mono">Example Usage</span>
+                              <span className="text-xs font-semibold text-stone-500 font-mono">{t("flashcards_example_usage", appLanguage)}</span>
                               <p className="text-xs md:text-sm text-stone-800 font-serif italic leading-relaxed">
                                 "{currentWord.example}"
                               </p>
@@ -318,7 +321,7 @@ export default function FlashcardsView({
                       <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
                         <div className="flex items-center gap-1.5">
                           <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="font-bold text-stone-200">Memory Strength:</span>
+                          <span className="font-bold text-stone-200">{t("flashcards_memory_strength", appLanguage)}</span>
                           <span className="font-mono font-extrabold text-emerald-400">{Math.round(currentWord.strength || 0)}%</span>
                         </div>
                         
@@ -329,7 +332,7 @@ export default function FlashcardsView({
                             className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded transition-all flex items-center gap-1 cursor-pointer"
                             title="Increase memory strength by +10%"
                           >
-                            <CheckCircle className="w-3 h-3" /> Got it (+10%)
+                            <CheckCircle className="w-3 h-3" /> {t("flashcards_got_it", appLanguage)}
                           </button>
                           <button
                             type="button"
@@ -337,7 +340,7 @@ export default function FlashcardsView({
                             className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 font-semibold text-[10px] rounded transition-all flex items-center gap-1 cursor-pointer"
                             title="Reduce memory strength by -10%"
                           >
-                            <RotateCcw className="w-3 h-3" /> Practice (-10%)
+                            <RotateCcw className="w-3 h-3" /> {t("flashcards_practice_btn", appLanguage)}
                           </button>
                         </div>
                       </div>
@@ -365,16 +368,16 @@ export default function FlashcardsView({
                       >
                         {currentWord.learned ? (
                           <>
-                            <Check className="w-3.5 h-3.5 stroke-[3]" /> Mastered
+                            <Check className="w-3.5 h-3.5 stroke-[3]" /> {t("flashcards_mastered", appLanguage)}
                           </>
                         ) : (
                           <>
-                            <CheckCircle className="w-3.5 h-3.5" /> Mark as Mastered
+                            <CheckCircle className="w-3.5 h-3.5" /> {t("flashcards_mark_mastered", appLanguage)}
                           </>
                         )}
                       </button>
                       <span className="text-xs text-stone-500 font-mono font-medium flex items-center gap-1">
-                        <HelpCircle className="w-3.5 h-3.5" /> Flip Card
+                        <HelpCircle className="w-3.5 h-3.5" /> {t("flashcards_click_flip", appLanguage)}
                       </span>
                     </div>
 
@@ -391,7 +394,7 @@ export default function FlashcardsView({
               disabled={currentIndex === 0}
               className="px-6 py-3 border border-stone-200 hover:border-stone-900 bg-white text-stone-700 font-semibold rounded-none disabled:opacity-30 disabled:hover:border-stone-200 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" /> Previous
+              <ArrowLeft className="w-4 h-4" /> {t("flashcards_previous", appLanguage)}
             </button>
 
             {currentIndex < sortedWords.length - 1 ? (
@@ -399,14 +402,14 @@ export default function FlashcardsView({
                 onClick={handleNext}
                 className="px-6 py-3 bg-stone-900 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
-                Next Word <ArrowRight className="w-4 h-4" />
+                {t("flashcards_next_word", appLanguage)} <ArrowRight className="w-4 h-4" />
               </button>
             ) : (
               <button
                 onClick={onStartQuiz}
                 className="px-6 py-3 bg-stone-950 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
-                Take Quiz <Trophy className="w-4 h-4" />
+                {t("flashcards_take_quiz", appLanguage)} <Trophy className="w-4 h-4" />
               </button>
             )}
           </div>
