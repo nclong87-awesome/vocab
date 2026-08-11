@@ -143,125 +143,143 @@ export const syncToGist = async (
   }
 };
 
+// Active request coalescing map to prevent simultaneous duplicate HTTP requests
+const activeGistFetches = new Map<string, Promise<any>>();
+
 export const syncFromGist = async (
   token: string = "", 
   gistId: string
 ): Promise<any> => {
-  const { url, headers } = getGistEndpointAndHeaders(token, gistId);
-
-  const response = await fetchWithTimeout(url, {
-    method: 'GET',
-    headers
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(err.message || 'Failed to read from GitHub Gist');
+  const cacheKey = `${token || ""}_${gistId}`;
+  if (activeGistFetches.has(cacheKey)) {
+    console.log("[Sync Service] [syncFromGist] Coalescing simultaneous fetch request for Gist ID:", gistId);
+    return activeGistFetches.get(cacheKey)!;
   }
 
-  const result = await response.json();
-  if (!result || !result.files || Object.keys(result.files).length === 0) {
-    throw new Error('Gist files empty or not found');
-  }
+  const fetchPromise = (async () => {
+    try {
+      const { url, headers } = getGistEndpointAndHeaders(token, gistId);
 
-  const getFileContent = async (fileObj: any): Promise<string | null> => {
-    if (!fileObj) return null;
-    if (fileObj.truncated && fileObj.raw_url) {
-      const rawRes = await fetchWithTimeout(fileObj.raw_url);
-      if (!rawRes.ok) {
-        throw new Error(`Failed to fetch truncated file raw content (${rawRes.status})`);
-      }
-      return await rawRes.text();
-    }
-    if (fileObj.content !== undefined && fileObj.content !== null) {
-      return fileObj.content;
-    }
-    return null;
-  };
+      const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers
+      });
 
-  // Segmented stores backup check
-  const parsedData: any = { stores: {} };
-  let hasValidData = false;
-
-  // Identify stores present in new format (VocabLearner_02_store_*.json)
-  const newFormatStoreNames = new Set<string>();
-  for (const filename of Object.keys(result.files)) {
-    if (filename.startsWith('VocabLearner_02_store_') && filename.endsWith('.json')) {
-      const sName = filename.replace('VocabLearner_02_store_', '').replace('.json', '');
-      if (sName) newFormatStoreNames.add(sName);
-    }
-  }
-
-  const metadataFile = result.files['VocabLearner_00_metadata.json'];
-  if (metadataFile) {
-    const metaContent = await getFileContent(metadataFile);
-    if (metaContent) {
-      try {
-        const meta = JSON.parse(metaContent);
-        parsedData.version = meta.version;
-        parsedData.dbName = meta.dbName;
-        parsedData.exportedAt = meta.exportedAt;
-        hasValidData = true;
-      } catch (e) {
-        console.error("Error parsing metadata file from gist:", e);
-      }
-    }
-  }
-
-  for (const [filename, fileObj] of Object.entries(result.files)) {
-    let storeName = null;
-    let isNewFormat = false;
-
-    if (filename.startsWith('VocabLearner_02_store_') && filename.endsWith('.json')) {
-      storeName = filename.replace('VocabLearner_02_store_', '').replace('.json', '');
-      isNewFormat = true;
-    } else if (filename.startsWith('store_') && filename.endsWith('.json')) {
-      storeName = filename.replace('store_', '').replace('.json', '');
-      isNewFormat = false;
-    }
-
-    if (storeName) {
-      // CRITICAL FIX: If a new format file exists for this store, skip legacy store_ file to avoid overwriting newer data!
-      if (!isNewFormat && newFormatStoreNames.has(storeName)) {
-        continue;
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(err.message || 'Failed to read from GitHub Gist');
       }
 
-      const content = await getFileContent(fileObj);
-      if (content) {
-        try {
-          parsedData.stores[storeName] = JSON.parse(content);
-          hasValidData = true;
-        } catch (e) {
-          console.error(`Error parsing ${filename} from gist:`, e);
+      const result = await response.json();
+      if (!result || !result.files || Object.keys(result.files).length === 0) {
+        throw new Error('Gist files empty or not found');
+      }
+
+      const getFileContent = async (fileObj: any): Promise<string | null> => {
+        if (!fileObj) return null;
+        if (fileObj.truncated && fileObj.raw_url) {
+          const rawRes = await fetchWithTimeout(fileObj.raw_url);
+          if (!rawRes.ok) {
+            throw new Error(`Failed to fetch truncated file raw content (${rawRes.status})`);
+          }
+          return await rawRes.text();
+        }
+        if (fileObj.content !== undefined && fileObj.content !== null) {
+          return fileObj.content;
+        }
+        return null;
+      };
+
+      // Segmented stores backup check
+      const parsedData: any = { stores: {} };
+      let hasValidData = false;
+
+      // Identify stores present in new format (VocabLearner_02_store_*.json)
+      const newFormatStoreNames = new Set<string>();
+      for (const filename of Object.keys(result.files)) {
+        if (filename.startsWith('VocabLearner_02_store_') && filename.endsWith('.json')) {
+          const sName = filename.replace('VocabLearner_02_store_', '').replace('.json', '');
+          if (sName) newFormatStoreNames.add(sName);
         }
       }
-    }
-  }
 
-  const deletedWordsFile = result.files['VocabLearner_01_deleted_words.json'];
-  if (deletedWordsFile) {
-    const deletedWordsContentStr = await getFileContent(deletedWordsFile);
-    if (deletedWordsContentStr) {
-      try {
-        const deletedWordsContent = JSON.parse(deletedWordsContentStr);
-        if (Array.isArray(deletedWordsContent)) {
-          parsedData.stores.deletedWords = deduplicateDeletedWords(deletedWordsContent);
-        } else if (deletedWordsContent && deletedWordsContent.value) {
-          const parsedArr = JSON.parse(deletedWordsContent.value);
-          if (Array.isArray(parsedArr)) {
-            parsedData.stores.deletedWords = deduplicateDeletedWords(parsedArr);
+      const metadataFile = result.files['VocabLearner_00_metadata.json'];
+      if (metadataFile) {
+        const metaContent = await getFileContent(metadataFile);
+        if (metaContent) {
+          try {
+            const meta = JSON.parse(metaContent);
+            parsedData.version = meta.version;
+            parsedData.dbName = meta.dbName;
+            parsedData.exportedAt = meta.exportedAt;
+            hasValidData = true;
+          } catch (e) {
+            console.error("Error parsing metadata file from gist:", e);
           }
         }
-        hasValidData = true;
-      } catch (e) {
-        console.error("Error parsing deletedWords from gist:", e);
       }
+
+      for (const [filename, fileObj] of Object.entries(result.files)) {
+        let storeName = null;
+        let isNewFormat = false;
+
+        if (filename.startsWith('VocabLearner_02_store_') && filename.endsWith('.json')) {
+          storeName = filename.replace('VocabLearner_02_store_', '').replace('.json', '');
+          isNewFormat = true;
+        } else if (filename.startsWith('store_') && filename.endsWith('.json')) {
+          storeName = filename.replace('store_', '').replace('.json', '');
+          isNewFormat = false;
+        }
+
+        if (storeName) {
+          // CRITICAL FIX: If a new format file exists for this store, skip legacy store_ file to avoid overwriting newer data!
+          if (!isNewFormat && newFormatStoreNames.has(storeName)) {
+            continue;
+          }
+
+          const content = await getFileContent(fileObj);
+          if (content) {
+            try {
+              parsedData.stores[storeName] = JSON.parse(content);
+              hasValidData = true;
+            } catch (e) {
+              console.error(`Error parsing ${filename} from gist:`, e);
+            }
+          }
+        }
+      }
+
+      const deletedWordsFile = result.files['VocabLearner_01_deleted_words.json'];
+      if (deletedWordsFile) {
+        const deletedWordsContentStr = await getFileContent(deletedWordsFile);
+        if (deletedWordsContentStr) {
+          try {
+            const deletedWordsContent = JSON.parse(deletedWordsContentStr);
+            if (Array.isArray(deletedWordsContent)) {
+              parsedData.stores.deletedWords = deduplicateDeletedWords(deletedWordsContent);
+            } else if (deletedWordsContent && deletedWordsContent.value) {
+              const parsedArr = JSON.parse(deletedWordsContent.value);
+              if (Array.isArray(parsedArr)) {
+                parsedData.stores.deletedWords = deduplicateDeletedWords(parsedArr);
+              }
+            }
+            hasValidData = true;
+          } catch (e) {
+            console.error("Error parsing deletedWords from gist:", e);
+          }
+        }
+      }
+
+      if (hasValidData && Object.keys(parsedData.stores).length > 0) {
+        return parsedData;
+      }
+
+      throw new Error('Backup files not found in Gist');
+    } finally {
+      activeGistFetches.delete(cacheKey);
     }
-  }
+  })();
 
-  if (hasValidData && Object.keys(parsedData.stores).length > 0) {
-    return parsedData;
-  }
-
-  throw new Error('Backup files not found in Gist');
+  activeGistFetches.set(cacheKey, fetchPromise);
+  return fetchPromise;
 };
