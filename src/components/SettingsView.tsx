@@ -103,6 +103,7 @@ export default function SettingsView({
   const [selectedNativeLang, setSelectedNativeLang] = useState<string>(nativeLanguage);
   const [selectedAppLang, setSelectedAppLang] = useState<string>(appLanguage || nativeLanguage);
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
+  const [ttsSaveSuccess, setTtsSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
   const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
@@ -127,6 +128,19 @@ export default function SettingsView({
     }
     setLangSaveSuccess("Language preferences saved successfully!");
     setTimeout(() => setLangSaveSuccess(null), 3000);
+  };
+
+  const handleSaveTTSConfigSettings = () => {
+    let updatedConfig = { ...config };
+    if (config.engine === 'browser' && config.voiceURI) {
+      const selectedVoice = availableVoices.find(v => v.voiceURI === config.voiceURI);
+      if (selectedVoice) {
+        updatedConfig.voice = selectedVoice.name;
+      }
+    }
+    onSaveTTSConfig(updatedConfig);
+    setTtsSaveSuccess("TTS voice configuration saved successfully!");
+    setTimeout(() => setTtsSaveSuccess(null), 3000);
   };
 
   // Target Language Voice Detection logic
@@ -1593,7 +1607,7 @@ export default function SettingsView({
                   className="w-full p-2.5 bg-white border border-stone-300 text-xs font-medium text-stone-900 rounded-none focus:outline-none focus:border-stone-900"
                 >
                   <option value="">Default System Voice</option>
-                  {availableVoices.map((v) => (
+                  {targetVoices.map((v) => (
                     <option key={v.voiceURI} value={v.voiceURI}>
                       {v.name} ({v.lang})
                     </option>
@@ -1829,6 +1843,51 @@ export default function SettingsView({
               </div>
             </div>
           )}
+        </div>
+
+        {ttsSaveSuccess && (
+          <div className="bg-emerald-900 text-white p-3.5 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+            <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
+            <span>{ttsSaveSuccess}</span>
+          </div>
+        )}
+
+        {/* Save Voice Action Footer */}
+        <div className="pt-3 border-t border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-stone-50/60 p-3.5">
+          <p className="text-xs text-stone-600">
+            Selected Engine: <strong className="text-stone-900 font-bold capitalize">{config.engine}</strong>
+            {config.engine === 'browser' && (
+              <>
+                {" "}• Voice: <strong className="text-stone-900 font-bold">{config.voiceURI ? (availableVoices.find(v => v.voiceURI === config.voiceURI)?.name || "Custom Voice") : "Default System Voice"}</strong>
+              </>
+            )}
+            {config.engine === 'gemini' && (
+              <>
+                {" "}• Persona: <strong className="text-stone-900 font-bold">{config.voice || "Puck"}</strong>
+              </>
+            )}
+            {config.engine === 'openai' && (
+              <>
+                {" "}• Voice: <strong className="text-stone-900 font-bold">{config.voice || "alloy"}</strong>
+              </>
+            )}
+            {config.engine === 'custom' && (
+              <>
+                {" "}• Voice: <strong className="text-stone-900 font-bold">{config.voice || "None"}</strong>
+              </>
+            )}
+          </p>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleSaveTTSConfigSettings}
+              className="w-full sm:w-auto px-5 py-2.5 bg-stone-900 hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+            >
+              <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
+              <span>Save Voice Configuration</span>
+            </button>
+          </div>
         </div>
       </div>
 
