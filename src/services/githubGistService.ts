@@ -53,16 +53,6 @@ export const syncToGist = async (
         storesCount: Object.keys(sanitized.stores || {}).length
       });
       
-      // Clean up legacy files from gist if updating existing gist
-      if (gistId) {
-        filesToUpdate['metadata.json'] = null;
-        filesToUpdate['deleted_words.json'] = null;
-        filesToUpdate['vocab_learner_backup.json'] = null;
-        for (const storeName of Object.keys(sanitized.stores)) {
-          filesToUpdate[`store_${storeName}.json`] = null;
-        }
-      }
-
       filesToUpdate['VocabLearner_00_metadata.json'] = {
         content: JSON.stringify({
           version: sanitized.version,
@@ -202,7 +192,7 @@ export const syncFromGist = async (
     }
   }
 
-  const metadataFile = result.files['VocabLearner_00_metadata.json'] || result.files['metadata.json'];
+  const metadataFile = result.files['VocabLearner_00_metadata.json'];
   if (metadataFile) {
     const metaContent = await getFileContent(metadataFile);
     if (metaContent) {
@@ -248,7 +238,7 @@ export const syncFromGist = async (
     }
   }
 
-  const deletedWordsFile = result.files['VocabLearner_01_deleted_words.json'] || result.files['deleted_words.json'];
+  const deletedWordsFile = result.files['VocabLearner_01_deleted_words.json'];
   if (deletedWordsFile) {
     const deletedWordsContentStr = await getFileContent(deletedWordsFile);
     if (deletedWordsContentStr) {
@@ -271,15 +261,6 @@ export const syncFromGist = async (
 
   if (hasValidData && Object.keys(parsedData.stores).length > 0) {
     return parsedData;
-  }
-
-  // Fallback check for single monolithic backup file
-  const singleBackupFile = result.files['vocab_learner_backup.json'];
-  if (singleBackupFile) {
-    const content = await getFileContent(singleBackupFile);
-    if (content) {
-      return JSON.parse(content);
-    }
   }
 
   throw new Error('Backup files not found in Gist');
