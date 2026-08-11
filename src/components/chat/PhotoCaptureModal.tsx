@@ -14,9 +14,10 @@ import {
   Clipboard,
   ZoomIn,
   ZoomOut,
-  Maximize2,
   Plus,
-  Minus
+  Minus,
+  Crop,
+  RotateCcw
 } from "lucide-react";
 import { resizeImageDataUrl } from "../../utils/llmHelpers";
 
@@ -47,7 +48,231 @@ function PhotoCaptureModal({
   // Zoom State
   const [zoom, setZoom] = useState<number>(1);
   const [maxHardwareZoom, setMaxHardwareZoom] = useState<number>(5);
-  const [previewZoom, setPreviewZoom] = useState<number>(1);
+
+  // Cropping State
+  const [originalImage, setOriginalImage] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [isCropping, setIsCropping] = useState<boolean>(false);
+  const [crop, setCrop] = useState<{ x: number; y: number; width: number; height: number }>({ x: 15, y: 15, width: 70, height: 70 });
+  const [imageAspect, setImageAspect] = useState<number>(1);
+  const [activeDrag, setActiveDrag] = useState<"move" | "nw" | "ne" | "se" | "sw" | null>(null);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; cropX: number; cropY: number; cropW: number; cropH: number } | null>(null);
+
+  // Unified image source handler
+  const handleNewImageSource = (dataUrl: string, name: string) => {
+    setCapturedImage({ dataUrl, name });
+    setOriginalImage({ dataUrl, name });
+    setMode("preview");
+    setIsCropping(false);
+    setCrop({ x: 15, y: 15, width: 70, height: 70 });
+  };
+
+  // Load original image dimensions to compute aspect ratio and initial crop
+  useEffect(() => {
+    if (originalImage) {
+      const img = new Image();
+      img.onload = () => {
+        const aspect = img.naturalWidth / img.naturalHeight;
+        setImageAspect(aspect);
+        
+        let w = 70;
+        let h = 70 * aspect;
+        
+        if (aspect > 1) {
+          h = 70;
+          w = 70 / aspect;
+        } else {
+          w = 70;
+          h = 70 * aspect;
+        }
+        
+        setCrop({
+          x: (100 - w) / 2,
+          y: (100 - h) / 2,
+          width: w,
+          height: h
+        });
+      };
+      img.src = originalImage.dataUrl;
+    }
+  }, [originalImage]);
+
+  // Dragging / Resizing Effect
+  useEffect(() => {
+    if (!activeDrag || !dragStartRef.current || !containerRef.current) return;
+
+    const handleDragMove = (e: MouseEvent | TouchEvent) => {
+      if (!dragStartRef.current || !containerRef.current) return;
+
+      let clientX = 0;
+      let clientY = 0;
+      if ("touches" in e) {
+        if (e.touches.length === 1) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+        } else {
+          return;
+        }
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const containerW = containerRect.width;
+      const containerH = containerRect.height;
+
+      if (containerW === 0 || containerH === 0) return;
+
+      const dx = clientX - dragStartRef.current.mouseX;
+      const dy = clientY - dragStartRef.current.mouseY;
+
+      const dPctX = (dx / containerW) * 100;
+      const dPctY = (dy / containerH) * 100;
+
+      const startX = dragStartRef.current.cropX;
+      const startY = dragStartRef.current.cropY;
+      const startW = dragStartRef.current.cropW;
+      const startH = dragStartRef.current.cropH;
+
+      let nextX = startX;
+      let nextY = startY;
+      let nextW = startW;
+      let nextH = startH;
+
+      const minW = 15;
+
+      if (activeDrag === "move") {
+        nextX = Math.max(0, Math.min(100 - startW, startX + dPctX));
+        nextY = Math.max(0, Math.min(100 - startH, startY + dPctY));
+      } else if (activeDrag === "se") {
+        const maxW = Math.min(100 - startX, (100 - startY) / imageAspect);
+        nextW = Math.max(minW, Math.min(maxW, startW + dPctX));
+        nextH = nextW * imageAspect;
+        nextX = startX;
+        nextY = startY;
+      } else if (activeDrag === "nw") {
+        const fixedX = startX + startW;
+        const fixedY = startY + startH;
+        const maxW = Math.min(fixedX, fixedY / imageAspect);
+        nextW = Math.max(minW, Math.min(maxW, startW - dPctX));
+        nextH = nextW * imageAspect;
+        nextX = fixedX - nextW;
+        nextY = fixedY - nextH;
+      } else if (activeDrag === "ne") {
+        const fixedX = startX;
+        const fixedY = startY + startH;
+        const maxW = Math.min(100 - fixedX, fixedY / imageAspect);
+        nextW = Math.max(minW, Math.min(maxW, startW + dPctX));
+        nextH = nextW * imageAspect;
+        nextX = fixedX;
+        nextY = fixedY - nextH;
+      } else if (activeDrag === "sw") {
+        const fixedX = startX + startW;
+        const fixedY = startY;
+        const maxW = Math.min(fixedX, (100 - fixedY) / imageAspect);
+        nextW = Math.max(minW, Math.min(maxW, startW - dPctX));
+        nextH = nextW * imageAspect;
+        nextX = fixedX - nextW;
+        nextY = fixedY;
+      }
+
+      setCrop({
+        x: nextX,
+        y: nextY,
+        width: nextW,
+        height: nextH,
+      });
+    };
+
+    const handleDragEnd = () => {
+      setActiveDrag(null);
+      dragStartRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleDragMove);
+    window.addEventListener("mouseup", handleDragEnd);
+    window.addEventListener("touchmove", handleDragMove, { passive: false });
+    window.addEventListener("touchend", handleDragEnd);
+
+    return () => {
+      window.removeEventListener("mousemove", handleDragMove);
+      window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchmove", handleDragMove);
+      window.removeEventListener("touchend", handleDragEnd);
+    };
+  }, [activeDrag]);
+
+  const handleDragStart = (
+    e: React.MouseEvent | React.TouchEvent,
+    action: "move" | "nw" | "ne" | "se" | "sw"
+  ) => {
+    e.preventDefault();
+    let clientX = 0;
+    let clientY = 0;
+    
+    if ("touches" in e) {
+      if (e.touches.length === 1) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        return; // ignore multi-touch
+      }
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    setActiveDrag(action);
+    dragStartRef.current = {
+      mouseX: clientX,
+      mouseY: clientY,
+      cropX: crop.x,
+      cropY: crop.y,
+      cropW: crop.width,
+      cropH: crop.height,
+    };
+  };
+
+  const handleApplyCrop = () => {
+    if (!originalImage || crop.width === 0) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      
+      const cropPixelX = (crop.x / 100) * img.naturalWidth;
+      const cropPixelY = (crop.y / 100) * img.naturalHeight;
+      const cropPixelW = (crop.width / 100) * img.naturalWidth;
+      const cropPixelH = (crop.height / 100) * img.naturalHeight;
+
+      const finalPixelSize = Math.round(Math.min(cropPixelW, cropPixelH));
+
+      canvas.width = finalPixelSize;
+      canvas.height = finalPixelSize;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(
+          img,
+          Math.round(cropPixelX),
+          Math.round(cropPixelY),
+          finalPixelSize,
+          finalPixelSize,
+          0,
+          0,
+          finalPixelSize,
+          finalPixelSize
+        );
+        const croppedDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        setCapturedImage(prev => prev ? { ...prev, dataUrl: croppedDataUrl } : null);
+        setIsCropping(false);
+        onToast?.("📐 Image cropped successfully!");
+      }
+    };
+    img.src = originalImage.dataUrl;
+  };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -203,10 +428,11 @@ function PhotoCaptureModal({
       stopCameraStream();
       setMode("choose");
       setCapturedImage(null);
+      setOriginalImage(null);
       setCameraError(null);
       setModalError(null);
       setZoom(1);
-      setPreviewZoom(1);
+      setIsCropping(false);
     }
   }, [isOpen]);
 
@@ -294,13 +520,9 @@ function PhotoCaptureModal({
     try {
       const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
       const name = `Camera Photo (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
-      setCapturedImage({ dataUrl: optimized, name });
-      setMode("preview");
-      setPreviewZoom(1);
+      handleNewImageSource(optimized, name);
     } catch (err) {
-      setCapturedImage({ dataUrl: rawDataUrl, name: "Camera Snapshot" });
-      setMode("preview");
-      setPreviewZoom(1);
+      handleNewImageSource(rawDataUrl, "Camera Snapshot");
     }
   };
 
@@ -325,13 +547,9 @@ function PhotoCaptureModal({
           const name = isCameraCapture
             ? `Camera Photo (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
             : file.name || "Uploaded Photo";
-          setCapturedImage({ dataUrl: optimized, name });
-          setMode("preview");
-          setPreviewZoom(1);
+          handleNewImageSource(optimized, name);
         } catch (err) {
-          setCapturedImage({ dataUrl: rawDataUrl, name: file.name || "Photo" });
-          setMode("preview");
-          setPreviewZoom(1);
+          handleNewImageSource(rawDataUrl, file.name || "Photo");
         }
       }
     };
@@ -358,9 +576,7 @@ function PhotoCaptureModal({
         if (typeof reader.result === "string") {
           const rawDataUrl = reader.result;
           const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
-          setCapturedImage({ dataUrl: optimized, name: file.name || "Dropped Image" });
-          setMode("preview");
-          setPreviewZoom(1);
+          handleNewImageSource(optimized, file.name || "Dropped Image");
         }
       };
       reader.readAsDataURL(file);
@@ -382,13 +598,9 @@ function PhotoCaptureModal({
               const rawDataUrl = reader.result;
               try {
                 const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
-                setCapturedImage({ dataUrl: optimized, name: "Clipboard Image" });
-                setMode("preview");
-                setPreviewZoom(1);
+                handleNewImageSource(optimized, "Clipboard Image");
               } catch {
-                setCapturedImage({ dataUrl: rawDataUrl, name: "Clipboard Image" });
-                setMode("preview");
-                setPreviewZoom(1);
+                handleNewImageSource(rawDataUrl, "Clipboard Image");
               }
             }
           };
@@ -424,13 +636,9 @@ function PhotoCaptureModal({
                 const rawDataUrl = reader.result;
                 try {
                   const optimized = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
-                  setCapturedImage({ dataUrl: optimized, name: "Pasted Clipboard Image" });
-                  setMode("preview");
-                  setPreviewZoom(1);
+                  handleNewImageSource(optimized, "Pasted Clipboard Image");
                 } catch {
-                  setCapturedImage({ dataUrl: rawDataUrl, name: "Pasted Image" });
-                  setMode("preview");
-                  setPreviewZoom(1);
+                  handleNewImageSource(rawDataUrl, "Pasted Image");
                 }
               }
             };
@@ -836,78 +1044,166 @@ function PhotoCaptureModal({
               </div>
             )}
 
-            {/* Mode 3: Preview Photo before uploading (with Preview Zoom inspection) */}
+            {/* Mode 3: Preview Photo before uploading */}
             {mode === "preview" && capturedImage && (
               <div className="space-y-3 flex flex-col items-center">
-                <div className="relative max-w-sm w-full aspect-square rounded-2xl overflow-hidden border border-stone-200 bg-stone-900 shadow-md flex items-center justify-center">
-                  <img
-                    src={capturedImage.dataUrl}
-                    alt="Captured photo preview"
-                    style={{
-                      transform: `scale(${previewZoom})`,
-                      transition: "transform 0.15s ease-out"
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-
-                  {/* Preview Zoom Indicator */}
-                  {previewZoom > 1 && (
-                    <div className="absolute top-2 right-2 px-2 py-0.5 bg-stone-900/80 border border-amber-400/40 text-amber-400 text-[10px] font-mono font-bold rounded-full">
-                      Preview {previewZoom.toFixed(1)}x
-                    </div>
-                  )}
-                </div>
-
-                {/* Preview Zoom Controls */}
-                <div className="flex items-center justify-between gap-2 w-full max-w-sm bg-stone-50 border border-stone-200 rounded-xl p-2">
-                  <span className="text-xs font-semibold text-stone-600 flex items-center gap-1 pl-1">
-                    <Maximize2 className="w-3.5 h-3.5 text-stone-500" /> Inspect text:
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {[1, 1.5, 2, 3].map((pz) => (
-                      <button
-                        key={pz}
-                        type="button"
-                        onClick={() => setPreviewZoom(pz)}
-                        className={`px-2 py-0.5 text-xs font-mono font-bold rounded-md transition-colors cursor-pointer ${
-                          previewZoom === pz
-                            ? "bg-stone-900 text-amber-400"
-                            : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-100"
-                        }`}
+                {isCropping ? (
+                  /* Interactive Cropping View */
+                  <div className="space-y-4 w-full flex flex-col items-center">
+                    <div 
+                      ref={containerRef}
+                      className="relative select-none touch-none w-full max-w-sm overflow-hidden bg-stone-900 rounded-2xl shadow-inner border border-stone-200"
+                    >
+                      <img
+                        src={originalImage?.dataUrl}
+                        alt="Crop source"
+                        className="w-full h-auto block pointer-events-none"
+                      />
+                      
+                      {/* Crop Window overlay */}
+                      <div
+                        style={{
+                          left: `${crop.x}%`,
+                          top: `${crop.y}%`,
+                          width: `${crop.width}%`,
+                          height: `${crop.height}%`,
+                          boxShadow: "0 0 0 9999px rgba(28, 25, 23, 0.65)", // warm stone-900 transparent mask
+                        }}
+                        className="absolute border-2 border-amber-400 cursor-move flex items-center justify-center z-10"
+                        onMouseDown={(e) => handleDragStart(e, "move")}
+                        onTouchStart={(e) => handleDragStart(e, "move")}
                       >
-                        {pz}x
+                        {/* Crop Guide lines (Rule of thirds) */}
+                        <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-40">
+                          <div className="border-r border-b border-white border-dashed" />
+                          <div className="border-r border-b border-white border-dashed" />
+                          <div className="border-b border-white border-dashed" />
+                          <div className="border-r border-b border-white border-dashed" />
+                          <div className="border-r border-b border-white border-dashed" />
+                          <div className="border-b border-white border-dashed" />
+                          <div className="border-r border-white border-dashed" />
+                          <div className="border-r border-white border-dashed" />
+                          <div />
+                        </div>
+
+                        {/* Corner handles */}
+                        <div
+                          className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-amber-500 rounded-full cursor-nwse-resize z-20 active:scale-125 transition-transform"
+                          onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, "nw"); }}
+                          onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, "nw"); }}
+                        />
+                        <div
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-amber-500 rounded-full cursor-nesw-resize z-20 active:scale-125 transition-transform"
+                          onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, "ne"); }}
+                          onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, "ne"); }}
+                        />
+                        <div
+                          className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-amber-500 rounded-full cursor-nesw-resize z-20 active:scale-125 transition-transform"
+                          onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, "sw"); }}
+                          onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, "sw"); }}
+                        />
+                        <div
+                          className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-amber-500 rounded-full cursor-nwse-resize z-20 active:scale-125 transition-transform"
+                          onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, "se"); }}
+                          onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, "se"); }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-center px-4">
+                      <p className="text-xs text-stone-500 font-medium">
+                        Drag the box to move. Drag corners to adjust the crop region.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full max-w-sm pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsCropping(false)}
+                        className="flex-1 py-2 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                      >
+                        Cancel
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={handleApplyCrop}
+                        className="flex-1 py-2 px-4 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold rounded-xl shadow-md transition-all hover:scale-102 cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Apply Crop</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  /* Image Preview and Action Toolbar */
+                  <div className="space-y-3 w-full flex flex-col items-center">
+                    <div className="relative max-w-sm w-full aspect-square rounded-2xl overflow-hidden border border-stone-200 bg-stone-900 shadow-md flex items-center justify-center">
+                      <img
+                        src={capturedImage.dataUrl}
+                        alt="Captured photo preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
 
-                <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 font-medium flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>AI Vision will extract and translate key vocabulary items from this image!</span>
-                </div>
+                    {/* Crop Toolbar Actions */}
+                    <div className="flex items-center gap-2 w-full max-w-sm">
+                      <button
+                        type="button"
+                        onClick={() => setIsCropping(true)}
+                        className="flex-1 py-2 px-3 bg-stone-900 hover:bg-stone-800 text-white hover:text-amber-400 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-stone-800"
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                        <span>Crop Photo</span>
+                      </button>
 
-                <div className="flex items-center gap-3 w-full pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCapturedImage(null);
-                      setMode("choose");
-                    }}
-                    className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Retake / Choose Another</span>
-                  </button>
+                      {capturedImage.dataUrl !== originalImage?.dataUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (originalImage) {
+                              setCapturedImage({ ...originalImage });
+                              onToast?.("🔄 Reverted to original image!");
+                            }
+                          }}
+                          className="flex-1 py-2 px-3 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-stone-200"
+                          title="Reset to Original"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-stone-600" />
+                          <span>Reset Image</span>
+                        </button>
+                      )}
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={handleConfirmUpload}
-                    className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-stone-800 text-amber-400 text-xs font-bold rounded-xl shadow-md transition-all hover:scale-102 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Check className="w-4 h-4 text-amber-400" />
-                    <span>Attach & Upload</span>
-                  </button>
-                </div>
+                    <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 font-medium flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>AI Vision will extract and translate key vocabulary items from this image!</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCapturedImage(null);
+                          setOriginalImage(null);
+                          setMode("choose");
+                        }}
+                        className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retake / Choose Another</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleConfirmUpload}
+                        className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-stone-800 text-amber-400 text-xs font-bold rounded-xl shadow-md transition-all hover:scale-102 cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Check className="w-4 h-4 text-amber-400" />
+                        <span>Attach & Upload</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
