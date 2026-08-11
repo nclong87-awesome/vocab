@@ -378,7 +378,6 @@ export default function App() {
               onSaveTTSConfig={handleSaveTTSConfig}
               onSaveLLMConfig={handleSaveLlmConfig}
               onOpenLlmModal={handleOpenLlmModal}
-              onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
               onReloadData={reloadAllDataFromDB}
               targetLanguage={targetLanguage}
               nativeLanguage={nativeLanguage}

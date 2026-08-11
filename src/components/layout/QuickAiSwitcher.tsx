@@ -4,18 +4,18 @@ import {
   ChevronDown, 
   Zap, 
   Check, 
-  
-  Sliders, 
   CheckCircle2, 
   Cpu,
   X,
   Server,
-  RotateCcw
+  RotateCcw,
+  Activity
 } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
-import { getLockedModels, isModelLocked, clearAllLocks, resetAllModelStates } from "../../utils/autoModeManager";
+import { isModelLocked, clearAllLocks, resetAllModelStates } from "../../utils/autoModeManager";
+import ModelStatusModal from "../ModelStatusModal";
 
 interface QuickAiSwitcherProps {
   llmConfig: LLMConfig;
@@ -45,6 +45,7 @@ export default function QuickAiSwitcher({
   const [isOpen, setIsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
 
   const activeProviderMeta = PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider) || PROVIDER_OPTIONS[0];
   const savedMap = getSavedProvidersMap(llmConfig);
@@ -154,19 +155,6 @@ export default function QuickAiSwitcher({
                   <h3 className="text-sm font-bold text-stone-900 tracking-tight leading-none truncate">
                     AI Engine & Models
                   </h3>
-                  <div className="flex items-center gap-2 mt-1 min-w-0">
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                      isConnected 
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80" 
-                        : "bg-amber-50 text-amber-700 border border-amber-200/80"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
-                      {isConnected ? "Ready" : "Key Needed"}
-                    </span>
-                    <p className="text-[11px] text-stone-500 truncate hidden xs:block">
-                      Switch model or manage keys
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -175,13 +163,13 @@ export default function QuickAiSwitcher({
                   type="button"
                   onClick={() => {
                     setIsOpen(false);
-                    onOpenLlmModal(llmConfig.provider);
+                    setIsModelStatusModalOpen(true);
                   }}
                   className="px-2.5 py-1 text-xs font-semibold text-stone-700 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200/90 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                  title="Manage API Keys"
+                  title="View Model Status & Metrics"
                 >
-                  <Sliders className="w-3.5 h-3.5 text-stone-500" />
-                  <span>Keys</span>
+                  <Activity className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Models Status</span>
                 </button>
                 <button
                   type="button"
@@ -210,38 +198,7 @@ export default function QuickAiSwitcher({
 
               {/* Model Dropdown Selector */}
               {activeProviderMeta.id === "auto" ? (
-                <div className="text-[11px] text-stone-300 bg-stone-800/70 p-2.5 rounded-lg border border-stone-700/60 leading-relaxed space-y-1.5">
-                  <div className="font-semibold text-amber-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Zap className="w-3.5 h-3.5 fill-current" />
-                      <span>Auto Mode: Priority Routing Active</span>
-                    </span>
-                    <span className="text-[10px] bg-emerald-900/80 text-emerald-300 border border-emerald-700 px-1.5 py-0.5 rounded font-bold">
-                      Tier 1 → Tier 4
-                    </span>
-                  </div>
-                  <p className="text-stone-300 text-[11px] leading-snug">
-                    Priority routes queries to <strong className="text-emerald-400">Tier 1 (Fast &lt;10s)</strong> models first. Slow models are demoted to <strong className="text-orange-400">Tier 4</strong> as emergency backups so your requests never fail.
-                  </p>
-                  {Object.keys(getLockedModels()).length > 0 && (
-                    <div className="pt-1.5 border-t border-stone-700/80 flex items-center justify-between">
-                      <span className="text-amber-300 text-[10px] font-medium">
-                        ⚠️ {Object.keys(getLockedModels()).length} model(s) locked
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          clearAllLocks();
-                          setToastMessage("Cleared all model lockouts!");
-                          setTimeout(() => setToastMessage(null), 2500);
-                        }}
-                        className="text-[10px] font-bold text-amber-400 hover:text-white underline cursor-pointer"
-                      >
-                        Reset Locks
-                      </button>
-                    </div>
-                  )}
-                </div>
+                null
               ) : (() => {
                 const unlockedModels = activeProviderMeta.models.filter(m => !isModelLocked(activeProviderMeta.id, m));
                 return (
@@ -401,7 +358,14 @@ export default function QuickAiSwitcher({
           </div>
         </>
       )}
-
+      {/* Model Status Modal */}
+      <ModelStatusModal
+        isOpen={isModelStatusModalOpen}
+        onClose={() => {
+          setIsModelStatusModalOpen(false);
+        }}
+        llmConfig={llmConfig}
+      />
     </div>
   );
 }

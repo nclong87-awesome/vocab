@@ -23,27 +23,17 @@ import {
   Trash2,
   FileJson,
   CheckCircle2,
-  RotateCcw,
   Zap,
   BookmarkCheck,
   ExternalLink,
   Cloud,
   Smartphone,
   HelpCircle,
-  Activity,
-  Gauge
 } from "lucide-react";
-import ModelStatusModal from "./ModelStatusModal";
 import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 import { getSavedProvidersMap, switchActiveProvider, removeProviderProfile } from "../utils/llmHelpers";
-import { 
-  getLockedModels,
-  unlockModel,
-  clearAllLocks,
-  resetAllModelStates,
-} from "../utils/autoModeManager";
 import { testLlmConnection } from "../services/llmClientService";
 import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage, waitForVoices } from "../utils/ttsService";
 import { 
@@ -62,7 +52,6 @@ interface SettingsViewProps {
   onSaveTTSConfig: (newConfig: TTSConfig) => void;
   onSaveLLMConfig?: (newConfig: LLMConfig) => void;
   onOpenLlmModal: (initialProvider?: LLMProvider) => void;
-  onOpenOnboarding?: () => void;
   onReloadData?: () => Promise<void>;
   targetLanguage?: string;
   nativeLanguage?: string;
@@ -76,7 +65,6 @@ export default function SettingsView({
   onSaveTTSConfig,
   onSaveLLMConfig,
   onOpenLlmModal,
-  onOpenOnboarding,
   onReloadData,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
@@ -105,10 +93,7 @@ export default function SettingsView({
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
   const [ttsSaveSuccess, setTtsSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
-  const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
-  const [refreshCount, setRefreshCount] = useState(0);
-
-  const lockedModels = refreshCount >= 0 ? getLockedModels() : {};
+  
 
   useEffect(() => {
     setSelectedTargetLang(targetLanguage);
@@ -596,38 +581,6 @@ export default function SettingsView({
               Connect and store credentials for multiple LLM providers (Ollama, OpenAI, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
             </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsModelStatusModalOpen(true)}
-              className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
-              id="view-model-statuses-btn"
-            >
-              <Activity className="w-3.5 h-3.5 text-stone-950 shrink-0 animate-pulse" />
-              <span>View All Model Statuses</span>
-            </button>
-
-            {onOpenOnboarding && (
-              <button
-                type="button"
-                onClick={onOpenOnboarding}
-                className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-stone-700 shrink-0" />
-                <span>Onboarding Wizard</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => onOpenLlmModal()}
-              className="px-4 py-2 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs shrink-0"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>Add / Edit Provider Credentials</span>
-            </button>
-          </div>
         </div>
 
         {/* Active Engine Highlight Box */}
@@ -694,97 +647,6 @@ export default function SettingsView({
             }`}>
               {llmTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
               <span>{llmTestResult.msg}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Auto Mode Circuit-Breaker Status Card */}
-        <div className="bg-amber-50/50 border border-amber-200/90 p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/80 pb-2.5">
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-amber-600 fill-current" />
-                Auto Mode Model Rotation & Health Circuit-Breaker
-              </h4>
-              <p className="text-xs text-stone-600 mt-0.5">
-                Auto Mode automatically rotates models across providers. Failing models are locked for ~1 hour to ensure seamless continuity.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setIsModelStatusModalOpen(true)}
-                className="px-3 py-1.5 bg-stone-900 hover:bg-black text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              >
-                <Gauge className="w-3.5 h-3.5 text-amber-400" />
-                <span>Model Statuses</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  resetAllModelStates();
-                  setRefreshCount(prev => prev + 1);
-                  setLlmTestResult({ success: true, msg: "All model states, metrics, failure logs, and locks have been completely reset!" });
-                }}
-                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Reset all model states, performance metrics, failure logs, and locks"
-                id="reset-model-state-settings-btn"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                <span>Reset All Model States</span>
-              </button>
-
-              {Object.keys(lockedModels).length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearAllLocks();
-                    setRefreshCount(prev => prev + 1);
-                    setLlmTestResult({ success: true, msg: "All model lockouts successfully cleared!" });
-                  }}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <span>Clear All Locks</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {Object.keys(lockedModels).length === 0 ? (
-            <div className="text-xs text-emerald-800 font-medium flex items-center gap-2 bg-emerald-50/80 p-2.5 rounded-lg border border-emerald-200">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>All AI models across providers are healthy and unlocked.</span>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <span className="text-[11px] font-bold text-amber-900 uppercase">
-                Currently Locked Models ({Object.keys(lockedModels).length}):
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                {Object.entries(lockedModels).map(([key, info]) => (
-                  <div key={key} className="bg-white p-2.5 border border-amber-300 rounded-lg flex items-center justify-between gap-2 shadow-2xs">
-                    <div className="min-w-0">
-                      <div className="font-bold font-mono text-stone-900 truncate">{info.provider}:{info.model}</div>
-                      <div className="text-[10px] text-stone-500">
-                        Locked until {new Date(info.expiresAt).toLocaleTimeString()}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        unlockModel(info.provider, info.model);
-                        setRefreshCount(prev => prev + 1);
-                        setLlmTestResult({ success: true, msg: `Unlocked ${key}` });
-                      }}
-                      className="px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 text-[10px] font-bold rounded border border-stone-300 shrink-0 cursor-pointer"
-                    >
-                      Unlock
-                    </button>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -944,210 +806,6 @@ export default function SettingsView({
                 </div>
               );
             })}
-          </div>
-        </div>
-      </div>
-
-      {/* Section 2: IndexedDB Database Management (Import & Export) */}
-      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
-        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <Database className="w-4 h-4 text-stone-800" />
-              IndexedDB Database Backup & Restore
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Manage local browser storage, export full database backups to JSON, or restore previous backups.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold bg-stone-100 text-stone-800 px-2.5 py-1 border border-stone-200 flex items-center gap-1.5">
-              <HardDrive className="w-3.5 h-3.5 text-stone-600" />
-              VocabLearnerDB (v1)
-            </span>
-          </div>
-        </div>
-
-        {/* Database Action Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Export Database Card */}
-          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
-                <Download className="w-4 h-4 text-stone-800" />
-                <span>Export IndexedDB Database</span>
-              </div>
-              <p className="text-xs text-stone-600">
-                Download a complete JSON snapshot containing all custom vocabulary words, study statistics, and app settings.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleExportDB}
-              disabled={isExporting}
-              className="w-full py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-            >
-              {isExporting ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Exporting JSON...</span>
-                </>
-              ) : (
-                <>
-                  <FileJson className="w-3.5 h-3.5" />
-                  <span>Export Database JSON</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Import Database Card */}
-          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
-                <Upload className="w-4 h-4 text-stone-800" />
-                <span>Import IndexedDB Backup</span>
-              </div>
-              <p className="text-xs text-stone-600">
-                Restore a previously exported `.json` database file to load custom words and study history into local browser storage.
-              </p>
-            </div>
-
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={handleFileSelect}
-                className="hidden"
-                id="indexeddb-file-input"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-              >
-                {isImporting ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Restoring Database...</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Select JSON File to Restore</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Cloud Sync Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-          <div className="md:col-span-2 border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
-                  <Cloud className="w-4 h-4 text-stone-800" />
-                  <span>GitHub Gist Cloud Sync</span>
-                </div>
-              </div>
-              <p className="text-xs text-stone-600">
-                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices.
-                You can create a Personal Access Token (classic) with the <code className="bg-stone-200 px-1 py-0.5 rounded">gist</code> scope at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub Settings</a>.
-              </p>
-            </div>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                  GitHub Personal Access Token or Proxy Key (Optional)
-                </label>
-                <input
-                  type="password"
-                  value={gistToken}
-                  onChange={handleGistTokenChange}
-                  placeholder="Leave blank to use default Worker proxy (storage.nclong87.workers.dev)..."
-                  className="w-full bg-white border border-stone-200 p-2 text-xs font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                  Gist ID {!gistToken.startsWith("ghp_") && !gistToken.startsWith("github_pat_") ? "(Required for Worker Proxy)" : "(Optional - creates new if blank)"}
-                </label>
-                <input
-                  type="text"
-                  value={gistId}
-                  onChange={handleGistIdChange}
-                  placeholder="Gist ID (e.g. 64abc123...)"
-                  className="w-full bg-white border border-stone-200 p-2 text-xs font-mono font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleSyncToCloud}
-                disabled={isCloudSyncing || isExporting || isImporting}
-                className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Backup to Cloud
-              </button>
-              <button
-                type="button"
-                onClick={handleSyncFromCloud}
-                disabled={isCloudSyncing || isExporting || isImporting || !gistId}
-                className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Restore from Cloud
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Alert Banner */}
-        {dbStatusMessage && (
-          <div className={`p-4 border text-xs font-medium flex items-start gap-3 transition-all ${
-            dbStatusMessage.type === "success" 
-              ? "bg-emerald-50 border-emerald-300 text-emerald-900" 
-              : dbStatusMessage.type === "error"
-              ? "bg-red-50 border-red-300 text-red-900"
-              : "bg-blue-50 border-blue-300 text-blue-900"
-          }`}>
-            {dbStatusMessage.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
-            {dbStatusMessage.type === "error" && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
-            {dbStatusMessage.type === "info" && <RefreshCw className="w-4 h-4 text-blue-600 animate-spin shrink-0 mt-0.5" />}
-            <span className="flex-1">{dbStatusMessage.text}</span>
-          </div>
-        )}
-
-        {/* Danger Zone: Reset Vocabularies & Words Data */}
-        <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
-                <AlertTriangle className="w-4 h-4 text-red-600" />
-                <span>Reset Vocabulary Collection</span>
-              </div>
-              <p className="text-xs text-red-700 font-normal">
-                Wipe all custom vocabulary words and study history. Reset database to default starter words or clear completely.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowResetConfirmModal(true)}
-              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs shrink-0"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Reset Data</span>
-            </button>
           </div>
         </div>
       </div>
@@ -1948,6 +1606,210 @@ export default function SettingsView({
         </div>
       </div>
 
+      {/* Section 2: IndexedDB Database Management (Import & Export) */}
+      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+              <Database className="w-4 h-4 text-stone-800" />
+              IndexedDB Database Backup & Restore
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Manage local browser storage, export full database backups to JSON, or restore previous backups.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold bg-stone-100 text-stone-800 px-2.5 py-1 border border-stone-200 flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-stone-600" />
+              VocabLearnerDB (v1)
+            </span>
+          </div>
+        </div>
+
+        {/* Database Action Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Export Database Card */}
+          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                <Download className="w-4 h-4 text-stone-800" />
+                <span>Export IndexedDB Database</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Download a complete JSON snapshot containing all custom vocabulary words, study statistics, and app settings.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportDB}
+              disabled={isExporting}
+              className="w-full py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+            >
+              {isExporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Exporting JSON...</span>
+                </>
+              ) : (
+                <>
+                  <FileJson className="w-3.5 h-3.5" />
+                  <span>Export Database JSON</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Import Database Card */}
+          <div className="border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                <Upload className="w-4 h-4 text-stone-800" />
+                <span>Import IndexedDB Backup</span>
+              </div>
+              <p className="text-xs text-stone-600">
+                Restore a previously exported `.json` database file to load custom words and study history into local browser storage.
+              </p>
+            </div>
+
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="indexeddb-file-input"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+              >
+                {isImporting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Restoring Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Select JSON File to Restore</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Cloud Sync Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div className="md:col-span-2 border border-stone-200 p-5 bg-stone-50/50 flex flex-col justify-between space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-stone-900 font-bold text-xs">
+                  <Cloud className="w-4 h-4 text-stone-800" />
+                  <span>GitHub Gist Cloud Sync</span>
+                </div>
+              </div>
+              <p className="text-xs text-stone-600">
+                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices.
+                You can create a Personal Access Token (classic) with the <code className="bg-stone-200 px-1 py-0.5 rounded">gist</code> scope at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub Settings</a>.
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  GitHub Personal Access Token or Proxy Key (Optional)
+                </label>
+                <input
+                  type="password"
+                  value={gistToken}
+                  onChange={handleGistTokenChange}
+                  placeholder="Leave blank to use default Worker proxy (storage.nclong87.workers.dev)..."
+                  className="w-full bg-white border border-stone-200 p-2 text-xs font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+                  Gist ID {!gistToken.startsWith("ghp_") && !gistToken.startsWith("github_pat_") ? "(Required for Worker Proxy)" : "(Optional - creates new if blank)"}
+                </label>
+                <input
+                  type="text"
+                  value={gistId}
+                  onChange={handleGistIdChange}
+                  placeholder="Gist ID (e.g. 64abc123...)"
+                  className="w-full bg-white border border-stone-200 p-2 text-xs font-mono font-medium text-stone-800 focus:outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-400 transition-all placeholder:text-stone-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleSyncToCloud}
+                disabled={isCloudSyncing || isExporting || isImporting}
+                className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Backup to Cloud
+              </button>
+              <button
+                type="button"
+                onClick={handleSyncFromCloud}
+                disabled={isCloudSyncing || isExporting || isImporting || !gistId}
+                className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Restore from Cloud
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Alert Banner */}
+        {dbStatusMessage && (
+          <div className={`p-4 border text-xs font-medium flex items-start gap-3 transition-all ${
+            dbStatusMessage.type === "success" 
+              ? "bg-emerald-50 border-emerald-300 text-emerald-900" 
+              : dbStatusMessage.type === "error"
+              ? "bg-red-50 border-red-300 text-red-900"
+              : "bg-blue-50 border-blue-300 text-blue-900"
+          }`}>
+            {dbStatusMessage.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
+            {dbStatusMessage.type === "error" && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />}
+            {dbStatusMessage.type === "info" && <RefreshCw className="w-4 h-4 text-blue-600 animate-spin shrink-0 mt-0.5" />}
+            <span className="flex-1">{dbStatusMessage.text}</span>
+          </div>
+        )}
+
+        {/* Danger Zone: Reset Vocabularies & Words Data */}
+        <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-red-900 font-bold text-xs">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+                <span>Reset Vocabulary Collection</span>
+              </div>
+              <p className="text-xs text-red-700 font-normal">
+                Wipe all custom vocabulary words and study history. Reset database to default starter words or clear completely.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowResetConfirmModal(true)}
+              className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Data</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Reset Confirmation Modal */}
       {showResetConfirmModal && (
         <div className="fixed inset-0 bg-stone-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -2180,15 +2042,6 @@ export default function SettingsView({
           </div>
         </div>
       )}
-      {/* Model Status Modal */}
-      <ModelStatusModal
-        isOpen={isModelStatusModalOpen}
-        onClose={() => {
-          setIsModelStatusModalOpen(false);
-          setRefreshCount(prev => prev + 1);
-        }}
-        llmConfig={llmConfig}
-      />
     </div>
   );
 }
