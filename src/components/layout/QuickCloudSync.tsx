@@ -125,9 +125,8 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     return () => clearTimeout(timer);
   }, [performQuietBackgroundCheck]);
 
-  // Listen to local database updates (e.g. adding words, taking quizzes) to recheck sync status
+  // Listen to local database updates (e.g. adding words, taking quizzes) to update status without remote fetch
   useEffect(() => {
-    let checkTimer: NodeJS.Timeout | null = null;
     const handleDBUpdate = () => {
       if (isSyncingRef.current || checkInProgressRef.current) {
         return; // Skip DB update events caused by active sync/check operations
@@ -135,19 +134,18 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       const token = localStorage.getItem("github_gist_token") || "";
       const gistId = localStorage.getItem("github_gist_id") || "";
       if (token.trim() || gistId.trim()) {
-        if (checkTimer) clearTimeout(checkTimer);
-        checkTimer = setTimeout(() => {
-          performQuietBackgroundCheck(token, gistId, true);
-        }, 1200);
+        // Since a local change has been written, we know there are new local changes to back up.
+        // We can immediately set status to "has-changes" without spamming GET requests to GitHub Gist.
+        setSyncStatus("has-changes");
+        setPendingCount(prev => prev > 0 ? prev : 1);
       }
     };
 
     window.addEventListener("vocab-db-updated", handleDBUpdate);
     return () => {
-      if (checkTimer) clearTimeout(checkTimer);
       window.removeEventListener("vocab-db-updated", handleDBUpdate);
     };
-  }, [performQuietBackgroundCheck]);
+  }, []);
 
   // Listen to tab focus (visibility change) for throttled background recheck (e.g. if 5+ minutes passed)
   useEffect(() => {
