@@ -367,7 +367,6 @@ export default function App() {
               onToggleStarWord={(wordId) => handleToggleStar(wordId)}
               onNavigateToView={(view) => handleSetView(view)}
               appLanguage={appLanguage}
-              onLlmApiError={handleAiApiError}
             />
           )}
 

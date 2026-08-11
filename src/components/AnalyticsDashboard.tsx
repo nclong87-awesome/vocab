@@ -20,6 +20,8 @@ import { t } from "../config/i18n";
 
 import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
+import { getRotatedDefaultModel } from "./chat/quickActionsConfig";
+import { RELIABLE_MODELS } from "../config/llmProviders";
 
 interface AnalyticsDashboardProps {
   words: Word[];
@@ -31,7 +33,6 @@ interface AnalyticsDashboardProps {
   onToggleLearnedWord: (wordId: string) => void;
   onToggleStarWord: (wordId: string) => void;
   onNavigateToView: (view: 'chatview' | 'manage' | 'analytics' | 'settings') => void;
-  onLlmApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
 }
 
 export default function AnalyticsDashboard({
@@ -43,7 +44,6 @@ export default function AnalyticsDashboard({
   onStartPracticeWeakWords,
   onToggleLearnedWord,
   onToggleStarWord,
-  onLlmApiError
 }: AnalyticsDashboardProps) {
   const safeWords = Array.isArray(words) ? words : [];
 
@@ -90,7 +90,18 @@ export default function AnalyticsDashboard({
   // Calculate overall accuracy rate
 
   // Run AI Analysis
-  const handleRunAiAnalysis = async (overrideConfig?: LLMConfig) => {
+  const handleRunAiAnalysis = async () => {
+    let overrideConfig: LLMConfig | undefined = undefined;
+    const match = getRotatedDefaultModel(RELIABLE_MODELS);
+    if (match) {
+      overrideConfig = {
+        provider: match.provider,
+        model: match.model,
+        apiKey: llmConfig?.apiKey || "",
+        baseUrl: llmConfig?.baseUrl || "",
+        isLoggedIn: true
+      };
+    }
     const configToUse = overrideConfig || llmConfig;
     setIsAnalyzing(true);
     setAnalysisError(null);
@@ -110,11 +121,7 @@ export default function AnalyticsDashboard({
       setAiReport(result);
     } catch (err: any) {
       console.error("AI Performance Analysis failed:", err);
-      if (onLlmApiError && configToUse) {
-        onLlmApiError(err, configToUse, (newConfig) => handleRunAiAnalysis(newConfig));
-      } else {
-        setAnalysisError(err.message || "Unable to generate AI analysis. Please verify your LLM key or connection.");
-      }
+      setAnalysisError(err.message || "Unable to generate AI analysis. Please verify your LLM key or connection.");
     } finally {
       setIsAnalyzing(false);
     }
