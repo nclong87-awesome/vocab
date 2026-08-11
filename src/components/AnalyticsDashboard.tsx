@@ -75,6 +75,7 @@ export default function AnalyticsDashboard({
   // Words needing memory refresher (decayed or overdue >= 5 days)
   const decayedWords = useMemo(() => {
     return safeWords.filter(w => {
+      if (!w.learned) return false; // Only mastered words undergo memory decay
       const days = getDaysSinceLastReview(w);
       return days >= 5 || (w.strength < 80 && w.lastReviewed !== null && days >= 1);
     });

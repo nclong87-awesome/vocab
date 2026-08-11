@@ -49,6 +49,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
 
   const memoryDecay = eligibleWords.filter(w => {
     if (starred.includes(w)) return false;
+    if (!w.learned) return false; // Only mastered words undergo memory decay
     const days = getDaysSinceLastReview(w, now);
     return days >= 5 || (w.strength < 80 && w.lastReviewed !== null && days >= 1);
   });
@@ -118,7 +119,8 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
   const daysSinceReview = getDaysSinceLastReview(word, now);
   const currentStrength = word.strength ?? 0;
   
-  if (daysSinceReview <= 0) {
+  // Memory decay only applies to mastered (learned) words
+  if (!word.learned || daysSinceReview <= 0) {
     return {
       newStrength: currentStrength,
       newLearned: word.learned,
@@ -185,6 +187,7 @@ export function getCandidateWordForFlashcard(words: Word[]): Word | null {
 
   const memoryDecay = words.filter(w => {
     if (starred.includes(w)) return false;
+    if (!w.learned) return false; // Only mastered words undergo memory decay
     const days = getDaysSinceLastReview(w, now);
     return days >= 5 || (w.strength < 80 && w.lastReviewed !== null && days >= 1);
   });
