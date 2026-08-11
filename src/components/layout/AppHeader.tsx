@@ -1,4 +1,4 @@
-// import React from "react";
+import { useState, useEffect } from "react";
 import { Sliders } from "lucide-react";
 import { LLMConfig, LLMProvider, UserStats } from "../../types";
 import QuickAiSwitcher from "./QuickAiSwitcher";
@@ -39,6 +39,38 @@ export default function AppHeader({
   sidePanelTab = "collection",
   isSidePanelOpen = false
 }: AppHeaderProps) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.matchMedia("(max-width: 1023px)").matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    
+    // Set initial value in case of mount timing differences
+    setIsMobile(mediaQuery.matches);
+
+    const listener = (e: MediaQueryListEvent) => {
+      setIsMobile(e.matches);
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", listener);
+    } else {
+      mediaQuery.addListener(listener);
+    }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", listener);
+      } else {
+        mediaQuery.removeListener(listener);
+      }
+    };
+  }, []);
+
   // Sub-renderers to keep the JSX dry and clean
   const renderLogo = () => (
     <div 
@@ -128,30 +160,32 @@ export default function AppHeader({
     <header className="bg-white border-b border-stone-200 py-1.5 sm:py-2.5 md:py-3 px-2 sm:px-6 md:px-8 sticky top-0 z-40 shrink-0" id="main-header">
       <div className="max-w-7xl mx-auto">
         
-        {/* Desktop Header Layout (>= lg) */}
-        <div className="hidden lg:flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6 xl:gap-8">
-            {renderLogo()}
-            <div className="h-4 w-px bg-stone-200" />
-            <div className="text-xs font-medium">
+        {!isMobile ? (
+          /* Desktop Header Layout (>= lg) */
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-6 xl:gap-8">
+              {renderLogo()}
+              <div className="h-4 w-px bg-stone-200" />
+              <div className="text-xs font-medium">
+                {renderNavLinks()}
+              </div>
+            </div>
+            {renderSwitchers()}
+          </div>
+        ) : (
+          /* Mobile & Tablet Header Layout (< lg, including iPad portrait) */
+          <div className="flex flex-col gap-1.5">
+            {/* Row 1: Logo (left) & Switchers (right) - NO overflow clipping so dropdown popovers can extend vertically */}
+            <div className="flex items-center justify-between gap-1 sm:gap-2 min-w-0 w-full">
+              {renderLogo()}
+              {renderSwitchers()}
+            </div>
+            {/* Row 2: Nav Links */}
+            <div className="flex items-center justify-start sm:justify-center gap-4 sm:gap-6 text-xs font-medium tracking-normal pt-1 border-t border-stone-100 overflow-x-auto scrollbar-none">
               {renderNavLinks()}
             </div>
           </div>
-          {renderSwitchers()}
-        </div>
-
-        {/* Mobile & Tablet Header Layout (< lg, including iPad portrait) */}
-        <div className="flex lg:hidden flex-col gap-1.5">
-          {/* Row 1: Logo (left) & Switchers (right) - NO overflow clipping so dropdown popovers can extend vertically */}
-          <div className="flex items-center justify-between gap-1 sm:gap-2 min-w-0 w-full">
-            {renderLogo()}
-            {renderSwitchers()}
-          </div>
-          {/* Row 2: Nav Links */}
-          <div className="flex items-center justify-start sm:justify-center gap-4 sm:gap-6 text-xs font-medium tracking-normal pt-1 border-t border-stone-100 overflow-x-auto scrollbar-none">
-            {renderNavLinks()}
-          </div>
-        </div>
+        )}
 
       </div>
     </header>
