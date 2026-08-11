@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { 
   Cloud, 
   RefreshCw, 
@@ -44,12 +44,30 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     }, duration);
   };
 
+  const checkInProgressRef = useRef<boolean>(false);
+  const isSyncingRef = useRef<boolean>(false);
+
   // Perform quiet background sync check without triggering toast messages
-  const performQuietBackgroundCheck = useCallback(async (token: string, gistId: string) => {
+  const performQuietBackgroundCheck = useCallback(async (token: string, gistId: string, force = false) => {
+    if (checkInProgressRef.current) {
+      return; // Already checking, skip duplicate concurrent call
+    }
+
+    if (!force) {
+      const lastCheck = Number(localStorage.getItem("last_gist_sync_check") || "0");
+      const minimumInterval = 10 * 1000; // 10 seconds throttle for automatic background checks
+      if (Date.now() - lastCheck < minimumInterval) {
+        return;
+      }
+    }
+
     try {
+      checkInProgressRef.current = true;
       setIsCheckingSync(true);
       const localData = await exportIndexedDBDatabase();
-      const remoteData = await syncFromGist(token, gistId, { isUserAction: false });
+      const remoteData = await syncFromGist(token, gistId);
+
+      localStorage.setItem("last_gist_sync_check", String(Date.now()));
 
       const localWords = localData.stores?.words || [];
       const remoteWords = remoteData.stores?.words || [];
@@ -73,11 +91,11 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       } else {
         setSyncStatus("in-sync");
         setPendingCount(0);
-        localStorage.setItem("last_gist_sync_check", String(Date.now()));
       }
-    } catch (e) {
-      console.warn("Background cloud sync check skipped or failed:", e);
+    } catch (e: any) {
+      console.error("Cloud sync check failed:", e);
     } finally {
+      checkInProgressRef.current = false;
       setIsCheckingSync(false);
     }
   }, []);
@@ -86,31 +104,50 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
   useEffect(() => {
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
+    const isConfigured = Boolean(token.trim() || gistId.trim());
 
-    if (!gistId) {
+    if (!isConfigured) {
+      setSyncStatus("unconfigured");
+      return;
+    }
+
+    if (!gistId && token) {
+      // Has PAT token but no Gist ID yet -> needs initial sync
       setSyncStatus("has-changes");
       return;
     }
 
-    // Schedule background check 1.2s after mount so initial UI renders smoothly
+    // Schedule background check shortly after mount so initial UI renders smoothly
     const timer = setTimeout(() => {
-      performQuietBackgroundCheck(token, gistId);
-    }, 1200);
+      performQuietBackgroundCheck(token, gistId, true);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [performQuietBackgroundCheck]);
 
-  // Listen to local database updates (e.g. adding words, taking quizzes) to immediately mark unsynced changes
+  // Listen to local database updates (e.g. adding words, taking quizzes) to recheck sync status
   useEffect(() => {
+    let checkTimer: NodeJS.Timeout | null = null;
     const handleDBUpdate = () => {
-      setSyncStatus("has-changes");
+      if (isSyncingRef.current || checkInProgressRef.current) {
+        return; // Skip DB update events caused by active sync/check operations
+      }
+      const token = localStorage.getItem("github_gist_token") || "";
+      const gistId = localStorage.getItem("github_gist_id") || "";
+      if (token.trim() || gistId.trim()) {
+        if (checkTimer) clearTimeout(checkTimer);
+        checkTimer = setTimeout(() => {
+          performQuietBackgroundCheck(token, gistId, true);
+        }, 1200);
+      }
     };
 
     window.addEventListener("vocab-db-updated", handleDBUpdate);
     return () => {
+      if (checkTimer) clearTimeout(checkTimer);
       window.removeEventListener("vocab-db-updated", handleDBUpdate);
     };
-  }, []);
+  }, [performQuietBackgroundCheck]);
 
   // Listen to tab focus (visibility change) for throttled background recheck (e.g. if 5+ minutes passed)
   useEffect(() => {
@@ -222,36 +259,56 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
 
+    console.log("[Sync UI] [handleConfirmMerge] Triggered merge action.", {
+      hasGistToken: Boolean(token),
+      gistId,
+      localWordsCount: comparisonData?.localData?.stores?.words?.length || 0,
+      remoteWordsCount: comparisonData?.remoteData?.stores?.words?.length || 0,
+    });
+
     try {
+      isSyncingRef.current = true;
       setIsSyncing(true);
       showToast("info", "Applying auto-merged changes to local & cloud...");
 
       // 1. Save merged data to local IndexedDB
+      console.log("[Sync UI] [handleConfirmMerge] Step 1: Importing merged data to local IndexedDB...");
       await importIndexedDBDatabase(mergeResult.mergedData);
+      console.log("[Sync UI] [handleConfirmMerge] Step 1 Completed: Local IndexedDB import resolved.");
 
       // 2. Save merged data to GitHub Gist
       const jsonString = JSON.stringify(sanitizeDataForCloudSync(mergeResult.mergedData));
+      console.log("[Sync UI] [handleConfirmMerge] Step 2: dispatching cloud syncToGist request...");
       const newGistId = await syncToGist(token, jsonString, gistId);
+      console.log("[Sync UI] [handleConfirmMerge] Step 2 Completed: Cloud syncToGist promise successfully resolved with Gist ID:", newGistId);
+
       if (!gistId && newGistId) {
         localStorage.setItem("github_gist_id", newGistId);
       }
 
-      // 3. Reload UI state
-      if (onReloadData) {
-        await onReloadData();
-      }
-
+      // 3. Update UI state IMMEDIATELY upon successful promise resolution
+      console.log("[Sync UI] [handleConfirmMerge] Updating UI state immediately.");
       setSyncStatus("in-sync");
       setPendingCount(0);
       localStorage.setItem("last_gist_sync_check", String(Date.now()));
-
       setShowConfirmModal(false);
       showToast("success", "🎉 Auto-Merge Success! Local & Cloud fully synchronized.");
+
+      // Reload Vocabulary data state concurrently in the background
+      if (onReloadData) {
+        console.log("[Sync UI] [handleConfirmMerge] Dispatching background onReloadData...");
+        onReloadData()
+          .then(() => console.log("[Sync UI] [handleConfirmMerge] Background onReloadData completed."))
+          .catch(err => console.error("[Sync UI] [handleConfirmMerge] Background onReloadData failed:", err));
+      }
     } catch (error: any) {
-      console.error("Failed to apply auto-merge:", error);
+      console.error("[Sync UI] [handleConfirmMerge] Error occurred during merge:", error);
       showToast("error", `Merge failed: ${error.message || "Error saving merged backup"}`);
     } finally {
       setIsSyncing(false);
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -260,27 +317,42 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
 
+    console.log("[Sync UI] [handleSyncLocalToCloud] Triggered local to cloud override.", {
+      hasGistToken: Boolean(token),
+      gistId
+    });
+
     try {
+      isSyncingRef.current = true;
       setIsSyncing(true);
+      showToast("info", "Uploading local database to cloud...");
+
       const localData = await exportIndexedDBDatabase();
       const jsonString = JSON.stringify(sanitizeDataForCloudSync(localData));
 
+      console.log("[Sync UI] [handleSyncLocalToCloud] Dispatching syncToGist with local database...");
       const newGistId = await syncToGist(token, jsonString, gistId);
+      console.log("[Sync UI] [handleSyncLocalToCloud] syncToGist promise resolved with Gist ID:", newGistId);
+
       if (!gistId && newGistId) {
         localStorage.setItem("github_gist_id", newGistId);
       }
 
+      // Update UI state immediately upon successful promise resolution
+      console.log("[Sync UI] [handleSyncLocalToCloud] Updating UI state immediately.");
       setSyncStatus("in-sync");
       setPendingCount(0);
       localStorage.setItem("last_gist_sync_check", String(Date.now()));
-
       setShowConfirmModal(false);
       showToast("success", "Cloud backup overwritten with local database!");
     } catch (error: any) {
-      console.error("Failed to sync local to cloud:", error);
+      console.error("[Sync UI] [handleSyncLocalToCloud] Error during local to cloud upload:", error);
       showToast("error", `Upload failed: ${error.message || "Error syncing to Gist"}`);
     } finally {
       setIsSyncing(false);
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -288,28 +360,47 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
   const handleOverwriteLocalFromCloud = async () => {
     if (!comparisonData?.remoteData) return;
 
+    console.log("[Sync UI] [handleOverwriteLocalFromCloud] Triggered cloud to local overwrite.", {
+      remoteWordsCount: comparisonData.remoteData?.stores?.words?.length || 0
+    });
+
     try {
+      isSyncingRef.current = true;
       setIsSyncing(true);
+      showToast("info", "Overwriting local database from cloud backup...");
+
+      console.log("[Sync UI] [handleOverwriteLocalFromCloud] Importing cloud backup to local IndexedDB...");
       await importIndexedDBDatabase(comparisonData.remoteData);
+      console.log("[Sync UI] [handleOverwriteLocalFromCloud] Local IndexedDB import resolved.");
 
-      if (onReloadData) {
-        await onReloadData();
-      }
-
+      // Update UI state immediately upon successful promise resolution
+      console.log("[Sync UI] [handleOverwriteLocalFromCloud] Updating UI state immediately.");
       setSyncStatus("in-sync");
       setPendingCount(0);
       localStorage.setItem("last_gist_sync_check", String(Date.now()));
-
       setShowConfirmModal(false);
       showToast("success", "Local database overwritten & restored from cloud!");
+
+      // Dispatch vocabulary reload and schedule page reload
+      if (onReloadData) {
+        console.log("[Sync UI] [handleOverwriteLocalFromCloud] Dispatching background onReloadData...");
+        onReloadData()
+          .then(() => console.log("[Sync UI] [handleOverwriteLocalFromCloud] Background onReloadData completed."))
+          .catch(err => console.error("[Sync UI] [handleOverwriteLocalFromCloud] Background onReloadData failed:", err));
+      }
+
       setTimeout(() => {
+        console.log("[Sync UI] [handleOverwriteLocalFromCloud] Reloading page to apply restored database...");
         window.location.reload();
       }, 1200);
     } catch (error: any) {
-      console.error("Failed to restore local from cloud:", error);
+      console.error("[Sync UI] [handleOverwriteLocalFromCloud] Error during restore:", error);
       showToast("error", `Restore failed: ${error.message || "Error importing backup"}`);
     } finally {
       setIsSyncing(false);
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 1000);
     }
   };
 
@@ -321,16 +412,18 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     }, 200);
   };
 
-  const hasToken = Boolean(localStorage.getItem("github_gist_token"));
+  const token = localStorage.getItem("github_gist_token") || "";
+  const gistId = localStorage.getItem("github_gist_id") || "";
+  const isConfigured = Boolean(token.trim() || gistId.trim());
 
   let dotColorClass = "bg-stone-300";
   let buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900";
-  let titleText = "Configure Cloud Sync (GitHub Gist)";
+  let titleText = "Configure Cloud Sync";
 
-  if (!hasToken) {
+  if (!isConfigured) {
     dotColorClass = "bg-stone-300";
     buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-700";
-    titleText = "Click to set up Cloud Sync (GitHub Gist)";
+    titleText = "Click to set up Cloud Sync (GitHub Gist or Worker Proxy)";
   } else if (isCheckingSync) {
     dotColorClass = "bg-amber-400 animate-pulse";
     buttonBorderBgClass = "bg-amber-50/70 border-amber-200 text-amber-900";
@@ -349,6 +442,10 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     dotColorClass = "bg-emerald-500";
     buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900";
     titleText = "In Sync: Local database matches cloud backup";
+  } else {
+    dotColorClass = "bg-amber-400 animate-pulse";
+    buttonBorderBgClass = "bg-stone-50 hover:bg-stone-100 border-stone-200/90 text-stone-900";
+    titleText = "Cloud Sync active. Checking cloud status...";
   }
 
   return (
@@ -377,14 +474,6 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         </span>
 
         <span className="font-bold sm:hidden">Sync</span>
-
-        {/* Small pulse ping dot when there are unsynced changes */}
-        {syncStatus === "has-changes" && !isCheckingSync && !isSyncing && (
-          <span className="flex h-2 w-2 relative -ml-0.5 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-          </span>
-        )}
       </button>
 
       {/* Floating Toast Notification */}

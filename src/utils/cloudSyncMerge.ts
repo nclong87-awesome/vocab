@@ -245,7 +245,7 @@ export function autoMergeLocalAndRemote(
 
       // Detect differences
       const changesList: string[] = [];
-      if (lWord.starred !== match.starred) {
+      if (Boolean(lWord.starred) !== Boolean(match.starred)) {
         changesList.push(`Starred status synced (${mergedStarred ? "Starred" : "Unstarred"})`);
       }
       
@@ -254,12 +254,12 @@ export function autoMergeLocalAndRemote(
         if ((lWord.strength ?? 0) !== (match.strength ?? 0)) {
           changesList.push(`Strength level merged (${lWord.strength ?? 0} vs ${match.strength ?? 0} → ${mergedStrength})`);
         }
-        if (lWord.learned !== match.learned) {
+        if (Boolean(lWord.learned) !== Boolean(match.learned)) {
           changesList.push(`Mastery synced (${mergedLearned ? "Mastered" : "Learning"})`);
         }
       }
 
-      if (lWord.definition !== match.definition) {
+      if ((lWord.definition || "").trim() !== (match.definition || "").trim()) {
         changesList.push(`Definition updated from latest edit`);
       }
 
@@ -343,8 +343,8 @@ export function autoMergeLocalAndRemote(
   const mergedHistory = Array.from(new Set([...(localStats.streak?.history || []), ...(remoteStats.streak?.history || [])]));
 
   const statsChanged =
-    localStats.totalQuizzesTaken !== mergedQuizzesTaken ||
-    localStats.totalCorrectAnswers !== mergedCorrectAnswers ||
+    (localStats.totalQuizzesTaken || 0) !== mergedQuizzesTaken ||
+    (localStats.totalCorrectAnswers || 0) !== mergedCorrectAnswers ||
     localStreakCount !== mergedStreakCount;
 
   const mergedStatsRec: StoredRecord<UserStats> = {
@@ -408,7 +408,21 @@ export function autoMergeLocalAndRemote(
   for (const s of remoteSettings) if (s && s.key) settingsMap.set(s.key, s);
   for (const s of localSettings) if (s && s.key) settingsMap.set(s.key, s);
 
-  const finalMergedDeletedList = deduplicateDeletedWords(mergedDeletedList);
+  const activeWordKeys = new Set<string>();
+  for (const w of mergedWordsList) {
+    if (w.id) activeWordKeys.add(w.id.trim());
+    if (w.word) activeWordKeys.add(w.word.trim().toLowerCase());
+  }
+
+  const finalMergedDeletedList = deduplicateDeletedWords(
+    mergedDeletedList.filter(d => {
+      if (!d) return false;
+      const dId = d.id ? d.id.trim() : "";
+      const dWord = d.word ? d.word.trim().toLowerCase() : "";
+      const isActive = (dId && activeWordKeys.has(dId)) || (dWord && activeWordKeys.has(dWord));
+      return !isActive;
+    })
+  );
   const mergedSettings = Array.from(settingsMap.values());
 
   const mergedExportData: IndexedDBExportData = {
