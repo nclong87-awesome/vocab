@@ -1,5 +1,5 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
-import { Word, UserStats } from "../types";
+import { Word, UserStats, StrengthHistoryEntry } from "../types";
 
 export interface DeletedWordRecord {
   id: string;
@@ -215,22 +215,50 @@ export function autoMergeLocalAndRemote(
       // - Starred: if starred anywhere, keep true
       const mergedStarred = Boolean(lWord.starred || match.starred);
 
+      // Merge and deduplicate strengthHistory arrays
+      const localHistory = lWord.strengthHistory || [];
+      const remoteHistory = match.strengthHistory || [];
+
+      const historyMap = new Map<string, StrengthHistoryEntry>();
+      for (const entry of [...localHistory, ...remoteHistory]) {
+        if (entry && entry.id) {
+          historyMap.set(entry.id, entry);
+        }
+      }
+      const mergedHistoryList = Array.from(historyMap.values()).sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+
       // Determine strength and learned status:
-      // If one side has been reviewed/updated more recently, take its strength/learned as authoritative.
-      // If they have the exact same review/creation time, use local's values to prevent memory decay ping-pong.
+      // If they have history, use the latest history entry to determine the strength and mastery status.
+      // Otherwise, use the most recent review timestamp.
       let mergedStrength = primary.strength ?? 0;
       let mergedLearned = primary.learned;
 
-      if (localReviewTime > remoteReviewTime) {
-        mergedStrength = lWord.strength ?? 0;
-        mergedLearned = lWord.learned;
-      } else if (remoteReviewTime > localReviewTime) {
-        mergedStrength = match.strength ?? 0;
-        mergedLearned = match.learned;
+      if (mergedHistoryList.length > 0) {
+        const latestEntry = mergedHistoryList[mergedHistoryList.length - 1];
+        const isLatestLocal = localHistory.some(h => h.id === latestEntry.id);
+        const isLatestRemote = remoteHistory.some(h => h.id === latestEntry.id);
+
+        mergedStrength = latestEntry.strength;
+        if (isLatestLocal) {
+          mergedLearned = lWord.learned;
+        } else if (isLatestRemote) {
+          mergedLearned = match.learned;
+        } else {
+          mergedLearned = mergedStrength >= 80 ? true : mergedStrength === 0 ? false : primary.learned;
+        }
       } else {
-        // Equal review times: use local values (which may have undergone decay)
-        mergedStrength = lWord.strength ?? 0;
-        mergedLearned = lWord.learned;
+        if (localReviewTime > remoteReviewTime) {
+          mergedStrength = lWord.strength ?? 0;
+          mergedLearned = lWord.learned;
+        } else if (remoteReviewTime > localReviewTime) {
+          mergedStrength = match.strength ?? 0;
+          mergedLearned = match.learned;
+        } else {
+          mergedStrength = lWord.strength ?? 0;
+          mergedLearned = lWord.learned;
+        }
       }
 
       const mergedWordItem: Word = {
@@ -240,7 +268,8 @@ export function autoMergeLocalAndRemote(
         strength: mergedStrength,
         learned: mergedLearned,
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
-        createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt
+        createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt,
+        strengthHistory: mergedHistoryList.length > 0 ? mergedHistoryList : undefined
       };
 
       // Detect differences
@@ -249,14 +278,14 @@ export function autoMergeLocalAndRemote(
         changesList.push(`Starred status synced (${mergedStarred ? "Starred" : "Unstarred"})`);
       }
       
-      // Only detect strength/learned changes if there is a real difference in user review time
-      if (localReviewTime !== remoteReviewTime) {
-        if ((lWord.strength ?? 0) !== (match.strength ?? 0)) {
-          changesList.push(`Strength level merged (${lWord.strength ?? 0} vs ${match.strength ?? 0} → ${mergedStrength})`);
-        }
-        if (Boolean(lWord.learned) !== Boolean(match.learned)) {
-          changesList.push(`Mastery synced (${mergedLearned ? "Mastered" : "Learning"})`);
-        }
+      if ((lWord.strength ?? 0) !== (match.strength ?? 0)) {
+        changesList.push(`Strength level merged (${lWord.strength ?? 0} vs ${match.strength ?? 0} → ${mergedStrength})`);
+      }
+      if (Boolean(lWord.learned) !== Boolean(match.learned)) {
+        changesList.push(`Mastery synced (${mergedLearned ? "Mastered" : "Learning"})`);
+      }
+      if (localHistory.length !== remoteHistory.length) {
+        changesList.push(`Strength history synced (${localHistory.length} vs ${remoteHistory.length} entries)`);
       }
 
       if ((lWord.definition || "").trim() !== (match.definition || "").trim()) {
