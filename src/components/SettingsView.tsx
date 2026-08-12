@@ -1347,6 +1347,55 @@ export default function SettingsView({
                   </div>
                 </div>
               </div>
+
+              {/* Test Voice Section */}
+              <div className="pt-4 border-t border-stone-200 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h5 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                    <Volume2 className="w-4 h-4 text-stone-800" />
+                    {t("settings_test_voice_studio", selectedAppLang)}
+                  </h5>
+                  <span className="text-[10px] text-stone-500">
+                    {t("settings_test_voice_studio_desc", selectedAppLang)}
+                  </span>
+                </div>
+
+                <textarea
+                  value={testText}
+                  onChange={(e) => setTestText(e.target.value)}
+                  rows={2}
+                  className="w-full p-3 bg-white border border-stone-200 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900 rounded-none shadow-2xs"
+                  placeholder={t("settings_test_voice_placeholder", selectedAppLang)}
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={handleTestAudio}
+                    className={`px-5 py-2.5 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all ${
+                      isTesting 
+                        ? "bg-amber-400 text-stone-950 animate-pulse" 
+                        : "bg-stone-900 text-white hover:bg-stone-800"
+                    }`}
+                  >
+                    {isTesting ? (
+                      <>
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>{t("settings_test_voice_stop_btn", selectedAppLang)}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>{t("settings_test_voice_model_btn", selectedAppLang)}</span>
+                      </>
+                    )}
+                  </button>
+
+                  <span className="text-xs font-medium text-stone-500">
+                    {isTesting ? t("settings_test_voice_playing", selectedAppLang) : t("settings_test_voice_click_btn", selectedAppLang)}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1579,63 +1628,6 @@ export default function SettingsView({
               <span>Save Voice Configuration</span>
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Section 4: Interactive Voice Tester Studio */}
-      <div className="bg-white border border-stone-200 p-4 sm:p-6 space-y-4">
-        <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-stone-800" />
-              {t("settings_test_voice_studio", selectedAppLang)}
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              {t("settings_test_voice_studio_desc", selectedAppLang)}
-            </p>
-          </div>
-          <span className="text-xs font-mono font-medium text-stone-500 capitalize">
-            {config.engine}
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          <textarea
-            value={testText}
-            onChange={(e) => setTestText(e.target.value)}
-            rows={2}
-            className="w-full p-3 bg-stone-50 border border-stone-200 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900 rounded-none"
-            placeholder={t("settings_test_voice_placeholder", selectedAppLang)}
-          />
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleTestAudio}
-              className={`px-5 py-2.5 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all ${
-                isTesting 
-                  ? "bg-amber-400 text-stone-950 animate-pulse" 
-                  : "bg-stone-900 text-white hover:bg-stone-800"
-              }`}
-            >
-              {isTesting ? (
-                <>
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>{t("settings_test_voice_stop_btn", selectedAppLang)}</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>{t("settings_test_voice_model_btn", selectedAppLang)}</span>
-                </>
-              )}
-            </button>
-
-            <span className="text-xs font-medium text-stone-500">
-              {isTesting ? t("settings_test_voice_playing", selectedAppLang) : t("settings_test_voice_click_btn", selectedAppLang)}
-            </span>
-          </div>
-
         </div>
       </div>
 
