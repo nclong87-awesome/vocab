@@ -42,11 +42,6 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
   if (!act || !act.label) return "";
   const rawLabel = String(act.label).trim();
 
-  const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
-  if (!isVi) {
-    return rawLabel;
-  }
-
   const lower = rawLabel.toLowerCase();
 
   if (act.action === "view_flashcard" || lower.includes("next flash card") || lower.includes("next flashcard")) {
