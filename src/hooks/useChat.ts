@@ -959,11 +959,15 @@ export function useChat({
       return;
     }
 
+    const updatedWords = [...newWordsToAdd, ...words];
+
     setWords((prev) => {
       const updated = [...newWordsToAdd, ...prev];
       saveAllWordsToDB(updated).catch((e) => console.error(e));
       return updated;
     });
+
+    const remainingActions = getRemainingWordActions(chatMessages, updatedWords, undefined, currentAppLang);
 
     setChatMessages((prev) => [
       ...prev,
@@ -976,6 +980,7 @@ export function useChat({
           skippedSection: skippedNames.length > 0 ? t("chat_batch_added_skipped_section", currentAppLang, { words: skippedNames.join(", ") }) : ""
         }),
         timestamp: new Date().toISOString(),
+        suggestedActions: remainingActions,
       },
     ]);
     setConversationalState("adding_word");

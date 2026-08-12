@@ -254,6 +254,17 @@ function ChatMessageItem({
           }
         }
 
+        // Filter out add_multiplewords if all individual words are already in the collection
+        if (act.action === "add_multiplewords" && act.payload && Array.isArray(act.payload.words)) {
+          const unsavedCount = act.payload.words.filter((w: any) => {
+            const wText = (w?.word || "").trim().toLowerCase();
+            return wText && words && Array.isArray(words) && !words.some(x => x.word.trim().toLowerCase() === wText);
+          }).length;
+          if (unsavedCount === 0) {
+            return false;
+          }
+        }
+
         const lbl = act.label ? String(act.label).trim() : "";
         const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
         const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
