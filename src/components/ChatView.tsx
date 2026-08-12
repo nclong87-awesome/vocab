@@ -233,25 +233,27 @@ function ChatView({
       }
 
       const lastMsg = messages[messages.length - 1];
-      const feedbackText = lastMsg.quizSpeechText?.trim();
+      const quizSpeechText = lastMsg.quizSpeechText?.trim();
       const nextQuestionText = lastMsg.nextQuestionSpeechText?.trim();
-      const fallbackText = lastMsg.audioWord || feedbackText;
+      const fallbackText = lastMsg.audioWord || quizSpeechText;
 
       if (lastMsg.role === "assistant" && (fallbackText || nextQuestionText) && (ttsConfig.autoPlayAudioInQuiz ?? true)) {
         const audioTimer = setTimeout(() => {
           const langCode = getLanguageCode(targetLanguage);
 
-          if (feedbackText && nextQuestionText) {
+          if (quizSpeechText) {
             speakText(
-              feedbackText,
+              quizSpeechText,
               ttsConfig,
               llmConfig,
               langCode,
               undefined,
               () => {
-                setTimeout(() => {
-                  speakText(nextQuestionText, ttsConfig, llmConfig, langCode);
-                }, 180);
+                if (nextQuestionText) {
+                  setTimeout(() => {
+                    speakText(nextQuestionText, ttsConfig, llmConfig, langCode);
+                  }, 180);
+                }
               }
             );
             return;

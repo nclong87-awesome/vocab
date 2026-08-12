@@ -308,8 +308,8 @@ export function useChat({
           timestamp: new Date().toISOString(),
           audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
           quizSpeechText: isCorrect
-            ? t("chat_quiz_speech_correct", currentAppLang, { answer: currentQ.correctAnswer })
-            : t("chat_quiz_speech_incorrect", currentAppLang, { answer: currentQ.correctAnswer }),
+            ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
+            : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
           nextQuestionSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
           imageUrl: nextQ.imageUrl,
           imageKeyword: nextQ.imageKeyword,
