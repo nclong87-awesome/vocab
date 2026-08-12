@@ -116,51 +116,35 @@ export function getRotatedDefaultModel(defaultModels: string[]): { provider: LLM
 export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickActionItem[] {
   return [
     {
-      id: "fix_grammar",
-      label: t("qa_fix_grammar_label", appLanguage),
-      category: "writing",
-      categoryLabel: t("qa_cat_writing", appLanguage),
-      icon: <CheckSquare className="w-4 h-4 text-amber-600" />,
-      title: t("qa_fix_grammar_title", appLanguage),
-      description: t("qa_fix_grammar_desc", appLanguage),
-      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      id: "add_word",
+      label: t("qa_add_word_label", appLanguage),
+      category: "vocab",
+      categoryLabel: t("qa_cat_vocab", appLanguage),
+      icon: <Plus className="w-4 h-4 text-green-600" />,
+      title: t("qa_add_word_title", appLanguage),
+      description: t("qa_add_word_desc", appLanguage),
+      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 0,
-      defaultModels: [],
-      getAction: ({ onFixGrammar, onClearHistory }) => {
+      defaultModels: RELIABLE_MODELS,
+      getAction: ({ onAddWord, onClearHistory }) => {
         onClearHistory();
-        onFixGrammar();
+        onAddWord();
       }
     },
     {
-      id: "suggest_reply",
-      label: t("qa_suggest_reply_label", appLanguage),
-      category: "writing",
-      categoryLabel: t("qa_cat_writing", appLanguage),
+      id: "generate_topic",
+      label: t("qa_generate_words_label", appLanguage),
+      category: "vocab",
+      categoryLabel: t("qa_cat_vocab", appLanguage),
       icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: t("qa_suggest_reply_title", appLanguage),
-      description: t("qa_suggest_reply_desc", appLanguage),
-      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      title: t("qa_generate_words_title", appLanguage),
+      description: t("qa_generate_words_desc", appLanguage),
+      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 1,
-      defaultModels: [],
-      getAction: ({ onSuggestCasualReplyPrompt, onClearHistory }) => {
+      defaultModels: RELIABLE_MODELS,
+      getAction: ({ onGenerateByTopic, onClearHistory }) => {
         onClearHistory();
-        onSuggestCasualReplyPrompt?.();
-      }
-    },
-    {
-      id: "start_quiz",
-      label: t("qa_start_quiz_label", appLanguage),
-      category: "study",
-      categoryLabel: t("qa_cat_study", appLanguage),
-      icon: <Brain className="w-4 h-4 text-amber-600" />,
-      title: t("qa_start_quiz_title", appLanguage),
-      description: t("qa_start_quiz_desc", appLanguage),
-      className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 1,
-      defaultModels: [],
-      getAction: ({ onStartQuiz, onClearHistory }) => {
-        onClearHistory();
-        onStartQuiz();
+        onGenerateByTopic();
       }
     },
     {
@@ -180,55 +164,71 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       }
     },
     {
-      id: "generate_topic",
-      label: t("qa_generate_words_label", appLanguage),
-      category: "vocab",
-      categoryLabel: t("qa_cat_vocab", appLanguage),
-      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: t("qa_generate_words_title", appLanguage),
-      description: t("qa_generate_words_desc", appLanguage),
-      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      id: "start_quiz",
+      label: t("qa_start_quiz_label", appLanguage),
+      category: "study",
+      categoryLabel: t("qa_cat_study", appLanguage),
+      icon: <Brain className="w-4 h-4 text-amber-600" />,
+      title: t("qa_start_quiz_title", appLanguage),
+      description: t("qa_start_quiz_desc", appLanguage),
+      className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 3,
-      defaultModels: RELIABLE_MODELS,
-      getAction: ({ onGenerateByTopic, onClearHistory }) => {
+      defaultModels: [],
+      getAction: ({ onStartQuiz, onClearHistory }) => {
         onClearHistory();
-        onGenerateByTopic();
+        onStartQuiz();
       }
     },
     {
-      id: "add_word",
-      label: t("qa_add_word_label", appLanguage),
-      category: "vocab",
-      categoryLabel: t("qa_cat_vocab", appLanguage),
-      icon: <Plus className="w-4 h-4 text-green-600" />,
-      title: t("qa_add_word_title", appLanguage),
-      description: t("qa_add_word_desc", appLanguage),
-      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      id: "fix_grammar",
+      label: t("qa_fix_grammar_label", appLanguage),
+      category: "writing",
+      categoryLabel: t("qa_cat_writing", appLanguage),
+      icon: <CheckSquare className="w-4 h-4 text-amber-600" />,
+      title: t("qa_fix_grammar_title", appLanguage),
+      description: t("qa_fix_grammar_desc", appLanguage),
+      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
-      defaultModels: RELIABLE_MODELS,
-      getAction: ({ onAddWord, onClearHistory }) => {
+      defaultModels: [],
+      getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();
-        onAddWord();
+        onFixGrammar();
       }
     },
     {
-      id: "interactive_chat_coach",
-      label: t("qa_interactive_prompts_label", appLanguage),
+      id: "suggest_reply",
+      label: t("qa_suggest_reply_label", appLanguage),
       category: "writing",
       categoryLabel: t("qa_cat_writing", appLanguage),
       icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-      title: t("qa_interactive_prompts_title", appLanguage),
-      description: t("qa_interactive_prompts_desc", appLanguage),
-      className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      title: t("qa_suggest_reply_title", appLanguage),
+      description: t("qa_suggest_reply_desc", appLanguage),
+      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
-      defaultModels: RELIABLE_MODELS,
-      getAction: ({ onSendMessage, onClearHistory }) => {
+      defaultModels: [],
+      getAction: ({ onSuggestCasualReplyPrompt, onClearHistory }) => {
         onClearHistory();
-        onSendMessage(
-          `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
-        );
+        onSuggestCasualReplyPrompt?.();
       }
     },
+    // {
+    //   id: "interactive_chat_coach",
+    //   label: t("qa_interactive_prompts_label", appLanguage),
+    //   category: "writing",
+    //   categoryLabel: t("qa_cat_writing", appLanguage),
+    //   icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+    //   title: t("qa_interactive_prompts_title", appLanguage),
+    //   description: t("qa_interactive_prompts_desc", appLanguage),
+    //   className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+    //   defaultIndex: 6,
+    //   defaultModels: RELIABLE_MODELS,
+    //   getAction: ({ onSendMessage, onClearHistory }) => {
+    //     onClearHistory();
+    //     onSendMessage(
+    //       `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
+    //     );
+    //   }
+    // },
     {
       id: "explain_grammar",
       label: t("qa_explain_grammar_label", appLanguage),
@@ -238,7 +238,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_explain_grammar_title", appLanguage),
       description: t("qa_explain_grammar_desc", appLanguage),
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 6,
+      defaultIndex: 7,
       defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
@@ -256,7 +256,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_common_phrases_title", appLanguage),
       description: t("qa_common_phrases_desc", appLanguage),
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
+      defaultIndex: 8,
       defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
@@ -274,7 +274,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_translate_contrast_title", appLanguage),
       description: t("qa_translate_contrast_desc", appLanguage),
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 8,
+      defaultIndex: 9,
       defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
@@ -292,7 +292,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_new_chat_title", appLanguage),
       description: t("qa_new_chat_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 9,
+      defaultIndex: 10,
       defaultModels: [],
       getAction: ({ onClearHistory }) => onClearHistory()
     }

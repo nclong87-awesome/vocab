@@ -1350,16 +1350,6 @@ export default function SettingsView({
 
               {/* Test Voice Section */}
               <div className="pt-4 border-t border-stone-200 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h5 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                    <Volume2 className="w-4 h-4 text-stone-800" />
-                    {t("settings_test_voice_studio", selectedAppLang)}
-                  </h5>
-                  <span className="text-[10px] text-stone-500">
-                    {t("settings_test_voice_studio_desc", selectedAppLang)}
-                  </span>
-                </div>
-
                 <textarea
                   value={testText}
                   onChange={(e) => setTestText(e.target.value)}
