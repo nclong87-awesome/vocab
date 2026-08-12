@@ -256,7 +256,72 @@ export type TranslationKey =
   | "toast_added_multiple_words"
   | "toast_retrying_photo_analysis"
   | "toast_photo_upload_prompt"
-  | "toast_retrying_suggest_reply";
+  | "toast_retrying_suggest_reply"
+  | "topic_travel_name"
+  | "topic_travel_badge"
+  | "topic_travel_desc"
+  | "topic_business_name"
+  | "topic_business_badge"
+  | "topic_business_desc"
+  | "topic_tech_name"
+  | "topic_tech_badge"
+  | "topic_tech_desc"
+  | "topic_daily_name"
+  | "topic_daily_badge"
+  | "topic_daily_desc"
+  | "topic_health_name"
+  | "topic_health_badge"
+  | "topic_health_desc"
+  | "cert_ket_desc"
+  | "cert_pet_desc"
+  | "cert_fce_desc"
+  | "cert_ielts_desc"
+  | "cert_toeic_desc"
+  | "cert_jlptn5_desc"
+  | "cert_jlptn4_desc"
+  | "cert_jlptn3_desc"
+  | "cert_jlptn2_desc"
+  | "cert_jlptn1_desc"
+  | "cert_hsk1_desc"
+  | "cert_hsk2_desc"
+  | "cert_hsk3_desc"
+  | "cert_hsk4_desc"
+  | "cert_hsk5_desc"
+  | "cert_delfa1_desc"
+  | "cert_delfa2_desc"
+  | "cert_delfb1_desc"
+  | "cert_delfb2_desc"
+  | "cert_dalfc1_desc"
+  | "cert_goethea1_desc"
+  | "cert_goethea2_desc"
+  | "cert_goetheb1_desc"
+  | "cert_goetheb2_desc"
+  | "cert_testdafc1_desc"
+  | "cert_delea1_desc"
+  | "cert_delea2_desc"
+  | "cert_deleb1_desc"
+  | "cert_deleb2_desc"
+  | "cert_delec1_desc"
+  | "cert_topik1_desc"
+  | "cert_topik2_desc"
+  | "cert_topik3_desc"
+  | "cert_topik4_desc"
+  | "cert_topik5_desc"
+  | "cert_vpta1_desc"
+  | "cert_vpta2_desc"
+  | "cert_vptb1_desc"
+  | "cert_vptb2_desc"
+  | "cert_vptc1_desc"
+  | "cert_cilsa1_desc"
+  | "cert_cilsa2_desc"
+  | "cert_cilsb1_desc"
+  | "cert_cilsb2_desc"
+  | "cert_cilsc1_desc"
+  | "cert_cefra1_desc"
+  | "cert_cefra2_desc"
+  | "cert_cefrb1_desc"
+  | "cert_cefrb2_desc"
+  | "cert_cefrc1_desc";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
@@ -545,7 +610,72 @@ export const translations: Record<string, LanguageTranslations> = {
     toast_added_multiple_words: "🎉 Added {count} vocabulary words to collection!",
     toast_retrying_photo_analysis: "🔄 Retrying photo vocabulary analysis...",
     toast_photo_upload_prompt: "📷 Please upload or select a photo to analyze",
-    toast_retrying_suggest_reply: "🔄 Retrying suggest casual reply..."
+    toast_retrying_suggest_reply: "🔄 Retrying suggest casual reply...",
+    topic_travel_name: "Travel & Dining",
+    topic_travel_badge: "Everyday",
+    topic_travel_desc: "Airports, hotels, ordering food, directions & sightseeing",
+    topic_business_name: "Business & Office",
+    topic_business_badge: "Career",
+    topic_business_desc: "Meetings, emails, negotiations, finance & presentations",
+    topic_tech_name: "Technology & AI",
+    topic_tech_badge: "Modern",
+    topic_tech_desc: "Software, artificial intelligence, internet & digital devices",
+    topic_daily_name: "Daily Life & Hobbies",
+    topic_daily_badge: "Lifestyle",
+    topic_daily_desc: "Sports, music, movies, shopping, home & leisure activities",
+    topic_health_name: "Health & Medical",
+    topic_health_badge: "Wellness",
+    topic_health_desc: "Body parts, symptoms, pharmacy, workout & healthy living",
+    cert_ket_desc: "Essential everyday vocabulary & basic conversation phrases",
+    cert_pet_desc: "Intermediate social, work, travel & study vocabulary",
+    cert_fce_desc: "Upper-intermediate idioms, expressions & formal discourse",
+    cert_ielts_desc: "Academic essays, data analysis, research & formal debate terms",
+    cert_toeic_desc: "Corporate office, finance, logistics, meetings & negotiation terms",
+    cert_jlptn5_desc: "Basic daily greetings, family, numbers & elementary kanji",
+    cert_jlptn4_desc: "Everyday conversation, shopping, weather & daily routine",
+    cert_jlptn3_desc: "Expressive vocabulary for work, hobbies & news summaries",
+    cert_jlptn2_desc: "Business Japanese, newspaper articles & nuanced expressions",
+    cert_jlptn1_desc: "Formal academic prose, specialized fields & subtle nuances",
+    cert_hsk1_desc: "Foundation words, essential daily greetings & pinyin basics",
+    cert_hsk2_desc: "Simple routines, directions, time & family relationships",
+    cert_hsk3_desc: "Intermediate travel, dining, leisure & social interaction",
+    cert_hsk4_desc: "Fluent discussions on work, culture, emotion & technology",
+    cert_hsk5_desc: "Professional articles, speeches, literature & business context",
+    cert_delfa1_desc: "Basic introductions, personal info & immediate surroundings",
+    cert_delfa2_desc: "Routine tasks, shopping, local geography & daily work",
+    cert_delfb1_desc: "Travel, expressing opinions, plans & personal experiences",
+    cert_delfb2_desc: "Debates, complex current affairs, media & professional discourse",
+    cert_dalfc1_desc: "Academic analysis, literary expression & specialized domains",
+    cert_goethea1_desc: "Basic phrases, introductions, numbers & everyday needs",
+    cert_goethea2_desc: "Workplace basics, environment, shopping & family life",
+    cert_goetheb1_desc: "Independent travel, work discussions & expressing views",
+    cert_goetheb2_desc: "Technical discussions, abstract topics & formal writing",
+    cert_testdafc1_desc: "University research, academic prose & complex business German",
+    cert_delea1_desc: "Basic greetings, personal details & immediate needs",
+    cert_delea2_desc: "Daily routines, family, local geography & shopping",
+    cert_deleb1_desc: "Travel, dreams, events, work & personal opinions",
+    cert_deleb2_desc: "Complex arguments, current news, professional environments",
+    cert_delec1_desc: "Fluent social, academic & professional Spanish discourse",
+    cert_topik1_desc: "Basic survival Korean, family, food & daily greetings",
+    cert_topik2_desc: "Telephone conversations, appointments & public transport",
+    cert_topik3_desc: "Public facility usage, social relationships & news basics",
+    cert_topik4_desc: "Workplace communication, news articles & social issues",
+    cert_topik5_desc: "Professional research, politics, economy & culture terms",
+    cert_vpta1_desc: "Greetings, family, numbers & basic street food ordering",
+    cert_vpta2_desc: "Shopping, directions, weather & daily routine in Vietnam",
+    cert_vptb1_desc: "Travel, workplace, traditional festivals & personal stories",
+    cert_vptb2_desc: "Business communication, news summaries & cultural commentary",
+    cert_vptc1_desc: "Formal academic, historical, literary & economic Vietnamese",
+    cert_cilsa1_desc: "Basic daily expressions, family & personal introduction",
+    cert_cilsa2_desc: "Everyday routine, local geography & shopping in Italy",
+    cert_cilsb1_desc: "Intermediate social interaction, travel & personal opinions",
+    cert_cilsb2_desc: "Professional discussions, media analysis & technical terms",
+    cert_cilsc1_desc: "Advanced academic, literary & formal Italian communication",
+    cert_cefra1_desc: "Basic greetings, self-introduction & foundational words",
+    cert_cefra2_desc: "Daily routine, shopping, family & immediate needs",
+    cert_cefrb1_desc: "Travel, work, leisure & expressing personal opinions",
+    cert_cefrb2_desc: "Complex arguments, professional contexts & media",
+    cert_cefrc1_desc: "Academic research, formal fluency & specialized topics"
   },
   vi: {
     app_title: "Học Từ Vựng AI",
@@ -805,7 +935,72 @@ export const translations: Record<string, LanguageTranslations> = {
     toast_added_multiple_words: "🎉 Đã thêm {count} từ vựng vào bộ sưu tập!",
     toast_retrying_photo_analysis: "🔄 Đang phân tích lại từ vựng từ hình ảnh...",
     toast_photo_upload_prompt: "📷 Vui lòng tải lên hoặc chọn một bức ảnh để phân tích",
-    toast_retrying_suggest_reply: "🔄 Đang gợi ý lại câu trả lời..."
+    toast_retrying_suggest_reply: "🔄 Đang gợi ý lại câu trả lời...",
+    topic_travel_name: "Du Lịch & Nhà Hàng",
+    topic_travel_badge: "Hàng ngày",
+    topic_travel_desc: "Sân bay, khách sạn, gọi món, chỉ đường & tham quan",
+    topic_business_name: "Kinh Doanh & Văn Phòng",
+    topic_business_badge: "Sự nghiệp",
+    topic_business_desc: "Cuộc họp, email, đàm phán, tài chính & thuyết trình",
+    topic_tech_name: "Công Nghệ & AI",
+    topic_tech_badge: "Hiện đại",
+    topic_tech_desc: "Phần mềm, trí tuệ nhân tạo, internet & thiết bị kỹ thuật số",
+    topic_daily_name: "Đời Sống & Sở Thích",
+    topic_daily_badge: "Lối sống",
+    topic_daily_desc: "Thể thao, âm nhạc, phim ảnh, mua sắm, nhà cửa & giải trí",
+    topic_health_name: "Sức Khỏe & Y Tế",
+    topic_health_badge: "Sức khỏe",
+    topic_health_desc: "Các bộ phận cơ thể, triệu chứng, nhà thuốc, tập luyện & sống khỏe",
+    cert_ket_desc: "Từ vựng thiết yếu hàng ngày & các cụm từ giao tiếp cơ bản",
+    cert_pet_desc: "Từ vựng trung cấp về xã hội, công việc, du lịch & học tập",
+    cert_fce_desc: "Thành ngữ, cụm diễn đạt & đàm thoại trang trọng trình độ trung cao cấp",
+    cert_ielts_desc: "Bài luận học thuật, phân tích dữ liệu, nghiên cứu & thuật ngữ tranh luận",
+    cert_toeic_desc: "Văn phòng doanh nghiệp, tài chính, logistics, cuộc họp & đàm phán",
+    cert_jlptn5_desc: "Chào hỏi hàng ngày cơ bản, gia đình, số đếm & kanji sơ cấp",
+    cert_jlptn4_desc: "Giao tiếp hàng ngày, mua sắm, thời tiết & sinh hoạt thường nhật",
+    cert_jlptn3_desc: "Từ vựng diễn đạt cho công việc, sở thích & tóm tắt tin tức",
+    cert_jlptn2_desc: "Tiếng Nhật thương mại, bài báo & các cách diễn đạt tinh tế",
+    cert_jlptn1_desc: "Văn phong học thuật trang trọng, các lĩnh vực chuyên ngành & sắc thái sâu sắc",
+    cert_hsk1_desc: "Từ vựng nền tảng, chào hỏi hàng ngày thiết yếu & pinyin cơ bản",
+    cert_hsk2_desc: "Sinh hoạt đơn giản, chỉ đường, thời gian & quan hệ gia đình",
+    cert_hsk3_desc: "Du lịch trung cấp, ăn uống, giải trí & tương tác xã hội",
+    cert_hsk4_desc: "Thảo luận lưu khoát về công việc, văn hóa, cảm xúc & công nghệ",
+    cert_hsk5_desc: "Bài báo chuyên nghiệp, diễn văn, văn học & bối cảnh kinh doanh",
+    cert_delfa1_desc: "Giới thiệu cơ bản, thông tin cá nhân & môi trường xung quanh",
+    cert_delfa2_desc: "Công việc hàng ngày, mua sắm, địa lý địa phương & công việc",
+    cert_delfb1_desc: "Du lịch, bày tỏ ý kiến, kế hoạch & trải nghiệm cá nhân",
+    cert_delfb2_desc: "Tranh luận, thời sự phức tạp, truyền thông & đàm thoại chuyên nghiệp",
+    cert_dalfc1_desc: "Phân tích học thuật, diễn đạt văn học & các lĩnh vực chuyên sâu",
+    cert_goethea1_desc: "Cụm từ cơ bản, giới thiệu, số đếm & nhu cầu hàng ngày",
+    cert_goethea2_desc: "Cơ bản về nơi làm việc, môi trường, mua sắm & đời sống gia đình",
+    cert_goetheb1_desc: "Du lịch độc lập, thảo luận công việc & bày tỏ quan điểm",
+    cert_goetheb2_desc: "Thảo luận kỹ thuật, chủ đề trừu tượng & viết văn trang trọng",
+    cert_testdafc1_desc: "Nghiên cứu đại học, văn phong học thuật & tiếng Đức thương mại phức tạp",
+    cert_delea1_desc: "Chào hỏi cơ bản, thông tin cá nhân & nhu cầu thiết yếu",
+    cert_delea2_desc: "Sinh hoạt hàng ngày, gia đình, địa lý & mua sắm",
+    cert_deleb1_desc: "Du lịch, ước mơ, sự kiện, công việc & ý kiến cá nhân",
+    cert_deleb2_desc: "Lập luận phức tạp, tin tức thời sự, môi trường chuyên nghiệp",
+    cert_delec1_desc: "Đàm thoại tiếng Tây Ban Nha lưu khoát trong xã hội, học thuật & chuyên môn",
+    cert_topik1_desc: "Tiếng Hàn sinh tồn cơ bản, gia đình, món ăn & chào hỏi hàng ngày",
+    cert_topik2_desc: "Trò chuyện điện thoại, cuộc hẹn & phương tiện công cộng",
+    cert_topik3_desc: "Sử dụng tiện ích công cộng, mối quan hệ xã hội & tin tức cơ bản",
+    cert_topik4_desc: "Giao tiếp nơi làm việc, bài báo & các vấn đề xã hội",
+    cert_topik5_desc: "Nghiên cứu chuyên nghiệp, chính trị, kinh tế & thuật ngữ văn hóa",
+    cert_vpta1_desc: "Chào hỏi, gia đình, số đếm & gọi món ăn đường phố cơ bản",
+    cert_vpta2_desc: "Mua sắm, chỉ đường, thời tiết & sinh hoạt hàng ngày tại Việt Nam",
+    cert_vptb1_desc: "Du lịch, nơi làm việc, lễ hội truyền thống & câu chuyện cá nhân",
+    cert_vptb2_desc: "Giao tiếp thương mại, tóm tắt tin tức & bình luận văn hóa",
+    cert_vptc1_desc: "Tiếng Việt học thuật, lịch sử, văn học & kinh tế cao cấp",
+    cert_cilsa1_desc: "Diễn đạt hàng ngày cơ bản, gia đình & giới thiệu bản thân",
+    cert_cilsa2_desc: "Sinh hoạt thường nhật, địa lý địa phương & mua sắm tại Ý",
+    cert_cilsb1_desc: "Tương tác xã hội trung cấp, du lịch & ý kiến cá nhân",
+    cert_cilsb2_desc: "Thảo luận chuyên nghiệp, phân tích truyền thông & thuật ngữ kỹ thuật",
+    cert_cilsc1_desc: "Giao tiếp tiếng Ý nâng cao trong học thuật, văn học & trang trọng",
+    cert_cefra1_desc: "Chào hỏi cơ bản, giới thiệu bản thân & từ vựng nền tảng",
+    cert_cefra2_desc: "Sinh hoạt hàng ngày, mua sắm, gia đình & nhu cầu thiết yếu",
+    cert_cefrb1_desc: "Du lịch, công việc, giải trí & bày tỏ ý kiến cá nhân",
+    cert_cefrb2_desc: "Lập luận phức tạp, bối cảnh chuyên nghiệp & truyền thông",
+    cert_cefrc1_desc: "Nghiên cứu học thuật, lưu khoát trang trọng & chủ đề chuyên sâu"
   },
   es: {
     app_title: "Aprende Vocabulario AI",
