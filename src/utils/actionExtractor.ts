@@ -34,7 +34,17 @@ export function getRemainingWordActions(
   const remainingWordActions: any[] = [];
   const seenWords = new Set<string>();
 
-  for (const act of lastMsgWithWordActions.suggestedActions) {
+  // Sort actions so that individual word additions are processed FIRST, and batch actions (add_multiplewords) LAST.
+  // This preserves the original individual action types and prevents them from being converted to confirm_save_word prematurely.
+  const sortedActions = [...lastMsgWithWordActions.suggestedActions].sort((a, b) => {
+    const aIsBatch = a && a.action === "add_multiplewords";
+    const bIsBatch = b && b.action === "add_multiplewords";
+    if (aIsBatch && !bIsBatch) return 1;
+    if (!aIsBatch && bIsBatch) return -1;
+    return 0;
+  });
+
+  for (const act of sortedActions) {
     if (!act || typeof act !== "object") continue;
 
     if (act.action === "add_multiplewords" && Array.isArray(act.payload?.words)) {
@@ -50,10 +60,14 @@ export function getRemainingWordActions(
 
         seenWords.add(actWord);
         const details = w.translation || w.definition || "";
+        const hasFullDetails = Boolean(w.translation && w.definition);
+
         remainingWordActions.push({
-          label: t("action_confirm_add_word", appLang, { word: w.word, details }),
-          action: "confirm_save_word",
-          payload: w,
+          label: hasFullDetails
+            ? t("action_confirm_add_word", appLang, { word: w.word, details })
+            : t("action_confirm_add", appLang, { word: w.word, translation: w.translation || "" }),
+          action: hasFullDetails ? "confirm_save_word" : "add_word",
+          payload: hasFullDetails ? w : { word: w.word, hint: w.hint || w.definition },
         });
       }
       continue;
@@ -86,7 +100,21 @@ export function getRemainingWordActions(
     if (isAlreadyInCollection) continue;
 
     seenWords.add(actWord);
-    remainingWordActions.push(act);
+
+    let finalAct = { ...act };
+    if (finalAct.action === "confirm_save_word") {
+      const hasFullDetails = Boolean(finalAct.payload?.translation && finalAct.payload?.definition);
+      if (!hasFullDetails) {
+        finalAct.action = "add_word";
+        if (finalAct.payload) {
+          finalAct.payload = {
+            word: finalAct.payload.word,
+            hint: finalAct.payload.hint || finalAct.payload.definition,
+          };
+        }
+      }
+    }
+    remainingWordActions.push(finalAct);
   }
 
   if (remainingWordActions.length === 0) {
