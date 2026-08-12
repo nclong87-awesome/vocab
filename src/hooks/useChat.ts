@@ -225,8 +225,7 @@ export function useChat({
     setIsTyping(true);
 
     setTimeout(() => {
-      const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-      const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
+      const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
       const currentQ = activeQuiz.questions[activeQuiz.currentIndex];
       const targetWordObj = words.find((w) => w.id === currentQ.wordId || w.word.toLowerCase() === currentQ.word.toLowerCase());
@@ -262,22 +261,30 @@ export function useChat({
 
       let feedback = "";
       if (isCorrect) {
-        feedback = isVi
-          ? `🎉 **Chính xác!**\n\nĐáp án cho câu hỏi là **"${currentQ.correctAnswer}"**.`
-          : `🎉 **Correct!**\n\nThe answer to "${currentQ.question.split("\n")[0]}" is **"${currentQ.correctAnswer}"**.`;
+        feedback = t("chat_quiz_feedback_correct_msg", currentAppLang, {
+          questionTitle: currentQ.question.split("\n")[0],
+          answer: currentQ.correctAnswer,
+        });
         if (targetWordObj) {
-          feedback += isVi
-            ? `\n\n*Từ*: **${targetWordObj.word}** (${targetWordObj.partOfSpeech})\n*Phát âm*: \`${targetWordObj.pronunciation || ""}\`\n*Bản dịch*: "${targetWordObj.translation}"`
-            : `\n\n*Word*: **${targetWordObj.word}** (${targetWordObj.partOfSpeech})\n*Pronunciation*: \`${targetWordObj.pronunciation || ""}\`\n*Translation*: "${targetWordObj.translation}"`;
+          feedback += t("chat_quiz_word_details", currentAppLang, {
+            word: targetWordObj.word,
+            partOfSpeech: targetWordObj.partOfSpeech,
+            pronunciation: targetWordObj.pronunciation || "",
+            translation: targetWordObj.translation,
+          });
         }
       } else {
-        feedback = isVi
-          ? `❌ **Chưa chính xác!**\n\nĐáp án đúng: **"${currentQ.correctAnswer}"** (câu trả lời của bạn: "${userAnswer}").`
-          : `❌ **Incorrect!**\n\nCorrect answer: **"${currentQ.correctAnswer}"** (your answer: "${userAnswer}").`;
+        feedback = t("chat_quiz_feedback_incorrect_msg", currentAppLang, {
+          answer: currentQ.correctAnswer,
+          userAnswer: userAnswer,
+        });
         if (targetWordObj) {
-          feedback += isVi
-            ? `\n\n*Từ*: **${targetWordObj.word}** (${targetWordObj.partOfSpeech})\n*Phát âm*: \`${targetWordObj.pronunciation || ""}\`\n*Bản dịch*: "${targetWordObj.translation}"`
-            : `\n\n*Word*: **${targetWordObj.word}** (${targetWordObj.partOfSpeech})\n*Pronunciation*: \`${targetWordObj.pronunciation || ""}\`\n*Translation*: "${targetWordObj.translation}"`;
+          feedback += t("chat_quiz_word_details", currentAppLang, {
+            word: targetWordObj.word,
+            partOfSpeech: targetWordObj.partOfSpeech,
+            pronunciation: targetWordObj.pronunciation || "",
+            translation: targetWordObj.translation,
+          });
         }
       }
 
@@ -297,12 +304,12 @@ export function useChat({
         const nextMsg: ChatMessage = {
           id: `quiz-next-${Date.now()}`,
           role: "assistant",
-          content: `${feedback}\n\n---\n\n### ${isVi ? `Câu ${nextIndex + 1} / ${activeQuiz.questions.length}` : `Question ${nextIndex + 1} of ${activeQuiz.questions.length}`}:\n**${nextQ.question}**`,
+          content: `${feedback}\n\n---\n\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}:\n**${nextQ.question}**`,
           timestamp: new Date().toISOString(),
           audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
           quizSpeechText: isCorrect
-            ? (isVi ? `Chính xác! Đáp án là ${currentQ.correctAnswer}` : `Correct! The answer is ${currentQ.correctAnswer}`)
-            : (isVi ? `Chưa chính xác! Đáp án đúng là ${currentQ.correctAnswer}` : `Incorrect! Correct answer: ${currentQ.correctAnswer}`),
+            ? t("chat_quiz_speech_correct", currentAppLang, { answer: currentQ.correctAnswer })
+            : t("chat_quiz_speech_incorrect", currentAppLang, { answer: currentQ.correctAnswer }),
           nextQuestionSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
           imageUrl: nextQ.imageUrl,
           imageKeyword: nextQ.imageKeyword,
@@ -325,17 +332,16 @@ export function useChat({
         const finishedMsg: ChatMessage = {
           id: `quiz-end-${Date.now()}`,
           role: "assistant",
-          content: isVi
-            ? `${feedback}\n\n---\n\n🏆 **Hoàn thành bài kiểm tra!**\n\nBạn đạt **${newScore} / ${totalQs}** (${Math.round(
-                (newScore / totalQs) * 100
-              )}%).\n\nTôi đã cập nhật thống kê và điều chỉnh độ ghi nhớ từ vựng cho bạn! Tất cả đã sẵn sàng.\n\nBạn muốn học gì tiếp theo?`
-            : `${feedback}\n\n---\n\n🏆 **Quiz Completed!**\n\nYou scored **${newScore} out of ${totalQs}** (${Math.round(
-                (newScore / totalQs) * 100
-              )}%).\n\nI have updated your statistics and adjusted word learning strength values! All set.\n\nWhat would you like to learn next?`,
+          content: t("chat_quiz_finished_msg", currentAppLang, {
+            feedback: feedback,
+            score: String(newScore),
+            total: String(totalQs),
+            accuracy: String(Math.round((newScore / totalQs) * 100)),
+          }),
           timestamp: new Date().toISOString(),
           suggestedActions: [
-            { label: isVi ? "🧠 Bắt Đầu Bài Quiz Hôm Nay" : "Start Today's Quiz", action: "start_quiz" },
-            { label: isVi ? "🗣️ Cụm Từ & Thành Ngữ Phổ Biến" : "Common Idioms & Phrases", action: "common_phrases" },
+            { label: t("chat_quiz_start_today_action", currentAppLang), action: "start_quiz" },
+            { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ],
         };
 

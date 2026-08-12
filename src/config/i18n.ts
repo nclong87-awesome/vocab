@@ -235,7 +235,28 @@ export type TranslationKey =
   | "chat_lookup_status"
   | "chat_lookup_not_found"
   | "chat_disambiguation_prompt"
-  | "chat_visual_scene";
+  | "chat_visual_scene"
+  | "fc_title"
+  | "fc_gained"
+  | "fc_current_strength"
+  | "fc_got_it_btn"
+  | "fc_needs_practice_btn"
+  | "fc_native_translation"
+  | "fc_definition_header"
+  | "fc_context_examples"
+  | "fc_nuance_tip"
+  | "fc_suggested_vocab"
+  | "fc_listen_example"
+  | "fc_listen_word"
+  | "fc_speak_word"
+  | "fc_strength_updated"
+  | "toast_copied_fixed_sentence"
+  | "toast_copied_selection"
+  | "toast_added_word"
+  | "toast_added_multiple_words"
+  | "toast_retrying_photo_analysis"
+  | "toast_photo_upload_prompt"
+  | "toast_retrying_suggest_reply";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
@@ -503,7 +524,28 @@ export const translations: Record<string, LanguageTranslations> = {
     chat_lookup_status: "🔍 *Consulting dictionary, translating, and generating definition for **\"{word}\"**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **No valid definition found for \"{word}\"**{contextHintStr}.\n\nThis entry was **not** added to your collection.\n\n👇 **Type another word below** to try again!",
     chat_disambiguation_prompt: "🤔 **\"{word}\"** has several common meanings in **{targetLanguage}**. Which definition would you like to add?",
-    chat_visual_scene: "Visual scene"
+    chat_visual_scene: "Visual scene",
+    fc_title: "AI Word Flash Card",
+    fc_gained: "Gained",
+    fc_current_strength: "Current word strength:",
+    fc_got_it_btn: "Got it! (+10% Strength)",
+    fc_needs_practice_btn: "Needs Practice (-10%)",
+    fc_native_translation: "Native Translation ({nativeLanguage}):",
+    fc_definition_header: "Definition ({targetLanguage}):",
+    fc_context_examples: "Contextual Example Sentences ({category}):",
+    fc_nuance_tip: "Nuance & Usage Tip:",
+    fc_suggested_vocab: "Suggested Vocabulary from Examples:",
+    fc_listen_example: "Listen to example sentence",
+    fc_listen_word: "Listen to word",
+    fc_speak_word: "Speak Word",
+    fc_strength_updated: "Updated memory strength for \"{word}\": {strength}% ({delta}%)",
+    toast_copied_fixed_sentence: "📋 Copied fixed sentence to clipboard!",
+    toast_copied_selection: "📋 Copied selection to clipboard!",
+    toast_added_word: "🎉 Added \"{word}\" to collection!",
+    toast_added_multiple_words: "🎉 Added {count} vocabulary words to collection!",
+    toast_retrying_photo_analysis: "🔄 Retrying photo vocabulary analysis...",
+    toast_photo_upload_prompt: "📷 Please upload or select a photo to analyze",
+    toast_retrying_suggest_reply: "🔄 Retrying suggest casual reply..."
   },
   vi: {
     app_title: "Học Từ Vựng AI",
@@ -742,7 +784,28 @@ export const translations: Record<string, LanguageTranslations> = {
     chat_lookup_status: "🔍 *Đang tra từ điển, dịch và tạo định nghĩa cho **\"{word}\"**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **Không tìm thấy định nghĩa hợp lệ cho \"{word}\"**{contextHintStr}.\n\nMục này **chưa** được thêm vào bộ sưu tập.\n\n👇 **Nhập một từ khác bên dưới** để thử lại!",
     chat_disambiguation_prompt: "🤔 **\"{word}\"** có một số nét nghĩa phổ biến trong **{targetLanguage}**. Bạn muốn thêm định nghĩa nào?",
-    chat_visual_scene: "Cảnh quan"
+    chat_visual_scene: "Cảnh quan",
+    fc_title: "Thẻ Ghi Nhớ AI",
+    fc_gained: "Tăng",
+    fc_current_strength: "Mức độ ghi nhớ hiện tại:",
+    fc_got_it_btn: "Đã thuộc! (+10% Độ nhớ)",
+    fc_needs_practice_btn: "Cần luyện tập (-10%)",
+    fc_native_translation: "Bản dịch ({nativeLanguage}):",
+    fc_definition_header: "Định nghĩa ({targetLanguage}):",
+    fc_context_examples: "Ví dụ trong ngữ cảnh ({category}):",
+    fc_nuance_tip: "Mẹo sử dụng & sắc thái từ:",
+    fc_suggested_vocab: "Từ vựng đề xuất từ ví dụ:",
+    fc_listen_example: "Nghe câu ví dụ",
+    fc_listen_word: "Nghe phát âm từ",
+    fc_speak_word: "Phát Âm Từ",
+    fc_strength_updated: "Đã cập nhật độ ghi nhớ cho \"{word}\": {strength}% ({delta}%)",
+    toast_copied_fixed_sentence: "📋 Đã sao chép câu đã sửa!",
+    toast_copied_selection: "📋 Đã sao chép vào bộ nhớ tạm!",
+    toast_added_word: "🎉 Đã thêm \"{word}\" vào bộ từ vựng!",
+    toast_added_multiple_words: "🎉 Đã thêm {count} từ vựng vào bộ sưu tập!",
+    toast_retrying_photo_analysis: "🔄 Đang phân tích lại từ vựng từ hình ảnh...",
+    toast_photo_upload_prompt: "📷 Vui lòng tải lên hoặc chọn một bức ảnh để phân tích",
+    toast_retrying_suggest_reply: "🔄 Đang gợi ý lại câu trả lời..."
   },
   es: {
     app_title: "Aprende Vocabulario AI",

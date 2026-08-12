@@ -8,6 +8,7 @@ import FormattedMessage from "./FormattedMessage";
 import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
+import { t } from "../../config/i18n";
 
 interface ChatMessageItemProps {
   msg: ChatMessage;
@@ -37,10 +38,11 @@ interface ChatMessageItemProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
 }
 
-function formatActionLabel(act: { label: string; action: string; payload?: any }, isVi: boolean): string {
+function formatActionLabel(act: { label: string; action: string; payload?: any }, currentAppLang: string): string {
   if (!act || !act.label) return "";
   const rawLabel = String(act.label).trim();
 
+  const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
   if (!isVi) {
     return rawLabel;
   }
@@ -48,23 +50,23 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
   const lower = rawLabel.toLowerCase();
 
   if (act.action === "view_flashcard" || lower.includes("next flash card") || lower.includes("next flashcard")) {
-    return "🃏 Thẻ Ghi Nhớ Tiếp Theo";
+    return t("action_next_flashcard", currentAppLang);
   }
 
   if (act.action === "start_quiz" || lower.includes("start quiz") || lower.includes("start vocab quiz")) {
-    return "🧠 Bắt Đầu Bài Quiz Hôm Nay";
+    return t("chat_quiz_start_today_action", currentAppLang);
   }
 
   if (act.action === "fix_another" || lower === "fix another sentence" || lower.includes("fix another")) {
-    return "✍️ Sửa Câu Khác";
+    return t("action_fix_another_sentence", currentAppLang);
   }
 
   if (act.action === "suggest_another" || lower === "suggest another casual reply" || lower.includes("suggest another")) {
-    return "💬 Gợi Ý Câu Trả Lời Khác";
+    return t("action_suggest_another", currentAppLang);
   }
 
   if (act.action === "copy_text" || act.action === "copy_sentence" || lower.includes("copy fixed sentence") || lower.includes("copy sentence")) {
-    return "📋 Sao Chép Câu Đã Sửa";
+    return t("action_copy_fixed_sentence", currentAppLang);
   }
 
   if (act.action === "add_word" || act.action === "confirm_save_word") {
@@ -73,22 +75,18 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
     if (word) {
       if (hint) {
-        return `➕ Thêm "${word}" (${hint})`;
+        return t("action_confirm_add", currentAppLang, { word, translation: hint });
       }
-      const matchParen = rawLabel.match(/\(([^)]+)\)/);
-      if (matchParen && matchParen[1]) {
-        return `➕ Thêm "${word}" (${matchParen[1]})`;
-      }
-      return `➕ Thêm "${word}" vào bộ từ vựng`;
+      return t("action_add_to_col", currentAppLang, { word });
     }
   }
 
   if (act.action === "add_multiplewords" || lower.includes("add all")) {
     const count = act.payload?.words?.length;
     if (count) {
-      return `✨ Thêm Tất Cả (${count}) Từ Vựng Vào Bộ Sưu Tập`;
+      return t("action_add_all_remaining", currentAppLang, { count: String(count) });
     }
-    return "✨ Thêm Tất Cả Từ Vựng Vào Bộ Sưu Tập";
+    return t("action_add_all_photo_words", currentAppLang, { count: "" }).replace(/\s*\(\)\s*/, " ");
   }
 
   if (lower.startsWith("add ") || lower.startsWith("+ add ") || lower.startsWith("➕ add ")) {
@@ -130,8 +128,7 @@ function ChatMessageItem({
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-  const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
+  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
   const handleCopy = (textToCopy: string, key: string, toastMessage: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -335,7 +332,7 @@ function ChatMessageItem({
                 <div className="mb-3 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
                   <div className="min-w-0 flex-1">
                     <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block font-mono">
-                      {isVi ? "Câu Đã Trau Chuốt:" : "Polished Sentence:"}
+                      {t("polished_sentence", currentAppLang)}
                     </span>
                     <p className="text-xs sm:text-sm font-semibold text-stone-900 break-words mt-0.5">
                       "{msg.fixedSentence}"
@@ -343,12 +340,12 @@ function ChatMessageItem({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, isVi ? "📋 Đã sao chép câu đã sửa!" : "📋 Copied fixed sentence to clipboard!")}
+                    onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, t("toast_copied_fixed_sentence", currentAppLang))}
                     className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
-                    title={isVi ? "Sao chép câu đã sửa" : "Copy fixed sentence"}
+                    title={t("action_copy_fixed_sentence", currentAppLang)}
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>{copiedKey === `fixed-${msg.id}` ? (isVi ? "Đã chép!" : "Copied!") : (isVi ? "Sao chép" : "Copy")}</span>
+                    <span>{copiedKey === `fixed-${msg.id}` ? t("copied", currentAppLang) : t("copy", currentAppLang)}</span>
                   </button>
                 </div>
               )}
@@ -509,7 +506,7 @@ function ChatMessageItem({
                       const textToCopy = act.payload?.text || msg.fixedSentence || "";
                       if (textToCopy) {
                         navigator.clipboard.writeText(textToCopy);
-                        showToast(isVi ? "📋 Đã sao chép vào bộ nhớ tạm!" : "📋 Copied selection to clipboard!");
+                        showToast(t("toast_copied_selection", currentAppLang));
                       }
                     } else if (act.action === "suggest_another") {
                       handleRecordActionUse("suggest_reply");
@@ -520,13 +517,13 @@ function ChatMessageItem({
                       onFixGrammar();
                     } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
                       onAddMultipleWords([act.payload]);
-                      showToast(isVi ? `🎉 Đã thêm "${act.payload.word}" vào bộ từ vựng!` : `🎉 Added "${act.payload.word}" to collection!`);
+                      showToast(t("toast_added_word", currentAppLang, { word: act.payload.word }));
                     } else if (act.action === "add_word" && act.payload?.word) {
                       handleRecordActionUse("add_word");
                       onAddWord(act.payload.word, act.payload?.hint);
                     } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
                       onAddMultipleWords(act.payload.words);
-                      showToast(isVi ? `🎉 Đã thêm ${act.payload.words.length} từ vựng vào bộ sưu tập!` : `🎉 Added ${act.payload.words.length} vocabulary words to collection!`);
+                      showToast(t("toast_added_multiple_words", currentAppLang, { count: String(act.payload.words.length) }));
                     } else if (act.action === "start_quiz") {
                       handleRecordActionUse("start_quiz");
                       onStartQuiz();
@@ -561,14 +558,14 @@ function ChatMessageItem({
                     } else if (act.action === "retry_analyze_image" && onAnalyzeImageVocab) {
                       const imageToRetry = act.payload?.imageDataUrl || [...messages].reverse().find(m => Boolean(m.imageUrl))?.imageUrl;
                       if (imageToRetry) {
-                        showToast(isVi ? "🔄 Đang phân tích lại từ vựng từ hình ảnh..." : "🔄 Retrying photo vocabulary analysis...");
+                        showToast(t("toast_retrying_photo_analysis", currentAppLang));
                         onAnalyzeImageVocab(imageToRetry, act.payload?.customPrompt);
                       } else {
-                        showToast(isVi ? "📷 Vui lòng tải lên hoặc chọn một bức ảnh để phân tích" : "📷 Please upload or select a photo to analyze");
+                        showToast(t("toast_photo_upload_prompt", currentAppLang));
                         setIsPhotoModalOpen(true);
                       }
                     } else if (act.action === "retry_suggest_reply" && onSuggestCasualReply) {
-                      showToast(isVi ? "🔄 Đang gợi ý lại câu trả lời..." : "🔄 Retrying suggest casual reply...");
+                      showToast(t("toast_retrying_suggest_reply", currentAppLang));
                       onSuggestCasualReply(act.payload?.imageDataUrl || null, act.payload?.customPrompt || "");
                     } else if (act.action === "send_message" && act.payload?.message) {
                       onSendMessage(act.payload.message);
@@ -638,7 +635,7 @@ function ChatMessageItem({
                           ? "text-white"
                           : "text-stone-900 group-hover:text-white group-focus:text-white group-active:text-white"
                       }`}>
-                        {formatActionLabel(act, isVi)}
+                        {formatActionLabel(act, currentAppLang)}
                       </span>
                     )}
                   </div>
