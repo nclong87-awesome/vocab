@@ -150,7 +150,76 @@ export type TranslationKey =
   | "action_add_to_col"
   | "action_confirm_add"
   | "action_next_flashcard"
-  | "action_suggest_another";
+  | "action_suggest_another"
+  | "action_add_all_remaining"
+  | "action_confirm_add_word"
+  | "label_example"
+  | "label_example_translation"
+  | "label_already_in_collection"
+  | "label_translation"
+  | "label_definition"
+  | "label_in_photo"
+  | "chat_word_added_success"
+  | "chat_exited_word_adding"
+  | "chat_generate_topic_count_prompt"
+  | "chat_generate_count_option"
+  | "chat_fallback_suggested_topics"
+  | "chat_fallback_no_response"
+  | "chat_photo_analyzed_for_vocab"
+  | "chat_uploaded_photo_label"
+  | "chat_analyzing_photo_vocab"
+  | "action_add_all_photo_words"
+  | "chat_photo_analysis_result"
+  | "chat_error_generate_vocab_from_image"
+  | "action_retry_analyze_image"
+  | "chat_batch_all_skipped"
+  | "chat_batch_added_success"
+  | "chat_batch_added_skipped_section"
+  | "chat_word_already_in_collection"
+  | "chat_user_selected_add_word"
+  | "chat_saving_custom_card"
+  | "chat_fail_add_word_sense"
+  | "chat_add_word_prompt"
+  | "chat_generate_topic_prompt"
+  | "chat_generating_topic_words_status"
+  | "chat_generate_topic_words_empty"
+  | "action_add_all_topic_words"
+  | "action_generate_more_topic_words"
+  | "chat_generate_topic_words_success"
+  | "chat_suggest_reply_prompt_msg"
+  | "chat_suggest_reply_guiding_prefix"
+  | "chat_suggest_reply_user_req_fallback"
+  | "chat_suggest_reply_analyzing_status"
+  | "chat_suggest_reply_label"
+  | "chat_suggest_replies_header"
+  | "chat_suggest_replies_empty"
+  | "chat_useful_conversation_vocab_header"
+  | "action_add_word_to_collection_with_reason"
+  | "chat_error_suggest_reply"
+  | "action_retry_suggest_reply"
+  | "chat_fix_grammar_prompt_msg"
+  | "chat_fixing_grammar_analyzing_status"
+  | "action_copy_fixed_sentence"
+  | "action_fix_another_sentence"
+  | "chat_recommended_vocabulary_candidates_header"
+  | "chat_empty_collection_flashcard_warning"
+  | "chat_no_words_found_flashcard_warning"
+  | "chat_flashcard_title"
+  | "topic_dining"
+  | "topic_travel"
+  | "topic_workplace"
+  | "topic_daily"
+  | "topic_grammar_tenses"
+  | "topic_grammar_conditional"
+  | "topic_grammar_relative"
+  | "topic_grammar_passive"
+  | "topic_translate_coffee"
+  | "topic_translate_opinions"
+  | "topic_translate_greetings"
+  | "topic_choose_daily"
+  | "topic_choose_career"
+  | "topic_choose_travel"
+  | "topic_choose_hobbies";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
@@ -333,7 +402,76 @@ export const translations: Record<string, LanguageTranslations> = {
     action_add_to_col: "Add \"{word}\" to collection",
     action_confirm_add: "➕ Confirm & Add \"{word}\" ({translation})",
     action_next_flashcard: "🃏 Next Flash Card",
-    action_suggest_another: "💬 Suggest Another Casual Reply"
+    action_suggest_another: "💬 Suggest Another Casual Reply",
+    action_add_all_remaining: "✨ Add All ({count}) Remaining Words to Collection",
+    action_confirm_add_word: "✨ + Confirm & Add \"{word}\" ({details})",
+    label_example: "Example",
+    label_example_translation: "Example Translation",
+    label_already_in_collection: " *(Already in collection)*",
+    label_translation: "Translation",
+    label_definition: "Definition",
+    label_in_photo: "In Photo",
+    chat_word_added_success: "🎉 **Successfully added \"{word}\" to your collection!**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **Translation**: {translation}\n- **Definition**: *{definition}*{exampleSection}\n\n👇 **Type another word below** to translate and add it to your collection!",
+    chat_exited_word_adding: "👍 **Exited word adding mode.** You are back in normal AI chat mode!\n\nFeel free to ask me questions, practice grammar, or pick a topic below.",
+    chat_generate_topic_count_prompt: "🔢 **How many vocabulary words would you like to generate for \"{topic}\"?**\n\nPlease select an option below or type any custom number (e.g. 5, 10, 15, 20):",
+    chat_generate_count_option: "Generate {count} words",
+    chat_fallback_suggested_topics: "Here are some suggested topics and options for practicing {targetLanguage}:",
+    chat_fallback_no_response: "I was unable to formulate a response. Please try asking again or selecting a topic below.",
+    chat_photo_analyzed_for_vocab: "Analyzed photo for vocabulary",
+    chat_uploaded_photo_label: "Uploaded Photo",
+    chat_analyzing_photo_vocab: "📷 *Analyzing your photo to extract vocabulary in {targetLanguage}...*",
+    action_add_all_photo_words: "✨ Add All ({count}) Discovered Photo Words",
+    chat_photo_analysis_result: "🔍 **Photo Analysis**: *\"{description}\"*\n\nFound **{count}** vocabulary items:\n\n{items}\n\n*Click below to confirm and add items to your collection:*",
+    chat_error_generate_vocab_from_image: "⚠️ **Unable to generate vocabulary from image.**\n\n*Error*: {error}",
+    action_retry_analyze_image: "🔄 Try again analyzing photo",
+    chat_batch_all_skipped: "ℹ️ All candidate words ({words}) are already saved in your vocabulary collection!",
+    chat_batch_added_success: "🎉 **Successfully added {count} new word(s) to your collection!**\n\n- **Added**: {addedList}{skippedSection}\n\n👇 **Type another word below** to keep adding to your collection!",
+    chat_batch_added_skipped_section: "\n- *Skipped duplicates*: {words}",
+    chat_word_already_in_collection: "ℹ️ **\"{word}\" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!",
+    chat_user_selected_add_word: "I want to add: \"{word}\" ({translation})",
+    chat_saving_custom_card: "🔍 *Saving custom card for **\"{word}\"** to your collection...*",
+    chat_fail_add_word_sense: "⚠️ **Failed to add word sense:** {error}. Please check your settings and try again.",
+    chat_add_word_prompt: "📝 **Add a New Word to Collection**\n\nWhat word or expression would you like to translate and add to your collection?\n\nPlease type the word or phrase in **{targetLanguage}** or **{nativeLanguage}** below!",
+    chat_generate_topic_prompt: "🎨 **Generate Vocabulary by Topic/Subject**\n\nChoose a topic below or **type any custom topic** you want to study!\n\n🏆 **Popular {targetLanguage} Exam / Certificate Topics:**\n{certList}\n\n💡 **General Topics:**\n{genList}\n\n👇 *Select a topic below or type your own topic in the chat!*",
+    chat_generating_topic_words_status: "🔍 *Generating {count} new, unique vocabulary words in **{targetLanguage}** about **\"{topic}\"**...*",
+    chat_generate_topic_words_empty: "⚠️ I tried to generate vocabulary words for **\"{topic}\"**, but I didn't find any new words that aren't already in your collection. Try a different topic or clear some existing words!",
+    action_add_all_topic_words: "✨ Add All ({count}) Words to Collection",
+    action_generate_more_topic_words: "🎨 Generate More Words for \"{topic}\"",
+    chat_generate_topic_words_success: "✨ **Generated {count} vocabulary words for topic \"{topic}\":**\n\n{wordsListMarkdown}\n\n👇 *Click \"Add All Words to Collection\" below or add individual words to your collection:*",
+    chat_suggest_reply_prompt_msg: "💬 **Suggest a Casual Reply**\n\nUpload an image (or screenshot) of a conversation, or enter some text to guide me (or both!).\n\nI will analyze the conversation and your guiding instructions, then return a few suggested replies along with candidate vocabulary words!",
+    chat_suggest_reply_guiding_prefix: "Guiding: \"{prompt}\"",
+    chat_suggest_reply_user_req_fallback: "Suggest a casual reply based on the attached screenshot",
+    chat_suggest_reply_analyzing_status: "💬 *Analyzing conversation and suggesting replies...*",
+    chat_suggest_reply_label: "➕ Add \"{word}\" to collection ({reason})",
+    chat_suggest_replies_header: "### 💬 Suggested Casual Replies:\n\n",
+    chat_suggest_replies_empty: "*No direct replies could be formulated. Try providing more text or a clearer screenshot.*\n\n",
+    chat_useful_conversation_vocab_header: "---\n### 📚 Useful Conversation Vocabulary:\n",
+    action_add_word_to_collection_with_reason: "➕ Add \"{word}\" to collection ({reason})",
+    chat_error_suggest_reply: "⚠️ **Unable to generate suggested replies.**\n\n*Error*: {error}",
+    action_retry_suggest_reply: "🔄 Try again suggesting reply",
+    chat_fix_grammar_prompt_msg: "✍️ **Fix Grammar & Polish Sentence**\n\nEnter or paste any sentence below in **{targetLanguage}** (or **{nativeLanguage}**).\n\nI will fix grammar & spelling, improve clarity and readability, suggest natural word choices, and identify candidate vocabulary to add to your collection!",
+    chat_fixing_grammar_analyzing_status: "✍️ *Analyzing sentence, fixing grammar, and identifying candidate vocabulary...*",
+    action_copy_fixed_sentence: "📋 Copy Fixed Sentence",
+    action_fix_another_sentence: "✍️ Fix Another Sentence",
+    chat_recommended_vocabulary_candidates_header: "---\n### 📚 Recommended Vocabulary Candidates:\n",
+    chat_empty_collection_flashcard_warning: "📝 **Your vocabulary collection is empty!**\n\nTo view AI flash cards, please add some words to your collection first using the **+ Add Word** button or ask me to generate words by topic!",
+    chat_no_words_found_flashcard_warning: "📝 **No vocabulary words found.** Please add words to your collection to view flash cards!",
+    chat_flashcard_title: "🃏 **Word Flash Card: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**Definition**: {definition}\n**Translation**: \"{translation}\"",
+    topic_dining: "🍽️ Dining Out & Restaurants",
+    topic_travel: "✈️ Travel & Airports",
+    topic_workplace: "💼 Workplace & Business Small Talk",
+    topic_daily: "🗣️ Daily Conversations & Emotions",
+    topic_grammar_tenses: "⏳ Past Simple vs Present Perfect",
+    topic_grammar_conditional: "💬 Conditional Sentences (If clauses)",
+    topic_grammar_relative: "🔗 Relative Clauses & Pronouns",
+    topic_grammar_passive: "🔄 Passive Voice & Formality",
+    topic_translate_coffee: "☕ Ordering Coffee & Polite Requests",
+    topic_translate_opinions: "🤝 Expressing Opinions & Disagreeing",
+    topic_translate_greetings: "👋 Formal vs Casual Greetings",
+    topic_choose_daily: "🗣️ Daily Life & Small Talk",
+    topic_choose_career: "🎓 Career & Education",
+    topic_choose_travel: "✈️ Travel & Culture",
+    topic_choose_hobbies: "🎯 Hobbies & Free Time"
   },
   vi: {
     app_title: "Học Từ Vựng AI",
@@ -487,7 +625,76 @@ export const translations: Record<string, LanguageTranslations> = {
     action_add_to_col: "Thêm \"{word}\" vào bộ từ vựng",
     action_confirm_add: "➕ Xác nhận & Thêm \"{word}\" ({translation})",
     action_next_flashcard: "🃏 Thẻ Ghi Nhớ Tiếp Theo",
-    action_suggest_another: "💬 Gợi Ý Câu Trả Lời Khác"
+    action_suggest_another: "💬 Gợi Ý Câu Trả Lời Khác",
+    action_add_all_remaining: "✨ Thêm tất cả ({count}) từ còn lại vào bộ từ vựng",
+    action_confirm_add_word: "✨ + Xác nhận & Thêm \"{word}\" ({details})",
+    label_example: "Ví dụ",
+    label_example_translation: "Dịch ví dụ",
+    label_already_in_collection: " *(Đã có trong bộ sưu tập)*",
+    label_translation: "Bản dịch",
+    label_definition: "Định nghĩa",
+    label_in_photo: "Trong ảnh",
+    chat_word_added_success: "🎉 **Đã thêm thành công \"{word}\" vào bộ sưu tập của bạn!**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **Bản dịch**: {translation}\n- **Định nghĩa**: *{definition}*{exampleSection}\n\n👇 **Nhập một từ khác bên dưới** để dịch và thêm vào bộ sưu tập!",
+    chat_exited_word_adding: "👍 **Đã thoát chế độ thêm từ.** Bạn đã quay lại chế độ chat AI bình thường!\n\nHãy thoải mái đặt câu hỏi, luyện ngữ pháp hoặc chọn chủ đề bên dưới.",
+    chat_generate_topic_count_prompt: "🔢 **Bạn muốn tạo bao nhiêu từ vựng cho chủ đề \"{topic}\"?**\n\nVui lòng chọn một tùy chọn bên dưới hoặc nhập số lượng bất kỳ (ví dụ: 5, 10, 15, 20):",
+    chat_generate_count_option: "Tạo {count} từ",
+    chat_fallback_suggested_topics: "Dưới đây là một số chủ đề và tùy chọn gợi ý để luyện tập tiếng {targetLanguage}:",
+    chat_fallback_no_response: "Tôi chưa thể tạo phản hồi. Vui lòng thử hỏi lại hoặc chọn một chủ đề bên dưới.",
+    chat_photo_analyzed_for_vocab: "Đã phân tích ảnh để trích xuất từ vựng",
+    chat_uploaded_photo_label: "Ảnh đã tải lên",
+    chat_analyzing_photo_vocab: "📷 *Đang phân tích hình ảnh để trích xuất từ vựng bằng {targetLanguage}...*",
+    action_add_all_photo_words: "✨ Thêm tất cả ({count}) từ vựng từ ảnh",
+    chat_photo_analysis_result: "🔍 **Phân tích hình ảnh**: *\"{description}\"*\n\nTìm thấy **{count}** từ vựng:\n\n{items}\n\n*Nhấp bên dưới để xác nhận và thêm vào bộ sưu tập:*",
+    chat_error_generate_vocab_from_image: "⚠️ **Không thể tạo từ vựng từ hình ảnh.**\n\n*Lỗi*: {error}",
+    action_retry_analyze_image: "🔄 Thử phân tích lại ảnh",
+    chat_batch_all_skipped: "ℹ️ Tất cả các từ đề xuất ({words}) đã có trong bộ sưu tập từ vựng của bạn!",
+    chat_batch_added_success: "🎉 **Đã thêm thành công {count} từ mới vào bộ sưu tập của bạn!**\n\n- **Đã thêm**: {addedList}{skippedSection}\n\n👇 **Nhập một từ khác bên dưới** để tiếp tục thêm vào bộ sưu tập!",
+    chat_batch_added_skipped_section: "\n- *Đã bỏ qua các từ trùng*: {words}",
+    chat_word_already_in_collection: "ℹ️ **\"{word}\" đã có trong bộ sưu tập từ vựng của bạn!**\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!",
+    chat_user_selected_add_word: "Tôi muốn thêm: \"{word}\" ({translation})",
+    chat_saving_custom_card: "🔍 *Đang lưu thẻ tùy chỉnh cho **\"{word}\"** vào bộ sưu tập của bạn...*",
+    chat_fail_add_word_sense: "⚠️ **Không thể thêm nghĩa từ:** {error}. Vui lòng kiểm tra cài đặt và thử lại.",
+    chat_add_word_prompt: "📝 **Thêm Từ Mới Vào Bộ Sưu Tập**\n\nBạn muốn dịch và thêm từ hoặc cụm từ nào vào bộ sưu tập?\n\nVui lòng nhập từ hoặc cụm từ bằng **{targetLanguage}** hoặc **{nativeLanguage}** bên dưới!",
+    chat_generate_topic_prompt: "🎨 **Tạo từ vựng theo chủ đề**\n\nChọn một chủ đề bên dưới hoặc **nhập bất kỳ chủ đề tùy chỉnh nào** bạn muốn học!\n\n🏆 **Chủ đề thi / chứng chỉ {targetLanguage} phổ biến:**\n{certList}\n\n💡 **Chủ đề chung:**\n{genList}\n\n👇 *Chọn một chủ đề bên dưới hoặc nhập chủ đề của bạn vào ô chat!*",
+    chat_generating_topic_words_status: "🔍 *Đang tạo {count} từ vựng mới độc đáo bằng {targetLanguage} về chủ đề **\"{topic}\"**...*",
+    chat_generate_topic_words_empty: "⚠️ Tôi đã cố gắng tạo từ vựng cho chủ đề **\"{topic}\"**, nhưng không tìm thấy từ mới nào chưa có trong bộ sưu tập của bạn. Hãy thử một chủ đề khác hoặc xóa bớt từ hiện tại!",
+    action_add_all_topic_words: "✨ Thêm tất cả ({count}) từ vào bộ từ vựng",
+    action_generate_more_topic_words: "🎨 Tạo thêm từ vựng cho chủ đề \"{topic}\"",
+    chat_generate_topic_words_success: "✨ **Đã tạo {count} từ vựng cho chủ đề \"{topic}\":**\n\n{wordsListMarkdown}\n\n👇 *Nhấp \"Thêm Tất Cả Từ Vào Bộ Từ Vựng\" bên dưới hoặc thêm từng từ riêng lẻ:*",
+    chat_suggest_reply_prompt_msg: "💬 **Gợi Ý Câu Trả Lời Giao Tiếp**\n\nTải lên hình ảnh (hoặc ảnh chụp màn hình) đoạn trò chuyện, hoặc nhập văn bản hướng dẫn (hoặc cả hai!).\n\nTôi sẽ phân tích đoạn hội thoại và gợi ý các câu trả lời tự nhiên cùng từ vựng đề xuất!",
+    chat_suggest_reply_guiding_prefix: "Hướng dẫn: \"{prompt}\"",
+    chat_suggest_reply_user_req_fallback: "Gợi ý câu trả lời tự nhiên dựa trên ảnh chụp màn hình đính kèm",
+    chat_suggest_reply_analyzing_status: "💬 *Đang phân tích đoạn hội thoại và gợi ý câu trả lời...*",
+    chat_suggest_reply_label: "➕ Thêm \"{word}\" vào bộ từ vựng ({reason})",
+    chat_suggest_replies_header: "### 💬 Gợi Ý Câu Trả Lời:\n\n",
+    chat_suggest_replies_empty: "*Không thể tạo câu trả lời trực tiếp. Hãy thử cung cấp thêm văn bản hoặc ảnh chụp rõ hơn.*\n\n",
+    chat_useful_conversation_vocab_header: "---\n### 📚 Từ Vựng Hữu Ích Cho Hội Thoại:\n",
+    action_add_word_to_collection_with_reason: "➕ Thêm \"{word}\" vào bộ từ vựng ({reason})",
+    chat_error_suggest_reply: "⚠️ **Không thể gợi ý câu trả lời.**\n\n*Lỗi*: {error}",
+    action_retry_suggest_reply: "🔄 Thử lại gợi ý câu trả lời",
+    chat_fix_grammar_prompt_msg: "✍️ **Sửa Ngữ Pháp & Trau Chuốt Câu**\n\nNhập hoặc dán bất kỳ câu nào bên dưới bằng **{targetLanguage}** (hoặc **{nativeLanguage}**).\n\nTôi sẽ sửa lỗi ngữ pháp & chính tả, nâng cao độ rõ ràng, gợi ý cách dùng từ tự nhiên và đề xuất từ vựng để thêm vào bộ sưu tập của bạn!",
+    chat_fixing_grammar_analyzing_status: "✍️ *Đang phân tích câu, sửa ngữ pháp và tìm từ vựng đề xuất...*",
+    action_copy_fixed_sentence: "📋 Sao chép câu đã sửa",
+    action_fix_another_sentence: "✍️ Sửa câu khác",
+    chat_recommended_vocabulary_candidates_header: "---\n### 📚 Từ Vựng Đề Xuất:\n",
+    chat_empty_collection_flashcard_warning: "📝 **Bộ sưu tập từ vựng của bạn đang trống!**\n\nĐể xem thẻ ghi nhớ AI, vui lòng thêm từ vào bộ sưu tập trước bằng nút **+ Thêm Từ** hoặc yêu cầu tôi tạo từ vựng theo chủ đề!",
+    chat_no_words_found_flashcard_warning: "📝 **Không tìm thấy từ vựng nào.** Vui lòng thêm từ vào bộ sưu tập để xem thẻ ghi nhớ!",
+    chat_flashcard_title: "🃏 **Thẻ Ghi Nhớ Từ Vựng: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**Định nghĩa**: {definition}\n**Bản dịch**: \"{translation}\"",
+    topic_dining: "🍽️ Gọi Món & Nhà Hàng",
+    topic_travel: "✈️ Du Lịch & Sân Bay",
+    topic_workplace: "💼 Giao Tiếp Công Sở",
+    topic_daily: "🗣️ Giao Tiếp Hàng Ngày",
+    topic_grammar_tenses: "⏳ Quá Khứ Đơn vs Hiện Tại Hoàn Thành",
+    topic_grammar_conditional: "💬 Câu Điều Kiện (If clauses)",
+    topic_grammar_relative: "🔗 Mệnh Đề Quan Hệ",
+    topic_grammar_passive: "🔄 Thể Bị Động",
+    topic_translate_coffee: "☕ Ordering Coffee & Polite Requests",
+    topic_translate_opinions: "🤝 Expressing Opinions & Disagreeing",
+    topic_translate_greetings: "👋 Formal vs Casual Greetings",
+    topic_choose_daily: "🗣️ Đời Sống & Giao Tiếp",
+    topic_choose_career: "🎓 Sự Nghiệp & Giáo Dục",
+    topic_choose_travel: "✈️ Du Lịch & Văn Hóa",
+    topic_choose_hobbies: "🎯 Sở Thích & Giải Trí"
   },
   es: {
     app_title: "Aprende Vocabulario AI",

@@ -359,15 +359,13 @@ export function useChat({
     const normalizedWordText = rawWordInput.toLowerCase();
     const existingMatch = words.find((w) => w.word.trim().toLowerCase() === normalizedWordText);
     if (existingMatch) {
-      const remainingActions = getRemainingWordActions(chatMessages, words, normalizedWordText, isVi);
+      const remainingActions = getRemainingWordActions(chatMessages, words, normalizedWordText, currentAppLang);
       setChatMessages((prev) => [
         ...prev,
         {
           id: `sys-exists-${Date.now()}`,
           role: "assistant",
-          content: isVi
-            ? `ℹ️ **"${existingMatch.word}" đã có trong bộ sưu tập từ vựng của bạn!**\n\n- **Bản dịch**: ${existingMatch.translation}\n- **Định nghĩa**: *${existingMatch.definition}*\n\nĐã bỏ qua thêm từ trùng lặp.\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!`
-            : `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n- **Translation**: ${existingMatch.translation}\n- **Definition**: *${existingMatch.definition}*\n\nSkipped adding duplicate entry.\n\n👇 **Type another word below** to add it to your collection!`,
+          content: t("chat_word_already_in_collection", currentAppLang, { word: existingMatch.word }),
           timestamp: new Date().toISOString(),
           suggestedActions: remainingActions,
         },
@@ -516,7 +514,7 @@ export function useChat({
 
         const finalMatch = words.find((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
         if (finalMatch) {
-          const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, isVi);
+          const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, currentAppLang);
           setChatMessages((prev) => {
             const filtered = prev.filter((m) => m.id !== statusMsgId);
             return [
@@ -524,9 +522,7 @@ export function useChat({
               {
                 id: `sys-exists-${Date.now()}`,
                 role: "assistant",
-                content: isVi
-                  ? `ℹ️ **"${finalMatch.word}" đã có trong bộ sưu tập từ vựng của bạn!**\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!`
-                  : `ℹ️ **"${finalMatch.word}" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!`,
+                content: t("chat_word_already_in_collection", currentAppLang, { word: finalMatch.word }),
                 timestamp: new Date().toISOString(),
                 suggestedActions: remainingActions,
                 provider: data.provider,
@@ -567,7 +563,7 @@ export function useChat({
           return updated;
         });
 
-        const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWordStr, isVi);
+        const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWordStr, currentAppLang);
 
         setChatMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== statusMsgId);
@@ -576,13 +572,14 @@ export function useChat({
             {
               id: `sys-added-word-${Date.now()}`,
               role: "assistant",
-              content: isVi
-                ? `🎉 **Đã thêm thành công "${targetWordStr}" vào bộ sưu tập của bạn!**\n\n### **${targetWordStr}** \`${pronunciationVal}\` (${partOfSpeechVal})\n- **Bản dịch**: ${translationVal}\n- **Định nghĩa**: *${definitionVal}*${
-                    exampleVal ? `\n- **Ví dụ**: "${exampleVal}"` : ""
-                  }${exampleTranslationVal ? `\n- **Dịch ví dụ**: "${exampleTranslationVal}"` : ""}\n\n👇 **Nhập một từ khác bên dưới** để dịch và thêm vào bộ sưu tập!`
-                : `🎉 **Successfully added "${targetWordStr}" to your collection!**\n\n### **${targetWordStr}** \`${pronunciationVal}\` (${partOfSpeechVal})\n- **Translation**: ${translationVal}\n- **Definition**: *${definitionVal}*${
-                    exampleVal ? `\n- **Example**: "${exampleVal}"` : ""
-                  }${exampleTranslationVal ? `\n- **Example Translation**: "${exampleTranslationVal}"` : ""}\n\n👇 **Type another word below** to translate and add it to your collection!`,
+              content: t("chat_word_added_success", currentAppLang, {
+                word: targetWordStr,
+                pronunciation: pronunciationVal,
+                partOfSpeech: partOfSpeechVal,
+                translation: translationVal,
+                definition: definitionVal,
+                exampleSection: (exampleVal ? `\n- **${t("label_example", currentAppLang)}**: "${exampleVal}"` : "") + (exampleTranslationVal ? `\n- **${t("label_example_translation", currentAppLang)}**: "${exampleTranslationVal}"` : "")
+              }),
               timestamp: new Date().toISOString(),
               suggestedActions: remainingActions,
               provider: data.provider,
@@ -660,15 +657,12 @@ export function useChat({
       ) {
         setConversationalState("none");
         const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-        const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
         setChatMessages((prev) => [
           ...prev,
           {
             id: `sys-exit-adding-${Date.now()}`,
             role: "assistant",
-            content: isVi
-              ? `👍 **Đã thoát chế độ thêm từ.** Bạn đã quay lại chế độ chat AI bình thường!\n\nHãy thoải mái đặt câu hỏi, luyện ngữ pháp hoặc chọn chủ đề bên dưới.`
-              : `👍 **Exited word adding mode.** You are back in normal AI chat mode!\n\nFeel free to ask me questions, practice grammar, or pick a topic below.`,
+            content: t("chat_exited_word_adding", currentAppLang),
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -743,7 +737,6 @@ export function useChat({
       });
 
       const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-      const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
       const resAny = result as any;
       const rawTextContent = result.text || resAny.content || resAny.message || resAny.response || resAny.reply || resAny.answer || "";
@@ -774,8 +767,8 @@ export function useChat({
       );
 
       const fallbackContent = finalActions.length > 0
-        ? (isVi ? `Dưới đây là một số chủ đề và tùy chọn gợi ý để luyện tập tiếng ${targetLanguage}:` : `Here are some suggested topics and options for practicing ${targetLanguage}:`)
-        : (isVi ? "Tôi chưa thể tạo phản hồi. Vui lòng thử hỏi lại hoặc chọn một chủ đề bên dưới." : "I was unable to formulate a response. Please try asking again or selecting a topic below.");
+        ? t("chat_fallback_suggested_topics", currentAppLang, { targetLanguage })
+        : t("chat_fallback_no_response", currentAppLang);
 
       const newAssistantMessage: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
@@ -808,22 +801,20 @@ export function useChat({
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
     const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
-    const userPromptText = customPrompt ? customPrompt : (isVi ? "Đã phân tích ảnh để trích xuất từ vựng" : "Analyzed photo for vocabulary");
+    const userPromptText = customPrompt ? customPrompt : t("chat_photo_analyzed_for_vocab", currentAppLang);
     setChatMessages((prev) => [
       ...prev,
       {
         id: userMsgId,
         role: "user",
-        content: `📷 **${isVi ? "Ảnh đã tải lên" : "Uploaded Photo"}**: ${userPromptText}`,
+        content: `📷 **${t("chat_uploaded_photo_label", currentAppLang)}**: ${userPromptText}`,
         imageUrl: imageDataUrl,
         timestamp: new Date().toISOString(),
       },
       {
         id: statusMsgId,
         role: "assistant",
-        content: isVi
-          ? `📷 *Đang phân tích hình ảnh để trích xuất từ vựng bằng ${targetLanguage}...*`
-          : `📷 *Analyzing your photo to extract vocabulary in ${targetLanguage}...*`,
+        content: t("chat_analyzing_photo_vocab", currentAppLang, { targetLanguage }),
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -845,14 +836,14 @@ export function useChat({
 
       items.forEach((item: any, idx: number) => {
         const isAlreadySaved = words.some((existing) => existing.word.toLowerCase().trim() === item.word.toLowerCase().trim());
-        const statusBadge = isAlreadySaved ? (isVi ? " *(Đã có trong bộ sưu tập)*" : " *(Already in collection)*") : "";
+        const statusBadge = isAlreadySaved ? t("label_already_in_collection", currentAppLang) : "";
 
         formattedItems.push(
           `### ${idx + 1}. **${item.word}** \`${item.pronunciation || ""}\`${statusBadge}\n` +
-            `- **${isVi ? "Bản dịch" : "Translation"}**: ${item.translation} (${item.partOfSpeech || "item"})\n` +
-            `- **${isVi ? "Định nghĩa" : "Definition"}**: *${item.definition}*\n` +
-            (item.example ? `- **${isVi ? "Ví dụ" : "Example"}**: "${item.example}"\n` : "") +
-            (item.context ? `- **${isVi ? "Trong ảnh" : "In Photo"}**: *${item.context}*\n` : "")
+            `- **${t("label_translation", currentAppLang)}**: ${item.translation} (${item.partOfSpeech || "item"})\n` +
+            `- **${t("label_definition", currentAppLang)}**: *${item.definition}*\n` +
+            (item.example ? `- **${t("label_example", currentAppLang)}**: "${item.example}"\n` : "") +
+            (item.context ? `- **${t("label_in_photo", currentAppLang)}**: *${item.context}*\n` : "")
         );
 
         if (!isAlreadySaved) {
@@ -868,9 +859,7 @@ export function useChat({
 
       if (unsavedItems.length > 1) {
         actions.unshift({
-          label: currentAppLang.toLowerCase().includes("vi")
-            ? `✨ Thêm tất cả (${unsavedItems.length}) từ vựng từ ảnh`
-            : `✨ Add All (${unsavedItems.length}) Discovered Photo Words`,
+          label: t("action_add_all_photo_words", currentAppLang, { count: String(unsavedItems.length) }),
           action: "add_multiplewords",
           payload: { words: items },
         });
@@ -883,9 +872,11 @@ export function useChat({
           {
             id: `sys-img-res-${Date.now()}`,
             role: "assistant",
-            content: isVi
-              ? `🔍 **Phân tích hình ảnh**: *"${res.imageDescription || "Cảnh quan"}"*\n\nTìm thấy **${items.length}** từ vựng:\n\n${formattedItems.join("\n")}\n\n*Nhấp bên dưới để xác nhận và thêm vào bộ sưu tập:*`
-              : `🔍 **Photo Analysis**: *"${res.imageDescription || "Visual scene"}"*\n\nFound **${items.length}** vocabulary items:\n\n${formattedItems.join("\n")}\n\n*Click below to confirm and add items to your collection:*`,
+            content: t("chat_photo_analysis_result", currentAppLang, {
+              description: res.imageDescription || (isVi ? "Cảnh quan" : "Visual scene"),
+              count: String(items.length),
+              items: formattedItems.join("\n")
+            }),
             imageUrl: "",
             timestamp: new Date().toISOString(),
             suggestedActions: actions,
@@ -899,7 +890,6 @@ export function useChat({
       console.error("Image analysis error:", err);
       const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to analyze image for vocabulary.");
       const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-      const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
       setChatMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== statusMsgId);
@@ -908,13 +898,11 @@ export function useChat({
           {
             id: `err-img-${Date.now()}`,
             role: "assistant",
-            content: isVi
-              ? `⚠️ **Không thể tạo từ vựng từ hình ảnh.**\n\n*Lỗi*: ${rawMsg}`
-              : `⚠️ **Unable to generate vocabulary from image.**\n\n*Error*: ${rawMsg}`,
+            content: t("chat_error_generate_vocab_from_image", currentAppLang, { error: rawMsg }),
             timestamp: new Date().toISOString(),
             suggestedActions: [
               {
-                label: isVi ? "🔄 Thử phân tích lại ảnh" : "🔄 Try again analyzing photo",
+                label: t("action_retry_analyze_image", currentAppLang),
                 action: "retry_analyze_image",
                 payload: {
                   imageDataUrl,
@@ -934,7 +922,6 @@ export function useChat({
     if (!candidateWords || !Array.isArray(candidateWords) || candidateWords.length === 0) return;
 
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
     const newWordsToAdd: Word[] = [];
     const skippedNames: string[] = [];
@@ -976,9 +963,7 @@ export function useChat({
         {
           id: `sys-batch-skipped-${Date.now()}`,
           role: "assistant",
-          content: isVi
-            ? `ℹ️ Tất cả các từ đề xuất (${skippedNames.join(", ")}) đã có trong bộ sưu tập từ vựng của bạn!`
-            : `ℹ️ All candidate words (${skippedNames.join(", ")}) are already saved in your vocabulary collection!`,
+          content: t("chat_batch_all_skipped", currentAppLang, { words: skippedNames.join(", ") }),
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -996,13 +981,11 @@ export function useChat({
       {
         id: `sys-batch-success-${Date.now()}`,
         role: "assistant",
-        content: isVi
-          ? `🎉 **Đã thêm thành công ${newWordsToAdd.length} từ mới vào bộ sưu tập của bạn!**\n\n- **Đã thêm**: ${newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", ")}${
-              skippedNames.length > 0 ? `\n- *Đã bỏ qua các từ trùng*: ${skippedNames.join(", ")}` : ""
-            }\n\n👇 **Nhập một từ khác bên dưới** để tiếp tục thêm vào bộ sưu tập!`
-          : `🎉 **Successfully added ${newWordsToAdd.length} new word(s) to your collection!**\n\n- **Added**: ${newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", ")}${
-              skippedNames.length > 0 ? `\n- *Skipped duplicates*: ${skippedNames.join(", ")}` : ""
-            }\n\n👇 **Type another word below** to keep adding to your collection!`,
+        content: t("chat_batch_added_success", currentAppLang, {
+          count: String(newWordsToAdd.length),
+          addedList: newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", "),
+          skippedSection: skippedNames.length > 0 ? t("chat_batch_added_skipped_section", currentAppLang, { words: skippedNames.join(", ") }) : ""
+        }),
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1021,7 +1004,7 @@ export function useChat({
     const targetWord = (sense.word || word).trim();
     const existingMatch = words.find((w) => w.word.trim().toLowerCase() === targetWord.toLowerCase());
     if (existingMatch) {
-      const remainingActions = getRemainingWordActions(chatMessages, words, targetWord, isVi);
+      const remainingActions = getRemainingWordActions(chatMessages, words, targetWord, currentAppLang);
       setChatMessages((prev) => [
         ...prev,
         {
@@ -1091,7 +1074,7 @@ export function useChat({
         return updated;
       });
 
-      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWord, isVi);
+      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWord, currentAppLang);
 
       setChatMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== statusMsgId);
@@ -1161,7 +1144,6 @@ export function useChat({
     setConversationalState("generating_topic_subject");
 
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
     const certTopics = getCertificateTopics(targetLanguage, currentAppLang);
     const genTopics = getGeneralTopics(currentAppLang);
@@ -1172,9 +1154,7 @@ export function useChat({
     const promptMsg: ChatMessage = {
       id: `gen-topic-prompt-${Date.now()}`,
       role: "assistant",
-      content: isVi
-        ? `🎨 **Tạo từ vựng theo chủ đề**\n\nChọn một chủ đề bên dưới hoặc **nhập bất kỳ chủ đề tùy chỉnh nào** bạn muốn học!\n\n🏆 **Chủ đề thi / chứng chỉ ${targetLanguage} phổ biến:**\n${certList}\n\n💡 **Chủ đề chung:**\n${genList}\n\n👇 *Chọn một chủ đề bên dưới hoặc nhập chủ đề của bạn vào ô chat!*`
-        : `🎨 **Generate Vocabulary by Topic/Subject**\n\nChoose a topic below or **type any custom topic** you want to study!\n\n🏆 **Popular ${targetLanguage} Exam / Certificate Topics:**\n${certList}\n\n💡 **General Topics:**\n${genList}\n\n👇 *Select a topic below or type your own topic in the chat!*`,
+      content: t("chat_generate_topic_prompt", currentAppLang, { certList, genList, targetLanguage }),
       timestamp: new Date().toISOString(),
       suggestedActions: [
         ...certTopics.map((t) => ({
@@ -1197,16 +1177,13 @@ export function useChat({
     setIsTyping(true);
     const statusMsgId = `gen-words-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
     setChatMessages((prev) => [
       ...prev,
       {
         id: statusMsgId,
         role: "assistant",
-        content: isVi
-          ? `🔍 *Đang tạo ${count} từ vựng mới độc đáo bằng **${targetLanguage}** về chủ đề **"${topic}"**...*`
-          : `🔍 *Generating ${count} new, unique vocabulary words in **${targetLanguage}** about **"${topic}"**...*`,
+        content: t("chat_generating_topic_words_status", currentAppLang, { count: String(count), targetLanguage, topic }),
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1253,9 +1230,7 @@ export function useChat({
             {
               id: `gen-words-empty-${Date.now()}`,
               role: "assistant",
-              content: isVi
-                ? `⚠️ Tôi đã cố gắng tạo từ vựng cho chủ đề **"${topic}"**, nhưng không tìm thấy từ mới nào chưa có trong bộ sưu tập của bạn. Hãy thử một chủ đề khác hoặc xóa bớt từ hiện tại!`
-                : `⚠️ I tried to generate vocabulary words for **"${topic}"**, but I didn't find any new words that aren't already in your collection. Try a different topic or clear some existing words!`,
+              content: t("chat_generate_topic_words_empty", currentAppLang, { topic }),
               timestamp: new Date().toISOString(),
             },
           ];
@@ -1296,9 +1271,7 @@ export function useChat({
 
       const suggestedActions: any[] = [
         {
-          label: isVi
-            ? `✨ Thêm tất cả (${generatedWords.length}) từ vào bộ từ vựng`
-            : `✨ Add All (${generatedWords.length}) Words to Collection`,
+          label: t("action_add_all_topic_words", currentAppLang, { count: String(generatedWords.length) }),
           action: "add_multiplewords",
           payload: { words: generatedWords },
         },
@@ -1308,9 +1281,7 @@ export function useChat({
           payload: w,
         })),
         {
-          label: isVi
-            ? `🎨 Tạo thêm từ vựng cho chủ đề "${topic}"`
-            : `🎨 Generate More Words for "${topic}"`,
+          label: t("action_generate_more_topic_words", currentAppLang, { topic }),
           action: "send_message",
           payload: { message: topic },
         },
@@ -1323,9 +1294,7 @@ export function useChat({
           {
             id: `gen-words-success-${Date.now()}`,
             role: "assistant",
-            content: isVi
-              ? `✨ **Đã tạo ${generatedWords.length} từ vựng cho chủ đề "${topic}":**\n\n${wordsListMarkdown}\n\n👇 *Nhấp "Thêm Tất Cả Từ Vào Bộ Từ Vựng" bên dưới hoặc thêm từng từ riêng lẻ:*`
-              : `✨ **Generated ${generatedWords.length} vocabulary words for topic "${topic}":**\n\n${wordsListMarkdown}\n\n👇 *Click "Add All Words to Collection" below or add individual words to your collection:*`,
+            content: t("chat_generate_topic_words_success", currentAppLang, { topic, count: String(generatedWords.length), wordsListMarkdown }),
             timestamp: new Date().toISOString(),
             suggestedActions: suggestedActions,
           },
@@ -1347,13 +1316,10 @@ export function useChat({
     setPendingWordSenses(null);
     setConversationalState("suggesting_reply");
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
     const promptMsg: ChatMessage = {
       id: `suggest-reply-prompt-${Date.now()}`,
       role: "assistant",
-      content: isVi
-        ? `💬 **Gợi Ý Câu Trả Lời Giao Tiếp**\n\nTải lên hình ảnh (hoặc ảnh chụp màn hình) đoạn trò chuyện, hoặc nhập văn bản hướng dẫn (hoặc cả hai!).\n\nTôi sẽ phân tích đoạn hội thoại và gợi ý các câu trả lời tự nhiên cùng từ vựng đề xuất!`
-        : `💬 **Suggest a Casual Reply**\n\nUpload an image (or screenshot) of a conversation, or enter some text to guide me (or both!).\n\nI will analyze the conversation and your guiding instructions, then return a few suggested replies along with candidate vocabulary words!`,
+      content: t("chat_suggest_reply_prompt_msg", currentAppLang),
       timestamp: new Date().toISOString(),
     };
     setChatMessages([promptMsg]);
@@ -1366,11 +1332,10 @@ export function useChat({
     setIsTyping(true);
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
     let userMsgContent = "";
     if (customPrompt) {
-      userMsgContent += isVi ? `Hướng dẫn: "${customPrompt}"` : `Guiding: "${customPrompt}"`;
+      userMsgContent += t("chat_suggest_reply_guiding_prefix", currentAppLang, { prompt: customPrompt });
     }
 
     setChatMessages((prev) => [
@@ -1378,14 +1343,14 @@ export function useChat({
       {
         id: `user-reply-req-${Date.now()}`,
         role: "user",
-        content: userMsgContent || (isVi ? "Gợi ý câu trả lời tự nhiên dựa trên ảnh chụp màn hình đính kèm" : "Suggest a casual reply based on the attached screenshot"),
+        content: userMsgContent || t("chat_suggest_reply_user_req_fallback", currentAppLang),
         timestamp: new Date().toISOString(),
         imageUrl: imageDataUrl || undefined,
       },
       {
         id: statusMsgId,
         role: "assistant",
-        content: isVi ? `💬 *Đang phân tích đoạn hội thoại và gợi ý câu trả lời...*` : `💬 *Analyzing conversation and suggesting replies...*`,
+        content: t("chat_suggest_reply_analyzing_status", currentAppLang),
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1407,10 +1372,9 @@ export function useChat({
       if (candidates && candidates.length > 0) {
         candidates.forEach((cand) => {
           if (cand.word) {
+            const reason = cand.reason || (currentAppLang.toLowerCase().includes("vi") ? "Từ vựng đề xuất" : "Suggested vocabulary");
             actions.push({
-              label: isVi
-                ? `➕ Thêm "${cand.word}" vào bộ từ vựng (${cand.reason || "Gợi ý từ vựng"})`
-                : `➕ Add "${cand.word}" to collection (${cand.reason || "Suggested vocabulary"})`,
+              label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason }),
               action: "add_word",
               payload: { word: cand.word, hint: cand.reason || cand.translation },
             });
@@ -1423,15 +1387,13 @@ export function useChat({
         action: "suggest_another",
       });
 
-      let contentMarkdown = isVi ? `### 💬 Gợi Ý Câu Trả Lời:\n\n` : `### 💬 Suggested Casual Replies:\n\n`;
+      let contentMarkdown = t("chat_suggest_replies_header", currentAppLang);
       if (replies.length === 0) {
-        contentMarkdown += isVi
-          ? `*Không thể tạo câu trả lời trực tiếp. Hãy thử cung cấp thêm văn bản hoặc ảnh chụp rõ hơn.*\n\n`
-          : `*No direct replies could be formulated. Try providing more text or a clearer screenshot.*\n\n`;
+        contentMarkdown += t("chat_suggest_replies_empty", currentAppLang);
       }
 
       if (candidates && candidates.length > 0) {
-        contentMarkdown += isVi ? `---\n### 📚 Từ Vựng Hữu Ích Cho Hội Thoại:\n` : `---\n### 📚 Useful Conversation Vocabulary:\n`;
+        contentMarkdown += t("chat_useful_conversation_vocab_header", currentAppLang);
         candidates.forEach((c) => {
           contentMarkdown += `- **${c.word}**: *${c.translation}* — ${c.reason}\n`;
         });
@@ -1464,11 +1426,11 @@ export function useChat({
           {
             id: `err-reply-${Date.now()}`,
             role: "assistant",
-            content: isVi ? `⚠️ **Không thể gợi ý câu trả lời.**\n\n*Lỗi*: ${rawMsg}` : `⚠️ **Unable to generate suggested replies.**\n\n*Error*: ${rawMsg}`,
+            content: t("chat_error_suggest_reply", currentAppLang, { error: rawMsg }),
             timestamp: new Date().toISOString(),
             suggestedActions: [
               {
-                label: isVi ? "🔄 Thử lại gợi ý câu trả lời" : "🔄 Try again suggesting reply",
+                label: t("action_retry_suggest_reply", currentAppLang),
                 action: "retry_suggest_reply",
                 payload: {
                   imageDataUrl,
@@ -1489,13 +1451,10 @@ export function useChat({
     setPendingWordSenses(null);
     setConversationalState("fixing_grammar");
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
     const promptMsg: ChatMessage = {
       id: `fix-grammar-prompt-${Date.now()}`,
       role: "assistant",
-      content: isVi
-        ? `✍️ **Sửa Ngữ Pháp & Trau Chuốt Câu**\n\nNhập hoặc dán bất kỳ câu nào bên dưới bằng **${targetLanguage}** (hoặc **${nativeLanguage}**).\n\nTôi sẽ sửa lỗi ngữ pháp & chính tả, nâng cao độ rõ ràng, gợi ý cách dùng từ tự nhiên và đề xuất từ vựng để thêm vào bộ sưu tập của bạn!`
-        : `✍️ **Fix Grammar & Polish Sentence**\n\nEnter or paste any sentence below in **${targetLanguage}** (or **${nativeLanguage}**).\n\nI will fix grammar & spelling, improve clarity and readability, suggest natural word choices, and identify candidate vocabulary to add to your collection!`,
+      content: t("chat_fix_grammar_prompt_msg", currentAppLang, { targetLanguage, nativeLanguage }),
       timestamp: new Date().toISOString(),
     };
     setChatMessages([promptMsg]);
@@ -1506,16 +1465,13 @@ export function useChat({
     setIsTyping(true);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
     setChatMessages((prev) => [
       ...prev,
       {
         id: statusMsgId,
         role: "assistant",
-        content: isVi
-          ? `✍️ *Đang phân tích câu, sửa ngữ pháp và tìm từ vựng đề xuất...*`
-          : `✍️ *Analyzing sentence, fixing grammar, and identifying candidate vocabulary...*`,
+        content: t("chat_fixing_grammar_analyzing_status", currentAppLang),
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1535,7 +1491,7 @@ export function useChat({
       const actions: any[] = [];
 
       actions.push({
-        label: isVi ? "📋 Sao chép câu đã sửa" : "📋 Copy Fixed Sentence",
+        label: t("action_copy_fixed_sentence", currentAppLang),
         action: "copy_text",
         payload: { text: fixedSentence },
       });
@@ -1543,10 +1499,9 @@ export function useChat({
       if (candidates && candidates.length > 0) {
         candidates.forEach((cand) => {
           if (cand.word) {
+            const reason = cand.reason || (currentAppLang.toLowerCase().includes("vi") ? "Từ vựng đề xuất" : "Candidate vocabulary");
             actions.push({
-              label: isVi
-                ? `➕ Thêm "${cand.word}" vào bộ từ vựng (${cand.reason || "Từ vựng đề xuất"})`
-                : `➕ Add "${cand.word}" to collection (${cand.reason || "Candidate vocabulary"})`,
+              label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason }),
               action: "add_word",
               payload: { word: cand.word, hint: cand.reason },
             });
@@ -1555,7 +1510,7 @@ export function useChat({
       }
 
       actions.push({
-        label: isVi ? "✍️ Sửa câu khác" : "✍️ Fix Another Sentence",
+        label: t("action_fix_another_sentence", currentAppLang),
         action: "fix_another",
       });
 
@@ -1565,7 +1520,7 @@ export function useChat({
       }
 
       if (candidates && candidates.length > 0) {
-        contentMarkdown += isVi ? `---\n### 📚 Từ Vựng Đề Xuất:\n` : `---\n### 📚 Recommended Vocabulary Candidates:\n`;
+        contentMarkdown += t("chat_recommended_vocabulary_candidates_header", currentAppLang);
         candidates.forEach((c) => {
           contentMarkdown += `- **${c.word}**: *${c.reason}*\n`;
         });
@@ -1607,15 +1562,12 @@ export function useChat({
 
     const activeWords = await getEffectiveWords();
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-    const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
     if (activeWords.length === 0) {
       const noWordsMsg: ChatMessage = {
         id: `flashcard-no-words-${Date.now()}`,
         role: "assistant",
-        content: isVi
-          ? `📝 **Bộ sưu tập từ vựng của bạn đang trống!**\n\nĐể xem thẻ ghi nhớ AI, vui lòng thêm từ vào bộ sưu tập trước bằng nút **+ Thêm Từ** hoặc yêu cầu tôi tạo từ vựng theo chủ đề!`
-          : `📝 **Your vocabulary collection is empty!**\n\nTo view AI flash cards, please add some words to your collection first using the **+ Add Word** button or ask me to generate words by topic!`,
+        content: t("chat_empty_collection_flashcard_warning", currentAppLang),
         timestamp: new Date().toISOString(),
       };
       setChatMessages([noWordsMsg]);
@@ -1627,9 +1579,7 @@ export function useChat({
       const noCandidateMsg: ChatMessage = {
         id: `flashcard-no-candidates-${Date.now()}`,
         role: "assistant",
-        content: isVi
-          ? `📝 **Không tìm thấy từ vựng nào.** Vui lòng thêm từ vào bộ sưu tập để xem thẻ ghi nhớ!`
-          : `📝 **No vocabulary words found.** Please add words to your collection to view flash cards!`,
+        content: t("chat_no_words_found_flashcard_warning", currentAppLang),
         timestamp: new Date().toISOString(),
       };
       setChatMessages([noCandidateMsg]);
@@ -1677,13 +1627,13 @@ export function useChat({
       const flashcardMsg: ChatMessage = {
         id: `flashcard-msg-${Date.now()}`,
         role: "assistant",
-        content: isVi
-          ? `🃏 **Thẻ Ghi Nhớ Từ Vựng: ${flashcardContent.word}**\n\n*${flashcardContent.partOfSpeech || candidateWord.partOfSpeech}* • \`${
-              flashcardContent.pronunciation || candidateWord.pronunciation || ""
-            }\`\n\n**Định nghĩa**: ${flashcardContent.definition}\n**Bản dịch**: "${flashcardContent.translation}"`
-          : `🃏 **Word Flash Card: ${flashcardContent.word}**\n\n*${flashcardContent.partOfSpeech || candidateWord.partOfSpeech}* • \`${
-              flashcardContent.pronunciation || candidateWord.pronunciation || ""
-            }\`\n\n**Definition**: ${flashcardContent.definition}\n**Translation**: "${flashcardContent.translation}"`,
+        content: t("chat_flashcard_title", currentAppLang, {
+          word: flashcardContent.word,
+          partOfSpeech: flashcardContent.partOfSpeech || candidateWord.partOfSpeech,
+          pronunciation: flashcardContent.pronunciation || candidateWord.pronunciation || "",
+          definition: flashcardContent.definition,
+          translation: flashcardContent.translation
+        }),
         timestamp: new Date().toISOString(),
         audioWord: flashcardContent.word,
         quizSpeechText: `${flashcardContent.word}. ${flashcardContent.definition}`,
