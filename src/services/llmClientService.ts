@@ -2073,9 +2073,11 @@ STRICT GENERATION RULES & RESTRICTIONS:
      * High Strength / Recently Reviewed Words (strength >= 80): Challenge the learner with nuanced context or subtle distractor choices to ensure long-term mastery.
 4. Question Types (mix across questions):
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
+     * CRITICAL SINGULAR/PLURAL & COUNTABILITY RULE: Ensure the definition clearly aligns with the target word's grammatical number and part of speech. If the target word is singular or uncountable (e.g., 'junk', 'furniture', 'information', 'equipment'), do NOT phrase the definition in a misleading plural way or, if helpful, explicitly include part of speech / countability cues in the prompt (e.g., "Which word (uncountable noun) matches...").
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
+     * Ensure the sentence context matches the exact grammatical form (tense, singular/plural) of the target word.
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-  - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)
+   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
