@@ -9,7 +9,7 @@ export interface TopicOption {
 
 export function getCertificateTopics(targetLanguage: string, appLanguage?: string): TopicOption[] {
   const lang = (targetLanguage || "English").trim().toLowerCase();
-  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || "Vietnamese";
+  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || "English";
   const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
   switch (lang) {
@@ -456,7 +456,7 @@ export function getCertificateTopics(targetLanguage: string, appLanguage?: strin
 }
 
 export function getGeneralTopics(appLanguage?: string): TopicOption[] {
-  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || "Vietnamese";
+  const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || "English";
   const isVi = currentAppLang.toLowerCase().includes("vi") || currentAppLang.toLowerCase().includes("vietnam");
 
   return [

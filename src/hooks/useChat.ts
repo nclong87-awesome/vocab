@@ -15,7 +15,7 @@ import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestio
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { getRotatedVisionModel } from "../config/llmProviders";
-import { extractOrGenerateTopicActions } from "../utils/actionExtractor";
+import { extractOrGenerateTopicActions, getRemainingWordActions } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { t } from "../config/i18n";
 
@@ -359,6 +359,7 @@ export function useChat({
     const normalizedWordText = rawWordInput.toLowerCase();
     const existingMatch = words.find((w) => w.word.trim().toLowerCase() === normalizedWordText);
     if (existingMatch) {
+      const remainingActions = getRemainingWordActions(chatMessages, words, normalizedWordText, isVi);
       setChatMessages((prev) => [
         ...prev,
         {
@@ -368,6 +369,7 @@ export function useChat({
             ? `ℹ️ **"${existingMatch.word}" đã có trong bộ sưu tập từ vựng của bạn!**\n\n- **Bản dịch**: ${existingMatch.translation}\n- **Định nghĩa**: *${existingMatch.definition}*\n\nĐã bỏ qua thêm từ trùng lặp.\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!`
             : `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n- **Translation**: ${existingMatch.translation}\n- **Definition**: *${existingMatch.definition}*\n\nSkipped adding duplicate entry.\n\n👇 **Type another word below** to add it to your collection!`,
           timestamp: new Date().toISOString(),
+          suggestedActions: remainingActions,
         },
       ]);
       setConversationalState("adding_word");
@@ -514,6 +516,7 @@ export function useChat({
 
         const finalMatch = words.find((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
         if (finalMatch) {
+          const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, isVi);
           setChatMessages((prev) => {
             const filtered = prev.filter((m) => m.id !== statusMsgId);
             return [
@@ -525,6 +528,7 @@ export function useChat({
                   ? `ℹ️ **"${finalMatch.word}" đã có trong bộ sưu tập từ vựng của bạn!**\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!`
                   : `ℹ️ **"${finalMatch.word}" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!`,
                 timestamp: new Date().toISOString(),
+                suggestedActions: remainingActions,
                 provider: data.provider,
                 model: data.model,
                 responseTimeMs: data.responseTimeMs,
@@ -553,6 +557,8 @@ export function useChat({
           strength: 0,
         };
 
+        const updatedWords = [newWordObj, ...words];
+
         setWords((prev) => {
           const exists = prev.some((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
           if (exists) return prev;
@@ -560,6 +566,8 @@ export function useChat({
           saveAllWordsToDB(updated).catch((e) => console.error("IndexedDB add word save error:", e));
           return updated;
         });
+
+        const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWordStr, isVi);
 
         setChatMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== statusMsgId);
@@ -576,6 +584,7 @@ export function useChat({
                     exampleVal ? `\n- **Example**: "${exampleVal}"` : ""
                   }${exampleTranslationVal ? `\n- **Example Translation**: "${exampleTranslationVal}"` : ""}\n\n👇 **Type another word below** to translate and add it to your collection!`,
               timestamp: new Date().toISOString(),
+              suggestedActions: remainingActions,
               provider: data.provider,
               model: data.model,
               responseTimeMs: data.responseTimeMs,
@@ -1012,6 +1021,7 @@ export function useChat({
     const targetWord = (sense.word || word).trim();
     const existingMatch = words.find((w) => w.word.trim().toLowerCase() === targetWord.toLowerCase());
     if (existingMatch) {
+      const remainingActions = getRemainingWordActions(chatMessages, words, targetWord, isVi);
       setChatMessages((prev) => [
         ...prev,
         {
@@ -1021,6 +1031,7 @@ export function useChat({
             ? `ℹ️ **"${existingMatch.word}" đã có trong bộ sưu tập từ vựng của bạn!**\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!`
             : `ℹ️ **"${existingMatch.word}" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!`,
           timestamp: new Date().toISOString(),
+          suggestedActions: remainingActions,
         },
       ]);
       setPendingWordSenses(null);
@@ -1072,11 +1083,15 @@ export function useChat({
         strength: 0,
       };
 
+      const updatedWords = [newWord, ...words];
+
       setWords((prev) => {
         const updated = [newWord, ...prev];
         saveAllWordsToDB(updated).catch((e) => console.error(e));
         return updated;
       });
+
+      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWord, isVi);
 
       setChatMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== statusMsgId);
@@ -1089,6 +1104,7 @@ export function useChat({
               ? `🎉 **Đã thêm thành công "${newWord.word}" vào bộ sưu tập của bạn!**\n\n- **Bản dịch**: ${newWord.translation}\n- **Phát âm**: \`${newWord.pronunciation}\`\n- **Định nghĩa**: *${newWord.definition}*\n${newWord.example ? `- **Ví dụ**: "${newWord.example}"\n` : ""}\n👇 **Nhập một từ khác bên dưới** để tiếp tục thêm vào bộ sưu tập!`
               : `🎉 **Successfully added "${newWord.word}" to your collection!**\n\n- **Translation**: ${newWord.translation}\n- **Pronunciation**: \`${newWord.pronunciation}\`\n- **Definition**: *${newWord.definition}*\n${newWord.example ? `- **Example**: "${newWord.example}"\n` : ""}\n👇 **Type another word below** to keep adding to your collection!`,
             timestamp: new Date().toISOString(),
+            suggestedActions: remainingActions,
           },
         ];
       });
@@ -1543,7 +1559,7 @@ export function useChat({
         action: "fix_another",
       });
 
-      let contentMarkdown = isVi ? `### ✨ Câu Đã Trau Chuốt:\n> **"${fixedSentence}"**\n\n` : `### ✨ Polished Sentence:\n> **"${fixedSentence}"**\n\n`;
+      let contentMarkdown = "";
       if (explanation) {
         contentMarkdown += `${explanation}\n\n`;
       }

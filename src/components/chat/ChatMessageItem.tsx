@@ -142,6 +142,15 @@ function ChatMessageItem({
 
   const safeMsgContent = typeof msg.content === "string" ? msg.content : (msg.content ? String(msg.content) : "");
 
+  const displayContent = useMemo(() => {
+    if (!msg.fixedSentence || !safeMsgContent) return safeMsgContent;
+
+    // Clean up any leading markdown header or blockquote for polished sentence so it's not rendered twice
+    let cleaned = safeMsgContent;
+    cleaned = cleaned.replace(/^###\s*✨\s*(?:Polished Sentence|Câu Đã Trau Chuốt):\s*\n*(?:>\s*.*?\n*)+/i, "");
+    return cleaned.trim();
+  }, [safeMsgContent, msg.fixedSentence]);
+
   const parsedQuizOptions = useMemo(() => {
     const opts: { label: string; action: string; payload: any }[] = [];
     if (!isUser && safeMsgContent) {
@@ -185,7 +194,8 @@ function ChatMessageItem({
           rawActions,
           lastUserMessage,
           targetLanguage,
-          nativeLanguage
+          nativeLanguage,
+          currentAppLang
         );
 
         const hasNextAction = rawActions.some(a => {
@@ -227,8 +237,15 @@ function ChatMessageItem({
       }
 
       // Filter actions if this is NOT the latest message in the thread:
+      // Word addition options are moved to the latest message so users don't need to scroll up
       if (!isLatestMessage) {
-        rawActions = rawActions.filter(a => a.action === "add_word" || a.action === "select_definition" || a.action === "retry_analyze_image" || a.action === "retry_suggest_reply" || a.action === "copy_text" || a.action === "copy_sentence");
+        rawActions = rawActions.filter(
+          a =>
+            a.action === "retry_analyze_image" ||
+            a.action === "retry_suggest_reply" ||
+            a.action === "copy_text" ||
+            a.action === "copy_sentence"
+        );
       }
     }
 
@@ -236,6 +253,15 @@ function ChatMessageItem({
       .filter(act => {
         if (!act || typeof act !== "object") return false;
         if (act.action === "select_definition") return Boolean(act.payload?.definition);
+
+        // Filter out add_word or confirm_save_word if word is already in words collection
+        if (act.action === "add_word" || act.action === "confirm_save_word") {
+          const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim().toLowerCase();
+          if (actWord && words && Array.isArray(words) && words.some(w => w.word.trim().toLowerCase() === actWord)) {
+            return false;
+          }
+        }
+
         const lbl = act.label ? String(act.label).trim() : "";
         const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
         const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
@@ -250,7 +276,7 @@ function ChatMessageItem({
         }
         return cleaned;
       });
-  }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage]);
+  }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage, words]);
 
   let className = isUser ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end" : "flex flex-col max-w-full w-full mr-auto items-stretch";
   if (isLatestMessage) {
@@ -304,14 +330,12 @@ function ChatMessageItem({
             />
           ) : (
             <>
-              <FormattedMessage text={msg.content} />
-
-              {/* Fixed sentence copy card */}
+              {/* Fixed sentence copy card at the top */}
               {msg.fixedSentence && (
-                <div className="mt-3 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+                <div className="mb-3 p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
                   <div className="min-w-0 flex-1">
                     <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block font-mono">
-                      Polished Sentence:
+                      {isVi ? "Câu Đã Trau Chuốt:" : "Polished Sentence:"}
                     </span>
                     <p className="text-xs sm:text-sm font-semibold text-stone-900 break-words mt-0.5">
                       "{msg.fixedSentence}"
@@ -319,15 +343,17 @@ function ChatMessageItem({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, "📋 Copied fixed sentence to clipboard!")}
+                    onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, isVi ? "📋 Đã sao chép câu đã sửa!" : "📋 Copied fixed sentence to clipboard!")}
                     className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
-                    title="Copy fixed sentence to clipboard"
+                    title={isVi ? "Sao chép câu đã sửa" : "Copy fixed sentence"}
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>{copiedKey === `fixed-${msg.id}` ? "Copied!" : "Copy"}</span>
+                    <span>{copiedKey === `fixed-${msg.id}` ? (isVi ? "Đã chép!" : "Copied!") : (isVi ? "Sao chép" : "Copy")}</span>
                   </button>
                 </div>
               )}
+
+              <FormattedMessage text={displayContent} />
 
               {/* Suggested replies cards with direct Copy buttons */}
               {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (

@@ -5,12 +5,12 @@ export function useLanguages() {
     return localStorage.getItem("vocab_learner_target_lang") || "English";
   });
   const [nativeLanguage, setNativeLanguage] = useState<string>(() => {
-    return localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
+    return localStorage.getItem("vocab_learner_native_lang") || "English";
   });
   const [appLanguage, setAppLanguage] = useState<string>(() => {
     const storedApp = localStorage.getItem("vocab_learner_app_lang");
     if (storedApp) return storedApp;
-    return localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
+    return localStorage.getItem("vocab_learner_native_lang") || "English";
   });
 
   const handleSelectLanguages = useCallback((targetLang: string, nativeLang: string, appLang?: string) => {

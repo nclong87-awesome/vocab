@@ -1,10 +1,124 @@
+export function getRemainingWordActions(
+  messages: any[],
+  currentWords: any[],
+  justAddedWord?: string,
+  isVi: boolean = true
+): any[] {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+
+  // Search backwards for the most recent assistant message with word addition actions
+  const reversed = [...messages].reverse();
+  const lastMsgWithWordActions = reversed.find((m) =>
+    m &&
+    m.role === "assistant" &&
+    Array.isArray(m.suggestedActions) &&
+    m.suggestedActions.some(
+      (a: any) =>
+        a &&
+        (a.action === "add_word" ||
+          a.action === "confirm_save_word" ||
+          a.action === "select_definition" ||
+          a.action === "add_multiplewords")
+    )
+  );
+
+  if (!lastMsgWithWordActions || !Array.isArray(lastMsgWithWordActions.suggestedActions)) {
+    return [];
+  }
+
+  const normalizedJustAdded = (justAddedWord || "").trim().toLowerCase();
+  const wordsList = Array.isArray(currentWords) ? currentWords : [];
+
+  const remainingWordActions: any[] = [];
+  const seenWords = new Set<string>();
+
+  for (const act of lastMsgWithWordActions.suggestedActions) {
+    if (!act || typeof act !== "object") continue;
+
+    if (act.action === "add_multiplewords" && Array.isArray(act.payload?.words)) {
+      for (const w of act.payload.words) {
+        const actWord = (w?.word || "").trim().toLowerCase();
+        if (!actWord) continue;
+        if (normalizedJustAdded && actWord === normalizedJustAdded) continue;
+        if (seenWords.has(actWord)) continue;
+        const isAlreadyInCollection = wordsList.some(
+          (item) => item && typeof item.word === "string" && item.word.trim().toLowerCase() === actWord
+        );
+        if (isAlreadyInCollection) continue;
+
+        seenWords.add(actWord);
+        remainingWordActions.push({
+          label: isVi
+            ? `✨ + Confirm & Add "${w.word}" (${w.translation || w.definition || ""})`
+            : `✨ + Confirm & Add "${w.word}" (${w.translation || w.definition || ""})`,
+          action: "confirm_save_word",
+          payload: w,
+        });
+      }
+      continue;
+    }
+
+    const isWordAction =
+      act.action === "add_word" ||
+      act.action === "confirm_save_word" ||
+      act.action === "select_definition";
+
+    if (!isWordAction) continue;
+
+    const actWord = (
+      act.payload?.word ||
+      act.payload?.targetWord ||
+      (act as any).word ||
+      ""
+    ).trim().toLowerCase();
+
+    if (!actWord) continue;
+
+    // Skip if it matches the newly added word
+    if (normalizedJustAdded && actWord === normalizedJustAdded) continue;
+
+    // Skip if already seen or in collection
+    if (seenWords.has(actWord)) continue;
+    const isAlreadyInCollection = wordsList.some(
+      (w) => w && typeof w.word === "string" && w.word.trim().toLowerCase() === actWord
+    );
+    if (isAlreadyInCollection) continue;
+
+    seenWords.add(actWord);
+    remainingWordActions.push(act);
+  }
+
+  if (remainingWordActions.length === 0) {
+    return [];
+  }
+
+  // If 2 or more remaining word actions, add a batch action at the top
+  if (remainingWordActions.length > 1) {
+    const candidatePayloads = remainingWordActions
+      .map((a) => a.payload)
+      .filter(Boolean);
+
+    const batchAction = {
+      label: isVi
+        ? `✨ Thêm tất cả (${remainingWordActions.length}) từ còn lại vào bộ từ vựng`
+        : `✨ Add All (${remainingWordActions.length}) Remaining Words to Collection`,
+      action: "add_multiplewords",
+      payload: { words: candidatePayloads },
+    };
+
+    return [batchAction, ...remainingWordActions];
+  }
+
+  return remainingWordActions;
+}
+
 export function extractOrGenerateTopicActions(
   mainText: string,
   existingActions: any[] = [],
   lastUserMsg = "",
   _targetLanguage = "English",
-  _nativeLanguage = "Vietnamese",
-  appLang = "Vietnamese"
+  _nativeLanguage = "English",
+  appLang = "English"
 ): any[] {
   const resultActions = Array.isArray(existingActions) ? [...existingActions] : [];
   const isVi = appLang.toLowerCase().includes("vi") || appLang.toLowerCase().includes("vietnam");
@@ -21,7 +135,53 @@ export function extractOrGenerateTopicActions(
     lowerMain.includes("try asking me:") ||
     lowerMain.includes("hãy thử hỏi tôi:");
 
-  if (isWelcomeMsg) {
+  const isWordConfirmation =
+    lowerMain.includes("successfully added") ||
+    lowerMain.includes("đã thêm thành công") ||
+    lowerMain.includes("already in your vocabulary collection") ||
+    lowerMain.includes("đã có trong bộ sưu tập");
+
+  if (isWelcomeMsg || isWordConfirmation) {
+    return resultActions;
+  }
+
+  // Check if this is the "Fix Grammar" prompt card asking user to enter/paste a sentence
+  const isFixGrammarPrompt =
+    lowerMain.includes("fix grammar & polish sentence") ||
+    lowerMain.includes("sửa ngữ pháp & trau chuốt câu") ||
+    lowerMain.includes("enter or paste any sentence below") ||
+    lowerMain.includes("nhập hoặc dán bất kỳ câu nào") ||
+    lowerMain.includes("fix-grammar-prompt");
+
+  if (isFixGrammarPrompt) {
+    const sampleSentences = isVi ? [
+      { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
+      { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
+      { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },
+    ] : [
+      { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
+      { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
+      { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },
+    ];
+    for (const s of sampleSentences) {
+      if (!resultActions.some(a => a.payload?.message === s.payload.message)) {
+        resultActions.push(s);
+      }
+    }
+    return resultActions;
+  }
+
+  // Check if existingActions already has word addition actions
+  const hasWordActions = resultActions.some(
+    (act) =>
+      act &&
+      (act.action === "add_word" ||
+        act.action === "confirm_save_word" ||
+        act.action === "select_definition" ||
+        act.action === "add_multiplewords")
+  );
+
+  if (hasWordActions) {
     return resultActions;
   }
 
