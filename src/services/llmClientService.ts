@@ -1400,7 +1400,7 @@ CRITICAL INSTRUCTIONS:
   }
 }
 
-// 3.8. Fix Grammar & Polish Sentence
+// 3.8. Polish Sentence & Improve Clarity
 export interface FixGrammarRequest {
   userText: string;
   targetLanguage?: string;
@@ -1447,7 +1447,7 @@ CRITICAL INSTRUCTIONS:
    - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
 `;
 
-  const systemInstruction = `You are a friendly, natural AI Language Coach. Fix grammar & spelling with a casual tone and suggest candidate vocabulary words for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
+  const systemInstruction = `You are a friendly, natural AI Language Coach. Polish sentences, improve flow, and fix grammar & spelling with a casual tone, suggesting candidate vocabulary words for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
   "fixedSentence": "string",
   "explanation": "string (markdown formatted casual explanation)",

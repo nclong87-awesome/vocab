@@ -1380,10 +1380,6 @@ export default function SettingsView({
                       </>
                     )}
                   </button>
-
-                  <span className="text-xs font-medium text-stone-500">
-                    {isTesting ? t("settings_test_voice_playing", selectedAppLang) : t("settings_test_voice_click_btn", selectedAppLang)}
-                  </span>
                 </div>
               </div>
             </div>

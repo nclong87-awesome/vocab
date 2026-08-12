@@ -171,10 +171,18 @@ export function extractOrGenerateTopicActions(
     return resultActions;
   }
 
-  // Check if this is the "Fix Grammar" prompt card asking user to enter/paste a sentence
+  // Check if this is the "Polish Sentence" prompt card asking user to enter/paste a sentence
   const isFixGrammarPrompt =
-    lowerMain.includes("fix grammar & polish sentence") ||
-    lowerMain.includes("sửa ngữ pháp & trau chuốt câu") ||
+    lowerMain.includes("polish sentence") ||
+    lowerMain.includes("fix grammar") ||
+    lowerMain.includes("trau chuốt câu") ||
+    lowerMain.includes("sửa ngữ pháp") ||
+    lowerMain.includes("satz verfeinern") ||
+    lowerMain.includes("pulir oración") ||
+    lowerMain.includes("polir la phrase") ||
+    lowerMain.includes("文章のブラッシュアップ") ||
+    lowerMain.includes("문장 다듬기") ||
+    lowerMain.includes("句子润色") ||
     lowerMain.includes("enter or paste any sentence below") ||
     lowerMain.includes("nhập hoặc dán bất kỳ câu nào") ||
     lowerMain.includes("fix-grammar-prompt");
