@@ -330,5 +330,6 @@ export const jaTranslations: LanguageTranslations = {
     settings_test_voice_stop_btn: "音声停止",
     settings_test_voice_model_btn: "音声モデルをテスト",
     settings_test_voice_playing: "音声を再生中...",
-    settings_test_voice_click_btn: "ボタンをクリックして出力をテストします"
+    settings_test_voice_click_btn: "ボタンをクリックして出力をテストします",
+    settings_test_voice_sample: "こんにちは！ボキャブラリーラーナーへようこそ。音声発音は記憶の定着をスピードアップします。"
   };

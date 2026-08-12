@@ -330,5 +330,6 @@ export const enTranslations: LanguageTranslations = {
     settings_test_voice_stop_btn: "Stop Audio",
     settings_test_voice_model_btn: "Test Voice Model",
     settings_test_voice_playing: "Playing speech...",
-    settings_test_voice_click_btn: "Click button to test output"
+    settings_test_voice_click_btn: "Click button to test output",
+    settings_test_voice_sample: "Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention."
   };

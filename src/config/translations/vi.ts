@@ -330,5 +330,6 @@ export const viTranslations: LanguageTranslations = {
     settings_test_voice_stop_btn: "Dừng Âm Thanh",
     settings_test_voice_model_btn: "Thử Giọng Nói",
     settings_test_voice_playing: "Đang phát giọng nói...",
-    settings_test_voice_click_btn: "Nhấn nút để thử phát âm"
+    settings_test_voice_click_btn: "Nhấn nút để thử phát âm",
+    settings_test_voice_sample: "Xin chào! Chào mừng bạn đến với Ứng dụng Học Từ Vựng. Phát âm âm thanh giúp ghi nhớ nhanh hơn."
   };

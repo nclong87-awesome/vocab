@@ -330,5 +330,6 @@ export const esTranslations: LanguageTranslations = {
     settings_test_voice_stop_btn: "Detener Audio",
     settings_test_voice_model_btn: "Probar Modelo de Voz",
     settings_test_voice_playing: "Reproduciendo voz...",
-    settings_test_voice_click_btn: "Haz clic en el botón para probar la salida"
+    settings_test_voice_click_btn: "Haz clic en el botón para probar la salida",
+    settings_test_voice_sample: "¡Hola! Bienvenido al Aprendiz de Vocabulario. La pronunciación en audio acelera la retención de la memoria."
   };

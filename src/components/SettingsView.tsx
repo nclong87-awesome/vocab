@@ -74,7 +74,7 @@ export default function SettingsView({
 }: SettingsViewProps) {
   const [config, setConfig] = useState<TTSConfig>(ttsConfig);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [testText, setTestText] = useState("Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.");
+  const [testText, setTestText] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const testFailsafeRef = useRef<number | null>(null);
 
@@ -124,9 +124,13 @@ export default function SettingsView({
       Indonesian: "Halo! Selamat datang di Pembelajar Kosakata. Pengucapan audio mempercepat retensi memori."
     };
 
-    const text = defaultTestTexts[selectedTargetLang] || defaultTestTexts["English"];
+    const langToUse = selectedTargetLang || selectedAppLang || "English";
+    const localized = t("settings_test_voice_sample", langToUse);
+    const text = (localized && localized !== "settings_test_voice_sample")
+      ? localized
+      : (defaultTestTexts[langToUse] || defaultTestTexts["English"]);
     setTestText(text);
-  }, [selectedTargetLang]);
+  }, [selectedTargetLang, selectedAppLang]);
 
   useEffect(() => {
     setSelectedNativeLang(nativeLanguage);

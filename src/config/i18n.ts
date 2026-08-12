@@ -337,7 +337,8 @@ export type TranslationKey =
   | "settings_test_voice_stop_btn"
   | "settings_test_voice_model_btn"
   | "settings_test_voice_playing"
-  | "settings_test_voice_click_btn";
+  | "settings_test_voice_click_btn"
+  | "settings_test_voice_sample";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
