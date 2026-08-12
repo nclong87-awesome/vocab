@@ -120,7 +120,6 @@ export function extractOrGenerateTopicActions(
   appLang = "English"
 ): any[] {
   const resultActions = Array.isArray(existingActions) ? [...existingActions] : [];
-  const isVi = appLang.toLowerCase().includes("vi") || appLang.toLowerCase().includes("vietnam");
 
   const lowerMain = (mainText || "").toLowerCase();
   const isWelcomeMsg =
@@ -153,11 +152,7 @@ export function extractOrGenerateTopicActions(
     lowerMain.includes("fix-grammar-prompt");
 
   if (isFixGrammarPrompt) {
-    const sampleSentences = isVi ? [
-      { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
-      { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
-      { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },
-    ] : [
+    const sampleSentences = [
       { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
       { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
       { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },

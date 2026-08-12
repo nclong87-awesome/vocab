@@ -219,7 +219,23 @@ export type TranslationKey =
   | "topic_choose_daily"
   | "topic_choose_career"
   | "topic_choose_travel"
-  | "topic_choose_hobbies";
+  | "topic_choose_hobbies"
+  | "chat_quiz_no_words_warning"
+  | "chat_quiz_no_candidates_warning"
+  | "chat_quiz_intro"
+  | "chat_quiz_question_header"
+  | "chat_quiz_feedback_correct_msg"
+  | "chat_quiz_feedback_incorrect_msg"
+  | "chat_quiz_word_details"
+  | "chat_quiz_speech_correct"
+  | "chat_quiz_speech_incorrect"
+  | "chat_quiz_finished_msg"
+  | "chat_quiz_start_today_action"
+  | "chat_quiz_common_phrases_action"
+  | "chat_lookup_status"
+  | "chat_lookup_not_found"
+  | "chat_disambiguation_prompt"
+  | "chat_visual_scene";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
@@ -471,7 +487,23 @@ export const translations: Record<string, LanguageTranslations> = {
     topic_choose_daily: "🗣️ Daily Life & Small Talk",
     topic_choose_career: "🎓 Career & Education",
     topic_choose_travel: "✈️ Travel & Culture",
-    topic_choose_hobbies: "🎯 Hobbies & Free Time"
+    topic_choose_hobbies: "🎯 Hobbies & Free Time",
+    chat_quiz_no_words_warning: "📝 **You don't have any words in your collection yet!**\n\nTo start a quiz, please add some words manually using the **+ Add Word** button or simply type a word in the chat and ask me to help you add it!",
+    chat_quiz_no_candidates_warning: "🎉 **No words to practice today!**\n\nYou have already reviewed your eligible vocabulary items recently. There are no words due for practice right now.\n\nPlease come back later or add new words to your collection to keep practicing!",
+    chat_quiz_intro: "🎬 **Let's start today's interactive quiz!**\n\nI generated **{count}** questions adhering to target language rules and distractor logic.\n\n---\n\n### Question 1 of {count}:\n**{question}**",
+    chat_quiz_question_header: "Question {index} of {total}",
+    chat_quiz_feedback_correct_msg: "🎉 **Correct!**\n\nThe answer to \"{questionTitle}\" is **\"{answer}\"**.",
+    chat_quiz_feedback_incorrect_msg: "❌ **Incorrect!**\n\nCorrect answer: **\"{answer}\"** (your answer: \"{userAnswer}\").",
+    chat_quiz_word_details: "\n\n*Word*: **{word}** ({partOfSpeech})\n*Pronunciation*: `{pronunciation}`\n*Translation*: \"{translation}\"",
+    chat_quiz_speech_correct: "Correct! The answer is {answer}",
+    chat_quiz_speech_incorrect: "Incorrect! Correct answer: {answer}",
+    chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Quiz Completed!**\n\nYou scored **{score} out of {total}** ({accuracy}%).\n\nI have updated your statistics and adjusted word learning strength values! All set.\n\nWhat would you like to learn next?",
+    chat_quiz_start_today_action: "🧠 Start Today's Quiz",
+    chat_quiz_common_phrases_action: "🗣️ Common Phrases & Idioms",
+    chat_lookup_status: "🔍 *Consulting dictionary, translating, and generating definition for **\"{word}\"**{contextHintStr}...*",
+    chat_lookup_not_found: "⚠️ **No valid definition found for \"{word}\"**{contextHintStr}.\n\nThis entry was **not** added to your collection.\n\n👇 **Type another word below** to try again!",
+    chat_disambiguation_prompt: "🤔 **\"{word}\"** has several common meanings in **{targetLanguage}**. Which definition would you like to add?",
+    chat_visual_scene: "Visual scene"
   },
   vi: {
     app_title: "Học Từ Vựng AI",
@@ -694,7 +726,23 @@ export const translations: Record<string, LanguageTranslations> = {
     topic_choose_daily: "🗣️ Đời Sống & Giao Tiếp",
     topic_choose_career: "🎓 Sự Nghiệp & Giáo Dục",
     topic_choose_travel: "✈️ Du Lịch & Văn Hóa",
-    topic_choose_hobbies: "🎯 Sở Thích & Giải Trí"
+    topic_choose_hobbies: "🎯 Sở Thích & Giải Trí",
+    chat_quiz_no_words_warning: "📝 **Bộ sưu tập của bạn chưa có từ vựng nào!**\n\nĐể bắt đầu bài kiểm tra, vui lòng thêm từ vựng thủ công bằng nút **+ Thêm Từ** hoặc nhập từ vào ô chat và nhờ tôi hỗ trợ thêm!",
+    chat_quiz_no_candidates_warning: "🎉 **Không có từ vựng nào cần luyện tập hôm nay!**\n\nBạn đã ôn tập các từ vựng đủ điều kiện gần đây. Hiện tại không có từ nào đến hạn luyện tập.\n\nVui lòng quay lại sau hoặc thêm từ mới vào bộ sưu tập để tiếp tục rèn luyện!",
+    chat_quiz_intro: "🎬 **Bắt đầu bài kiểm tra tương tác hôm nay!**\n\nTôi đã tạo **{count}** câu hỏi rèn luyện từ vựng cho bạn.\n\n---\n\n### Câu 1 / {count}:\n**{question}**",
+    chat_quiz_question_header: "Câu {index} / {total}",
+    chat_quiz_feedback_correct_msg: "🎉 **Chính xác!**\n\nĐáp án cho câu hỏi là **\"{answer}\"**.",
+    chat_quiz_feedback_incorrect_msg: "❌ **Chưa chính xác!**\n\nĐáp án đúng: **\"{answer}\"** (câu trả lời của bạn: \"{userAnswer}\").",
+    chat_quiz_word_details: "\n\n*Từ*: **{word}** ({partOfSpeech})\n*Phát âm*: `{pronunciation}`\n*Bản dịch*: \"{translation}\"",
+    chat_quiz_speech_correct: "Chính xác! Đáp án là {answer}",
+    chat_quiz_speech_incorrect: "Chưa chính xác! Đáp án đúng là {answer}",
+    chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Hoàn thành bài kiểm tra!**\n\nBạn đạt **{score} / {total}** ({accuracy}%).\n\nTôi đã cập nhật thống kê và điều chỉnh độ ghi nhớ từ vựng cho bạn! Tất cả đã sẵn sàng.\n\nBạn muốn học gì tiếp theo?",
+    chat_quiz_start_today_action: "🧠 Bắt Đầu Bài Quiz Hôm Nay",
+    chat_quiz_common_phrases_action: "🗣️ Cụm Từ & Thành Ngữ Phổ Biến",
+    chat_lookup_status: "🔍 *Đang tra từ điển, dịch và tạo định nghĩa cho **\"{word}\"**{contextHintStr}...*",
+    chat_lookup_not_found: "⚠️ **Không tìm thấy định nghĩa hợp lệ cho \"{word}\"**{contextHintStr}.\n\nMục này **chưa** được thêm vào bộ sưu tập.\n\n👇 **Nhập một từ khác bên dưới** để thử lại!",
+    chat_disambiguation_prompt: "🤔 **\"{word}\"** có một số nét nghĩa phổ biến trong **{targetLanguage}**. Bạn muốn thêm định nghĩa nào?",
+    chat_visual_scene: "Cảnh quan"
   },
   es: {
     app_title: "Aprende Vocabulario AI",
