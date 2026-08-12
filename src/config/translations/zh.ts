@@ -323,5 +323,12 @@ export const zhTranslations: LanguageTranslations = {
     cert_cefra2_desc: "CEFR A2 日常作息、购物、家庭与即刻需求表达",
     cert_cefrb1_desc: "CEFR B1 旅游、工作、休闲娱乐与表达个人见解",
     cert_cefrb2_desc: "CEFR B2 复杂观点论证、专业工作语境与媒体阅读",
-    cert_cefrc1_desc: "CEFR C1 学术研究、正式流利表达与各类专业主题词汇"
+    cert_cefrc1_desc: "CEFR C1 学术研究、正式流利表达与各类专业主题词汇",
+    settings_test_voice_studio: "语音测试工作室",
+    settings_test_voice_studio_desc: "使用当前选定的语音设置听一段示例文本",
+    settings_test_voice_placeholder: "输入示例文本以测试发音...",
+    settings_test_voice_stop_btn: "停止播放",
+    settings_test_voice_model_btn: "测试语音模型",
+    settings_test_voice_playing: "正在播放语音...",
+    settings_test_voice_click_btn: "点击按钮测试输出"
   };

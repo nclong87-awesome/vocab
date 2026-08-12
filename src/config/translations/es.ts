@@ -323,5 +323,12 @@ export const esTranslations: LanguageTranslations = {
     cert_cefra2_desc: "Rutina diaria, compras, familia y necesidades inmediatas",
     cert_cefrb1_desc: "Viajes, trabajo, ocio y expresión de opiniones personales",
     cert_cefrb2_desc: "Argumentos complejos, contextos profesionales y medios de comunicación",
-    cert_cefrc1_desc: "Investigación académica, fluidez formal y temas especializados"
+    cert_cefrc1_desc: "Investigación académica, fluidez formal y temas especializados",
+    settings_test_voice_studio: "Estudio de Prueba de Voz",
+    settings_test_voice_studio_desc: "Escucha un texto de muestra utilizando los ajustes de voz seleccionados actualmente",
+    settings_test_voice_placeholder: "Escribe un texto de muestra para probar la pronunciación...",
+    settings_test_voice_stop_btn: "Detener Audio",
+    settings_test_voice_model_btn: "Probar Modelo de Voz",
+    settings_test_voice_playing: "Reproduciendo voz...",
+    settings_test_voice_click_btn: "Haz clic en el botón para probar la salida"
   };

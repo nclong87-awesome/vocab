@@ -323,5 +323,12 @@ export const viTranslations: LanguageTranslations = {
     cert_cefra2_desc: "Sinh hoạt hàng ngày, mua sắm, gia đình & nhu cầu thiết yếu",
     cert_cefrb1_desc: "Du lịch, công việc, giải trí & bày tỏ ý kiến cá nhân",
     cert_cefrb2_desc: "Lập luận phức tạp, bối cảnh chuyên nghiệp & truyền thông",
-    cert_cefrc1_desc: "Nghiên cứu học thuật, lưu khoát trang trọng & chủ đề chuyên sâu"
+    cert_cefrc1_desc: "Nghiên cứu học thuật, lưu khoát trang trọng & chủ đề chuyên sâu",
+    settings_test_voice_studio: "Phòng Thử Giọng Nói",
+    settings_test_voice_studio_desc: "Nghe văn bản mẫu bằng cài đặt giọng nói đang được chọn",
+    settings_test_voice_placeholder: "Nhập văn bản mẫu để thử phát âm...",
+    settings_test_voice_stop_btn: "Dừng Âm Thanh",
+    settings_test_voice_model_btn: "Thử Giọng Nói",
+    settings_test_voice_playing: "Đang phát giọng nói...",
+    settings_test_voice_click_btn: "Nhấn nút để thử phát âm"
   };

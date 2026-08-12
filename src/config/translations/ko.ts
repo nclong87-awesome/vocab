@@ -323,5 +323,12 @@ export const koTranslations: LanguageTranslations = {
     cert_cefra2_desc: "일상 일과, 쇼핑, 가족 및 기본적 필요 표현",
     cert_cefrb1_desc: "여행, 업무, 여가 및 개인적 의견 표현",
     cert_cefrb2_desc: "복잡한 논증, 전문적 맥락 및 미디어",
-    cert_cefrc1_desc: "학술 연구, 격식 있는 유창함 및 전문적 분야"
+    cert_cefrc1_desc: "학술 연구, 격식 있는 유창함 및 전문적 분야",
+    settings_test_voice_studio: "음성 테스트 스튜디오",
+    settings_test_voice_studio_desc: "현재 선택된 음성 설정을 사용하여 샘플 텍스트를 듣습니다",
+    settings_test_voice_placeholder: "발음을 테스트할 샘플 텍스트를 입력하십시오...",
+    settings_test_voice_stop_btn: "음성 중지",
+    settings_test_voice_model_btn: "음성 모델 테스트",
+    settings_test_voice_playing: "음성 재생 중...",
+    settings_test_voice_click_btn: "버튼을 클릭하여 출력을 테스트합니다"
   };

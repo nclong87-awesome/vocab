@@ -45,6 +45,7 @@ import { syncToGist, syncFromGist } from "../services/githubGistService";
 import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
 
 import { SUPPORTED_LANGUAGES } from "../config/languages";
+import { t } from "../config/i18n";
 
 interface SettingsViewProps {
   ttsConfig: TTSConfig;
@@ -98,6 +99,34 @@ export default function SettingsView({
   useEffect(() => {
     setSelectedTargetLang(targetLanguage);
   }, [targetLanguage]);
+
+  useEffect(() => {
+    const defaultTestTexts: Record<string, string> = {
+      English: "Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.",
+      Spanish: "¡Hola! Bienvenido al Aprendiz de Vocabulario. La pronunciación en audio acelera la retención de la memoria.",
+      French: "Bonjour! Bienvenue dans l'Apprenti de Vocabulaire. La prononciation audio accélère la mémorisation.",
+      German: "Hallo! Willkommen beim Vokabellernen. Die Audio-Aussprache beschleunigt das Behalten im Gedächtnis.",
+      Vietnamese: "Xin chào! Chào mừng bạn đến với Ứng dụng Học Từ Vựng. Phát âm âm thanh giúp ghi nhớ nhanh hơn.",
+      Japanese: "こんにちは！ボキャブラリーラーナーへようこそ。音声発音は記憶の定着をスピードアップします。",
+      Chinese: "你好！欢迎来到词汇学习助手。语音发音可以加速记忆保持。",
+      Italian: "Ciao! Benvenuto nell'Apprendista del Vocabolario. La pronuncia audio accelera la memorizzazione.",
+      Portuguese: "Olá! Bem-vindo ao Aprendiz de Vocabulário. A pronúncia em áudio acelera a retenção da memória.",
+      Korean: "안녕하세요! 어휘 학습기에 오신 것을 환영합니다. 오디오 발음은 기억력을 빠르게 향상시킵니다.",
+      Russian: "Привет! Добро пожаловать v Помощник по изучению лексики. Аудиопроизношение ускоряет запоминание.",
+      Dutch: "Hallo! Welkom bij Woordenschat Leren. Audio-uitspraak versnelt het onthouden.",
+      Arabic: "مرحباً! مرحبًا بك في متعلم المفردات. النطق الصوتي يسرع حفظ الذاكرة.",
+      Hindi: "नमस्ते! शब्दावली शिक्षार्थी में आपका स्वागत है। ऑडियो उच्चारण स्मृति प्रतिधारण को तेज करता है।",
+      Turkish: "Merhaba! Kelime Öğreniciye hoş geldiniz. Sesli telaffuz hafızada tutmayı hızlandırır.",
+      Polish: "Cześć! Witamy w programie do nauki słownictwa. Wymowa dźwiękowa przyspiesza zapamiętywanie.",
+      Swedish: "Hej! Välkommen till Ordförrådsläraren. Ljuduttal påskyndar minnesbehållningen.",
+      Greek: "Γεια σας! Καλώς ήρθατε στον Βοηθό Εκμάθησης Λεξιλογίου. Η ακουστική προφορά επιταχύνει τη συγκράτηση στη μνήμη.",
+      Thai: "สวัสดี! ยินดีต้อนรับสู่โปรแกรมเรียนรู้คำศัพท์ การออกเสียงด้วยเสียงช่วยเร่งการจดจำ",
+      Indonesian: "Halo! Selamat datang di Pembelajar Kosakata. Pengucapan audio mempercepat retensi memori."
+    };
+
+    const text = defaultTestTexts[selectedTargetLang] || defaultTestTexts["English"];
+    setTestText(text);
+  }, [selectedTargetLang]);
 
   useEffect(() => {
     setSelectedNativeLang(nativeLanguage);
@@ -1555,10 +1584,10 @@ export default function SettingsView({
           <div>
             <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
               <Volume2 className="w-4 h-4 text-stone-800" />
-              Test Voice Studio
+              {t("settings_test_voice_studio", selectedAppLang)}
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              Listen to a sample text using the currently selected voice settings
+              {t("settings_test_voice_studio_desc", selectedAppLang)}
             </p>
           </div>
           <span className="text-xs font-mono font-medium text-stone-500 capitalize">
@@ -1572,7 +1601,7 @@ export default function SettingsView({
             onChange={(e) => setTestText(e.target.value)}
             rows={2}
             className="w-full p-3 bg-stone-50 border border-stone-200 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900 rounded-none"
-            placeholder="Type sample text to test pronunciation..."
+            placeholder={t("settings_test_voice_placeholder", selectedAppLang)}
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1588,18 +1617,18 @@ export default function SettingsView({
               {isTesting ? (
                 <>
                   <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Stop Audio</span>
+                  <span>{t("settings_test_voice_stop_btn", selectedAppLang)}</span>
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Test Voice Model</span>
+                  <span>{t("settings_test_voice_model_btn", selectedAppLang)}</span>
                 </>
               )}
             </button>
 
             <span className="text-xs font-medium text-stone-500">
-              {isTesting ? "Playing speech..." : "Click button to test output"}
+              {isTesting ? t("settings_test_voice_playing", selectedAppLang) : t("settings_test_voice_click_btn", selectedAppLang)}
             </span>
           </div>
 

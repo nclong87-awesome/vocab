@@ -323,5 +323,12 @@ export const jaTranslations: LanguageTranslations = {
     cert_cefra2_desc: "日常ルーティン、買い物、家族、身近なニーズ",
     cert_cefrb1_desc: "旅行、仕事、レジャー、個人の意見の表明",
     cert_cefrb2_desc: "複雑な議論、プロフェッショナルな文脈、メディア",
-    cert_cefrc1_desc: "学術研究、公式な流暢さ、専門的なトピック"
+    cert_cefrc1_desc: "学術研究、公式な流暢さ、専門的なトピック",
+    settings_test_voice_studio: "音声テストスタジオ",
+    settings_test_voice_studio_desc: "現在選択されている音声設定を使用してサンプルテキストを聴く",
+    settings_test_voice_placeholder: "発音をテストするサンプルテキストを入力してください...",
+    settings_test_voice_stop_btn: "音声停止",
+    settings_test_voice_model_btn: "音声モデルをテスト",
+    settings_test_voice_playing: "音声を再生中...",
+    settings_test_voice_click_btn: "ボタンをクリックして出力をテストします"
   };

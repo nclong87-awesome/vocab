@@ -323,5 +323,12 @@ export const deTranslations: LanguageTranslations = {
     cert_cefra2_desc: "Tagesablauf, Einkaufen, Familie & unmittelbare Bedürfnisse",
     cert_cefrb1_desc: "Reisen, Arbeit, Freizeit & Äußerung persönlicher Meinungen",
     cert_cefrb2_desc: "Komplexe Argumente, berufliche Kontexte & Medien",
-    cert_cefrc1_desc: "Wissenschaftliche Forschung, formelle Fließfähigkeit & Fachthemen"
+    cert_cefrc1_desc: "Wissenschaftliche Forschung, formelle Fließfähigkeit & Fachthemen",
+    settings_test_voice_studio: "Test-Sprachstudio",
+    settings_test_voice_studio_desc: "Hören Sie sich einen Beispieltext mit den aktuell ausgewählten Stimmeinstellungen an",
+    settings_test_voice_placeholder: "Geben Sie einen Beispieltext ein, um die Aussprache zu testen...",
+    settings_test_voice_stop_btn: "Audio stoppen",
+    settings_test_voice_model_btn: "Stimmmodell testen",
+    settings_test_voice_playing: "Sprache wird abgespielt...",
+    settings_test_voice_click_btn: "Klicken Sie auf die Schaltfläche, um die Ausgabe zu testen"
   };

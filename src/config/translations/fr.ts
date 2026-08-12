@@ -323,5 +323,12 @@ export const frTranslations: LanguageTranslations = {
     cert_cefra2_desc: "Routine quotidienne, shopping, famille et besoins immédiats",
     cert_cefrb1_desc: "Voyages, travail, loisirs et expression d'opinions personnelles",
     cert_cefrb2_desc: "Arguments complexes, contextes professionnels et médias",
-    cert_cefrc1_desc: "Recherche académique, fluidité formelle et sujets spécialisés"
+    cert_cefrc1_desc: "Recherche académique, fluidité formelle et sujets spécialisés",
+    settings_test_voice_studio: "Studio de Test Vocal",
+    settings_test_voice_studio_desc: "Écoutez un exemple de texte en utilisant les paramètres vocaux actuellement sélectionnés",
+    settings_test_voice_placeholder: "Saisissez un exemple de texte pour tester la prononciation...",
+    settings_test_voice_stop_btn: "Arrêter l'Audio",
+    settings_test_voice_model_btn: "Tester le Modèle Vocal",
+    settings_test_voice_playing: "Lecture de la voix...",
+    settings_test_voice_click_btn: "Cliquez sur le bouton pour tester la sortie"
   };

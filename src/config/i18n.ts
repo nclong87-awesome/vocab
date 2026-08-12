@@ -330,7 +330,14 @@ export type TranslationKey =
   | "cert_cefra2_desc"
   | "cert_cefrb1_desc"
   | "cert_cefrb2_desc"
-  | "cert_cefrc1_desc";
+  | "cert_cefrc1_desc"
+  | "settings_test_voice_studio"
+  | "settings_test_voice_studio_desc"
+  | "settings_test_voice_placeholder"
+  | "settings_test_voice_stop_btn"
+  | "settings_test_voice_model_btn"
+  | "settings_test_voice_playing"
+  | "settings_test_voice_click_btn";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

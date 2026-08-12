@@ -323,5 +323,12 @@ export const enTranslations: LanguageTranslations = {
     cert_cefra2_desc: "Daily routine, shopping, family & immediate needs",
     cert_cefrb1_desc: "Travel, work, leisure & expressing personal opinions",
     cert_cefrb2_desc: "Complex arguments, professional contexts & media",
-    cert_cefrc1_desc: "Academic research, formal fluency & specialized topics"
+    cert_cefrc1_desc: "Academic research, formal fluency & specialized topics",
+    settings_test_voice_studio: "Test Voice Studio",
+    settings_test_voice_studio_desc: "Listen to a sample text using the currently selected voice settings",
+    settings_test_voice_placeholder: "Type sample text to test pronunciation...",
+    settings_test_voice_stop_btn: "Stop Audio",
+    settings_test_voice_model_btn: "Test Voice Model",
+    settings_test_voice_playing: "Playing speech...",
+    settings_test_voice_click_btn: "Click button to test output"
   };
