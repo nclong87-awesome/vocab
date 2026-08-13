@@ -1,5 +1,5 @@
 import { LLMConfig, LLMProvider } from "../types";
-import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -168,10 +168,7 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
     for (const p of providersToInclude) {
       if (p.models[i] && p.models[i] !== "auto") {
         const modelName = p.models[i];
-        // Only include if it's in the reliable models list or is custom provider
-        if (RELIABLE_MODELS.includes(modelName) || p.id === "custom") {
-          candidates.push({ provider: p.id, model: modelName });
-        }
+        candidates.push({ provider: p.id, model: modelName });
       }
     }
   }
@@ -774,6 +771,33 @@ export function getNextAutoCandidate(
       const probeCandidate = probePool[idx];
       console.log(`[Auto Mode - Epsilon Exploration Probe] Probing Tier 2/4 candidate to re-evaluate response time: ${probeCandidate.provider}:${probeCandidate.model}`);
       return probeCandidate;
+    }
+
+    // Probe Selection: If there are any untested or stale models in Tier 1, prioritize them cleanly
+    // without index-skipping issues by selecting the candidate with the absolute lowest calls (e.g., 0 calls)
+    // and oldest test time.
+    const untestedOrStale = tier1.filter(t => t.isUntestedOrStale);
+    if (untestedOrStale.length > 0) {
+      untestedOrStale.sort((a, b) => {
+        const keyA = `${a.cand.provider}:${a.cand.model}`;
+        const keyB = `${b.cand.provider}:${b.cand.model}`;
+        const metricA = metricsMap[keyA];
+        const metricB = metricsMap[keyB];
+
+        const callsA = metricA?.totalCalls ?? 0;
+        const callsB = metricB?.totalCalls ?? 0;
+        if (callsA !== callsB) {
+          return callsA - callsB;
+        }
+
+        const testA = metricA?.lastTestedAt ?? 0;
+        const testB = metricB?.lastTestedAt ?? 0;
+        return testA - testB;
+      });
+
+      const selected = untestedOrStale[0].cand;
+      console.log(`[Auto Mode - Probe Selection] Selected untested/stale candidate (calls: ${metricsMap[`${selected.provider}:${selected.model}`]?.totalCalls ?? 0}): ${selected.provider}:${selected.model}`);
+      return selected;
     }
 
     // Standard Tier Priority Selection (Tier 1 -> Tier 2 -> Tier 4)
