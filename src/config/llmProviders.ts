@@ -92,7 +92,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "pro/gpt-5-mini"
       // "pro/glm-5"
     ],
-    visionModels: ["pro/gpt-5.6-luna", "pro/minimax-m2.5"],
+    visionModels: ["pro/gpt-5.6-luna"],
     defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://9flare.com/api/v1",
     requiresKey: false
