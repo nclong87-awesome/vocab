@@ -164,12 +164,7 @@ export const syncFromGist = async (
     try {
       const { url, headers } = getGistEndpointAndHeaders(token, gistId);
 
-      // Append cache buster parameter and anti-caching headers to guarantee fresh data
-      const cacheBustUrl = `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
-      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
-      headers['Pragma'] = 'no-cache';
-
-      const response = await fetchWithTimeout(cacheBustUrl, {
+      const response = await fetchWithTimeout(url, {
         method: 'GET',
         headers
       });
@@ -187,13 +182,7 @@ export const syncFromGist = async (
       const getFileContent = async (fileObj: any): Promise<string | null> => {
         if (!fileObj) return null;
         if (fileObj.truncated && fileObj.raw_url) {
-          const rawUrlWithBust = `${fileObj.raw_url}${fileObj.raw_url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
-          const rawRes = await fetchWithTimeout(rawUrlWithBust, {
-            headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache'
-            }
-          });
+          const rawRes = await fetchWithTimeout(fileObj.raw_url);
           if (!rawRes.ok) {
             throw new Error(`Failed to fetch truncated file raw content (${rawRes.status})`);
           }
