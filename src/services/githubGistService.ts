@@ -136,6 +136,7 @@ export const syncToGist = async (
 
     const result = await response.json();
     console.log("[Sync Service] [syncToGist] Request succeeded. Returned Gist ID:", result.id);
+    activeGistFetches.clear();
     return result.id;
   } catch (fetchError: any) {
     console.error("[Sync Service] [syncToGist] Net/HTTP Error during fetch:", fetchError);
@@ -148,10 +149,13 @@ const activeGistFetches = new Map<string, Promise<any>>();
 
 export const syncFromGist = async (
   token: string = "", 
-  gistId: string
+  gistId: string,
+  forceRefresh: boolean = false
 ): Promise<any> => {
   const cacheKey = `${token || ""}_${gistId}`;
-  if (activeGistFetches.has(cacheKey)) {
+  if (forceRefresh) {
+    activeGistFetches.delete(cacheKey);
+  } else if (activeGistFetches.has(cacheKey)) {
     console.log("[Sync Service] [syncFromGist] Coalescing simultaneous fetch request for Gist ID:", gistId);
     return activeGistFetches.get(cacheKey)!;
   }
@@ -160,7 +164,12 @@ export const syncFromGist = async (
     try {
       const { url, headers } = getGistEndpointAndHeaders(token, gistId);
 
-      const response = await fetchWithTimeout(url, {
+      // Append cache buster parameter and anti-caching headers to guarantee fresh data
+      const cacheBustUrl = `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      headers['Pragma'] = 'no-cache';
+
+      const response = await fetchWithTimeout(cacheBustUrl, {
         method: 'GET',
         headers
       });
@@ -178,7 +187,13 @@ export const syncFromGist = async (
       const getFileContent = async (fileObj: any): Promise<string | null> => {
         if (!fileObj) return null;
         if (fileObj.truncated && fileObj.raw_url) {
-          const rawRes = await fetchWithTimeout(fileObj.raw_url);
+          const rawUrlWithBust = `${fileObj.raw_url}${fileObj.raw_url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+          const rawRes = await fetchWithTimeout(rawUrlWithBust, {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          });
           if (!rawRes.ok) {
             throw new Error(`Failed to fetch truncated file raw content (${rawRes.status})`);
           }

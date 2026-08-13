@@ -46,19 +46,48 @@ export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] 
     }
   }
 
-  // 3. Append memory decay entry if current strength is lower than last recorded entry
-  const currentStrength = Math.max(0, Math.min(100, Math.round(word.strength ?? 0)));
-  const lastEntry = history[history.length - 1];
+  // Deduplicate adjacent decay entries with identical strength
+  const dedupedHistory: StrengthHistoryEntry[] = [];
+  for (const entry of history) {
+    const last = dedupedHistory[dedupedHistory.length - 1];
+    if (
+      last &&
+      entry.reason === "memory_decay" &&
+      last.reason === "memory_decay" &&
+      entry.strength === last.strength
+    ) {
+      continue;
+    }
+    dedupedHistory.push(entry);
+  }
 
-  if (lastEntry && currentStrength < lastEntry.strength) {
-    const delta = currentStrength - lastEntry.strength;
-    const nowIso = new Date().toISOString();
-    // Prevent duplicate decay entries if last entry is already at the same strength
-    if (lastEntry.reason !== "memory_decay" || lastEntry.strength !== currentStrength) {
-      history.push({
-        id: `hist-decay-${word.id}-${Date.now()}`,
-        timestamp: nowIso,
-        strength: currentStrength,
+  return dedupedHistory;
+}
+
+/**
+ * Cleans up corrupted history entries (e.g. repeated decay entries from page reloads)
+ * and sets word strength to its clean target value.
+ */
+export function sanitizeAndHealWordHistory(
+  word: Word,
+  targetStrength: number,
+  targetLearned: boolean
+): Word {
+  const history = word.strengthHistory || [];
+  // Keep all non-decay practice entries
+  const practiceEntries = history.filter(e => e.reason !== "memory_decay");
+
+  let cleanHistory: StrengthHistoryEntry[] = [...practiceEntries];
+
+  if (practiceEntries.length > 0) {
+    const lastPractice = practiceEntries[practiceEntries.length - 1];
+    if (targetStrength < lastPractice.strength) {
+      const delta = targetStrength - lastPractice.strength;
+      const baselineMs = lastPractice.timestamp ? new Date(lastPractice.timestamp).getTime() : 0;
+      cleanHistory.push({
+        id: `hist-decay-${word.id || word.word}-${baselineMs}-heal`,
+        timestamp: lastPractice.timestamp || new Date().toISOString(),
+        strength: targetStrength,
         delta,
         reason: "memory_decay",
         note: `Memory strength decayed over time (${delta}% at -10%/day)`
@@ -66,7 +95,12 @@ export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] 
     }
   }
 
-  return history;
+  return {
+    ...word,
+    strength: targetStrength,
+    learned: targetLearned,
+    strengthHistory: cleanHistory
+  };
 }
 
 /**
@@ -76,7 +110,8 @@ export function recordStrengthHistory(
   word: Word,
   newStrength: number,
   reason: StrengthHistoryEntry["reason"],
-  note?: string
+  note?: string,
+  idOverride?: string
 ): Word {
   const boundedStrength = Math.max(0, Math.min(100, Math.round(newStrength)));
   const nowIso = new Date().toISOString();
@@ -84,7 +119,7 @@ export function recordStrengthHistory(
   // If this is a newly created word without prior history, create a single creation event
   if ((!word.strengthHistory || word.strengthHistory.length === 0) && reason === "created") {
     const initialEntry: StrengthHistoryEntry = {
-      id: `hist-created-${word.id || Date.now()}`,
+      id: idOverride || `hist-created-${word.id || Date.now()}`,
       timestamp: word.createdAt || nowIso,
       strength: boundedStrength,
       delta: 0,
@@ -103,10 +138,25 @@ export function recordStrengthHistory(
 
   const previousHistory = getEffectiveStrengthHistory(word);
   const lastEntry = previousHistory[previousHistory.length - 1];
+
+  // Prevent duplicate decay entries if the last entry is already a memory_decay entry with the exact same strength
+  if (
+    reason === "memory_decay" &&
+    lastEntry &&
+    lastEntry.reason === "memory_decay" &&
+    lastEntry.strength === boundedStrength
+  ) {
+    return {
+      ...word,
+      strength: boundedStrength,
+      learned: boundedStrength >= 80 ? word.learned : false
+    };
+  }
+
   const delta = boundedStrength - (lastEntry ? lastEntry.strength : word.strength || 0);
 
   const newEntry: StrengthHistoryEntry = {
-    id: `hist-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: idOverride || `hist-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     timestamp: nowIso,
     strength: boundedStrength,
     delta,
@@ -117,10 +167,14 @@ export function recordStrengthHistory(
   // Keep up to 50 history entries max
   const updatedHistory = [...previousHistory, newEntry].slice(-50);
 
+  const newLearnedState = reason === "memory_decay"
+    ? boundedStrength >= 80
+    : (boundedStrength >= 80 ? true : boundedStrength === 0 ? false : word.learned);
+
   return {
     ...word,
     strength: boundedStrength,
-    learned: boundedStrength >= 80 ? true : boundedStrength === 0 ? false : word.learned,
+    learned: newLearnedState,
     // Keep original practice date if reason is memory_decay, otherwise set lastReviewed to now
     lastReviewed: reason === "memory_decay" ? word.lastReviewed : nowIso,
     strengthHistory: updatedHistory

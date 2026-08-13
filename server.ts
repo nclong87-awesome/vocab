@@ -730,13 +730,28 @@ app.all(["/api/gist", "/api/gist/*"], async (req, res) => {
       ? "https://api.github.com/gists"
       : "https://storage.nclong87.workers.dev/gists";
 
-    const targetUrl = `${baseUrl}${subPath}`;
+    const queryString = req.url.includes("?") ? req.url.substring(req.url.indexOf("?")) : "";
+    const targetUrl = `${baseUrl}${subPath}${queryString}`;
 
     const headers: Record<string, string> = {
       "Accept": "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       "Content-Type": "application/json"
     };
+
+    // Forward caching and validation headers from incoming client request
+    if (req.headers["cache-control"]) {
+      headers["Cache-Control"] = req.headers["cache-control"] as string;
+    }
+    if (req.headers["pragma"]) {
+      headers["Pragma"] = req.headers["pragma"] as string;
+    }
+    if (req.headers["if-none-match"]) {
+      headers["If-None-Match"] = req.headers["if-none-match"] as string;
+    }
+    if (req.headers["if-modified-since"]) {
+      headers["If-Modified-Since"] = req.headers["if-modified-since"] as string;
+    }
 
     if (isDirectGitHubPat) {
       headers["Authorization"] = `Bearer ${token}`;
@@ -762,6 +777,10 @@ app.all(["/api/gist", "/api/gist/*"], async (req, res) => {
 
     const response = await fetchWithTimeout(targetUrl, fetchOptions);
     const dataText = await response.text();
+
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     let dataJson;
     try {

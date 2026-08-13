@@ -1,5 +1,6 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
 import { Word, UserStats, StrengthHistoryEntry } from "../types";
+import { recalculateWordsMemoryDecay } from "./spacedRepetition";
 
 export interface DeletedWordRecord {
   id: string;
@@ -124,8 +125,13 @@ export function autoMergeLocalAndRemote(
   localData: IndexedDBExportData,
   remoteData: IndexedDBExportData
 ): MergeResult {
-  const localWords: Word[] = localData.stores?.words || [];
-  const remoteWords: Word[] = remoteData.stores?.words || [];
+  const now = new Date();
+  const rawLocalWords: Word[] = localData.stores?.words || [];
+  const rawRemoteWords: Word[] = remoteData.stores?.words || [];
+
+  // Evaluate memory decay on both local and remote words at the exact same point in time ("now")
+  const { updatedWords: localWords } = recalculateWordsMemoryDecay(rawLocalWords, now);
+  const { updatedWords: remoteWords } = recalculateWordsMemoryDecay(rawRemoteWords, now);
 
   const newLocalWords: Word[] = [];
   const newRemoteWords: Word[] = [];
@@ -215,49 +221,72 @@ export function autoMergeLocalAndRemote(
       // - Starred: if starred anywhere, keep true
       const mergedStarred = Boolean(lWord.starred || match.starred);
 
+      const lEffectiveStrength = lWord.strength ?? (lWord.learned ? 100 : 0);
+      const rEffectiveStrength = match.strength ?? (match.learned ? 100 : 0);
+
       // Merge and deduplicate strengthHistory arrays
       const localHistory = lWord.strengthHistory || [];
       const remoteHistory = match.strengthHistory || [];
 
       const historyMap = new Map<string, StrengthHistoryEntry>();
       for (const entry of [...localHistory, ...remoteHistory]) {
-        if (entry && entry.id) {
-          historyMap.set(entry.id, entry);
+        if (entry) {
+          const key = entry.id || `${entry.timestamp || ""}-${entry.reason || ""}-${entry.strength ?? 0}`;
+          const existing = historyMap.get(key);
+          if (!existing) {
+            historyMap.set(key, entry);
+          } else {
+            const existingTime = parseTime(existing.timestamp);
+            const entryTime = parseTime(entry.timestamp);
+            if (entryTime > existingTime || (entryTime === existingTime && (entry.strength ?? 0) > (existing.strength ?? 0))) {
+              historyMap.set(key, entry);
+            }
+          }
         }
       }
-      const mergedHistoryList = Array.from(historyMap.values()).sort(
+
+      const rawMergedHistory = Array.from(historyMap.values()).sort(
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
 
+      // Deduplicate adjacent memory_decay entries with identical strength
+      const mergedHistoryList: StrengthHistoryEntry[] = [];
+      for (const entry of rawMergedHistory) {
+        const last = mergedHistoryList[mergedHistoryList.length - 1];
+        if (
+          last &&
+          entry.reason === "memory_decay" &&
+          last.reason === "memory_decay" &&
+          entry.strength === last.strength
+        ) {
+          continue;
+        }
+        mergedHistoryList.push(entry);
+      }
+
       // Determine strength and learned status:
-      // If they have history, use the latest history entry to determine the strength and mastery status.
-      // Otherwise, use the most recent review timestamp.
-      let mergedStrength = primary.strength ?? 0;
-      let mergedLearned = primary.learned;
+      let mergedStrength = Math.max(lEffectiveStrength, rEffectiveStrength);
+      let mergedLearned = Boolean(lWord.learned || match.learned || mergedStrength >= 80);
 
       if (mergedHistoryList.length > 0) {
         const latestEntry = mergedHistoryList[mergedHistoryList.length - 1];
-        const isLatestLocal = localHistory.some(h => h.id === latestEntry.id);
-        const isLatestRemote = remoteHistory.some(h => h.id === latestEntry.id);
-
-        mergedStrength = latestEntry.strength;
-        if (isLatestLocal) {
-          mergedLearned = lWord.learned;
-        } else if (isLatestRemote) {
-          mergedLearned = match.learned;
+        if (latestEntry.reason === "memory_decay") {
+          mergedStrength = latestEntry.strength;
+          mergedLearned = mergedStrength >= 80;
+        } else if (latestEntry.reason === "mastered") {
+          mergedStrength = Math.max(80, latestEntry.strength);
+          mergedLearned = true;
         } else {
-          mergedLearned = mergedStrength >= 80 ? true : mergedStrength === 0 ? false : primary.learned;
+          mergedStrength = latestEntry.strength;
+          mergedLearned = mergedStrength >= 80 ? true : Boolean(lWord.learned || match.learned);
         }
       } else {
         if (localReviewTime > remoteReviewTime) {
-          mergedStrength = lWord.strength ?? 0;
-          mergedLearned = lWord.learned;
+          mergedStrength = lEffectiveStrength;
+          mergedLearned = Boolean(lWord.learned || mergedStrength >= 80);
         } else if (remoteReviewTime > localReviewTime) {
-          mergedStrength = match.strength ?? 0;
-          mergedLearned = match.learned;
-        } else {
-          mergedStrength = lWord.strength ?? 0;
-          mergedLearned = lWord.learned;
+          mergedStrength = rEffectiveStrength;
+          mergedLearned = Boolean(match.learned || mergedStrength >= 80);
         }
       }
 
@@ -278,13 +307,13 @@ export function autoMergeLocalAndRemote(
         changesList.push(`Starred status synced (${mergedStarred ? "Starred" : "Unstarred"})`);
       }
       
-      if ((lWord.strength ?? 0) !== (match.strength ?? 0)) {
-        changesList.push(`Strength level merged (${lWord.strength ?? 0} vs ${match.strength ?? 0} → ${mergedStrength})`);
+      if (lEffectiveStrength !== rEffectiveStrength) {
+        changesList.push(`Strength level merged (${lEffectiveStrength} vs ${rEffectiveStrength} → ${mergedStrength})`);
       }
       if (Boolean(lWord.learned) !== Boolean(match.learned)) {
         changesList.push(`Mastery synced (${mergedLearned ? "Mastered" : "Learning"})`);
       }
-      if (localHistory.length !== remoteHistory.length) {
+      if (localHistory.length !== mergedHistoryList.length && remoteHistory.length !== mergedHistoryList.length) {
         changesList.push(`Strength history synced (${localHistory.length} vs ${remoteHistory.length} entries)`);
       }
 

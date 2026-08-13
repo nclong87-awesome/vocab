@@ -65,7 +65,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       checkInProgressRef.current = true;
       setIsCheckingSync(true);
       const localData = await exportIndexedDBDatabase();
-      const remoteData = await syncFromGist(token, gistId);
+      const remoteData = await syncFromGist(token, gistId, true);
 
       localStorage.setItem("last_gist_sync_check", String(Date.now()));
 
@@ -205,7 +205,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       }
 
       // Fetch remote data from Gist
-      const remoteData = await syncFromGist(token, gistId);
+      const remoteData = await syncFromGist(token, gistId, true);
 
       const localWords = localData.stores?.words || [];
       const remoteWords = remoteData.stores?.words || [];
@@ -306,7 +306,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
       setIsSyncing(false);
       setTimeout(() => {
         isSyncingRef.current = false;
-      }, 1000);
+      }, 3000);
     }
   };
 
