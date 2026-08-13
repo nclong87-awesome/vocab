@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
-import { getQuickActionItems, getRotatedDefaultModel } from "./quickActionsConfig";
+import { getQuickActionItems } from "./quickActionsConfig";
 import { t } from "../../config/i18n";
 
 interface QuickActionsSectionProps {
@@ -111,15 +111,15 @@ function QuickActionsSection({
           p.setSelectedImage(null);
         }
 
-        if (p.llmConfig?.provider === "auto" && item.defaultModels && item.defaultModels.length > 0) {
-          const match = getRotatedDefaultModel(item.defaultModels);
-          if (match) {
-            if (p.onSwitchProvider) {
-              p.onSwitchProvider(match.provider, match.model);
-              p.showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
-            }
-          }
-        }
+        // if (p.llmConfig?.provider === "auto" && item.defaultModels && item.defaultModels.length > 0) {
+        //   const match = getRotatedDefaultModel(item.defaultModels);
+        //   if (match) {
+        //     if (p.onSwitchProvider) {
+        //       p.onSwitchProvider(match.provider, match.model);
+        //       p.showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
+        //     }
+        //   }
+        // }
 
         item.getAction({
           targetLanguage: p.targetLanguage,
