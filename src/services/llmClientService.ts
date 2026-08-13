@@ -1168,7 +1168,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
-     "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
+     "imageKeyword": string (MUST be in English, 1-3 words, representing a highly concrete, visual, physical object or action that symbolizes the word for Unsplash image search. Avoid abstract concepts. Examples: for "ephemeral" use "soap bubble", for "serendipity" use "four leaf clover", for "understand" use "light bulb", for "gregarious" use "friends cafe"),
      "category": string,
      "context": string`;
 
@@ -1186,7 +1186,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
+      "imageKeyword": "string (MUST be in English, highly focused 1-3 word concrete visual concept/object that symbolizes the word for Unsplash image search)",
       "category": "string",
       "context": "string"
     }
@@ -2100,12 +2100,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
      * Ensure the sentence context matches the exact grammatical form (tense, singular/plural) of the target word.
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)
+   - 'picture': "Which word matches the visual concept shown below?" (set 'imageKeyword' to a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word)
 5. Context & Category Alignment:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-  - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.
+  - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.
 
 7. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
@@ -2119,17 +2119,17 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imageKeyword": "string (ONE single comma-free search term for picture questions, directly relevant to the word's context and category)"
+    "imageKeyword": "string (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object, scene, or action that symbolizes the word)"
   }
 ]`;
 
   const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
-CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.\n\n` +
+CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search).`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2476,7 +2476,7 @@ CRITICAL REQUIREMENTS:
 2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
 3. Extra Example Sentence: Generate EXACTLY 1 EXTRA example sentence in ${targetLanguage} with its native translation in ${nativeLanguage}. The sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage. Return it as a single-element array — do not return more than one sentence.
 4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
-5. Image Search Keyword: Set imageKeyword to ONE single search term (comma-free) capturing the visual concept of the word.
+5. Image Search Keyword: Set imageKeyword to a highly focused, 1-3 word English search term (comma-free) representing a concrete, physical, photogenic object, scene, or action that symbolizes the word. Avoid abstract concepts.
 6. Suggested Related Vocabulary: Identify 3 to 5 COMMON, everyday-frequency words or expressions in ${targetLanguage} that belong to the SAME category ("${word.category || "General"}") and the SAME usage context ("${word.context || "Conversational"}") as the target word. Guidelines:
    - Prioritize high-frequency words a learner would realistically encounter and reuse in this context. Do NOT pick rare, archaic, academic, or overly advanced vocabulary.
    - They must be thematically related to the target word (same topic/scenario), not merely words that happened to appear in the example sentence.
@@ -2496,12 +2496,11 @@ Output MUST be strictly valid JSON matching this schema:
   "extraExampleSentences": [
     {
       "sentence": "string in ${targetLanguage}",
-      "translation": "string in ${nativeLanguage}",
-      "contextCategoryNote": "string (brief note explaining relevance to context/category)"
+      "translation": "string in ${nativeLanguage}"
     }
   ],
   "usageNotes": "string",
-  "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
+  "imageKeyword": "string (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object, scene, or action that symbolizes the word)",
   "suggestedVocabulary": [
     {
       "word": "string (common related word/expression in the same category and context)",
@@ -2512,7 +2511,7 @@ Output MUST be strictly valid JSON matching this schema:
   ]
 }
 
-NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary" MUST contain 3 to 5 items.`;
+NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary" MUST contain EXACTLY 1 to 2 items.`;
 
   const prompt = `Generate interactive flashcard content for the word:\n` +
     `Word: "${word.word}"\n` +
@@ -2524,9 +2523,9 @@ NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary"
     `Stored Example: "${word.example || "N/A"}"\n\n` +
     `REMINDERS:\n` +
     `- Return EXACTLY 1 extra example sentence.\n` +
-    `- Return 3 to 5 suggestedVocabulary entries that are COMMON words related to the category "${word.category || "General"}" and context "${word.context || "Conversational"}" (not rare or advanced vocabulary, and not the target word itself).`;
+    `- Return EXACTLY 1 to 2 suggestedVocabulary entries (choose the best candidate words) that are COMMON words related to the category "${word.category || "General"}" and context "${word.context || "Conversational"}" (not rare or advanced vocabulary, and not the target word itself).`;
 
-  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array with EXACTLY 1 item: sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (3 to 5 common related words in the same category and context, each with word, translation, partOfSpeech, definition).`;
+  const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array with EXACTLY 1 item: sentence, translation), usageNotes, imageKeyword, and suggestedVocabulary (1 to 2 common related words in the same category and context, each with word, translation, partOfSpeech, definition).`;
 
   try {
     let rawResultText = "";

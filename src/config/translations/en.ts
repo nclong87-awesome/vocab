@@ -247,7 +247,7 @@ export const enTranslations: LanguageTranslations = {
     fc_definition_header: "Definition ({targetLanguage}):",
     fc_context_examples: "Contextual Example Sentences ({category}):",
     fc_nuance_tip: "Nuance & Usage Tip:",
-    fc_suggested_vocab: "Suggested Vocabulary from Examples:",
+    fc_suggested_vocab: "Suggested words:",
     fc_listen_example: "Listen to example sentence",
     fc_listen_word: "Listen to word",
     fc_speak_word: "Speak Word",

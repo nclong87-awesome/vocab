@@ -1,7 +1,7 @@
 import React from "react";
 import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers } from "lucide-react";
 import { LLMProvider } from "../../types";
-import PROVIDER_OPTIONS, { RELIABLE_MODELS } from "../../config/llmProviders";
+import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
   isModelLocked
 } from "../../utils/autoModeManager";

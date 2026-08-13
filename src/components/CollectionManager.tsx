@@ -88,7 +88,7 @@ function CollectionManager({
         word: word.word,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse
+        cfg: configToUse
       });
 
       if (onUpdateWords) {

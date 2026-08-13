@@ -1860,8 +1860,7 @@ Output MUST be strictly valid JSON matching this schema:
   "extraExampleSentences": [
     {
       "sentence": "string in ${targetLanguage}",
-      "translation": "string in ${nativeLanguage}",
-      "contextCategoryNote": "string (brief note explaining relevance to context/category)"
+      "translation": "string in ${nativeLanguage}"
     }
   ],
   "usageNotes": "string",
@@ -1876,7 +1875,7 @@ Output MUST be strictly valid JSON matching this schema:
   ]
 }
 
-NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary" MUST contain 3 to 5 items.`;
+NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary" MUST contain EXACTLY 1 to 2 items.`;
 
     const prompt = `Generate interactive flashcard content for the word:\n` +
       `Word: "${word.word}"\n` +
@@ -1888,9 +1887,9 @@ NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary"
       `Stored Example: "${word.example || "N/A"}"\n\n` +
       `REMINDERS:\n` +
       `- Return EXACTLY 1 extra example sentence.\n` +
-      `- Return 3 to 5 suggestedVocabulary entries that are COMMON words related to the category "${word.category || "General"}" and context "${word.context || "Conversational"}" (not rare or advanced vocabulary, and not the target word itself).`;
+      `- Return EXACTLY 1 to 2 suggestedVocabulary entries (choose the best candidate words) that are COMMON words related to the category "${word.category || "General"}" and context "${word.context || "Conversational"}" (not rare or advanced vocabulary, and not the target word itself).`;
 
-    const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array with EXACTLY 1 item: sentence, translation, contextCategoryNote), usageNotes, imageKeyword, and suggestedVocabulary (3 to 5 common related words in the same category and context, each with word, translation, partOfSpeech, definition).`;
+    const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array with EXACTLY 1 item: sentence, translation), usageNotes, imageKeyword, and suggestedVocabulary (1 to 2 common related words in the same category and context, each with word, translation, partOfSpeech, definition).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const result = cleanAndParseJson(text);

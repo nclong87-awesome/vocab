@@ -24,8 +24,22 @@ export function getImageSearchTerm(word: Word): string {
 
 // Helper function to generate relevant visual concept keywords
 export function getImageKeyword(word: Word | string): string {
-  if (typeof word === 'string') return word;
-  return word.category ? `${word.word}, ${word.category}` : word.word;
+  if (typeof word === 'string') {
+    // If it's a string, clean it up if it has a comma (e.g. "apple, fruit" -> "apple")
+    if (word.includes(",")) {
+      return word.split(",")[0].trim();
+    }
+    return word;
+  }
+  if (word.imageKeyword) {
+    return word.imageKeyword;
+  }
+  // Fallback: use word.word, clean up any trailing context or commas
+  const term = word.word;
+  if (term.includes(",")) {
+    return term.split(",")[0].trim();
+  }
+  return term;
 }
 
 // Helper function to fetch image URL from Cloudflare Worker endpoint using keyword query

@@ -247,7 +247,7 @@ export const viTranslations: LanguageTranslations = {
     fc_definition_header: "Định nghĩa ({targetLanguage}):",
     fc_context_examples: "Ví dụ trong ngữ cảnh ({category}):",
     fc_nuance_tip: "Mẹo sử dụng & sắc thái từ:",
-    fc_suggested_vocab: "Từ vựng đề xuất từ ví dụ:",
+    fc_suggested_vocab: "Từ vựng đề xuất:",
     fc_listen_example: "Nghe câu ví dụ",
     fc_listen_word: "Nghe phát âm từ",
     fc_speak_word: "Phát Âm Từ",

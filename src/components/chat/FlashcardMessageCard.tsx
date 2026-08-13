@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import { Volume2, Sparkles, Lightbulb, Clock, TrendingUp, CheckCircle, RotateCcw } from "lucide-react";
+import { Volume2, Sparkles, Lightbulb, Clock } from "lucide-react";
 import { FlashcardData, TTSConfig, LLMConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
-import { recordStrengthHistory } from "../../utils/strengthHistoryHelpers";
-import { saveAllWordsToDB } from "../../db/indexedDB";
 import QuizImage from "../quiz/QuizImage";
 import { t } from "../../config/i18n";
 
@@ -31,49 +29,13 @@ function FlashcardMessageCard({
   llmConfig,
   provider,
   model,
-  responseTimeMs,
-  words,
-  onUpdateWords,
-  showToast
+  responseTimeMs
 }: FlashcardMessageCardProps) {
   const [speakingText, setSpeakingText] = useState<string | null>(null);
 
   if (!data) return null;
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
-
-  const targetWord = words?.find(
-    (w) => (data.wordId && w.id === data.wordId) || w.word.trim().toLowerCase() === data.word.trim().toLowerCase()
-  );
-
-  const currentStrength = targetWord ? (targetWord.strength ?? 0) : (data.newStrength ?? 10);
-  const prevStrength = data.previousStrength ?? Math.max(0, currentStrength - 10);
-  const strengthGained = data.strengthGained ?? Math.max(0, currentStrength - prevStrength);
-
-  const handlePracticeRecall = (delta: number) => {
-    if (!targetWord || !onUpdateWords) return;
-
-    const oldStrength = targetWord.strength ?? 0;
-    const newStrength = Math.max(0, Math.min(100, oldStrength + delta));
-    const actualDelta = newStrength - oldStrength;
-    const note = actualDelta >= 0 
-      ? `Flashcard Practice (+${actualDelta}%)`
-      : `Flashcard Practice (${actualDelta}%)`;
-
-    const updatedWord = recordStrengthHistory(targetWord, newStrength, 'flashcard_review', note);
-    const updatedWords = (words || []).map((w) => (w.id === targetWord.id ? updatedWord : w));
-
-    onUpdateWords(updatedWords);
-    saveAllWordsToDB(updatedWords).catch((e) => console.error("Error saving updated strength:", e));
-
-    if (showToast) {
-      showToast(t("fc_strength_updated", currentAppLang, {
-        word: targetWord.word,
-        strength: String(newStrength),
-        delta: `${actualDelta >= 0 ? '+' : ''}${actualDelta}`
-      }));
-    }
-  };
 
   const handleSpeak = (textToSpeak: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -148,59 +110,7 @@ function FlashcardMessageCard({
           </button>
         </div>
 
-        {/* Flashcard Strength Gain & Memory Gauge Banner */}
-        <div className="bg-stone-900 text-white p-3.5 rounded-xl border border-stone-800 shadow-xs space-y-2.5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-emerald-400 text-stone-950 flex items-center justify-center font-black text-xs shrink-0 shadow-2xs">
-                <TrendingUp className="w-4.5 h-4.5 text-stone-950" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-300">
-                    {t("flashcards_memory_strength", currentAppLang)}
-                  </span>
-                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold font-mono px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span>+{strengthGained > 0 ? strengthGained : 10}% {t("fc_gained", currentAppLang)}</span>
-                  </span>
-                </div>
-                <p className="text-xs text-stone-300 mt-0.5">
-                  {t("fc_current_strength", currentAppLang)} <span className="font-mono font-bold text-emerald-400">{Math.round(currentStrength)}%</span>
-                </p>
-              </div>
-            </div>
 
-            {/* Strength Gauge Bar */}
-            <div className="w-full sm:w-36 bg-stone-800 rounded-full h-2 overflow-hidden border border-stone-700/60">
-              <div
-                className="bg-emerald-400 h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.max(0, Math.min(100, currentStrength))}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Interactive Recall Practice Rating Buttons */}
-          {targetWord && onUpdateWords && (
-            <div className="pt-2 border-t border-stone-800/80 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handlePracticeRecall(10)}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                {t("fc_got_it_btn", currentAppLang)}
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePracticeRecall(-10)}
-                className="flex-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold py-1.5 px-3 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                {t("fc_needs_practice_btn", currentAppLang)}
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* Translation & Target Language Definition */}
         <div className="space-y-2 bg-stone-50/80 p-3.5 rounded-xl border border-stone-100">
@@ -271,12 +181,6 @@ function FlashcardMessageCard({
                       <Volume2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-
-                  {item.contextCategoryNote && (
-                    <span className="inline-block bg-amber-50 text-amber-900 border border-amber-200/70 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                      📌 {item.contextCategoryNote}
-                    </span>
-                  )}
 
                   <p className="text-xs text-stone-600 font-medium italic">
                     "{item.translation}"

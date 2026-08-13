@@ -395,7 +395,7 @@ export function useChat({
         hint: hint,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse,
+        cfg: configToUse,
       });
 
       const validSenses = (data.senses || []).filter((s: any) => s && (s.definition || s.translation));
@@ -1184,7 +1184,7 @@ export function useChat({
         targetLanguage,
         nativeLanguage,
         count,
-        llmConfig: configToUse,
+        cfg: configToUse,
       });
 
       const rawList = extractWordsFromPayload(res);
