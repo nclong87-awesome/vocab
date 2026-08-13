@@ -310,50 +310,6 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     }
   };
 
-  // Manual Option A: Sync Local to Cloud Only
-  const handleSyncLocalToCloud = async () => {
-    const token = localStorage.getItem("github_gist_token") || "";
-    const gistId = localStorage.getItem("github_gist_id") || "";
-
-    console.log("[Sync UI] [handleSyncLocalToCloud] Triggered local to cloud override.", {
-      hasGistToken: Boolean(token),
-      gistId
-    });
-
-    try {
-      isSyncingRef.current = true;
-      setIsSyncing(true);
-      showToast("info", "Uploading local database to cloud...");
-
-      const localData = await exportIndexedDBDatabase();
-      const jsonString = JSON.stringify(sanitizeDataForCloudSync(localData));
-
-      console.log("[Sync UI] [handleSyncLocalToCloud] Dispatching syncToGist with local database...");
-      const newGistId = await syncToGist(token, jsonString, gistId);
-      console.log("[Sync UI] [handleSyncLocalToCloud] syncToGist promise resolved with Gist ID:", newGistId);
-
-      if (!gistId && newGistId) {
-        localStorage.setItem("github_gist_id", newGistId);
-      }
-
-      // Update UI state immediately upon successful promise resolution
-      console.log("[Sync UI] [handleSyncLocalToCloud] Updating UI state immediately.");
-      setSyncStatus("in-sync");
-      setPendingCount(0);
-      localStorage.setItem("last_gist_sync_check", String(Date.now()));
-      setShowConfirmModal(false);
-      showToast("success", "Cloud backup overwritten with local database!");
-    } catch (error: any) {
-      console.error("[Sync UI] [handleSyncLocalToCloud] Error during local to cloud upload:", error);
-      showToast("error", `Upload failed: ${error.message || "Error syncing to Gist"}`);
-    } finally {
-      setIsSyncing(false);
-      setTimeout(() => {
-        isSyncingRef.current = false;
-      }, 1000);
-    }
-  };
-
   // Manual Option B: Overwrite Local from Cloud Only
   const handleOverwriteLocalFromCloud = async () => {
     if (!comparisonData?.remoteData) return;
@@ -498,7 +454,6 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         mergeResult={mergeResult}
         isSyncing={isSyncing}
         onConfirmMerge={handleConfirmMerge}
-        onSyncLocalToCloud={handleSyncLocalToCloud}
         onOverwriteLocalFromCloud={handleOverwriteLocalFromCloud}
         onCancel={() => setShowConfirmModal(false)}
       />

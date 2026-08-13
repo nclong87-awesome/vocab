@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { 
   Cloud, 
-  Upload, 
   Download, 
   X, 
   HardDrive, 
@@ -11,8 +9,6 @@ import {
   Sparkles,
   Plus,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
   Trash2
 } from "lucide-react";
@@ -25,7 +21,6 @@ interface CloudSyncConfirmModalProps {
   mergeResult: MergeResult | null;
   isSyncing: boolean;
   onConfirmMerge: () => void;
-  onSyncLocalToCloud: () => void;
   onOverwriteLocalFromCloud: () => void;
   onCancel: () => void;
 }
@@ -37,12 +32,9 @@ export default function CloudSyncConfirmModal({
   mergeResult,
   isSyncing,
   onConfirmMerge,
-  onSyncLocalToCloud,
   onOverwriteLocalFromCloud,
   onCancel
 }: CloudSyncConfirmModalProps) {
-  const [showOverrideOptions, setShowOverrideOptions] = useState(false);
-
   if (!isOpen || !localData || !remoteData) return null;
 
   const localWordsCount = localData.stores?.words?.length || 0;
@@ -321,46 +313,21 @@ export default function CloudSyncConfirmModal({
             </p>
           </button>
 
-          {/* Collapsible Direct Overwrite Choices */}
-          <div className="pt-1 border-t border-stone-200">
+          {/* Manual Overwrite Options */}
+          <div className="pt-2 border-t border-stone-200">
             <button
               type="button"
-              onClick={() => setShowOverrideOptions(prev => !prev)}
-              className="text-xs font-bold text-stone-600 hover:text-stone-900 flex items-center gap-1 py-1 cursor-pointer"
+              onClick={onOverwriteLocalFromCloud}
+              disabled={isSyncing}
+              className="w-full p-2.5 sm:p-3 bg-stone-50 hover:bg-stone-100 text-stone-900 border border-stone-300 text-xs font-semibold text-left transition-colors cursor-pointer flex items-center gap-2.5"
+              id="download-cloud-only-btn"
             >
-              <span>Manual Direct Overwrite Options</span>
-              {showOverrideOptions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-
-            {showOverrideOptions && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-stone-100 animate-in fade-in">
-                <button
-                  type="button"
-                  onClick={onSyncLocalToCloud}
-                  disabled={isSyncing}
-                  className="p-2.5 sm:p-3 bg-stone-100 hover:bg-stone-200 text-stone-900 border border-stone-300 text-xs font-semibold text-left transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <Upload className="w-4 h-4 text-stone-700 shrink-0" />
-                  <div>
-                    <div className="font-bold">Push Local Only</div>
-                    <div className="text-[10px] text-stone-500 font-normal">Overwrite Cloud Backup</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onOverwriteLocalFromCloud}
-                  disabled={isSyncing}
-                  className="p-2.5 sm:p-3 bg-stone-100 hover:bg-stone-200 text-stone-900 border border-stone-300 text-xs font-semibold text-left transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4 text-stone-700 shrink-0" />
-                  <div>
-                    <div className="font-bold">Download Cloud Only</div>
-                    <div className="text-[10px] text-stone-500 font-normal">Overwrite Local Device</div>
-                  </div>
-                </button>
+              <Download className="w-4 h-4 text-stone-700 shrink-0" />
+              <div>
+                <div className="font-bold text-stone-950">Download Cloud Only</div>
+                <div className="text-[10px] text-stone-500 font-normal">Overwrite local device data directly with the latest cloud backup</div>
               </div>
-            )}
+            </button>
           </div>
         </div>
 
