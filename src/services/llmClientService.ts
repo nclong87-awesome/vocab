@@ -3,7 +3,7 @@ import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord } fro
 import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import { getDaysSinceLastReview } from "../utils/spacedRepetition";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
-import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
   getAutoModelCandidates, 
@@ -14,6 +14,7 @@ import {
 } from "../utils/autoModeManager";
 
 import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "../utils/jsonSanitizer";
+import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
 export { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload };
 
 // Sanitize model names for provider
@@ -74,6 +75,21 @@ export class LLMConnectionError extends Error {
     this.isRetryable = parsed.isRetryable;
     this.provider = parsed.provider;
   }
+}
+
+export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined {
+  let overrideConfig: LLMConfig | undefined = undefined;
+  const match = getRotatedDefaultModel(RELIABLE_MODELS);
+  if (match) {
+    overrideConfig = {
+      provider: match.provider,
+      model: match.model,
+      apiKey: llmConfig?.apiKey || "",
+      baseUrl: llmConfig?.baseUrl || "",
+      isLoggedIn: true
+    };
+  }
+  return overrideConfig || llmConfig;
 }
 
 /**
@@ -980,9 +996,10 @@ export async function autofillWordService(params: {
   hint?: string;
   targetLanguage?: string;
   nativeLanguage?: string;
-  llmConfig?: LLMConfig;
+  cfg?: LLMConfig;
 }): Promise<any> {
-  const { word, hint, targetLanguage, nativeLanguage, llmConfig } = params;
+  const { word, hint, targetLanguage, nativeLanguage, cfg } = params;
+  const llmConfig = getOverrideConfig(cfg);
 
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
@@ -1099,9 +1116,10 @@ export async function checkWordDefinitionsService(params: {
   hint?: string;
   targetLanguage?: string;
   nativeLanguage?: string;
-  llmConfig?: LLMConfig;
+  cfg?: LLMConfig;
 }): Promise<any> {
-  const { word, hint, targetLanguage, nativeLanguage, llmConfig } = params;
+  const { word, hint, targetLanguage, nativeLanguage, cfg } = params;
+  const llmConfig = getOverrideConfig(cfg);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
 
@@ -1271,9 +1289,10 @@ export async function generateRandomWordsService(params: {
   targetLanguage?: string;
   nativeLanguage?: string;
   count?: number;
-  llmConfig?: LLMConfig;
+  cfg?: LLMConfig;
 }): Promise<{ words: any[]; provider?: string; model?: string; responseTimeMs?: number }> {
-  const { topic, targetLanguage, nativeLanguage, count = 5, llmConfig } = params;
+  const { topic, targetLanguage, nativeLanguage, count = 5, cfg } = params;
+  const llmConfig = getOverrideConfig(cfg);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
   const startTime = performance.now();
@@ -1664,7 +1683,8 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
 }
 
 export async function analyzePerformanceService(params: PerformanceAnalysisRequest): Promise<PerformanceAnalysisResult> {
-  const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig } = params;
+  const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig: cfg } = params;
+  const llmConfig = getOverrideConfig(cfg);
   const startTime = performance.now();
 
   const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";

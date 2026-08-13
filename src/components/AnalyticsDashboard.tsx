@@ -20,8 +20,6 @@ import { t } from "../config/i18n";
 
 import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
-import { getRotatedDefaultModel } from "./chat/quickActionsConfig";
-import { RELIABLE_MODELS } from "../config/llmProviders";
 
 interface AnalyticsDashboardProps {
   words: Word[];
@@ -91,18 +89,7 @@ export default function AnalyticsDashboard({
 
   // Run AI Analysis
   const handleRunAiAnalysis = async () => {
-    let overrideConfig: LLMConfig | undefined = undefined;
-    const match = getRotatedDefaultModel(RELIABLE_MODELS);
-    if (match) {
-      overrideConfig = {
-        provider: match.provider,
-        model: match.model,
-        apiKey: llmConfig?.apiKey || "",
-        baseUrl: llmConfig?.baseUrl || "",
-        isLoggedIn: true
-      };
-    }
-    const configToUse = overrideConfig || llmConfig;
+    const configToUse = llmConfig;
     setIsAnalyzing(true);
     setAnalysisError(null);
     try {

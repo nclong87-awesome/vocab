@@ -17,7 +17,6 @@ export interface QuickActionItem {
   description: string;
   className: string;
   defaultIndex: number;
-  defaultModels: string[];
   getAction: (params: {
     targetLanguage: string;
     nativeLanguage: string;
@@ -125,7 +124,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_add_word_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 0,
-      defaultModels: RELIABLE_MODELS,
       getAction: ({ onAddWord, onClearHistory }) => {
         onClearHistory();
         onAddWord();
@@ -141,7 +139,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_generate_words_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 1,
-      defaultModels: RELIABLE_MODELS,
       getAction: ({ onGenerateByTopic, onClearHistory }) => {
         onClearHistory();
         onGenerateByTopic();
@@ -157,7 +154,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_flash_card_desc", appLanguage),
       className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
-      defaultModels: [],
       getAction: ({ onViewFlashcard, onClearHistory }) => {
         onClearHistory();
         onViewFlashcard?.();
@@ -173,7 +169,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_start_quiz_desc", appLanguage),
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 3,
-      defaultModels: [],
       getAction: ({ onStartQuiz, onClearHistory }) => {
         onClearHistory();
         onStartQuiz();
@@ -189,7 +184,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_fix_grammar_desc", appLanguage),
       className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
-      defaultModels: [],
       getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();
         onFixGrammar();
@@ -205,7 +199,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_suggest_reply_desc", appLanguage),
       className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 5,
-      defaultModels: [],
       getAction: ({ onSuggestCasualReplyPrompt, onClearHistory }) => {
         onClearHistory();
         onSuggestCasualReplyPrompt?.();
@@ -239,7 +232,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_explain_grammar_desc", appLanguage),
       className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 7,
-      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -257,7 +249,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_common_phrases_desc", appLanguage),
       className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 8,
-      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -275,7 +266,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_translate_contrast_desc", appLanguage),
       className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 9,
-      defaultModels: RELIABLE_MODELS,
       getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
         onClearHistory();
         onSendMessage(
@@ -293,7 +283,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_new_chat_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 10,
-      defaultModels: [],
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];
