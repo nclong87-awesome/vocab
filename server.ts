@@ -1056,6 +1056,9 @@ The user's native language is "${userNative}".
 
 CRITICAL INSTRUCTIONS:
 - Every word generated SHOULD BE unique and practical for a language learner.
+- "word": The target vocabulary word or expression STRICTLY in the target language (${userTarget}), e.g. "hello".
+- "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide for the target language word, e.g. "/həˈloʊ/". Must NOT be empty.
+- "partOfSpeech": The part of speech of the word (e.g. noun, verb, adjective, adverb, idiom, interjection, or expression).
 - "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "translation": Direct translation into the user's native language (${userNative}).
 - "example": Realistic example sentence in target language (${userTarget}).

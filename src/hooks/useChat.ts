@@ -1286,6 +1286,9 @@ export function useChat({
             content: t("chat_generate_topic_words_success", currentAppLang, { topic, count: String(generatedWords.length), wordsListMarkdown }),
             timestamp: new Date().toISOString(),
             suggestedActions: suggestedActions,
+            provider: res.provider,
+            model: res.model,
+            responseTimeMs: res.responseTimeMs,
           },
         ];
       });

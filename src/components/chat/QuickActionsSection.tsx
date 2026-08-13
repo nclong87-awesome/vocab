@@ -111,7 +111,7 @@ function QuickActionsSection({
           p.setSelectedImage(null);
         }
 
-        if (p.llmConfig?.provider !== "auto" && item.defaultModels && item.defaultModels.length > 0) {
+        if (p.llmConfig?.provider === "auto" && item.defaultModels && item.defaultModels.length > 0) {
           const match = getRotatedDefaultModel(item.defaultModels);
           if (match) {
             if (p.onSwitchProvider) {
