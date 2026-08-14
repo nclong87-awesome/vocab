@@ -76,6 +76,7 @@ export interface Word {
   imageKeyword?: string;
   category?: string;
   context?: string;
+  suggestedWords?: (string | { word: string; translation?: string; hint?: string })[];
   strengthHistory?: StrengthHistoryEntry[];
 }
 
@@ -90,6 +91,7 @@ export interface WordSense {
   imageKeyword: string;
   category?: string;
   context?: string;
+  suggestedWords?: (string | { word: string; translation?: string; hint?: string })[];
 }
 
 

@@ -179,6 +179,8 @@ export const deTranslations: LanguageTranslations = {
     chat_error_generate_vocab_from_image: "⚠️ **Vokabelgenerierung aus Bild fehlgeschlagen.**\n\n*Fehler*: {error}",
     action_retry_analyze_image: "🔄 Foto erneut analysieren",
     chat_batch_all_skipped: "ℹ️ Alle vorgeschlagenen Wörter ({words}) sind bereits in Ihrer Vokabelsammlung gespeichert!",
+    chat_single_word_added_success: "🎉 **„{word}“ wurde erfolgreich zu Ihrer Sammlung hinzugefügt!**\n\n- **Übersetzung**: „{translation}“\n- **Definition**: *{definition}*{collocatedSection}\n\n👇 **Klicken Sie unten auf ein vorgeschlagenes Wort, um es hinzuzufügen**, oder geben Sie ein beliebiges neues Wort im Chat ein!",
+    label_commonly_used_with: "Häufig verwendet mit",
     chat_batch_added_success: "🎉 **Erfolgreich {count} neue(s) Wort/Wörter zu Ihrer Sammlung hinzugefügt!**\n\n- **Hinzugefügt**: {addedList}{skippedSection}\n\n👇 **Geben Sie unten ein weiteres Wort ein**, um Ihre Sammlung weiter zu füllen!",
     chat_batch_added_skipped_section: "\n- *Übersprungene Duplikate*: {words}",
     chat_word_already_in_collection: "ℹ️ **\"{word}\" ist bereits in Ihrer Vokabelsammlung vorhanden!**\n\n👇 **Geben Sie unten ein weiteres Wort ein**, um es Ihrer Sammlung hinzuzufügen!",

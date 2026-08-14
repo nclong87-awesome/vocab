@@ -1041,7 +1041,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
 - "example": A realistic, high-quality example sentence in the target language (${userTarget}), e.g. "Hello, how are you?".
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Travel & Hospitality", "Business & Work", "Technology", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
-- "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.`;
+- "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.
+- "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]).`;
 
   const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
@@ -1053,7 +1054,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   "example": "string (example in ${userTarget})",
   "exampleTranslation": "string (example translation in ${userNative})",
   "category": "string (topic/category string)",
-  "context": "string (specific real-world usage context description)"
+  "context": "string (specific real-world usage context description)",
+  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
 }`;
 
   const startTime = performance.now();
@@ -1182,6 +1184,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
+     "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]),
      "imageKeyword": string (MUST be in English, 1-3 words, representing a highly concrete, visual, physical object or action that symbolizes the word for Unsplash image search. Avoid abstract concepts. Examples: for "ephemeral" use "soap bubble", for "serendipity" use "four leaf clover", for "understand" use "light bulb", for "gregarious" use "friends cafe"),
      "category": string,
      "context": string`;
@@ -1191,6 +1194,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
   "hasMultipleSenses": boolean,
+  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"],
   "senses": [
     {
       "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
@@ -1202,7 +1206,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       "exampleTranslation": "string (sentence translation in ${userNative})",
       "imageKeyword": "string (MUST be in English, highly focused 1-3 word concrete visual concept/object that symbolizes the word for Unsplash image search)",
       "category": "string",
-      "context": "string"
+      "context": "string",
+      "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
     }
   ]
 }`;

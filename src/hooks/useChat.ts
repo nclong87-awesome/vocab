@@ -69,6 +69,7 @@ export function useChat({
   const [pendingWordSenses, setPendingWordSenses] = useState<{
     word: string;
     senses: WordSense[];
+    suggestedWords?: (string | { word: string; translation?: string; hint?: string })[];
   } | null>(null);
 
   // In-Chat interactive conversational quiz state
@@ -415,6 +416,7 @@ export function useChat({
         setPendingWordSenses({
           word: wordText,
           senses: validSenses,
+          suggestedWords: data.suggestedWords || undefined,
         });
 
         const actions = validSenses.map((sense: any, idx: number) => {
@@ -533,6 +535,7 @@ export function useChat({
           exampleTranslation: exampleTranslationVal,
           category: categoryVal,
           context: contextVal,
+          suggestedWords: sense?.suggestedWords || data.suggestedWords || undefined,
           learned: false,
           starred: false,
           createdAt: new Date().toISOString(),
@@ -984,6 +987,7 @@ export function useChat({
         exampleTranslation: c.exampleTranslation || undefined,
         category: c.category || "General",
         context: c.context || c.reason || c.definition,
+        suggestedWords: c.suggestedWords || undefined,
         learned: false,
         starred: false,
         createdAt: new Date().toISOString(),
@@ -1018,6 +1022,50 @@ export function useChat({
     if (newWordsToAdd.length === 1) {
       const addedWord = newWordsToAdd[0];
       onShowToast?.(t("toast_added_word", currentAppLang, { word: addedWord.word }));
+
+      const rawSuggested = Array.isArray(addedWord.suggestedWords) ? addedWord.suggestedWords : [];
+      const collocatedStrings: string[] = [];
+      const suggestedWordActions: any[] = [];
+
+      rawSuggested.forEach((sw) => {
+        const swWord = typeof sw === "string" ? sw.trim() : sw?.word?.trim();
+        if (!swWord) return;
+        const existsAlready = updatedWords.some((w) => w.word.trim().toLowerCase() === swWord.toLowerCase());
+        if (!existsAlready) {
+          collocatedStrings.push(swWord);
+          suggestedWordActions.push({
+            label: `+ ${swWord}`,
+            action: "add_word",
+            payload: {
+              word: swWord,
+              hint: typeof sw === "object" && sw.hint ? sw.hint : `Paired with ${addedWord.word}`,
+            },
+          });
+        }
+      });
+
+      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, addedWord.word, currentAppLang);
+      const combinedActions = [...suggestedWordActions, ...remainingActions];
+
+      const collocatedSection = collocatedStrings.length > 0
+        ? `\n- **${t("label_commonly_used_with", currentAppLang)}**: ${collocatedStrings.map((s) => `*${s}*`).join(", ")}`
+        : "";
+
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-single-success-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_single_word_added_success", currentAppLang, {
+            word: addedWord.word,
+            translation: addedWord.translation || "",
+            definition: addedWord.definition || "",
+            collocatedSection: collocatedSection,
+          }),
+          timestamp: new Date().toISOString(),
+          suggestedActions: combinedActions,
+        },
+      ]);
     } else {
       onShowToast?.(t("toast_added_multiple_words", currentAppLang, { count: String(newWordsToAdd.length) }));
       const remainingActions = getRemainingWordActions(chatMessages, updatedWords, undefined, currentAppLang);
@@ -1080,6 +1128,7 @@ export function useChat({
       exampleTranslation: sense.exampleTranslation || undefined,
       category: sense.category || "General",
       context: sense.context || sense.definition,
+      suggestedWords: sense.suggestedWords || pendingWordSenses.suggestedWords || undefined,
       learned: false,
       starred: false,
       createdAt: new Date().toISOString(),

@@ -342,7 +342,9 @@ export type TranslationKey =
   | "settings_test_voice_model_btn"
   | "settings_test_voice_playing"
   | "settings_test_voice_click_btn"
-  | "settings_test_voice_sample";
+  | "settings_test_voice_sample"
+  | "chat_single_word_added_success"
+  | "label_commonly_used_with";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

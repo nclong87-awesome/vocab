@@ -179,6 +179,8 @@ export const zhTranslations: LanguageTranslations = {
     chat_error_generate_vocab_from_image: "⚠️ **无法从图片中提取词汇。**\n\n*错误原因*: {error}",
     action_retry_analyze_image: "🔄 重新分析照片",
     chat_batch_all_skipped: "ℹ️ 所有候选词汇 ({words}) 均已保存至您的词汇本中！",
+    chat_single_word_added_success: "🎉 **已成功将“{word}”添加至你的词汇本！**\n\n- **翻译**: “{translation}”\n- **定义**: *{definition}*{collocatedSection}\n\n👇 **点击下方推荐词汇即可添加**，或在聊天框中输入任何新单词！",
+    label_commonly_used_with: "常搭配使用的词汇",
     chat_batch_added_success: "🎉 **已成功将 {count} 个新词汇添加至你的词汇本！**\n\n- **已添加**: {addedList}{skippedSection}\n\n👇 **在下方输入另一个单词** 以继续添加词汇！",
     chat_batch_added_skipped_section: "\n- *已跳过重复词汇*: {words}",
     chat_word_already_in_collection: "ℹ️ **“{word}”已在你的词汇本中！**\n\n👇 **在下方输入另一个单词** 以添加新词汇！",

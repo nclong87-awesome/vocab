@@ -179,6 +179,8 @@ export const frTranslations: LanguageTranslations = {
     chat_error_generate_vocab_from_image: "⚠️ **Échec de la génération du vocabulaire à partir de l'image.**\n\n*Erreur* : {error}",
     action_retry_analyze_image: "🔄 Réanalyser la photo",
     chat_batch_all_skipped: "ℹ️ Tous les mots suggérés ({words}) sont déjà enregistrés dans votre collection de vocabulaire !",
+    chat_single_word_added_success: "🎉 **\"{word}\" a été ajouté avec succès à votre collection !**\n\n- **Traduction** : \"{translation}\"\n- **Définition** : *{definition}*{collocatedSection}\n\n👇 **Cliquez sur un mot suggéré ci-dessous pour l'ajouter**, ou saisissez un nouveau mot dans le chat !",
+    label_commonly_used_with: "Apparaît fréquemment avec",
     chat_batch_added_success: "🎉 **{count} nouveau(x) mot(s) ajouté(s) avec succès à votre collection !**\n\n- **Ajouté(s)** : {addedList}{skippedSection}\n\n👇 **Saisissez un autre mot ci-dessous** pour continuer à enrichir votre collection !",
     chat_batch_added_skipped_section: "\n- *Doublons ignorés* : {words}",
     chat_word_already_in_collection: "ℹ️ **\"{word}\" est déjà présent dans votre collection de vocabulaire !**\n\n👇 **Saisissez un autre mot ci-dessous** pour l'ajouter à votre collection !",

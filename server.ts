@@ -916,7 +916,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 - "example": A realistic, high-quality example sentence in the target language (${userTarget}), e.g. "Hello, how are you?".
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Technology & Programming", "Travel & Hospitality", "Business & Work", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
-- "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.`;
+- "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.
+- "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]).`;
 
     const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -928,7 +929,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
   "example": "string (example in ${userTarget})",
   "exampleTranslation": "string (example translation in ${userNative})",
   "category": "string (topic/category string)",
-  "context": "string (specific real-world usage context description)"
+  "context": "string (specific real-world usage context description)",
+  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
@@ -1008,13 +1010,15 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "exampleTranslation": string (written in "${userNative}"),
      "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
      "category": string,
-     "context": string`;
+     "context": string,
+     "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]).`;
 
     const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "word": "string (the primary target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
   "hasMultipleSenses": boolean,
+  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"],
   "senses": [
     {
       "word": "string (the target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
@@ -1026,7 +1030,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       "exampleTranslation": "string (sentence translation in ${userNative})",
       "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
       "category": "string",
-      "context": "string"
+      "context": "string",
+      "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
     }
   ]
 }`;

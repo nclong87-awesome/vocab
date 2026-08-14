@@ -179,6 +179,8 @@ export const jaTranslations: LanguageTranslations = {
     chat_error_generate_vocab_from_image: "⚠️ **画像から単語を生成できません。**\n\n*エラー*: {error}",
     action_retry_analyze_image: "🔄 写真の単語解析を再試行",
     chat_batch_all_skipped: "ℹ️ 候補の単語 ({words}) はすべてすでに単語帳に保存されています！",
+    chat_single_word_added_success: "🎉 **単語帳に「{word}」を追加しました！**\n\n- **翻訳**: 「{translation}」\n- **定義**: *{definition}*{collocatedSection}\n\n👇 **下の提案された単語をクリックして追加**するか、新しい単語を入力してください！",
+    label_commonly_used_with: "よく一緒に使われる語句",
     chat_batch_added_success: "🎉 **単語帳に {count} 個の新しい単語を追加しました！**\n\n- **追加済み**: {addedList}{skippedSection}\n\n👇 **他の単語を下のチャットに入力**して追加を続けましょう！",
     chat_batch_added_skipped_section: "\n- *スキップされた重複*: {words}",
     chat_word_already_in_collection: "ℹ️ **「{word}」はすでに単語帳に追加されています！**\n\n👇 **他の単語を下のチャットに入力**して追加してください！",

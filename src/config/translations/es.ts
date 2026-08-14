@@ -179,6 +179,8 @@ export const esTranslations: LanguageTranslations = {
     chat_error_generate_vocab_from_image: "⚠️ **No se ha podido generar vocabulario a partir de la imagen.**\n\n*Error*: {error}",
     action_retry_analyze_image: "🔄 Volver a intentar analizar la foto",
     chat_batch_all_skipped: "ℹ️ ¡Todas las palabras propuestas ({words}) ya están guardadas en tu colección de vocabulario!",
+    chat_single_word_added_success: "🎉 **¡Se ha añadido correctamente \"{word}\" a tu colección!**\n\n- **Traducción**: \"{translation}\"\n- **Definición**: *{definition}*{collocatedSection}\n\n👇 **Haz clic en una palabra sugerida abajo para añadirla**, o escribe una nueva palabra en el chat.",
+    label_commonly_used_with: "Aparece con frecuencia con",
     chat_batch_added_success: "🎉 **¡Se han añadido correctamente {count} nueva(s) palabra(s) a tu colección!**\n\n- **Añadido**: {addedList}{skippedSection}\n\n👇 **Escribe otra palabra abajo** para seguir alimentando tu colección.",
     chat_batch_added_skipped_section: "\n- *Duplicados omitidos*: {words}",
     chat_word_already_in_collection: "ℹ️ **¡\"{word}\" ya está en tu colección de vocabulario!**\n\n👇 **Escribe otra palabra abajo** para añadirla a tu colección.",
