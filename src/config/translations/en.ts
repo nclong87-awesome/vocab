@@ -258,7 +258,7 @@ export const enTranslations: LanguageTranslations = {
     fc_strength_updated: "Updated memory strength for \"{word}\": {strength}% ({delta}%)",
     toast_copied_fixed_sentence: "📋 Copied fixed sentence to clipboard!",
     toast_copied_selection: "📋 Copied selection to clipboard!",
-    toast_added_word: "🎉 Added \"{word}\" to collection!",
+    toast_added_word: "🎉 Successfully added \"{word}\" to your collection!",
     toast_added_multiple_words: "🎉 Added {count} vocabulary words to collection!",
     toast_retrying_photo_analysis: "🔄 Retrying photo vocabulary analysis...",
     toast_photo_upload_prompt: "📷 Please upload or select a photo to analyze",

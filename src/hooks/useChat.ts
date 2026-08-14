@@ -29,6 +29,7 @@ interface UseChatProps {
   appLanguage?: string;
   handleAiApiError: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
   handleFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
+  onShowToast?: (msg: string) => void;
 }
 
 export function useChat({
@@ -41,6 +42,7 @@ export function useChat({
   appLanguage,
   handleAiApiError,
   handleFinishQuiz,
+  onShowToast,
 }: UseChatProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage;
@@ -879,8 +881,12 @@ export function useChat({
         if (!isAlreadySaved) {
           actions.push({
             label: t("action_confirm_add", currentAppLang, { word: item.word, translation: item.translation }),
-            action: "add_word",
-            payload: { word: item.word, hint: item.definition },
+            action: "confirm_save_word",
+            payload: {
+              ...item,
+              category: item.category || "Photo Vocabulary",
+              context: item.context || item.definition || "",
+            },
           });
         }
       });
@@ -1011,25 +1017,9 @@ export function useChat({
 
     if (newWordsToAdd.length === 1) {
       const addedWord = newWordsToAdd[0];
-      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, addedWord.word, currentAppLang);
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: `sys-added-word-${Date.now()}`,
-          role: "assistant",
-          content: t("chat_word_added_success", currentAppLang, {
-            word: addedWord.word,
-            pronunciation: addedWord.pronunciation || "",
-            partOfSpeech: addedWord.partOfSpeech || "word",
-            translation: addedWord.translation,
-            definition: addedWord.definition,
-            exampleSection: (addedWord.example ? `\n- **${t("label_example", currentAppLang)}**: "${addedWord.example}"` : "") + (addedWord.exampleTranslation ? `\n- **${t("label_example_translation", currentAppLang)}**: "${addedWord.exampleTranslation}"` : "")
-          }),
-          timestamp: new Date().toISOString(),
-          suggestedActions: remainingActions,
-        },
-      ]);
+      onShowToast?.(t("toast_added_word", currentAppLang, { word: addedWord.word }));
     } else {
+      onShowToast?.(t("toast_added_multiple_words", currentAppLang, { count: String(newWordsToAdd.length) }));
       const remainingActions = getRemainingWordActions(chatMessages, updatedWords, undefined, currentAppLang);
       setChatMessages((prev) => [
         ...prev,

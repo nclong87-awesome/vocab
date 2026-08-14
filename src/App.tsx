@@ -83,6 +83,12 @@ export default function App() {
     handleFinishQuiz,
   } = useVocabulary();
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const showToast = useCallback((msgText: string) => {
+    setToastMessage(msgText);
+    setTimeout(() => setToastMessage(null), 3000);
+  }, []);
+
   const {
     chatMessages,
     setChatMessages,
@@ -110,6 +116,7 @@ export default function App() {
     appLanguage,
     handleAiApiError,
     handleFinishQuiz,
+    onShowToast: showToast,
   });
 
   // Global Interaction Listener to unlock audio context and handle user input
@@ -437,6 +444,8 @@ export default function App() {
                     onSuggestCasualReplyPrompt={handlePromptSuggestCasualReply}
                     onSuggestCasualReply={handleSuggestCasualReply}
                     conversationalState={conversationalState}
+                    toast={toastMessage}
+                    onToast={showToast}
                   />
                 )}
               </motion.div>

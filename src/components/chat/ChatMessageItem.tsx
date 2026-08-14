@@ -241,34 +241,54 @@ function ChatMessageItem({
       }
     }
 
-    return (rawActions || [])
+    const filtered = (rawActions || []).filter(act => {
+      if (!act || typeof act !== "object") return false;
+      if (act.action === "select_definition") return Boolean(act.payload?.definition);
+
+      // Filter out add_word or confirm_save_word if word is already in words collection
+      if (act.action === "add_word" || act.action === "confirm_save_word") {
+        const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim().toLowerCase();
+        if (actWord && words && Array.isArray(words) && words.some(w => w.word.trim().toLowerCase() === actWord)) {
+          return false;
+        }
+      }
+
+      // Filter out add_multiplewords if all individual words are already in the collection
+      if (act.action === "add_multiplewords" && act.payload && Array.isArray(act.payload.words)) {
+        const unsavedCount = act.payload.words.filter((w: any) => {
+          const wText = (w?.word || "").trim().toLowerCase();
+          return wText && words && Array.isArray(words) && !words.some(x => x.word.trim().toLowerCase() === wText);
+        }).length;
+        if (unsavedCount === 0) {
+          return false;
+        }
+      }
+
+      const lbl = act.label ? String(act.label).trim() : "";
+      const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
+      const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
+      return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
+    });
+
+    const hasOriginalWordConfirmAction = (rawActions || []).some(
+      a => a && (a.action === "confirm_save_word" || a.action === "add_word" || a.action === "select_definition")
+    );
+    const hasRemainingWordConfirmAction = filtered.some(
+      a => a && (a.action === "confirm_save_word" || a.action === "add_word" || a.action === "select_definition" || a.action === "add_multiplewords")
+    );
+
+    return filtered
       .filter(act => {
-        if (!act || typeof act !== "object") return false;
-        if (act.action === "select_definition") return Boolean(act.payload?.definition);
+        // If this message originally had word confirmation/addition actions and all of them have been resolved/saved,
+        // any accompanying cancel action (e.g. "✕ Cancel") should also be removed.
+        const isCancelAction =
+          (act.action === "send_message" && (act.payload?.message?.toLowerCase() === "cancel" || act.payload?.message?.toLowerCase() === "hủy")) ||
+          (typeof act.label === "string" && (act.label.toLowerCase().includes("cancel") || act.label.toLowerCase().includes("hủy")));
 
-        // Filter out add_word or confirm_save_word if word is already in words collection
-        if (act.action === "add_word" || act.action === "confirm_save_word") {
-          const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim().toLowerCase();
-          if (actWord && words && Array.isArray(words) && words.some(w => w.word.trim().toLowerCase() === actWord)) {
-            return false;
-          }
+        if (isCancelAction && hasOriginalWordConfirmAction && !hasRemainingWordConfirmAction) {
+          return false;
         }
-
-        // Filter out add_multiplewords if all individual words are already in the collection
-        if (act.action === "add_multiplewords" && act.payload && Array.isArray(act.payload.words)) {
-          const unsavedCount = act.payload.words.filter((w: any) => {
-            const wText = (w?.word || "").trim().toLowerCase();
-            return wText && words && Array.isArray(words) && !words.some(x => x.word.trim().toLowerCase() === wText);
-          }).length;
-          if (unsavedCount === 0) {
-            return false;
-          }
-        }
-
-        const lbl = act.label ? String(act.label).trim() : "";
-        const msgPayload = act.payload?.message ? String(act.payload.message).trim() : "";
-        const wordPayload = act.payload?.word || (act as any).word ? String(act.payload?.word || (act as any).word).trim() : "";
-        return lbl.length > 0 || msgPayload.length > 0 || wordPayload.length > 0;
+        return true;
       })
       .map(act => {
         const cleaned = { ...act };

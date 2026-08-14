@@ -33,6 +33,8 @@ interface ChatViewProps {
   words: Word[];
   onUpdateWords?: (updatedWords: Word[]) => void;
   conversationalState?: string;
+  toast?: string | null;
+  onToast?: (msg: string) => void;
 }
 
 function ChatView({
@@ -59,12 +61,15 @@ function ChatView({
   words,
   onUpdateWords,
   conversationalState = "none",
+  toast: externalToast,
+  onToast: onExternalToast,
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [internalToast, setInternalToast] = useState<string | null>(null);
+  const toast = externalToast !== undefined ? externalToast : internalToast;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const latestMessageRef = useRef<HTMLDivElement>(null);
@@ -81,9 +86,13 @@ function ChatView({
   }, []);
 
   const showToast = useCallback((msgText: string) => {
-    setToast(msgText);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+    if (onExternalToast) {
+      onExternalToast(msgText);
+    } else {
+      setInternalToast(msgText);
+      setTimeout(() => setInternalToast(null), 3000);
+    }
+  }, [onExternalToast]);
 
   // Helper to auto scroll to bottom
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {

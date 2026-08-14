@@ -258,7 +258,7 @@ export const viTranslations: LanguageTranslations = {
     fc_strength_updated: "Đã cập nhật độ ghi nhớ cho \"{word}\": {strength}% ({delta}%)",
     toast_copied_fixed_sentence: "📋 Đã sao chép câu đã sửa!",
     toast_copied_selection: "📋 Đã sao chép vào bộ nhớ tạm!",
-    toast_added_word: "🎉 Đã thêm \"{word}\" vào bộ từ vựng!",
+    toast_added_word: "🎉 Đã thêm thành công \"{word}\" vào bộ sưu tập!",
     toast_added_multiple_words: "🎉 Đã thêm {count} từ vựng vào bộ sưu tập!",
     toast_retrying_photo_analysis: "🔄 Đang phân tích lại từ vựng từ hình ảnh...",
     toast_photo_upload_prompt: "📷 Vui lòng tải lên hoặc chọn một bức ảnh để phân tích",

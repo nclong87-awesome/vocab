@@ -35,22 +35,22 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://api.groq.com/openai/v1",
     requiresKey: false
   },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    tagline: "Unified API gateway for 100+ AI models",
-    defaultModel: "poolside/laguna-xs-2.1:free",
-    models: [
-      "poolside/laguna-xs-2.1:free",
-      "nvidia/nemotron-3-super-120b-a12b:free",
-      "nvidia/nemotron-3-nano-30b-a3b:free",
-      "google/gemma-4-26b-a4b-it:free",
-      "openai/gpt-oss-20b:free"
-    ],
-    defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
-    directBaseUrl: "https://openrouter.ai/api/v1",
-    requiresKey: false
-  },
+  // {
+  //   id: "openrouter",
+  //   name: "OpenRouter",
+  //   tagline: "Unified API gateway for 100+ AI models",
+  //   defaultModel: "poolside/laguna-xs-2.1:free",
+  //   models: [
+  //     "poolside/laguna-xs-2.1:free",
+  //     "nvidia/nemotron-3-super-120b-a12b:free",
+  //     "nvidia/nemotron-3-nano-30b-a3b:free",
+  //     "google/gemma-4-26b-a4b-it:free",
+  //     "openai/gpt-oss-20b:free"
+  //   ],
+  //   defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
+  //   directBaseUrl: "https://openrouter.ai/api/v1",
+  //   requiresKey: false
+  // },
   {
     id: "gemini",
     name: "Google Gemini",
