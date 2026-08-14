@@ -67,9 +67,10 @@ export function useChat({
 
   // Conversational state for prompting word addition & grammar fixing
   const [conversationalState, setConversationalState] = useState<
-    "none" | "adding_word" | "generating_topic_subject" | "generating_topic_count" | "fixing_grammar" | "suggesting_reply"
+    "none" | "adding_word" | "confirming_add_word" | "generating_topic_subject" | "generating_topic_count" | "fixing_grammar" | "suggesting_reply"
   >("none");
   const [pendingTopicSubject, setPendingTopicSubject] = useState<string>("");
+  const [pendingConfirmWord, setPendingConfirmWord] = useState<Word | null>(null);
 
   // Pending word senses for multi-definition disambiguation
   const [pendingWordSenses, setPendingWordSenses] = useState<{
@@ -546,26 +547,30 @@ export function useChat({
           strength: 0,
         };
 
-        const updatedWords = [newWordObj, ...words];
+        setPendingConfirmWord(newWordObj);
+        setConversationalState("confirming_add_word");
 
-        setWords((prev) => {
-          const exists = prev.some((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
-          if (exists) return prev;
-          const updated = [newWordObj, ...prev];
-          saveAllWordsToDB(updated).catch((e) => console.error("IndexedDB add word save error:", e));
-          return updated;
-        });
-
-        const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWordStr, currentAppLang);
+        const confirmActions = [
+          {
+            label: t("action_confirm_add_word", currentAppLang, { word: targetWordStr, details: translationVal }),
+            action: "confirm_save_word",
+            payload: newWordObj,
+          },
+          {
+            label: t("action_cancel", currentAppLang),
+            action: "send_message",
+            payload: { message: "cancel" },
+          },
+        ];
 
         setChatMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== statusMsgId);
           return [
             ...filtered,
             {
-              id: `sys-added-word-${Date.now()}`,
+              id: `sys-confirm-word-${Date.now()}`,
               role: "assistant",
-              content: t("chat_word_added_success", currentAppLang, {
+              content: t("chat_confirm_word_preview_prompt", currentAppLang, {
                 word: targetWordStr,
                 pronunciation: pronunciationVal,
                 partOfSpeech: partOfSpeechVal,
@@ -574,14 +579,13 @@ export function useChat({
                 exampleSection: (exampleVal ? `\n- **${t("label_example", currentAppLang)}**: "${exampleVal}"` : "") + (exampleTranslationVal ? `\n- **${t("label_example_translation", currentAppLang)}**: "${exampleTranslationVal}"` : "")
               }),
               timestamp: new Date().toISOString(),
-              suggestedActions: remainingActions,
+              suggestedActions: confirmActions,
               provider: data.provider,
               model: data.model,
               responseTimeMs: data.responseTimeMs,
             },
           ];
         });
-        setConversationalState("adding_word");
       }
     } catch (err: any) {
       console.error(err);
@@ -632,6 +636,52 @@ export function useChat({
 
     if (activeQuiz) {
       handleQuizAnswer(text.trim());
+      return;
+    }
+
+    if (conversationalState === "confirming_add_word") {
+      const currentWord = pendingConfirmWord;
+      const lower = text.trim().toLowerCase();
+
+      const isPositive = [
+        "yes", "y", "confirm", "add", "ok", "okay", "sure", "save", "accept",
+        "đồng ý", "thêm", "chấp nhận", "có", "xác nhận", "cớ", "tiếp tục",
+        "si", "sí", "oui", "ja", "はい", "是", "好的", "네", "확인"
+      ].some((k) => lower === k || lower.startsWith(k + " ") || lower.endsWith(" " + k));
+
+      const isNegative = [
+        "no", "n", "cancel", "stop", "exit", "quit", "done", "skip",
+        "hủy", "không", "khong", "dừng", "thoát", "non", "nein", "いいえ", "不", "取消", "아니오"
+      ].some((k) => lower === k || lower.startsWith(k + " ") || lower.endsWith(" " + k));
+
+      if (isPositive && currentWord) {
+        setPendingConfirmWord(null);
+        setConversationalState("adding_word");
+        await handleAddMultipleWords([currentWord]);
+        return;
+      }
+
+      if (isNegative) {
+        setPendingConfirmWord(null);
+        setConversationalState("adding_word");
+        const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
+        const wordName = currentWord?.word || text.trim();
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: `sys-cancel-confirm-${Date.now()}`,
+            role: "assistant",
+            content: t("chat_cancelled_add_word", currentAppLang, { word: wordName }),
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
+
+      // If user typed a new word or natural phrase instead
+      setPendingConfirmWord(null);
+      setConversationalState("adding_word");
+      await handleConversationalAddWord(text.trim(), undefined, configToUse);
       return;
     }
 
@@ -910,6 +960,7 @@ export function useChat({
   const handleAddMultipleWords = async (candidateWords: any[]) => {
     if (!candidateWords || !Array.isArray(candidateWords) || candidateWords.length === 0) return;
 
+    setPendingConfirmWord(null);
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
     const newWordsToAdd: Word[] = [];
@@ -967,22 +1018,43 @@ export function useChat({
       return updated;
     });
 
-    const remainingActions = getRemainingWordActions(chatMessages, updatedWords, undefined, currentAppLang);
-
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-batch-success-${Date.now()}`,
-        role: "assistant",
-        content: t("chat_batch_added_success", currentAppLang, {
-          count: String(newWordsToAdd.length),
-          addedList: newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", "),
-          skippedSection: skippedNames.length > 0 ? t("chat_batch_added_skipped_section", currentAppLang, { words: skippedNames.join(", ") }) : ""
-        }),
-        timestamp: new Date().toISOString(),
-        suggestedActions: remainingActions,
-      },
-    ]);
+    if (newWordsToAdd.length === 1) {
+      const addedWord = newWordsToAdd[0];
+      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, addedWord.word, currentAppLang);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-added-word-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_word_added_success", currentAppLang, {
+            word: addedWord.word,
+            pronunciation: addedWord.pronunciation || "",
+            partOfSpeech: addedWord.partOfSpeech || "word",
+            translation: addedWord.translation,
+            definition: addedWord.definition,
+            exampleSection: (addedWord.example ? `\n- **${t("label_example", currentAppLang)}**: "${addedWord.example}"` : "") + (addedWord.exampleTranslation ? `\n- **${t("label_example_translation", currentAppLang)}**: "${addedWord.exampleTranslation}"` : "")
+          }),
+          timestamp: new Date().toISOString(),
+          suggestedActions: remainingActions,
+        },
+      ]);
+    } else {
+      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, undefined, currentAppLang);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-batch-success-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_batch_added_success", currentAppLang, {
+            count: String(newWordsToAdd.length),
+            addedList: newWordsToAdd.map((w) => `**${w.word}** (${w.translation})`).join(", "),
+            skippedSection: skippedNames.length > 0 ? t("chat_batch_added_skipped_section", currentAppLang, { words: skippedNames.join(", ") }) : ""
+          }),
+          timestamp: new Date().toISOString(),
+          suggestedActions: remainingActions,
+        },
+      ]);
+    }
     setConversationalState("adding_word");
   };
 
@@ -1013,98 +1085,61 @@ export function useChat({
       return;
     }
 
-    setIsTyping(true);
-    const statusMsgId = `add-word-selected-status-${Date.now()}`;
-
     const finalTranslation =
       translation && translation !== "undefined" ? translation : sense.translation && sense.translation !== "undefined" ? sense.translation : targetWord;
-    const newUserMsg: ChatMessage = {
-      id: `user-select-def-${Date.now()}`,
-      role: "user",
-      content: t("chat_user_selected_add_word", currentAppLang, { word: targetWord, translation: finalTranslation }),
-      timestamp: new Date().toISOString(),
+
+    const newWord: Word = {
+      id: `ai-word-${Date.now()}`,
+      word: targetWord,
+      pronunciation: sense.pronunciation || "/.../",
+      partOfSpeech: sense.partOfSpeech || "noun",
+      definition: sense.definition,
+      translation: sense.translation && sense.translation !== "undefined" ? sense.translation : finalTranslation,
+      example: sense.example || undefined,
+      exampleTranslation: sense.exampleTranslation || undefined,
+      category: sense.category || "General",
+      context: sense.context || sense.definition,
+      learned: false,
+      starred: false,
+      createdAt: new Date().toISOString(),
+      lastReviewed: null,
+      strength: 0,
     };
+
+    setPendingConfirmWord(newWord);
+    setPendingWordSenses(null);
+    setConversationalState("confirming_add_word");
+
+    const confirmActions = [
+      {
+        label: t("action_confirm_add_word", currentAppLang, { word: targetWord, details: newWord.translation }),
+        action: "confirm_save_word",
+        payload: newWord,
+      },
+      {
+        label: t("action_cancel", currentAppLang),
+        action: "send_message",
+        payload: { message: "cancel" },
+      },
+    ];
 
     setChatMessages((prev) => [
       ...prev,
-      newUserMsg,
       {
-        id: statusMsgId,
+        id: `sys-confirm-word-${Date.now()}`,
         role: "assistant",
-        content: t("chat_saving_custom_card", currentAppLang, { word: targetWord }),
+        content: t("chat_confirm_word_preview_prompt", currentAppLang, {
+          word: newWord.word,
+          pronunciation: newWord.pronunciation || "",
+          partOfSpeech: newWord.partOfSpeech,
+          translation: newWord.translation,
+          definition: newWord.definition,
+          exampleSection: (newWord.example ? `\n- **${t("label_example", currentAppLang)}**: "${newWord.example}"` : "") + (newWord.exampleTranslation ? `\n- **${t("label_example_translation", currentAppLang)}**: "${newWord.exampleTranslation}"` : "")
+        }),
         timestamp: new Date().toISOString(),
+        suggestedActions: confirmActions,
       },
     ]);
-
-    try {
-      const newWord: Word = {
-        id: `ai-word-${Date.now()}`,
-        word: targetWord,
-        pronunciation: sense.pronunciation || "/.../",
-        partOfSpeech: sense.partOfSpeech || "noun",
-        definition: sense.definition,
-        translation: sense.translation && sense.translation !== "undefined" ? sense.translation : finalTranslation,
-        example: sense.example || undefined,
-        exampleTranslation: sense.exampleTranslation || undefined,
-        category: sense.category || "General",
-        context: sense.context || sense.definition,
-        learned: false,
-        starred: false,
-        createdAt: new Date().toISOString(),
-        lastReviewed: null,
-        strength: 0,
-      };
-
-      const updatedWords = [newWord, ...words];
-
-      setWords((prev) => {
-        const updated = [newWord, ...prev];
-        saveAllWordsToDB(updated).catch((e) => console.error(e));
-        return updated;
-      });
-
-      const remainingActions = getRemainingWordActions(chatMessages, updatedWords, targetWord, currentAppLang);
-
-      setChatMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-add-${Date.now()}`,
-            role: "assistant",
-            content: t("chat_word_added_success", currentAppLang, {
-              word: newWord.word,
-              pronunciation: newWord.pronunciation || '',
-              partOfSpeech: newWord.partOfSpeech,
-              translation: newWord.translation,
-              definition: newWord.definition,
-              exampleSection: newWord.example ? `\n- **${t("label_example", currentAppLang)}**: "${newWord.example}"` : ""
-            }),
-            timestamp: new Date().toISOString(),
-            suggestedActions: remainingActions,
-          },
-        ];
-      });
-
-      setPendingWordSenses(null);
-      setConversationalState("adding_word");
-    } catch (err: any) {
-      console.error(err);
-      setChatMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `sys-add-err-${Date.now()}`,
-            role: "assistant",
-            content: t("chat_fail_add_word_sense", currentAppLang, { error: err.message || (currentAppLang.toLowerCase().includes("vi") ? "Lỗi không xác định" : "Unknown error") }),
-            timestamp: new Date().toISOString(),
-          },
-        ];
-      });
-    } finally {
-      setIsTyping(false);
-    }
   };
 
   const handleConversationalAddWordOrPrompt = (wordText?: string, hint?: string) => {
@@ -1249,6 +1284,13 @@ export function useChat({
         generatedWords.push(newWord);
       });
 
+      // Update words in both state and local database immediately without confirmation step
+      setWords((prev) => {
+        const updated = [...generatedWords, ...prev];
+        saveAllWordsToDB(updated).catch((e) => console.error("Error auto-saving words to DB:", e));
+        return updated;
+      });
+
       const wordsListMarkdown = generatedWords
         .map(
           (w, idx) =>
@@ -1258,22 +1300,51 @@ export function useChat({
         )
         .join("\n\n");
 
+      let rawSuccessMsg = t("chat_generate_topic_words_success", currentAppLang, { topic, count: String(generatedWords.length), wordsListMarkdown });
+      
+      // Clean up localized trailing confirm-related prompts
+      rawSuccessMsg = rawSuccessMsg
+        .replace(/👇\s*\*Click[\s\S]*collection:\*/i, "")
+        .replace(/👇\s*\*Nhấp[\s\S]*tập:\*/i, "")
+        .replace(/👇\s*\*Haga[\s\S]*colección:\*/i, "")
+        .replace(/👇\s*\*Cliquez[\s\S]*collection\s*\*:/i, "")
+        .replace(/👇\s*\*Klicken[\s\S]*hinzuzufügen\s*\*:/i, "")
+        .replace(/👇\s*\*コレクションに追加[\s\S]*ボタンをクリック[\s\S]*：\*/i, "")
+        .replace(/👇\s*\*컬렉션에 추가[\s\S]*버튼을 클릭[\s\S]*:\*/i, "")
+        .replace(/👇\s*\*点击下方[\s\S]*添加：\*/i, "");
+
+      let autoAddedNotice = "";
+      const code = currentAppLang.toLowerCase().trim();
+      if (code.startsWith("vi")) {
+        autoAddedNotice = "\n\n⚡ *Các từ này đã được tự động thêm vào bộ sưu tập của bạn để đơn giản hóa quá trình học!*";
+      } else if (code.startsWith("es")) {
+        autoAddedNotice = "\n\n⚡ *¡Estas palabras se han añadido automáticamente a tus colecciones para simplificar el proceso!*";
+      } else if (code.startsWith("fr")) {
+        autoAddedNotice = "\n\n⚡ *Ces mots ont été automatiquement ajoutés à vos collections pour simplifier le processus !*";
+      } else if (code.startsWith("de")) {
+        autoAddedNotice = "\n\n⚡ *Diese Wörter wurden automatisch zu Ihren Sammlungen hinzugefügt, um den Prozess zu vereinfachen!*";
+      } else if (code.startsWith("ja")) {
+        autoAddedNotice = "\n\n⚡ *プロセスの簡略化のため、これらの単語は自動的にコレクションに追加されました！*";
+      } else if (code.startsWith("ko")) {
+        autoAddedNotice = "\n\n⚡ *학습 과정을 단순화하기 위해 이 단어들이 컬렉션에 자동으로 추가되었습니다!*";
+      } else if (code.startsWith("zh")) {
+        autoAddedNotice = "\n\n⚡ *这些单词已自动添加到您的收藏中，以简化学习流程！*";
+      } else {
+        autoAddedNotice = "\n\n⚡ *These words have been automatically added to your collections to simplify the process!*";
+      }
+
+      const successContent = rawSuccessMsg.trim() + autoAddedNotice;
+
       const suggestedActions: any[] = [
-        {
-          label: t("action_add_all_topic_words", currentAppLang, { count: String(generatedWords.length) }),
-          action: "add_multiplewords",
-          payload: { words: generatedWords },
-        },
-        ...generatedWords.map((w) => ({
-          label: t("action_confirm_add", currentAppLang, { word: w.word, translation: w.translation }),
-          action: "confirm_save_word",
-          payload: w,
-        })),
         {
           label: t("action_generate_more_topic_words", currentAppLang, { topic }),
           action: "send_message",
           payload: { message: topic },
         },
+        {
+          label: t("chat_quiz_start_today_action", currentAppLang),
+          action: "start_quiz",
+        }
       ];
 
       setChatMessages((prev) => {
@@ -1283,7 +1354,7 @@ export function useChat({
           {
             id: `gen-words-success-${Date.now()}`,
             role: "assistant",
-            content: t("chat_generate_topic_words_success", currentAppLang, { topic, count: String(generatedWords.length), wordsListMarkdown }),
+            content: successContent,
             timestamp: new Date().toISOString(),
             suggestedActions: suggestedActions,
             provider: res.provider,
@@ -1667,6 +1738,7 @@ export function useChat({
     setConversationalState("none");
     setPendingTopicSubject("");
     setPendingWordSenses(null);
+    setPendingConfirmWord(null);
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage;
     const initialWelcome: ChatMessage[] = [
       {
@@ -1691,6 +1763,8 @@ export function useChat({
     setPendingTopicSubject,
     pendingWordSenses,
     setPendingWordSenses,
+    pendingConfirmWord,
+    setPendingConfirmWord,
     activeQuiz,
     setActiveQuiz,
     startChatQuiz,

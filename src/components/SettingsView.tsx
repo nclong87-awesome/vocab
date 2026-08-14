@@ -610,9 +610,6 @@ export default function SettingsView({
               <Bot className="w-4 h-4 text-stone-800" />
               AI Model Provider Connections & Key Storage
             </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Connect and store credentials for multiple LLM providers (Ollama, OpenAI, Google Gemini, 9Flare, Custom). Switch engines dynamically anytime.
-            </p>
           </div>
         </div>
 
@@ -851,9 +848,6 @@ export default function SettingsView({
               <Globe className="w-4 h-4 text-blue-600" />
               Language & Explanation Preferences
             </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Set your global Target Language (what you want to learn) and Native/Explanation Language.
-            </p>
           </div>
 
           <span className="text-xs font-semibold px-2.5 py-1 bg-stone-100 border border-stone-200 text-stone-700 self-start sm:self-auto">
@@ -894,9 +888,6 @@ export default function SettingsView({
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-stone-500 font-serif italic">
-                  Vocabulary words, example sentences, and quizzes will be generated in this language.
-                </p>
               </div>
 
               <div className="md:col-span-1 flex h-full">
@@ -965,9 +956,6 @@ export default function SettingsView({
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-stone-500 font-serif italic">
-                Definitions, example translations, and AI tutor hints will be explained in this language.
-              </p>
             </div>
           </div>
 
@@ -1000,9 +988,6 @@ export default function SettingsView({
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-stone-500 font-serif italic">
-                App interface labels and speech synthesis for quiz questions follow this language.
-              </p>
             </div>
           </div>
         </div>

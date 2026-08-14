@@ -85,7 +85,14 @@ function ChatView({
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const processImageFile = useCallback(async (file: File, defaultName?: string) => {
+  // Helper to auto scroll to bottom
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+    }, 50);
+  }, []);
+
+  const processImageFile = useCallback((file: File, _defaultName?: string) => {
     if (!file.type.startsWith("image/")) {
       showToast("⚠️ Please select or paste a valid image file (PNG, JPG, WEBP)");
       return;
@@ -93,26 +100,29 @@ function ChatView({
     const reader = new FileReader();
     reader.onload = async () => {
       if (typeof reader.result === "string") {
-        const name = defaultName || file.name || "Attached Photo";
         const rawDataUrl = reader.result;
-        
+        const promptNote = inputText.trim() || undefined;
         try {
           const optimizedDataUrl = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
-          setSelectedImage({
-            dataUrl: optimizedDataUrl,
-            name
-          });
+          if (conversationalState === "suggesting_reply") {
+            onSuggestCasualReply?.(optimizedDataUrl, promptNote || "");
+          } else {
+            onAnalyzeImageVocab?.(optimizedDataUrl, promptNote);
+          }
         } catch (err) {
-          setSelectedImage({
-            dataUrl: rawDataUrl,
-            name
-          });
+          if (conversationalState === "suggesting_reply") {
+            onSuggestCasualReply?.(rawDataUrl, promptNote || "");
+          } else {
+            onAnalyzeImageVocab?.(rawDataUrl, promptNote);
+          }
         }
-        showToast("📷 Image attached! Click Send or press Enter to analyze with AI Vision.");
+        setInputText("");
+        setSelectedImage(null);
+        scrollToBottom("smooth");
       }
     };
     reader.readAsDataURL(file);
-  }, [showToast]);
+  }, [showToast, conversationalState, inputText, onSuggestCasualReply, onAnalyzeImageVocab, scrollToBottom]);
 
   const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -205,13 +215,6 @@ function ChatView({
       }
       return updated;
     });
-  }, []);
-
-  // Helper to auto scroll to bottom
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    }, 50);
   }, []);
 
   // Helper to auto scroll to the top of the newly added message
@@ -431,12 +434,17 @@ function ChatView({
       <PhotoCaptureModal
         isOpen={isPhotoModalOpen}
         onClose={() => setIsPhotoModalOpen(false)}
-        onImageSelected={(dataUrl, name) => {
-          setSelectedImage({ dataUrl, name });
-          showToast("📷 Photo attached! Click Send or press Enter to analyze with AI Vision.");
+        onImageSubmit={(dataUrl, prompt) => {
+          if (conversationalState === "suggesting_reply") {
+            onSuggestCasualReply?.(dataUrl, prompt || "");
+          } else {
+            onAnalyzeImageVocab?.(dataUrl, prompt);
+          }
+          scrollToBottom("smooth");
         }}
         targetLanguage={targetLanguage}
         onToast={showToast}
+        modeType={conversationalState === "suggesting_reply" ? "reply" : "vocab"}
       />
     </div>
   );

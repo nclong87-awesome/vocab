@@ -80,7 +80,7 @@ export async function fetchWithTimeout(
 ): Promise<Response> {
   const urlString = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
   const isImageAnalysisWorker = urlString.includes("image-analysis.nclong87.workers.dev");
-  const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 60000);
+  const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 30000);
 
   const { timeoutMs: _, ...fetchInit } = init || {};
 

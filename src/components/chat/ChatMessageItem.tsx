@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
-import FormattedMessage from "./FormattedMessage";
+import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
@@ -164,7 +164,7 @@ function ChatMessageItem({
     return opts;
   }, [isUser, safeMsgContent]);
 
-  const effectiveActions = useMemo(() => {
+  const unfilteredActions = useMemo(() => {
     let rawActions: { label: string; action: string; payload?: any }[] = [];
 
     if (!isUser) {
@@ -281,6 +281,103 @@ function ChatMessageItem({
       });
   }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage, words]);
 
+  const effectiveActions = useMemo(() => {
+    const lines = (displayContent || "").split("\n");
+    const inlineMatchedActions = new Set<{ label: string; action: string; payload?: any }>();
+    for (const line of lines) {
+      const trimmed = line.trim();
+      let content = "";
+      if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+        content = trimmed.substring(2);
+      } else {
+        const numberedMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+        if (numberedMatch) {
+          content = numberedMatch[2];
+        }
+      }
+      if (content) {
+        const matching = findMatchingAction(content, unfilteredActions);
+        if (matching) {
+          inlineMatchedActions.add(matching);
+        }
+      }
+    }
+
+    return unfilteredActions.filter(act => !inlineMatchedActions.has(act));
+  }, [unfilteredActions, displayContent]);
+
+  const handleActionClick = (act: { label: string; action: string; payload?: any }) => {
+    if (act.action === "copy_text" || act.action === "copy_sentence") {
+      const textToCopy = act.payload?.text || msg.fixedSentence || "";
+      if (textToCopy) {
+        navigator.clipboard.writeText(textToCopy);
+        showToast(t("toast_copied_selection", currentAppLang));
+      }
+    } else if (act.action === "suggest_another") {
+      handleRecordActionUse("suggest_reply");
+      setIsPhotoModalOpen(true);
+      onSuggestCasualReplyPrompt?.();
+    } else if (act.action === "fix_another") {
+      handleRecordActionUse("fix_grammar");
+      onFixGrammar();
+    } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
+      onAddMultipleWords([act.payload]);
+      showToast(t("toast_added_word", currentAppLang, { word: act.payload.word }));
+    } else if (act.action === "add_word" && act.payload?.word) {
+      handleRecordActionUse("add_word");
+      onAddWord(act.payload.word, act.payload?.hint);
+    } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
+      onAddMultipleWords(act.payload.words);
+      showToast(t("toast_added_multiple_words", currentAppLang, { count: String(act.payload.words.length) }));
+    } else if (act.action === "start_quiz") {
+      handleRecordActionUse("start_quiz");
+      onStartQuiz();
+    } else if (act.action === "view_flashcard") {
+      handleRecordActionUse("view_flashcard");
+      onViewFlashcard?.();
+    } else if (act.action === "quiz_answer" && act.payload?.answer) {
+      onSendMessage(act.payload.answer);
+    } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
+      onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
+    } else if (act.action === "common_phrases") {
+      handleRecordActionUse("common_phrases");
+      onSendMessage(
+        `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
+      );
+      scrollToBottom("smooth");
+      focusInput();
+    } else if (act.action === "explain_grammar") {
+      handleRecordActionUse("explain_grammar");
+      onSendMessage(
+        `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
+      );
+      scrollToBottom("smooth");
+      focusInput();
+    } else if (act.action === "translate_contrast") {
+      handleRecordActionUse("translate_contrast");
+      onSendMessage(
+        `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
+      );
+      scrollToBottom("smooth");
+      focusInput();
+    } else if (act.action === "retry_analyze_image" && onAnalyzeImageVocab) {
+      const imageToRetry = act.payload?.imageDataUrl || [...messages].reverse().find(m => Boolean(m.imageUrl))?.imageUrl;
+      if (imageToRetry) {
+        showToast(t("toast_retrying_photo_analysis", currentAppLang));
+        onAnalyzeImageVocab(imageToRetry, act.payload?.customPrompt);
+      } else {
+        showToast(t("toast_photo_upload_prompt", currentAppLang));
+        setIsPhotoModalOpen(true);
+      }
+    } else if (act.action === "retry_suggest_reply" && onSuggestCasualReply) {
+      showToast(t("toast_retrying_suggest_reply", currentAppLang));
+      onSuggestCasualReply(act.payload?.imageDataUrl || null, act.payload?.customPrompt || "");
+    } else if (act.action === "send_message" && act.payload?.message) {
+      onSendMessage(act.payload.message);
+    }
+    scrollToBottom("smooth");
+  };
+
   let className = isUser ? "flex flex-col max-w-[85%] sm:max-w-[75%] w-full ml-auto items-end" : "flex flex-col max-w-full w-full mr-auto items-stretch";
   if (isLatestMessage) {
     className += " pt-1";
@@ -356,7 +453,12 @@ function ChatMessageItem({
                 </div>
               )}
 
-              <FormattedMessage text={displayContent} />
+              <FormattedMessage
+                text={displayContent}
+                suggestedActions={unfilteredActions}
+                onActionClick={handleActionClick}
+                appLanguage={currentAppLang}
+              />
 
               {/* Suggested replies cards with direct Copy buttons */}
               {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (

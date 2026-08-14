@@ -24,20 +24,22 @@ import { resizeImageDataUrl } from "../../utils/llmHelpers";
 interface PhotoCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImageSelected: (dataUrl: string, name: string) => void;
+  onImageSubmit: (dataUrl: string, prompt?: string) => void;
   targetLanguage?: string;
   onToast?: (msg: string) => void;
+  modeType?: "vocab" | "reply";
 }
 
 function PhotoCaptureModal({
   isOpen,
   onClose,
-  onImageSelected,
+  onImageSubmit,
   targetLanguage = "English",
-  onToast
+  onToast,
 }: PhotoCaptureModalProps) {
   const [mode, setMode] = useState<"choose" | "camera" | "preview">("choose");
   const [capturedImage, setCapturedImage] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [focusNote, setFocusNote] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState<boolean>(false);
@@ -559,7 +561,8 @@ function PhotoCaptureModal({
 
   const handleConfirmUpload = () => {
     if (capturedImage) {
-      onImageSelected(capturedImage.dataUrl, capturedImage.name);
+      onImageSubmit(capturedImage.dataUrl, focusNote.trim() || undefined);
+      setFocusNote("");
       onClose();
     }
   };
@@ -697,14 +700,7 @@ function PhotoCaptureModal({
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-stone-950 flex items-center gap-1.5">
                   {mode === "camera" ? "Take a Photo" : mode === "preview" ? "Confirm Photo" : "Upload or Take Image"}
-                </h3>
-                <p className="text-[11px] text-stone-500 font-medium">
-                  {mode === "camera"
-                    ? "Point camera at objects, signs, or text to extract vocabulary"
-                    : mode === "preview"
-                    ? "Ready to attach and analyze with AI Vision"
-                    : `Snap a photo or select an image to extract ${targetLanguage} words`}
-                </p>
+                </h3>                
               </div>
             </div>
 
@@ -1174,17 +1170,30 @@ function PhotoCaptureModal({
                       )}
                     </div>
 
-                    <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-950 font-medium flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>AI Vision will extract and translate key vocabulary items from this image!</span>
+                    {/* Optional Focus Note Input */}
+                    <div className="w-full max-w-sm">
+                      <input
+                        type="text"
+                        value={focusNote}
+                        onChange={(e) => setFocusNote(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleConfirmUpload();
+                          }
+                        }}
+                        placeholder="Add optional focus note (e.g. 'Focus on food items')..."
+                        className="w-full bg-stone-50 hover:bg-stone-100/60 focus:bg-white text-stone-900 border border-stone-200 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs transition-colors placeholder:text-stone-400 font-medium"
+                      />
                     </div>
 
-                    <div className="flex items-center gap-3 w-full pt-1">
+                    <div className="flex items-center gap-3 w-full max-w-sm pt-1">
                       <button
                         type="button"
                         onClick={() => {
                           setCapturedImage(null);
                           setOriginalImage(null);
+                          setFocusNote("");
                           setMode("choose");
                         }}
                         className="flex-1 py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
@@ -1198,8 +1207,8 @@ function PhotoCaptureModal({
                         onClick={handleConfirmUpload}
                         className="flex-1 py-2.5 px-4 bg-stone-900 hover:bg-stone-800 text-amber-400 text-xs font-bold rounded-xl shadow-md transition-all hover:scale-102 cursor-pointer flex items-center justify-center gap-1.5"
                       >
-                        <Check className="w-4 h-4 text-amber-400" />
-                        <span>Attach & Upload</span>
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span>Upload & Analyze</span>
                       </button>
                     </div>
                   </div>

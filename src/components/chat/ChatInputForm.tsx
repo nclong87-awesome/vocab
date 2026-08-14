@@ -47,11 +47,6 @@ function ChatInputForm({
                 <Camera className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 Photo Attached: {selectedImage.name}
               </span>
-              <span className="text-[10px] text-amber-800/80 block">
-                {conversationalState === "suggesting_reply"
-                  ? "AI Vision will analyze the screenshot to suggest casual replies when submitted"
-                  : "AI Vision will extract & translate vocabulary items when submitted"}
-              </span>
             </div>
           </div>
           <button
@@ -95,7 +90,9 @@ function ChatInputForm({
           onChange={(e) => setInputText(e.target.value)}
           disabled={isTyping}
           placeholder={
-            conversationalState === "adding_word"
+            conversationalState === "confirming_add_word"
+              ? "Type 'confirm' to add word, or 'cancel'..."
+              : conversationalState === "adding_word"
               ? "Type another word or expression to add..."
               : selectedImage
               ? "Add an optional focus note (e.g. 'Focus on food items') or press Enter to analyze..."

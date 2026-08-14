@@ -32,7 +32,7 @@ export async function fetchWithTimeout(
 ): Promise<Response> {
   const urlString = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
   const isImageAnalysisWorker = urlString.includes("image-analysis.nclong87.workers.dev");
-  const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 60000);
+  const timeoutMs = init?.timeoutMs !== undefined ? init.timeoutMs : (isImageAnalysisWorker ? 0 : 30000);
 
   if (timeoutMs <= 0) {
     const { timeoutMs: _, ...fetchInit } = init || {};
@@ -884,6 +884,13 @@ Target language being learned: "${userTarget}".
 User's native language: "${userNative}".
 
 CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
+0. CRITICAL WORD EXTRACTION & HEADWORD ISOLATION DIRECTIVE:
+   - Always attempt to extract individual target vocabulary words or key lexical terms from user input whenever possible, rather than using the entire sentence or request phrase as a single word!
+   - If "${word}" is a full user sentence, clause, natural language query, or conversational request (e.g., "The weather is very whimsical today", "I want to add the word serendipity", "She had an innate talent for music", "Thêm từ enthusiastic vào từ điển", "How do you say resilience in Spanish?", "Can we learn about biodiversity?"):
+     * NEVER set the "word" field to the entire input sentence or question!
+     * Isolate and extract the core headword / target vocabulary item being learned or referenced (e.g. "whimsical", "serendipity", "innate", "enthusiastic", "resilience", "biodiversity").
+     * If the input sentence was in the native language (${userNative}) or describes a concept, extract or translate that core headword into ${userTarget} for "word" and provide the ${userNative} translation.
+     * Established multi-word phrasal verbs or fixed idioms (e.g., "break down", "piece of cake", "give up") may be extracted as a unit, but NEVER treat full descriptive sentences, greetings, or conversational questions as a single word!
 1. NATURAL LANGUAGE REQUEST OR SENTENCE (EXTRACT CLEAN HEADWORD & CONTEXT):
    - If "${word}" is a user sentence or natural request specifying a word and context (e.g. "I want to add a citation in the RAG context", "I want to add table in database context", "add the word citation in RAG context"):
      * EXTRACT ONLY the pure headword or core term itself for the "word" field (e.g., set "word": "citation", NOT "I want to add a citation in the RAG context").
@@ -953,6 +960,13 @@ Target language: "${userTarget}".
 User's native language: "${userNative}".
 
 CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
+0. CRITICAL WORD EXTRACTION & HEADWORD ISOLATION DIRECTIVE:
+   - Always attempt to extract individual target vocabulary words or key lexical terms from user input whenever possible, rather than using the entire sentence or request phrase as a single word!
+   - If "${word}" is a full user sentence, clause, natural language query, or conversational request (e.g., "The weather is very whimsical today", "I want to add the word serendipity", "She had an innate talent for music", "Thêm từ enthusiastic vào từ điển", "How do you say resilience in Spanish?", "Can we learn about biodiversity?"):
+     * NEVER set the "word" field to the entire input sentence or question!
+     * Isolate and extract the core headword / target vocabulary item being learned or referenced (e.g. "whimsical", "serendipity", "innate", "enthusiastic", "resilience", "biodiversity").
+     * If multiple distinct candidate vocabulary terms exist in the sentence, or if the user's focus is ambiguous, set "hasMultipleSenses": true and provide candidate senses for each extracted individual word from the sentence so the user can choose which specific word to add.
+     * Established multi-word phrasal verbs or fixed idioms (e.g., "break down", "piece of cake", "give up") may be extracted as a unit, but NEVER treat full descriptive sentences, greetings, or conversational questions as a single word!
 1. NATURAL LANGUAGE REQUEST OR SENTENCE (EXTRACT CLEAN HEADWORD & CONTEXT):
    - If "${word}" is a user sentence or request asking to add a word and context (e.g., "I want to add a citation in the RAG context", "I want to add table in database context", "add the word citation in RAG context"):
      * EXTRACT ONLY the target vocabulary headword itself for the "word" field (both for top-level "word" and inside every sense item in "senses", e.g., set "word": "citation", NOT "I want to add a citation in the RAG context").
