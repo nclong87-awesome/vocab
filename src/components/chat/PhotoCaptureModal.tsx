@@ -34,7 +34,6 @@ function PhotoCaptureModal({
   isOpen,
   onClose,
   onImageSubmit,
-  targetLanguage = "English",
   onToast,
 }: PhotoCaptureModalProps) {
   const [mode, setMode] = useState<"choose" | "camera" | "preview">("choose");

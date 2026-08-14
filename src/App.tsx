@@ -295,26 +295,15 @@ export default function App() {
         setIsOnboardingModalOpen(true);
       }
 
-      const storedChat = localStorage.getItem("vocab_learner_chat_history");
-      if (storedChat) {
-        try {
-          const parsed = JSON.parse(storedChat);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setChatMessages(parsed);
-          }
-        } catch (e) {
-          // ignore
-        }
-      } else {
-        setChatMessages([
-          {
-            id: "welcome-msg",
-            role: "assistant",
-            content: t("chat_welcome_msg", refreshedApp, { target: refreshedTarget, native: refreshedNative }),
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      }
+      localStorage.removeItem("vocab_learner_chat_history");
+      setChatMessages([
+        {
+          id: "welcome-msg",
+          role: "assistant",
+          content: t("chat_welcome_msg", refreshedApp, { target: refreshedTarget, native: refreshedNative }),
+          timestamp: new Date().toISOString(),
+        },
+      ]);
     } catch (e) {
       console.error("IndexedDB load error:", e);
       setWords([]);

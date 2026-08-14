@@ -43,15 +43,6 @@ export function useChat({
   handleFinishQuiz,
 }: UseChatProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const stored = localStorage.getItem("vocab_learner_chat_history");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error(e);
-    }
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage;
     return [
       {
