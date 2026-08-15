@@ -535,7 +535,7 @@ async function callLLMClientSideSingleCandidate(
   }
 
   // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (worker proxy)
-  let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
+  let defaultBaseUrl = "https://openai.nclong87.workers.dev";
   if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
   if (provider === "openrouter") defaultBaseUrl = "https://openrouter.nclong87.workers.dev/api/v1";
   if (provider === "9flare") defaultBaseUrl = "https://9flare.nclong87.workers.dev/api/v1";
