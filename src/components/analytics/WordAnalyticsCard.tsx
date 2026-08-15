@@ -4,6 +4,7 @@ import { Volume2, RefreshCw, History } from "lucide-react";
 import { Word } from "../../types";
 import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "./StrengthHistoryModal";
+import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
 interface WordAnalyticsCardProps {
   key?: React.Key;
@@ -137,25 +138,10 @@ export default function WordAnalyticsCard({
             <span className="truncate">{isMastered ? "Mastered" : "Learning"}</span>
           </span>
 
-          <button
-            type="button"
+          <MemoryStrengthBar
+            strength={strengthLevel}
             onClick={() => setShowHistoryModal(true)}
-            className="flex-1 min-w-0 flex items-center justify-between gap-2.5 cursor-pointer hover:bg-stone-50 px-3.5 py-1.5 rounded-lg border border-stone-200/80 transition-colors bg-white shadow-2xs"
-            title={`Memory Strength: ${strengthLevel}%. Click for strength history.`}
-          >
-            <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider shrink-0">Strength</span>
-            <div className="h-1.5 flex-1 min-w-[1.25rem] bg-stone-200/70 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${
-                  strengthLevel >= 80 ? 'bg-emerald-500' : 
-                  strengthLevel >= 40 ? 'bg-amber-500' : 
-                  'bg-rose-450'
-                }`}
-                style={{ width: `${Math.max(0, Math.min(100, strengthLevel))}%` }}
-              />
-            </div>
-            <span className="text-[10px] font-mono font-bold text-stone-700 shrink-0 tabular-nums">{Math.round(strengthLevel)}%</span>
-          </button>
+          />
 
           {word.starred && (
             <span className="shrink-0 text-amber-700 font-bold flex items-center gap-1 text-[10px] uppercase tracking-wide bg-amber-50 border border-amber-200/70 px-2 py-1 rounded-md">

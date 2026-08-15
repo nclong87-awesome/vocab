@@ -3,6 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, CheckCircle, Trash2, History } from "lucide-react";
 import { Word } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
+import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
 interface WordCardProps {
   key?: React.Key;
@@ -174,25 +175,10 @@ function WordCard({
             <span className="truncate">{word.learned ? "Mastered" : "Learning"}</span>
           </span>
 
-          <button
-            type="button"
+          <MemoryStrengthBar
+            strength={word.strength || 0}
             onClick={() => setShowHistoryModal(true)}
-            className="flex-1 min-w-0 flex items-center justify-between gap-2.5 cursor-pointer hover:bg-stone-50 px-3.5 py-1.5 rounded-lg border border-stone-200/80 transition-colors bg-white shadow-2xs"
-            title={`Memory Strength: ${word.strength || 0}%. Click for strength history.`}
-          >
-            <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider shrink-0">Strength</span>
-            <div className="h-1.5 flex-1 min-w-[1.25rem] bg-stone-200/70 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${
-                  (word.strength || 0) >= 80 ? 'bg-emerald-500' : 
-                  (word.strength || 0) >= 40 ? 'bg-amber-500' : 
-                  'bg-rose-450'
-                }`} 
-                style={{ width: `${Math.max(0, Math.min(100, word.strength || 0))}%` }}
-              />
-            </div>
-            <span className="text-[10px] font-mono font-bold text-stone-700 shrink-0 tabular-nums">{Math.round(word.strength || 0)}%</span>
-          </button>
+          />
 
           {word.starred && (
             <span className="shrink-0 text-amber-700 font-bold flex items-center gap-1 text-[10px] uppercase tracking-wide bg-amber-50 border border-amber-200/70 px-2 py-1 rounded-md">

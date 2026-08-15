@@ -91,8 +91,8 @@ function WordRow({
                 <div 
                   className={`h-full transition-all duration-500 ${
                     (word.strength || 0) >= 80 ? 'bg-emerald-500' : 
-                    (word.strength || 0) >= 40 ? 'bg-amber-400' : 
-                    'bg-rose-450'
+                    (word.strength || 0) >= 40 ? 'bg-amber-500' : 
+                    'bg-rose-500'
                   }`} 
                   style={{ width: `${Math.max(0, Math.min(100, word.strength || 0))}%` }}
                 />
