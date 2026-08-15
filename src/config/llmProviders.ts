@@ -28,7 +28,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "openai/gpt-oss-120b", 
       "openai/gpt-oss-20b", 
       "openai/gpt-oss-safeguard-20b",
-      "llama-3.3-70b-versatile",
     ],
     visionModels: ["qwen/qwen3.6-27b"],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
@@ -97,16 +96,17 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://9flare.com/api/v1",
     requiresKey: false
   },
-  // {
-  //   id: "openai",
-  //   name: "OpenAI",
-  //   tagline: "GPT series models",
-  //   defaultModel: "gpt-5.4-mini",
-  //   models: ["gpt-5.4-mini"],
-  //   defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
-  //   directBaseUrl: "https://api.openai.com/v1",
-  //   requiresKey: false
-  // },
+  {
+    id: "openai",
+    name: "OpenAI",
+    tagline: "GPT series models",
+    defaultModel: "gpt-5.6-luna",
+    models: ["gpt-5.6-luna"],
+    visionModels: ["gpt-5.6-luna"],
+    defaultBaseUrl: "https://openai.nclong87.workers.dev",
+    directBaseUrl: "https://api.openai.com/v1",
+    requiresKey: false
+  },
   {
     id: "custom",
     name: "Custom / Local Endpoint",
