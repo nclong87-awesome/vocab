@@ -6,10 +6,7 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   Search, 
-  
   BookOpen, 
-  Zap, 
-  
   RefreshCw
 } from "lucide-react";
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
@@ -70,6 +67,22 @@ export default function AnalyticsDashboard({
     return safeWords.filter(w => !w.learned && w.strength < 50);
   }, [safeWords]);
 
+  // Words used / reviewed recently (sorted by most recent review)
+  const recentlyUsedWords = useMemo(() => {
+    return safeWords
+      .filter(w => w.lastReviewed !== null || (w.strength ?? 0) > 0)
+      .sort((a, b) => {
+        const dateA = a.lastReviewed ? new Date(a.lastReviewed).getTime() : 0;
+        const dateB = b.lastReviewed ? new Date(b.lastReviewed).getTime() : 0;
+        return dateB - dateA;
+      });
+  }, [safeWords]);
+
+  // Words never used / never reviewed yet
+  const neverUsedWords = useMemo(() => {
+    return safeWords.filter(w => w.lastReviewed === null && (w.strength ?? 0) === 0 && !w.learned);
+  }, [safeWords]);
+
   // Words needing memory refresher (decayed or overdue >= 5 days)
   const decayedWords = useMemo(() => {
     return safeWords.filter(w => {
@@ -102,6 +115,11 @@ export default function AnalyticsDashboard({
         totalWords: totalWordsCount,
         masteredWords,
         improvingWords,
+        recentlyUsedWords,
+        neverUsedWords,
+        allWords: safeWords.slice(0, 50),
+        targetLanguage: "English",
+        nativeLanguage: appLanguage,
         llmConfig: configToUse
       });
 
@@ -197,17 +215,6 @@ export default function AnalyticsDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {improvingWords.length > 0 && (
-            <button
-              onClick={() => onStartPracticeWeakWords(improvingWords)}
-              className="px-5 py-3 bg-amber-400 hover:bg-amber-300 hover:scale-[1.01] active:scale-[0.99] text-stone-950 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-xs rounded-xl"
-              title="Launch a practice quiz focused on words needing improvement"
-            >
-              <Zap className="w-4 h-4 fill-stone-950" />
-              <span>{t("analytics_practice_weak", appLanguage)} ({improvingWords.length})</span>
-            </button>
-          )}
-
           <button
             onClick={() => handleRunAiAnalysis()}
             disabled={isAnalyzing}
@@ -240,8 +247,12 @@ export default function AnalyticsDashboard({
               aiReport={aiReport}
               isAnalyzing={isAnalyzing}
               analysisError={analysisError}
+              words={safeWords}
+              appLanguage={appLanguage}
               setAiReport={setAiReport}
               onRunAiAnalysis={handleRunAiAnalysis}
+              onStartPracticeWords={(wordsToPractice) => onStartPracticeWeakWords(wordsToPractice)}
+              onSpeakWord={handleSpeakWord}
             />
           </motion.div>
         )}

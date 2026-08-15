@@ -127,34 +127,34 @@ export default function WordAnalyticsCard({
         </div>
 
         {/* Card Footer Status & Memory Strength */}
-        <div className="pt-3 border-t border-stone-100 flex items-center gap-2 text-[11px] mt-auto">
-          <span className={`shrink-0 font-semibold px-2.5 py-1 rounded-full text-[10px] flex items-center gap-1.5 ${
+        <div className="pt-3 border-t border-stone-100 flex items-center gap-2 text-[11px] mt-auto min-w-0">
+          <span className={`shrink-0 font-semibold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] flex items-center gap-1.5 ${
             isMastered 
               ? "bg-emerald-50 text-emerald-800 border border-emerald-200/70" 
               : "bg-amber-50/80 text-amber-900 border border-amber-200/70"
           }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isMastered ? "bg-emerald-500" : "bg-amber-500"}`} />
-            {isMastered ? "Mastered" : "Learning"}
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMastered ? "bg-emerald-500" : "bg-amber-500"}`} />
+            <span className="truncate">{isMastered ? "Mastered" : "Learning"}</span>
           </span>
 
           <button
             type="button"
             onClick={() => setShowHistoryModal(true)}
-            className="flex-1 min-w-0 flex items-center justify-between gap-2 cursor-pointer hover:bg-stone-50 px-2.5 py-1 rounded-md border border-stone-200/70 transition-colors bg-white shadow-2xs"
+            className="flex-1 min-w-0 flex items-center justify-between gap-2.5 cursor-pointer hover:bg-stone-50 px-3.5 py-1.5 rounded-lg border border-stone-200/80 transition-colors bg-white shadow-2xs"
             title={`Memory Strength: ${strengthLevel}%. Click for strength history.`}
           >
             <span className="text-[9px] font-bold text-stone-400 uppercase tracking-wider shrink-0">Strength</span>
-            <div className="h-1.5 flex-1 min-w-[2rem] bg-stone-150 rounded-full overflow-hidden">
+            <div className="h-1.5 flex-1 min-w-[1.25rem] bg-stone-200/70 rounded-full overflow-hidden">
               <div 
                 className={`h-full transition-all duration-500 ${
                   strengthLevel >= 80 ? 'bg-emerald-500' : 
                   strengthLevel >= 40 ? 'bg-amber-500' : 
                   'bg-rose-450'
-                }`} 
+                }`}
                 style={{ width: `${Math.max(0, Math.min(100, strengthLevel))}%` }}
               />
             </div>
-            <span className="text-[9px] font-mono font-bold text-stone-700 shrink-0">{Math.round(strengthLevel)}%</span>
+            <span className="text-[10px] font-mono font-bold text-stone-700 shrink-0 tabular-nums">{Math.round(strengthLevel)}%</span>
           </button>
 
           {word.starred && (

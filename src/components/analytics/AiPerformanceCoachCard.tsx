@@ -1,12 +1,18 @@
-import { Brain, X, AlertTriangle, Sparkles, Target } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Brain, X, AlertTriangle, Sparkles, Target, Volume2, Clock, Bookmark, HelpCircle } from "lucide-react";
 import { PerformanceAnalysisResult } from "../../services/llmClientService";
+import { Word } from "../../types";
 
 interface AiPerformanceCoachCardProps {
   aiReport: PerformanceAnalysisResult | null;
   isAnalyzing: boolean;
   analysisError: string | null;
+  words?: Word[];
+  appLanguage?: string;
   setAiReport: (report: PerformanceAnalysisResult | null) => void;
   onRunAiAnalysis: () => void;
+  onStartPracticeWords?: (words: Word[]) => void;
+  onSpeakWord?: (wordText: string, wordId: string, customLang?: string) => void;
 }
 
 export default function AiPerformanceCoachCard({
@@ -14,12 +20,35 @@ export default function AiPerformanceCoachCard({
   isAnalyzing,
   analysisError,
   setAiReport,
-  onRunAiAnalysis
+  onRunAiAnalysis,
+  onSpeakWord
 }: AiPerformanceCoachCardProps) {
+  const [practiceFilter, setPracticeFilter] = useState<'all' | 'recently_used' | 'never_used'>('all');
+
+  // Top practice words list from AI report
+  const practiceWords = useMemo(() => {
+    return aiReport?.topPracticeWords || [];
+  }, [aiReport]);
+
+  const recentPracticeWords = useMemo(() => {
+    return practiceWords.filter(w => w.type === 'recently_used');
+  }, [practiceWords]);
+
+  const neverUsedPracticeWords = useMemo(() => {
+    return practiceWords.filter(w => w.type === 'never_used');
+  }, [practiceWords]);
+
+  const filteredPracticeWords = useMemo(() => {
+    if (practiceFilter === 'recently_used') return recentPracticeWords;
+    if (practiceFilter === 'never_used') return neverUsedPracticeWords;
+    return practiceWords;
+  }, [practiceWords, recentPracticeWords, neverUsedPracticeWords, practiceFilter]);
+
   if (!aiReport && !isAnalyzing && !analysisError) return null;
 
   return (
     <div className="bg-white border border-stone-200/80 p-6 sm:p-8 space-y-6 rounded-2xl shadow-2xs hover:shadow-xs transition-shadow duration-300" id="ai-performance-coach-card">
+      {/* Card Header */}
       <div className="flex items-center justify-between border-b border-stone-100 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-amber-50/60 border border-amber-200/60 rounded-xl flex items-center justify-center text-amber-700 shadow-3xs shrink-0">
@@ -27,7 +56,7 @@ export default function AiPerformanceCoachCard({
           </div>
           <div>
             <h3 className="text-base font-bold text-stone-900 tracking-tight">AI Learning Coach Analysis</h3>
-            <p className="text-xs text-stone-500 font-serif italic">Personalized cognitive assessment & memory guidance</p>
+            <p className="text-xs text-stone-500 font-serif italic">Personalized cognitive assessment & top practice recommendations</p>
           </div>
         </div>
 
@@ -42,6 +71,7 @@ export default function AiPerformanceCoachCard({
         )}
       </div>
 
+      {/* Loading Spinner */}
       {isAnalyzing && (
         <div className="py-8 text-center space-y-4">
           <div className="w-10 h-10 border-2 border-stone-200 border-t-amber-500 rounded-full animate-spin mx-auto" />
@@ -51,6 +81,7 @@ export default function AiPerformanceCoachCard({
         </div>
       )}
 
+      {/* Error State */}
       {analysisError && (
         <div className="p-4 bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-3 rounded-xl">
           <div className="font-bold flex items-center gap-2 text-rose-800">
@@ -67,6 +98,7 @@ export default function AiPerformanceCoachCard({
         </div>
       )}
 
+      {/* Analysis Content */}
       {aiReport && !isAnalyzing && (
         <div className="space-y-6 text-xs">
           {/* Overall Trajectory Assessment */}
@@ -79,6 +111,156 @@ export default function AiPerformanceCoachCard({
               "{aiReport.overallAssessment}"
             </p>
           </div>
+
+          {/* TOP 10 WORDS TO PRACTICE SECTION */}
+          {practiceWords.length > 0 && (
+            <div className="bg-gradient-to-br from-stone-50/80 to-amber-50/20 border border-amber-200/60 p-5 rounded-2xl space-y-4 shadow-3xs" id="top-words-to-practice-section">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200/60 pb-3.5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 bg-amber-400 text-stone-950 font-black rounded-lg flex items-center justify-center text-xs shadow-3xs">
+                      10
+                    </span>
+                    <h4 className="font-bold text-stone-900 text-sm tracking-tight">Top Words to Practice Today</h4>
+                  </div>
+                  <p className="text-[11px] text-stone-500 font-serif italic mt-0.5">
+                    Curated by AI: Recently used terms needing reinforcement & untouched words to expand vocabulary
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Category Filter Tabs */}
+                  <div className="inline-flex p-1 bg-stone-200/70 rounded-xl text-[10px] font-semibold">
+                    <button
+                      onClick={() => setPracticeFilter('all')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        practiceFilter === 'all'
+                          ? 'bg-white text-stone-900 shadow-3xs font-bold'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      All ({practiceWords.length})
+                    </button>
+                    <button
+                      onClick={() => setPracticeFilter('recently_used')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        practiceFilter === 'recently_used'
+                          ? 'bg-amber-400 text-stone-950 shadow-3xs font-bold'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      Recent ({recentPracticeWords.length})
+                    </button>
+                    <button
+                      onClick={() => setPracticeFilter('never_used')}
+                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                        practiceFilter === 'never_used'
+                          ? 'bg-indigo-600 text-white shadow-3xs font-bold'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      Never Used ({neverUsedPracticeWords.length})
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 10 Words Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {filteredPracticeWords.map((item, idx) => {
+                  const isRecent = item.type === 'recently_used';
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3.5 border rounded-xl transition-all duration-200 space-y-2 relative ${
+                        isRecent
+                          ? 'bg-white/90 border-amber-200/80 hover:border-amber-400 hover:shadow-2xs'
+                          : 'bg-indigo-50/20 border-indigo-200/80 hover:border-indigo-400 hover:shadow-2xs'
+                      }`}
+                    >
+                      {/* Top status bar */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 bg-stone-100 text-stone-700 font-mono text-[10px] font-bold rounded-md flex items-center justify-center border border-stone-200">
+                            #{idx + 1}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-md ${
+                              isRecent
+                                ? 'bg-amber-100/90 text-amber-900 border border-amber-300/60'
+                                : 'bg-indigo-100/90 text-indigo-900 border border-indigo-300/60'
+                            }`}
+                          >
+                            {isRecent ? (
+                              <>
+                                <Clock className="w-2.5 h-2.5" />
+                                <span>Recently Used</span>
+                              </>
+                            ) : (
+                              <>
+                                <Bookmark className="w-2.5 h-2.5" />
+                                <span>Never Used</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Strength Indicator */}
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                          <span className="text-stone-400 text-[9px]">Strength:</span>
+                          <span
+                            className={`font-bold ${
+                              (item.strength ?? 0) >= 50
+                                ? 'text-amber-600'
+                                : (item.strength ?? 0) > 0
+                                ? 'text-stone-700'
+                                : 'text-indigo-600'
+                            }`}
+                          >
+                            {item.strength ?? 0}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Word Title & Translation */}
+                      <div className="flex items-start justify-between gap-2 pt-0.5">
+                        <div>
+                          <h5 className="font-bold text-stone-900 text-sm tracking-tight capitalize">
+                            {item.word}
+                          </h5>
+                          {item.translation && (
+                            <p className="text-stone-600 font-medium text-xs">
+                              {item.translation}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Speaker Button */}
+                        {onSpeakWord && (
+                          <button
+                            onClick={() => onSpeakWord(item.word, `coach-${item.word}-${idx}`)}
+                            className="p-1.5 bg-stone-100 hover:bg-amber-100 text-stone-600 hover:text-amber-800 rounded-lg transition-colors cursor-pointer shrink-0"
+                            title="Listen to pronunciation"
+                          >
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Coach Pedagogical Reason */}
+                      <div className="bg-stone-50/70 p-2 rounded-lg border border-stone-200/50 text-[11px] text-stone-700 leading-snug flex items-start gap-1.5">
+                        <HelpCircle className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                        <span className="font-serif italic text-stone-600">
+                          {item.reason}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Strengths & Weaknesses Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

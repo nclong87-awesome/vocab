@@ -1589,11 +1589,25 @@ CRITICAL INSTRUCTIONS:
 }
 
 // 4. Analyze Performance with AI Service
+export interface RecommendedPracticeWord {
+  word: string;
+  translation: string;
+  reason: string;
+  type: 'recently_used' | 'never_used';
+  strength?: number;
+  priority?: 'high' | 'medium';
+}
+
 export interface PerformanceAnalysisRequest {
   stats: any;
   totalWords: number;
   masteredWords?: any[];
   improvingWords?: any[];
+  recentlyUsedWords?: any[];
+  neverUsedWords?: any[];
+  allWords?: any[];
+  targetLanguage?: string;
+  nativeLanguage?: string;
   llmConfig?: LLMConfig;
 }
 
@@ -1603,6 +1617,7 @@ export interface PerformanceAnalysisResult {
   weaknessesSummary: string;
   actionableTips: string[];
   recommendedFocusTopics: string[];
+  topPracticeWords?: RecommendedPracticeWord[];
   motivationQuote: string;
   provider?: string;
   model?: string;
@@ -1615,6 +1630,7 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
       overallAssessment: "Great progress on your vocabulary learning journey! Keep practicing regularly to strengthen retention.",
       strengthsSummary: "Building consistency across studied terms and flashcard reviews.",
       weaknessesSummary: "Focus on lower strength terms and newly added words.",
+      topPracticeWords: [],
       actionableTips: ["Review weak terms daily", "Take quick practice quizzes", "Use spaced repetition"],
       recommendedFocusTopics: ["Core Vocabulary"],
       motivationQuote: "Consistency in practice builds lasting language fluency."
@@ -1668,6 +1684,36 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
     weaknessesSummary = raw.performance_insights.areas_for_growth;
   }
 
+  // Parse Top Practice Words (Top 10 words to practice: recently used and never used)
+  let topPracticeWords: RecommendedPracticeWord[] = [];
+  const rawPractice = raw.topPracticeWords || raw.top_practice_words || raw.topWordsToPractice || raw.practiceWords || raw.practice_words || raw.recommendedPracticeWords || raw.top_10_words || raw.wordsToPractice;
+  if (Array.isArray(rawPractice)) {
+    topPracticeWords = rawPractice.slice(0, 10).map((item: any) => {
+      if (typeof item === "string") {
+        return {
+          word: item,
+          translation: "",
+          reason: "Recommended for practice",
+          type: "recently_used" as const,
+          strength: 20,
+          priority: "high" as const
+        };
+      }
+      const rawType = String(item.type || item.category || item.status || "").toLowerCase();
+      const isNeverUsed = rawType.includes("never") || rawType.includes("new") || rawType.includes("untouched") || item.strength === 0 || item.lastReviewed === null;
+      const type: 'recently_used' | 'never_used' = isNeverUsed ? 'never_used' : 'recently_used';
+
+      return {
+        word: String(item.word || item.name || item.term || "").trim(),
+        translation: String(item.translation || item.meaning || item.definition || "").trim(),
+        reason: String(item.reason || item.note || item.explanation || (isNeverUsed ? "Never practiced yet - start initial recall" : "Needs reinforcement and practice")).trim(),
+        type,
+        strength: typeof item.strength === "number" ? Math.max(0, Math.min(100, item.strength)) : (isNeverUsed ? 0 : 30),
+        priority: (item.priority === "medium" ? "medium" : "high") as 'high' | 'medium'
+      };
+    }).filter((item: RecommendedPracticeWord) => Boolean(item.word));
+  }
+
   let actionableTips: string[] = [];
   const tipsRaw = raw.actionableTips || raw.actionable_tips || raw.actionable_next_steps || raw.retention_strategies || raw.tips || raw.strategies;
   if (Array.isArray(tipsRaw)) {
@@ -1692,6 +1738,7 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
     overallAssessment: overallAssessment || "Your vocabulary practice shows steady progress and active momentum.",
     strengthsSummary: strengthsSummary || "Demonstrating solid recall on core vocabulary terms.",
     weaknessesSummary: weaknessesSummary || "Focus on terms with lower strength scores and terms needing review.",
+    topPracticeWords: topPracticeWords.length > 0 ? topPracticeWords : undefined,
     actionableTips: actionableTips.length > 0 ? actionableTips : ["Review weak terms daily", "Practice with active quizzes", "Focus on spaced repetition"],
     recommendedFocusTopics: recommendedFocusTopics.length > 0 ? recommendedFocusTopics : ["Core Vocabulary"],
     motivationQuote: motivationQuote || "Consistency in practice builds lasting language fluency.",
@@ -1702,36 +1749,80 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
 }
 
 export async function analyzePerformanceService(params: PerformanceAnalysisRequest): Promise<PerformanceAnalysisResult> {
-  const { stats, totalWords, masteredWords = [], improvingWords = [], llmConfig: cfg } = params;
+  const { 
+    stats, 
+    totalWords, 
+    masteredWords = [], 
+    improvingWords = [], 
+    recentlyUsedWords = [], 
+    neverUsedWords = [],
+    targetLanguage = "English",
+    nativeLanguage = "Vietnamese",
+    llmConfig: cfg 
+  } = params;
   const llmConfig = getOverrideConfig(cfg);
   const startTime = performance.now();
 
   const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
   const improvingSampleStr = (improvingWords || []).slice(0, 15).map((w: any) => `${w.word} (strength ${w.strength ?? 0}/100, ${w.translation || w.definition})`).join(", ") || "None yet";
+  const recentlyUsedStr = (recentlyUsedWords || []).slice(0, 15).map((w: any) => `${w.word} (strength ${w.strength ?? 0}/100, last reviewed: ${w.lastReviewed || 'recently'}, ${w.translation || w.definition})`).join(", ") || "None recorded";
+  const neverUsedStr = (neverUsedWords || []).slice(0, 15).map((w: any) => `${w.word} (strength 0/100, never reviewed yet, ${w.translation || w.definition})`).join(", ") || "None (all words have been practiced)";
 
-  const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report.
+  const prompt = `You are an elite AI Language Learning Coach & Vocabulary Analyst. Analyze the following student performance data and provide a personalized, deeply insightful analytics report with a curated list of the TOP 10 WORDS THE LEARNER NEEDS TO PRACTICE.
 
 STUDENT PERFORMANCE DATA:
+- Target Language: ${targetLanguage}
+- Native Explanation Language: ${nativeLanguage}
 - Total Vocabulary Words in Collection: ${totalWords || 0}
 - Total Words Mastered: ${(masteredWords || []).length}
 - Total Words Studied/Reviewed: ${(masteredWords || []).length + (improvingWords || []).filter((w: any) => w.lastReviewed !== null || (w.strength ?? 0) > 0).length}
+- Total Words Never Practiced / Untouched: ${(neverUsedWords || []).length}
 - Quizzes Completed: ${stats?.totalQuizzesTaken || 0}
 - Correct Answers in Quizzes: ${stats?.totalCorrectAnswers || 0}
 - Active Study Streak: ${stats?.streak?.count || 0} days
 
-SAMPLE MASTERED WORDS:
-${masteredSampleStr}
+1. WORDS USED/REVIEWED RECENTLY (Sample):
+${recentlyUsedStr}
 
-SAMPLE WORDS NEEDING IMPROVEMENT:
+2. WORDS NEVER USED / UNTOUCHED (Sample):
+${neverUsedStr}
+
+3. WORDS NEEDING IMPROVEMENT / LOW STRENGTH (Sample):
 ${improvingSampleStr}
 
-Provide a structured AI analysis with constructive insights, memory retention strategies, and actionable guidance for the learner.`;
+4. MASTERED WORDS (Sample):
+${masteredSampleStr}
 
-  const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly valid JSON-only analytics matching the schema below. CRITICAL: Use the exact JSON field names specified in schemaDesc. Do not include any conversational filler outside the JSON.`;
+CRITICAL DIRECTIVE FOR TOP 10 WORDS TO PRACTICE:
+You MUST identify and select the TOP 10 WORDS the learner needs to practice right now, presenting a balanced selection of BOTH:
+1. Words they have used/reviewed recently that need reinforcement (words with lower retention strength, recent review mistakes, or fading memory).
+2. Words in their collection that they have NEVER used or reviewed yet (untouched words that need initial learning and memory establishment).
+
+For each of the 10 practice words, specify:
+- "word": The word in ${targetLanguage}
+- "translation": Translation or meaning in ${nativeLanguage}
+- "reason": A crisp, encouraging 1-sentence pedagogical reason explaining why the student should practice this word (e.g., "Never practiced yet — establish initial memory", "Low retention (30%) after recent review — needs active quiz recall", "Memory decay — reinforce before forgetting").
+- "type": Strictly either "recently_used" (if reviewed before) or "never_used" (if never reviewed/studied yet).
+- "strength": Current retention strength (0-100).
+- "priority": "high" or "medium".
+
+Provide a structured AI analysis with constructive insights, memory retention strategies, the top 10 words to practice, and actionable guidance for the learner.`;
+
+  const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly valid JSON-only analytics matching the schema below. CRITICAL: Use the exact JSON field names specified in schemaDesc. Ensure topPracticeWords contains up to 10 prioritized words combining both recently used and never-used words. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
   "overallAssessment": "string (Empowering 2-3 sentence overview of learner's trajectory)",
   "strengthsSummary": "string (Key strengths and patterns where the learner excels)",
   "weaknessesSummary": "string (Specific word patterns or areas needing improvement)",
+  "topPracticeWords": [
+    {
+      "word": "string (Word in ${targetLanguage})",
+      "translation": "string (Translation in ${nativeLanguage})",
+      "reason": "string (Pedagogical reason why the user should practice this word)",
+      "type": "recently_used | never_used",
+      "strength": 0,
+      "priority": "high | medium"
+    }
+  ],
   "actionableTips": [
     "string (Actionable study tip 1)",
     "string (Actionable study tip 2)",
