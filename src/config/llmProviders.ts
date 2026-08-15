@@ -103,7 +103,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "gpt-5.6-luna",
     models: ["gpt-5.6-luna"],
     visionModels: ["gpt-5.6-luna"],
-    defaultBaseUrl: "https://openai.nclong87.workers.dev",
+    defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
     directBaseUrl: "https://api.openai.com/v1",
     requiresKey: false
   },
