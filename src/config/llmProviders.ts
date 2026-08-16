@@ -96,17 +96,17 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://9flare.com/api/v1",
     requiresKey: false
   },
-  {
-    id: "openai",
-    name: "OpenAI",
-    tagline: "GPT series models",
-    defaultModel: "gpt-5.6-luna",
-    models: ["gpt-5.6-luna"],
-    visionModels: ["gpt-5.6-luna"],
-    defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
-    directBaseUrl: "https://api.openai.com/v1",
-    requiresKey: false
-  },
+  // {
+  //   id: "openai",
+  //   name: "OpenAI",
+  //   tagline: "GPT series models",
+  //   defaultModel: "gpt-5.6-luna",
+  //   models: ["gpt-5.6-luna"],
+  //   visionModels: ["gpt-5.6-luna"],
+  //   defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
+  //   directBaseUrl: "https://api.openai.com/v1",
+  //   requiresKey: false
+  // },
   {
     id: "custom",
     name: "Custom / Local Endpoint",
@@ -144,8 +144,7 @@ export const RELIABLE_MODELS: string[] = [
   "gemma4:31b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
-  "pro/gpt-5-mini",
-  "gpt-5.6-luna"
+  "pro/gpt-5-mini"
 ];
 
 export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {
