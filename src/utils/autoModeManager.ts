@@ -416,9 +416,9 @@ export function getModelPerformanceTier(
     return 1;
   }
   
-  if (status === 'strong' || responseTimeMs < 10000) return 1;
-  if (status === 'medium' || responseTimeMs <= 20000) return 2;
-  return 4; // 'weak' / slow models (>20s)
+  if (status === 'strong' || responseTimeMs < 15000) return 1;
+  if (status === 'medium' || responseTimeMs < 25000) return 2;
+  return 4; // 'weak' / slow models (>= 25s)
 }
 
 export function getPerformanceTierMeta(
@@ -434,7 +434,7 @@ export function getPerformanceTierMeta(
         shortLabel: "Tier 1: Fast",
         description: isUntestedOrStale 
           ? "Untested or stale model boosted to Tier 1 for immediate benchmark sampling."
-          : "Fast response times (<10s). First priority choice for all queries.",
+          : "Fast response times (0–14s). First priority choice for all queries.",
         colorClass: isUntestedOrStale 
           ? "bg-sky-50 text-sky-800 border-sky-200" 
           : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -442,10 +442,10 @@ export function getPerformanceTierMeta(
     case 2:
       return {
         tier: 2,
-        name: "Tier 2: Balanced Performance",
-        badgeLabel: "Tier 2 (Balanced)",
-        shortLabel: "Tier 2: Balanced",
-        description: "Moderate response times (10s - 20s). Automatically re-probed periodically for promotion to Tier 1.",
+        name: "Tier 2: Medium Performance",
+        badgeLabel: "Tier 2 (Medium)",
+        shortLabel: "Tier 2: Medium",
+        description: "Medium response times (15–24s). Automatically re-probed periodically for promotion to Tier 1.",
         colorClass: "bg-amber-50 text-amber-700 border-amber-200"
       };
     case 3:
@@ -464,7 +464,7 @@ export function getPerformanceTierMeta(
         name: "Tier 4: Demoted Fallback",
         badgeLabel: "Tier 4 (Slow Fallback)",
         shortLabel: "Tier 4: Slow",
-        description: "Slow response (>20s). Demoted as emergency backups, but periodically re-evaluated to detect performance recovery.",
+        description: "Slow response (25s or more). Demoted as emergency backups, but periodically re-evaluated to detect performance recovery.",
         colorClass: "bg-orange-50 text-orange-800 border-orange-200"
       };
   }
@@ -496,8 +496,8 @@ export function getModelStatusIndicator(
 ): ModelStatusIndicator {
   if (isLocked) return 'offline';
   if (responseTimeMs === null || responseTimeMs === undefined) return 'untested';
-  if (responseTimeMs < 10000) return 'strong';
-  if (responseTimeMs <= 20000) return 'medium';
+  if (responseTimeMs < 15000) return 'strong';
+  if (responseTimeMs < 25000) return 'medium';
   return 'weak';
 }
 
@@ -738,14 +738,14 @@ export function getNextAutoCandidate(
       if (time === null || stale) {
         // Untested or Stale -> Priority Tier 1 Probe!
         tier1.push({ cand, time, isUntestedOrStale: true });
-      } else if (time < 10000) {
-        // Fast -> Tier 1
+      } else if (time < 15000) {
+        // Fast (0–14s) -> Tier 1
         tier1.push({ cand, time, isUntestedOrStale: false });
-      } else if (time <= 20000) {
-        // Balanced -> Tier 2
+      } else if (time < 25000) {
+        // Medium (15–24s) -> Tier 2
         tier2.push({ cand, time });
       } else {
-        // Slow -> Tier 4 (Demoted)
+        // Slow (25s or more) -> Tier 4 (Demoted)
         tier4.push({ cand, time });
       }
     }

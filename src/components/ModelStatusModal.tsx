@@ -99,23 +99,23 @@ export default function ModelStatusModal({
     switch (status) {
       case 'strong':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Fast: 0–14s">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Strong</span>
+            <span>Fast</span>
           </span>
         );
       case 'medium':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200" title="Medium: 15–24s">
             <Gauge className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span>Medium</span>
           </span>
         );
       case 'weak':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200" title="Slow: 25s or more">
             <AlertTriangle className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-            <span>Weak</span>
+            <span>Slow</span>
           </span>
         );
       case 'offline':
@@ -343,7 +343,7 @@ export default function ModelStatusModal({
                     : "bg-amber-50 text-amber-800 border border-amber-200/80 hover:bg-amber-100"
                 }`}
               >
-                Tier 2: Balanced ({modelStatuses.filter(m => m.performanceTier === 2).length})
+                Tier 2: Medium ({modelStatuses.filter(m => m.performanceTier === 2).length})
               </button>
               <button
                 type="button"
