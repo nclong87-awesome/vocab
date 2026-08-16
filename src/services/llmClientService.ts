@@ -78,6 +78,10 @@ export class LLMConnectionError extends Error {
 }
 
 export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined {
+  // if llmConfig?.model is reliable, return it as-is; otherwise, rotate to a reliable model
+  if (llmConfig?.model && RELIABLE_MODELS.some(m => m === llmConfig.model)) {
+    return llmConfig;
+  }
   let overrideConfig: LLMConfig | undefined = undefined;
   const match = getRotatedDefaultModel(RELIABLE_MODELS);
   if (match) {
@@ -85,7 +89,7 @@ export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined 
       provider: match.provider,
       model: match.model,
       apiKey: llmConfig?.apiKey || "",
-      baseUrl: llmConfig?.baseUrl || "",
+      baseUrl: match.baseUrl || llmConfig?.baseUrl || "",
       isLoggedIn: true
     };
   }

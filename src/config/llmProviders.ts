@@ -144,7 +144,8 @@ export const RELIABLE_MODELS: string[] = [
   "gemma4:31b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
-  "pro/gpt-5-mini"
+  "pro/gpt-5-mini",
+  "gpt-5.6-luna"
 ];
 
 export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {
