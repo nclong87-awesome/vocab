@@ -1917,77 +1917,125 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
   }
 });
 
-// Flashcard Generation endpoint
-app.post("/api/generate-flashcard", async (req, res) => {
+// Flashcard Generation endpoint (supports batch of 5 words or single word)
+app.post(["/api/generate-flashcards", "/api/generate-flashcard"], async (req, res) => {
   try {
-    const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+    const { words, word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
 
-    if (!word || !word.word) {
-      return res.status(400).json({ error: "Word object is required" });
+    const wordsList = Array.isArray(words) ? words : word ? [word] : [];
+    if (wordsList.length === 0) {
+      return res.status(400).json({ error: "Word or words array is required" });
     }
 
-    const systemInstruction = `You are a world-class AI Language Pedagogy Engine creating interactive flash cards for ${targetLanguage} learners (native language: ${nativeLanguage}).
-Given a target vocabulary word, its category, context, definition, and user stats, generate rich flashcard study content.
+    const systemInstruction = `You are a world-class AI Language Pedagogy Engine creating interactive flashcards for ${targetLanguage} learners (native language: ${nativeLanguage}).
+Given target vocabulary words, generate a clean, focused, high-retention flashcard for EACH word.
 
-CRITICAL REQUIREMENTS:
-1. Provide a refined target language definition in ${targetLanguage}, pronunciation (IPA), and native translation in ${nativeLanguage}.
-2. Category & Context Alignment: Identify or refine the word's category (e.g. "Business & Meetings", "Travel & Hospitality", "Everyday Conversation", "Emotions & Mindset") and practical usage context scenario.
-3. Extra Example Sentence: Generate EXACTLY 1 EXTRA example sentence in ${targetLanguage} with its native translation in ${nativeLanguage}. The sentence MUST be directly relevant to the word's specific category ("${word.category || "General"}") and context ("${word.context || "Conversational"}"), demonstrating real-world conversational or professional usage. Return it as a single-element array — do not return more than one sentence.
-4. Usage Notes: Provide a concise, highly practical note on collocations, tone (formal vs casual), memory hooks, or common nuances.
-5. Image Search Keyword: Set imageKeyword to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.
-6. Suggested Related Vocabulary: Identify 3 to 5 COMMON, everyday-frequency words or expressions in ${targetLanguage} that belong to the SAME category ("${word.category || "General"}") and the SAME usage context ("${word.context || "Conversational"}") as the target word. Guidelines:
-   - Prioritize high-frequency words a learner would realistically encounter and reuse in this context. Do NOT pick rare, archaic, academic, or overly advanced vocabulary.
-   - They must be thematically related to the target word (same topic/scenario), not merely words that happened to appear in the example sentence.
-   - Do NOT repeat the target word itself, and do not repeat the same word twice.
-   - For each, provide its target-language form ("word"), direct native-language translation ("translation" in ${nativeLanguage}), part of speech ("partOfSpeech"), and a brief definition ("definition" in ${targetLanguage}).
-   These will be displayed as suggested actions to allow the user to easily add them to their collection.
+FOR EACH WORD:
+1. "word": The target vocabulary word in ${targetLanguage}.
+2. "pronunciation": Accurate IPA pronunciation guide (e.g. /ɪˈfɛmərəl/).
+3. "partOfSpeech": Part of speech (noun, verb, adjective, adverb, idiom, etc.).
+4. "translation": Natural, accurate translation in ${nativeLanguage}.
+5. "definition": Concise, clear definition in ${targetLanguage}.
+6. "example": EXACTLY 1 natural, realistic example sentence demonstrating practical usage in context.
+7. "exampleTranslation": Translation of the example sentence in ${nativeLanguage}.
+8. "category": Thematic domain/tag (e.g. "Everyday", "Business", "Travel", "Academic", "Emotions").
+9. "suggestedWords": Optional top 1 or 2 most natural collocations or paired expressions (keep it strictly concise, maximum 1-2 items per card).
+   For each pairing, provide:
+   - "word": The collocated expression in ${targetLanguage} (e.g., "heavy rain", "deep breath").
+   - "translation": Native translation in ${nativeLanguage}.
+   - "hint": A brief 2-4 word explanation note.
+
+CRITICAL REQUIREMENT: For each flashcard, "suggestedWords" MUST contain AT MOST 1 or 2 items. Do not generate long lists.
 
 Output MUST be strictly valid JSON matching this schema:
-{
-  "word": "string",
-  "pronunciation": "string",
-  "partOfSpeech": "string",
-  "definition": "string in ${targetLanguage}",
-  "translation": "string in ${nativeLanguage}",
-  "category": "string",
-  "context": "string",
-  "extraExampleSentences": [
-    {
-      "sentence": "string in ${targetLanguage}",
-      "translation": "string in ${nativeLanguage}"
-    }
-  ],
-  "usageNotes": "string",
-  "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
-  "suggestedVocabulary": [
-    {
-      "word": "string (common related word/expression in the same category and context)",
-      "translation": "string (translation in ${nativeLanguage})",
-      "partOfSpeech": "string (e.g. noun, verb, adjective, idiom)",
-      "definition": "string (short definition in ${targetLanguage})"
-    }
-  ]
-}
+[
+  {
+    "word": "string",
+    "pronunciation": "string",
+    "partOfSpeech": "string",
+    "translation": "string",
+    "definition": "string in ${targetLanguage}",
+    "example": "string in ${targetLanguage}",
+    "exampleTranslation": "string in ${nativeLanguage}",
+    "category": "string",
+    "suggestedWords": [
+      {
+        "word": "string (collocation/pairing)",
+        "translation": "string (native translation)",
+        "hint": "string (brief note)"
+      }
+    ]
+  }
+]`;
 
-NOTE: "extraExampleSentences" MUST contain EXACTLY 1 item. "suggestedVocabulary" MUST contain EXACTLY 1 to 2 items.`;
+    const wordsDetails = wordsList.map((w: any, idx: number) => 
+      `${idx + 1}. Word: "${w.word}" | POS: "${w.partOfSpeech || "unknown"}" | Def: "${w.definition || ""}" | Trans: "${w.translation || ""}" | Cat: "${w.category || "General"}" | Context: "${w.context || ""}"`
+    ).join("\n");
 
-    const prompt = `Generate interactive flashcard content for the word:\n` +
-      `Word: "${word.word}"\n` +
-      `Part of Speech: "${word.partOfSpeech || "unknown"}"\n` +
-      `Stored Definition: "${word.definition}"\n` +
-      `Stored Translation: "${word.translation}"\n` +
-      `Stored Category: "${word.category || "General"}"\n` +
-      `Stored Context: "${word.context || word.definition}"\n` +
-      `Stored Example: "${word.example || "N/A"}"\n\n` +
+    const prompt = `Generate interactive study flashcards for these ${wordsList.length} vocabulary words:\n${wordsDetails}\n\n` +
       `REMINDERS:\n` +
-      `- Return EXACTLY 1 extra example sentence.\n` +
-      `- Return EXACTLY 1 to 2 suggestedVocabulary entries (choose the best candidate words) that are COMMON words related to the category "${word.category || "General"}" and context "${word.context || "Conversational"}" (not rare or advanced vocabulary, and not the target word itself).`;
+      `- Return a JSON array containing EXACTLY ${wordsList.length} flashcard objects.\n` +
+      `- For each flashcard, include 1 natural example sentence with translation.\n` +
+      `- For each flashcard, include at most 1 or 2 top commonly paired words/collocations ("suggestedWords") with their native translation (keep concise).`;
 
-    const schemaDesc = `Object containing word, pronunciation, partOfSpeech, definition, translation, category, context, extraExampleSentences (array with EXACTLY 1 item: sentence, translation), usageNotes, imageKeyword, and suggestedVocabulary (1 to 2 common related words in the same category and context, each with word, translation, partOfSpeech, definition).`;
+    const schemaDesc = `Array of Flashcard objects with word, pronunciation, partOfSpeech, translation, definition, example, exampleTranslation, category, suggestedWords (concise array of at most 1-2 items with word, translation, hint).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
-    const result = cleanAndParseJson(text);
-    res.json(result);
+    const cleaned = cleanJsonResponse(text);
+    const parsed = cleanAndParseJson(cleaned);
+
+    let cardsArray: any[] = [];
+    if (Array.isArray(parsed)) {
+      cardsArray = parsed;
+    } else if (parsed && Array.isArray(parsed.cards)) {
+      cardsArray = parsed.cards;
+    } else if (parsed && Array.isArray(parsed.flashcards)) {
+      cardsArray = parsed.flashcards;
+    } else if (parsed && typeof parsed === "object") {
+      cardsArray = [parsed];
+    }
+
+    // Normalize each card and attach corresponding wordId
+    const normalizedCards = cardsArray.map((card: any, idx: number) => {
+      const originalWord = wordsList[idx] || wordsList.find((w: any) => w.word?.toLowerCase().trim() === card.word?.toLowerCase().trim()) || {};
+      
+      // Normalize suggestedWords (keep 1-3 top paired words)
+      let suggestedWords: any[] = [];
+      const rawSuggestions = card.suggestedWords || card.suggestedVocabulary || card.collocations || [];
+      if (Array.isArray(rawSuggestions)) {
+        suggestedWords = rawSuggestions.slice(0, 3).map((item: any) => {
+          if (typeof item === "string") {
+            return { word: item, translation: "", hint: "Common pairing" };
+          }
+          return {
+            word: String(item.word || item.collocation || item.phrase || "").trim(),
+            translation: String(item.translation || item.meaning || "").trim(),
+            hint: String(item.hint || item.collocationType || item.type || item.partOfSpeech || "").trim()
+          };
+        }).filter((item: any) => Boolean(item.word));
+      }
+
+      return {
+        wordId: originalWord.id,
+        word: card.word || originalWord.word || "",
+        pronunciation: card.pronunciation || originalWord.pronunciation || "",
+        partOfSpeech: card.partOfSpeech || originalWord.partOfSpeech || "noun",
+        translation: card.translation || originalWord.translation || "",
+        definition: card.definition || originalWord.definition || "",
+        example: card.example || card.extraExampleSentences?.[0]?.sentence || originalWord.example || "",
+        exampleTranslation: card.exampleTranslation || card.extraExampleSentences?.[0]?.translation || originalWord.exampleTranslation || "",
+        category: card.category || originalWord.category || "General",
+        context: card.context || originalWord.context || originalWord.definition || "",
+        suggestedWords: suggestedWords.slice(0, 3),
+        suggestedVocabulary: suggestedWords.slice(0, 3)
+      };
+    });
+
+    res.json({
+      cards: normalizedCards,
+      // If single card was requested, also expose top-level properties for backward compatibility
+      ...(normalizedCards[0] || {})
+    });
   } catch (error: any) {
     console.error("Error generating flashcard content:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");

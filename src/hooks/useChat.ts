@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChatMessage, Word, WordSense, LLMConfig, UserStats, QuizQuestion } from "../types";
+import { ChatMessage, Word, WordSense, LLMConfig, UserStats, QuizQuestion, FlashcardItem } from "../types";
 import {
   sendChatMessageService,
   checkWordDefinitionsService,
@@ -7,10 +7,10 @@ import {
   generateAiQuizQuestionsService,
   fixGrammarService,
   analyzeImageVocabService,
-  generateFlashcardContentService,
+  generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { getQuizCandidateWords, getCandidateWordForFlashcard } from "../utils/spacedRepetition";
+import { getQuizCandidateWords, getCandidateWordsForFlashcards } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
@@ -1667,13 +1667,18 @@ export function useChat({
       return;
     }
 
-    const candidateWord = getCandidateWordForFlashcard(activeWords);
-    if (!candidateWord) {
+    const candidateWords = getCandidateWordsForFlashcards(activeWords, 5);
+    if (candidateWords.length === 0) {
       const noCandidateMsg: ChatMessage = {
         id: `flashcard-no-candidates-${Date.now()}`,
         role: "assistant",
         content: t("chat_no_words_found_flashcard_warning", currentAppLang),
         timestamp: new Date().toISOString(),
+        suggestedActions: [
+          { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+          { label: t("chat_quiz_start_today_action", currentAppLang), action: "start_quiz" },
+        ],
       };
       setChatMessages([noCandidateMsg]);
       return;
@@ -1682,20 +1687,23 @@ export function useChat({
     setIsTyping(true);
 
     try {
-      const flashcardContent = await generateFlashcardContentService({
-        word: candidateWord,
+      const batchResult = await generateBatchFlashcardsService({
+        words: candidateWords,
         targetLanguage,
         nativeLanguage,
         llmConfig: configToUse,
       });
 
-      const prevStrength = candidateWord.strength ?? 0;
-      const calcNewStrength = Math.min(100, prevStrength + 10);
-      const strengthGained = calcNewStrength - prevStrength;
+      const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
 
+      // Update strength and review history for all studied words
+      const candidateIds = new Set(candidateWords.map((w) => w.id));
       setWords((prevWords) => {
         const updatedWords = prevWords.map((w) => {
-          if (w.id === candidateWord.id) {
+          if (candidateIds.has(w.id)) {
+            const prevStrength = w.strength ?? 0;
+            const calcNewStrength = Math.min(100, prevStrength + 10);
+            const strengthGained = calcNewStrength - prevStrength;
             return recordStrengthHistory(
               w, 
               calcNewStrength, 
@@ -1709,54 +1717,62 @@ export function useChat({
         return updatedWords;
       });
 
-      const keywordText = flashcardContent.imageKeyword || candidateWord.imageKeyword || candidateWord.word;
+      // Aggregate top 3 unique suggested words across all flashcard cards in the deck
+      const seenSuggested = new Set<string>();
+      const top3SuggestedActions: { label: string; action: string; payload: { word: string; hint?: string } }[] = [];
+      cards.forEach((c) => {
+        (c.suggestedWords || []).forEach((sw: any) => {
+          const swWord = typeof sw === "string" ? sw.trim() : (sw?.word || "").trim();
+          const swHint = typeof sw === "object" ? (sw?.hint || sw?.relationship || sw?.translation || "") : "";
+          if (swWord && !seenSuggested.has(swWord.toLowerCase())) {
+            seenSuggested.add(swWord.toLowerCase());
+            if (top3SuggestedActions.length < 3) {
+              top3SuggestedActions.push({
+                label: `+ ${swWord}`,
+                action: "add_word",
+                payload: { word: swWord, hint: swHint || undefined }
+              });
+            }
+          }
+        });
+      });
 
-      const vocabActions = (flashcardContent.suggestedVocabulary || []).map((vocab: any) => ({
-        label: t("action_confirm_add", currentAppLang, { word: vocab.word, translation: vocab.translation }),
-        action: "add_word",
-        payload: { word: vocab.word, hint: vocab.definition },
-      }));
-
+      const primaryCard: FlashcardItem | undefined = cards[0];
       const flashcardMsg: ChatMessage = {
         id: `flashcard-msg-${Date.now()}`,
         role: "assistant",
-        content: t("chat_flashcard_title", currentAppLang, {
-          word: flashcardContent.word,
-          partOfSpeech: flashcardContent.partOfSpeech || candidateWord.partOfSpeech,
-          pronunciation: flashcardContent.pronunciation || candidateWord.pronunciation || "",
-          definition: flashcardContent.definition,
-          translation: flashcardContent.translation
-        }),
+        content: t("chat_flashcard_deck_title", currentAppLang, { count: String(cards.length) }),
         timestamp: new Date().toISOString(),
-        audioWord: flashcardContent.word,
-        quizSpeechText: `${flashcardContent.word}. ${flashcardContent.definition}`,
-        imageKeyword: keywordText,
+        audioWord: primaryCard?.word,
+        quizSpeechText: primaryCard ? `${primaryCard.word}. ${primaryCard.definition}` : undefined,
+        imageKeyword: primaryCard?.word,
         flashcardData: {
-          wordId: candidateWord.id,
-          word: flashcardContent.word,
-          pronunciation: flashcardContent.pronunciation || candidateWord.pronunciation,
-          partOfSpeech: flashcardContent.partOfSpeech || candidateWord.partOfSpeech,
-          definition: flashcardContent.definition,
-          translation: flashcardContent.translation,
-          category: flashcardContent.category || candidateWord.category || "General",
-          context: flashcardContent.context || candidateWord.context || candidateWord.definition,
-          extraExampleSentences: flashcardContent.extraExampleSentences,
-          usageNotes: flashcardContent.usageNotes,
-          imageKeyword: keywordText,
-          suggestedVocabulary: flashcardContent.suggestedVocabulary,
-          previousStrength: prevStrength,
-          newStrength: calcNewStrength,
-          strengthGained: strengthGained
+          cards: cards,
+          wordId: primaryCard?.wordId,
+          word: primaryCard?.word,
+          pronunciation: primaryCard?.pronunciation,
+          partOfSpeech: primaryCard?.partOfSpeech,
+          definition: primaryCard?.definition,
+          translation: primaryCard?.translation,
+          example: primaryCard?.example,
+          exampleTranslation: primaryCard?.exampleTranslation,
+          category: primaryCard?.category,
+          context: primaryCard?.context,
+          suggestedWords: primaryCard?.suggestedWords,
         },
-        provider: flashcardContent.provider,
-        model: flashcardContent.model,
-        responseTimeMs: flashcardContent.responseTimeMs,
-        suggestedActions: [...vocabActions, { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" }],
+        provider: batchResult.provider,
+        model: batchResult.model,
+        responseTimeMs: batchResult.responseTimeMs,
+        suggestedActions: [
+          ...top3SuggestedActions,
+          { label: t("action_next_flashcard_deck", currentAppLang), action: "view_flashcard" },
+          { label: t("action_start_quiz_with_words", currentAppLang), action: "start_quiz" }
+        ],
       };
 
       setChatMessages([flashcardMsg]);
     } catch (e: any) {
-      console.error("Error generating flash card:", e);
+      console.error("Error generating flash card deck:", e);
       handleAiApiError(e, configToUse, (newConfig) => handleViewFlashcard(newConfig));
     } finally {
       setIsTyping(false);

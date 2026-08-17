@@ -211,7 +211,7 @@ export const jaTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ 別の文章をブラッシュアップする",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 おすすめの追加候補単語:\n",
     chat_empty_collection_flashcard_warning: "📝 **単語帳が空です！**\n\nAI単語カードを表示するには、まず **+ 単語を追加** ボタンを使用するか、トピック別の単語生成を依頼して、単語を追加してください！",
-    chat_no_words_found_flashcard_warning: "📝 **単語が見つかりません。** 単語カードを表示するには、単語帳に追加してください！",
+    chat_no_words_found_flashcard_warning: "🎉 **現在、単語カードの対象となる単語はありません！**\n\nすべての単語が復習済みです（未学習の単語、クイズでの誤答、または7日以上復習していない単語はありません）。\n\n明日また確認するか、新しい単語を追加して学習を続けてください！",
     chat_flashcard_title: "🃏 **単語カード: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**定義**: {definition}\n**Translation**: 「{translation}」",
     topic_dining: "🍽️ 外食＆レストラン",
     topic_travel: "✈️ 旅行＆空港",

@@ -128,17 +128,49 @@ export interface SuggestedVocabularyWord {
   translation: string;
   partOfSpeech?: string;
   definition?: string;
+  hint?: string;
 }
 
-export interface FlashcardData {
+export interface SuggestedPairedWord {
+  word: string;
+  translation: string;
+  relationship?: string;
+  hint?: string;
+  partOfSpeech?: string;
+  phrase?: string;
+}
+
+export interface FlashcardItem {
   wordId?: string;
   word: string;
   pronunciation?: string;
   partOfSpeech?: string;
   definition: string;
   translation: string;
+  example?: string;
+  exampleTranslation?: string;
   category?: string;
   context?: string;
+  suggestedWords?: SuggestedPairedWord[];
+  imageKeyword?: string;
+  imageUrl?: string;
+  previousStrength?: number;
+  newStrength?: number;
+  strengthGained?: number;
+}
+
+export interface FlashcardData {
+  cards?: FlashcardItem[];
+  wordId?: string;
+  word?: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  definition?: string;
+  translation?: string;
+  category?: string;
+  context?: string;
+  example?: string;
+  exampleTranslation?: string;
   extraExampleSentences?: {
     sentence: string;
     translation: string;
@@ -148,6 +180,7 @@ export interface FlashcardData {
   imageUrl?: string;
   imageKeyword?: string;
   suggestedVocabulary?: SuggestedVocabularyWord[];
+  suggestedWords?: (string | SuggestedPairedWord)[];
   previousStrength?: number;
   newStrength?: number;
   strengthGained?: number;

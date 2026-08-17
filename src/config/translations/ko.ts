@@ -211,7 +211,7 @@ export const koTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ 다른 문장 다듬기",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 추천 단어장 추가 후보:\n",
     chat_empty_collection_flashcard_warning: "📝 **단어장이 비어 있습니다!**\n\nAI 플래시카드를 보려면 먼저 **+ 단어 추가** 버튼을 사용하여 단어를 직접 추가하거나 주제별 단어 생성을 요청하여 단어장에 추가해 주세요!",
-    chat_no_words_found_flashcard_warning: "📝 **등록된 단어가 없습니다.** 단어 카드 학습을 시작하려면 단어장에 단어를 추가해 주세요!",
+    chat_no_words_found_flashcard_warning: "🎉 **현재 플래시카드 학습 대상 단어가 없습니다!**\n\n모든 단어가 최신 상태로 복습되었습니다 (미학습 단어, 퀴즈 오답 단어, 7일 이상 미학습 단어가 없습니다).\n\n내일 다시 확인하시거나 새 단어를 추가하여 계속 학습해 보세요!",
     chat_flashcard_title: "🃏 **단어 카드: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**뜻/정의**: {definition}\n**번역**: \"{translation}\"",
     topic_dining: "🍽️ 외식 및 레스토랑",
     topic_travel: "✈️ 여행 및 공항",

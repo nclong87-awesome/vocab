@@ -276,18 +276,96 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
 }
 
 /**
- * Selects a candidate word for flashcard viewing applying the same candidate pool and weighted random sampling rules as quiz selection.
+ * Determines whether a word is eligible as a candidate for flashcard study:
+ * 1. They've never learned it (!word.learned or !word.lastReviewed)
+ * 2. They answered a quiz question incorrectly (has 'quiz_incorrect' in strengthHistory)
+ * 3. It hasn't been used for a flashcard or quiz in over 7 days (diffDays > 7)
+ */
+export function isFlashcardCandidate(word: Word, now: Date = new Date()): boolean {
+  // Condition 1: Never learned it (not marked as learned or never reviewed)
+  if (!word.learned || !word.lastReviewed) {
+    return true;
+  }
+
+  // Condition 2: Answered a quiz question incorrectly
+  const hasQuizIncorrect = (word.strengthHistory || []).some(
+    entry => entry.reason === "quiz_incorrect"
+  );
+  if (hasQuizIncorrect) {
+    return true;
+  }
+
+  // Condition 3: Hasn't been used for a flashcard or quiz in over 7 days
+  const { lastPracticeDate } = getLastPracticeBaseline(word);
+  const dateStr = lastPracticeDate || word.lastReviewed;
+  if (!dateStr) {
+    return true;
+  }
+
+  const reviewDate = new Date(dateStr);
+  if (isNaN(reviewDate.getTime())) {
+    return true;
+  }
+
+  const diffMs = now.getTime() - reviewDate.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  if (diffDays > 7) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Selects candidate words for flashcard study (default up to 5) strictly from words meeting
+ * the candidate criteria (never learned, quiz incorrect, or idle > 7 days).
+ * Returns empty array if no words meet the conditions.
+ */
+export function getCandidateWordsForFlashcards(words: Word[], count: number = 5, now: Date = new Date()): Word[] {
+  if (!words || words.length === 0) return [];
+
+  // Filter ONLY words that meet the 3 strict criteria
+  const eligibleWords = words.filter(word => isFlashcardCandidate(word, now));
+
+  if (eligibleWords.length === 0) {
+    return [];
+  }
+
+  // Categorize eligible words by priority to give the most impactful words first:
+  // 1. Words with quiz errors (urgent review)
+  // 2. Never learned / unreviewed words
+  // 3. Words idle > 7 days
+  const quizErrorWords: Word[] = [];
+  const neverLearnedWords: Word[] = [];
+  const idleSevenDaysWords: Word[] = [];
+
+  for (const word of eligibleWords) {
+    const hasQuizIncorrect = (word.strengthHistory || []).some(entry => entry.reason === "quiz_incorrect");
+    if (hasQuizIncorrect) {
+      quizErrorWords.push(word);
+    } else if (!word.learned || !word.lastReviewed) {
+      neverLearnedWords.push(word);
+    } else {
+      idleSevenDaysWords.push(word);
+    }
+  }
+
+  // Shuffle within categories for variety
+  const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
+  const prioritized = [
+    ...shuffle(quizErrorWords),
+    ...shuffle(neverLearnedWords),
+    ...shuffle(idleSevenDaysWords),
+  ];
+
+  return prioritized.slice(0, count);
+}
+
+/**
+ * Selects a candidate word for flashcard viewing strictly from eligible words.
  */
 export function getCandidateWordForFlashcard(words: Word[]): Word | null {
   if (!words || words.length === 0) return null;
-
-  // 1. First try quiz candidates with standard 12h cooldown using candidate pool & weighted random sampling
-  const cooldownCandidates = getQuizCandidateWords(words, { maxCandidates: 5, cooldownHours: 12, candidatePoolSize: 30 });
-  if (cooldownCandidates.length > 0) {
-    return cooldownCandidates[Math.floor(Math.random() * cooldownCandidates.length)];
-  }
-
-  // 2. If no candidate met cooldown rules, fallback to weighted random sampling without cooldown restriction
-  const fallbackCandidates = getQuizCandidateWords(words, { maxCandidates: 5, cooldownHours: 0, candidatePoolSize: 30 });
-  return fallbackCandidates[0] || words[Math.floor(Math.random() * words.length)] || null;
+  const candidates = getCandidateWordsForFlashcards(words, 1);
+  return candidates[0] || null;
 }

@@ -344,7 +344,15 @@ export type TranslationKey =
   | "settings_test_voice_click_btn"
   | "settings_test_voice_sample"
   | "chat_single_word_added_success"
-  | "label_commonly_used_with";
+  | "label_commonly_used_with"
+  | "chat_flashcard_deck_title"
+  | "action_next_flashcard_deck"
+  | "action_start_quiz_with_words"
+  | "flashcard_mode_deck"
+  | "flashcard_mode_all"
+  | "flashcard_paired_words_title"
+  | "flashcard_added_word"
+  | "flashcard_add_paired";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

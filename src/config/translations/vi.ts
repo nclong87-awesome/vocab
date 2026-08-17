@@ -211,7 +211,7 @@ export const viTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ Trau chuốt câu khác",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 Từ Vựng Đề Xuất:\n",
     chat_empty_collection_flashcard_warning: "📝 **Bộ sưu tập từ vựng của bạn đang trống!**\n\nĐể xem thẻ ghi nhớ AI, vui lòng thêm từ vào bộ sưu tập trước bằng nút **+ Thêm Từ** hoặc yêu cầu tôi tạo từ vựng theo chủ đề!",
-    chat_no_words_found_flashcard_warning: "📝 **Không tìm thấy từ vựng nào.** Vui lòng thêm từ vào bộ sưu tập để xem thẻ ghi nhớ!",
+    chat_no_words_found_flashcard_warning: "🎉 **Hiện tại không có từ vựng nào cần ôn thẻ ghi nhớ!**\n\nTất cả từ vựng của bạn đã được cập nhật (không có từ chưa học, trả lời sai bài kiểm tra, hoặc chưa ôn luyện quá 7 ngày).\n\nVui lòng kiểm tra lại vào ngày mai hoặc thêm từ mới để học!",
     chat_flashcard_title: "🃏 **Thẻ Ghi Nhớ Từ Vựng: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**Định nghĩa**: {definition}\n**Bản dịch**: \"{translation}\"",
     topic_dining: "🍽️ Gọi Món & Nhà Hàng",
     topic_travel: "✈️ Du Lịch & Sân Bay",
@@ -337,5 +337,13 @@ export const viTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "Thử Giọng Nói",
     settings_test_voice_playing: "Đang phát giọng nói...",
     settings_test_voice_click_btn: "Nhấn nút để thử phát âm",
-    settings_test_voice_sample: "Xin chào! Chào mừng bạn đến với Ứng dụng Học Từ Vựng. Phát âm âm thanh giúp ghi nhớ nhanh hơn."
+    settings_test_voice_sample: "Xin chào! Chào mừng bạn đến với Ứng dụng Học Từ Vựng. Phát âm âm thanh giúp ghi nhớ nhanh hơn.",
+    chat_flashcard_deck_title: "🃏 **Bộ Thẻ Học Flashcard ({count} từ)**",
+    action_next_flashcard_deck: "🃏 Học 5 Thẻ Tiếp Theo",
+    action_start_quiz_with_words: "🎯 Luyện Tập Trắc Nghiệm",
+    flashcard_mode_deck: "Từng Thẻ",
+    flashcard_mode_all: "Xem 5 Thẻ",
+    flashcard_paired_words_title: "Từ Thường Đi Kèm",
+    flashcard_added_word: "Đã thêm vào bộ từ",
+    flashcard_add_paired: "Thêm"
   };

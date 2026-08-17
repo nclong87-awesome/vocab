@@ -211,7 +211,7 @@ export const zhTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ 润色其他句子",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 推荐候选词汇：\n",
     chat_empty_collection_flashcard_warning: "📝 **您的词汇本为空！**\n\n要查看 AI 记忆卡片，请先使用 **+ 添加词汇** 按钮手动添加词汇，或者要求我按主题生成词汇！",
-    chat_no_words_found_flashcard_warning: "📝 **未找到任何词汇。** 请先在词汇本中添加词汇以查看记忆卡片！",
+    chat_no_words_found_flashcard_warning: "🎉 **目前没有需要复习记忆卡片的词汇！**\n\n您的所有词汇都处于最新状态（没有未学习的词汇、近期测验答错的词汇或超过 7 天未复习的词汇）。\n\n请明天再来查看，或添加更多新词汇继续学习！",
     chat_flashcard_title: "🃏 **生词记忆卡片: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**释义**: {definition}\n**翻译**: “{translation}”",
     topic_dining: "🍽️ 外出就餐与餐厅",
     topic_travel: "✈️ 旅游与机场",

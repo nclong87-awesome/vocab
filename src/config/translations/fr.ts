@@ -211,7 +211,7 @@ export const frTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ Polir une autre phrase",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 Vocabulaire recommandé :\n",
     chat_empty_collection_flashcard_warning: "📝 **Votre collection de vocabulaire est vide !**\n\nPour voir les cartes mémoire IA, veuillez d'abord ajouter des mots à votre collection en utilisant le bouton **+ Ajouter un Mot** ou demandez-moi de générer des mots par thème !",
-    chat_no_words_found_flashcard_warning: "📝 **Aucun mot de vocabulaire trouvé.** Veuillez ajouter des mots à votre collection pour afficher les cartes mémoire !",
+    chat_no_words_found_flashcard_warning: "🎉 **Aucun candidat pour les cartes mémoire pour le moment !**\n\nTous vos mots sont à jour (aucun mot non appris, aucune erreur récente aux quiz ou mot inactif depuis plus de 7 jours).\n\nRevenez demain ou ajoutez de nouveaux mots à apprendre !",
     chat_flashcard_title: "🃏 **Carte mémoire : {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**Définition** : {definition}\n**Traduction** : \"{translation}\"",
     topic_dining: "🍽️ Dîner à l'extérieur & Restaurants",
     topic_travel: "✈️ Voyage & Aéroports",

@@ -170,14 +170,63 @@ function ChatMessageItem({
     if (!isUser) {
       const hasQuizOptions = parsedQuizOptions.length >= 2 && parsedQuizOptions.length <= 5;
       
-      if (hasQuizOptions) {
+      if (msg.flashcardData) {
+        // Flashcard message: strictly top 3 suggested words across the whole deck, plus standard deck navigation actions
+        const cardsList = msg.flashcardData.cards && Array.isArray(msg.flashcardData.cards) && msg.flashcardData.cards.length > 0
+          ? msg.flashcardData.cards
+          : (msg.flashcardData.word ? [msg.flashcardData] : []);
+
+        const top3Suggested: { word: string; hint?: string; translation?: string }[] = [];
+        const seenWords = new Set<string>();
+
+        for (const card of cardsList) {
+          const suggList = card.suggestedWords || [];
+          for (const item of suggList) {
+            const wordStr = typeof item === "string" ? item.trim() : (item?.word || "").trim();
+            const hintStr = typeof item === "object" ? (item?.hint || item?.relationship || item?.translation || "") : "";
+            const transStr = typeof item === "object" ? (item?.translation || "") : "";
+            const lower = wordStr.toLowerCase();
+            if (wordStr && !seenWords.has(lower)) {
+              seenWords.add(lower);
+              const isAlreadyInCollection = words && Array.isArray(words) && words.some(
+                w => w && typeof w.word === "string" && w.word.trim().toLowerCase() === lower
+              );
+              if (!isAlreadyInCollection) {
+                top3Suggested.push({
+                  word: wordStr,
+                  hint: hintStr || transStr || undefined,
+                  translation: transStr || undefined,
+                });
+                if (top3Suggested.length >= 3) break;
+              }
+            }
+          }
+          if (top3Suggested.length >= 3) break;
+        }
+
+        const flashcardWordActions = top3Suggested.map(s => ({
+          label: `+ ${s.word}`,
+          action: "add_word",
+          payload: {
+            word: s.word,
+            hint: s.hint || s.translation
+          }
+        }));
+
+        // Keep non-word actions from msg.suggestedActions (e.g. view_flashcard, start_quiz)
+        const nonWordActions = (msg.suggestedActions || []).filter(
+          a => a && a.action !== "add_word" && a.action !== "confirm_save_word" && a.action !== "add_multiplewords"
+        );
+
+        rawActions = [...flashcardWordActions, ...nonWordActions];
+      } else if (hasQuizOptions) {
         rawActions = [...parsedQuizOptions];
       } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
         rawActions = [...msg.suggestedActions];
       }
 
-      // On the latest message, if no quiz options are present, extract or generate topic choices
-      if (isLatestMessage && !hasQuizOptions) {
+      // On the latest message, if no quiz options and not flashcard, extract or generate topic choices
+      if (isLatestMessage && !hasQuizOptions && !msg.flashcardData) {
         const content = safeMsgContent;
         const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
 
@@ -446,6 +495,8 @@ function ChatMessageItem({
               responseTimeMs={msg.responseTimeMs}
               words={words}
               onUpdateWords={onUpdateWords}
+              onAddWord={onAddWord}
+              onAddMultipleWords={onAddMultipleWords}
               showToast={showToast}
             />
           ) : (

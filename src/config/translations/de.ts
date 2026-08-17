@@ -211,7 +211,7 @@ export const deTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ Weiteren Satz verfeinern",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 Empfohlene Vokabelkandidaten:\n",
     chat_empty_collection_flashcard_warning: "📝 **Ihre Vokabelsammlung ist leer!**\n\nUm KI-Karteikarten anzuzeigen, fügen Sie bitte zuerst einige Wörter zu Ihrer Sammlung hinzu – entweder über den Button **+ Wort Hinzufügen** oder bitten Sie mich, Wörter nach Thema zu generieren!",
-    chat_no_words_found_flashcard_warning: "📝 **Keine Vokabeln gefunden.** Bitte fügen Sie Wörter zu Ihrer Sammlung hinzu, um Karteikarten anzuzeigen!",
+    chat_no_words_found_flashcard_warning: "🎉 **Derzeit keine Kandidaten für Karteikarten!**\n\nAlle Ihre Vokabeln sind auf dem neuesten Stand (keine unvollständig gelernten Wörter, Fehler im Quiz oder Wörter, die seit über 7 Tagen nicht geübt wurden).\n\nBitte schauen Sie morgen wieder vorbei oder fügen Sie weitere Wörter hinzu!",
     chat_flashcard_title: "🃏 **Wort-Karteikarte: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**Definition**: {definition}\n**Übersetzung**: \"{translation}\"",
     topic_dining: "🍽️ Auswärts essen & Restaurants",
     topic_travel: "✈️ Reisen & Flughäfen",

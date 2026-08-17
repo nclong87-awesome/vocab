@@ -211,7 +211,7 @@ export const enTranslations: LanguageTranslations = {
     action_fix_another_sentence: "✍️ Polish Another Sentence",
     chat_recommended_vocabulary_candidates_header: "---\n### 📚 Recommended Vocabulary Candidates:\n",
     chat_empty_collection_flashcard_warning: "📝 **Your vocabulary collection is empty!**\n\nTo view AI flash cards, please add some words to your collection first using the **+ Add Word** button or ask me to generate words by topic!",
-    chat_no_words_found_flashcard_warning: "📝 **No vocabulary words found.** Please add words to your collection to view flash cards!",
+    chat_no_words_found_flashcard_warning: "🎉 **No candidates for flashcards right now!**\n\nThere are currently no words that meet the study criteria (unlearned words, incorrect quiz answers, or words idle for over 7 days).\n\nPlease check back tomorrow or add more words to learn!",
     chat_flashcard_title: "🃏 **Word Flash Card: {word}**\n\n*{partOfSpeech}* • `{pronunciation}`\n\n**Definition**: {definition}\n**Translation**: \"{translation}\"",
     topic_dining: "🍽️ Dining Out & Restaurants",
     topic_travel: "✈️ Travel & Airports",
@@ -337,5 +337,13 @@ export const enTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "Test Voice Model",
     settings_test_voice_playing: "Playing speech...",
     settings_test_voice_click_btn: "Click button to test output",
-    settings_test_voice_sample: "Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention."
+    settings_test_voice_sample: "Hello! Welcome to Vocabulary Learner. Audio pronunciation speeds up memory retention.",
+    chat_flashcard_deck_title: "🃏 **Study Flashcards ({count} Words)**",
+    action_next_flashcard_deck: "🃏 Study Next 5 Flashcards",
+    action_start_quiz_with_words: "🎯 Practice Quiz",
+    flashcard_mode_deck: "Deck Mode",
+    flashcard_mode_all: "View All 5",
+    flashcard_paired_words_title: "Commonly Paired With",
+    flashcard_added_word: "Added to collection",
+    flashcard_add_paired: "Add"
   };
