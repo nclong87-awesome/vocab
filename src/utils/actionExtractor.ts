@@ -107,9 +107,12 @@ export function getRemainingWordActions(
       if (!hasFullDetails) {
         finalAct.action = "add_word";
         if (finalAct.payload) {
+          const hint = finalAct.payload.definition || finalAct.payload.translation || (finalAct.payload.hint && !finalAct.payload.hint.startsWith("Paired with") ? finalAct.payload.hint : undefined);
           finalAct.payload = {
             word: finalAct.payload.word,
-            hint: finalAct.payload.hint || finalAct.payload.definition,
+            definition: finalAct.payload.definition,
+            translation: finalAct.payload.translation,
+            hint,
           };
         }
       }

@@ -1142,12 +1142,16 @@ export function useChat({
         const existsAlready = updatedWords.some((w) => w.word.trim().toLowerCase() === swWord.toLowerCase());
         if (!existsAlready) {
           collocatedStrings.push(swWord);
+          const swObj = typeof sw === "object" && sw !== null ? sw : null;
+          const hintVal = swObj?.definition || swObj?.translation || (swObj?.hint && !swObj.hint.startsWith("Paired with") ? swObj.hint : undefined);
           suggestedWordActions.push({
             label: `+ ${swWord}`,
             action: "add_word",
             payload: {
               word: swWord,
-              hint: typeof sw === "object" && sw.hint ? sw.hint : `Paired with ${addedWord.word}`,
+              definition: swObj?.definition,
+              translation: swObj?.translation,
+              hint: hintVal,
             },
           });
         }

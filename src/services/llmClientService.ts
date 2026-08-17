@@ -1152,7 +1152,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
   "hasMultipleSenses": boolean,
-  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"],
+  "suggestedWords": [
+    {
+      "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
+      "definition": "string (short definition in ${userTarget})",
+      "translation": "string (translation in ${userNative})"
+    }
+  ],
   "senses": [
     {
       "word": "string (the word/expression STRICTLY in the target language ${userTarget}, e.g. 'hello')",
@@ -1165,7 +1171,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       "imageKeyword": "string (MUST be in English, highly focused 1-3 word concrete visual concept/object that symbolizes the word for Unsplash image search)",
       "category": "string",
       "context": "string",
-      "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
+      "suggestedWords": [
+        {
+          "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
+          "definition": "string (short definition in ${userTarget})",
+          "translation": "string (translation in ${userNative})"
+        }
+      ]
     }
   ]
 }`;

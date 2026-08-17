@@ -935,7 +935,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
   "exampleTranslation": "string (example translation in ${userNative})",
   "category": "string (topic/category string)",
   "context": "string (specific real-world usage context description)",
-  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
+  "suggestedWords": [
+    {
+      "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
+      "definition": "string (short definition in ${userTarget})",
+      "translation": "string (translation in ${userNative})"
+    }
+  ]
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
@@ -1023,7 +1029,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
   "word": "string (the primary target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
   "notFound": boolean,
   "hasMultipleSenses": boolean,
-  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"],
+  "suggestedWords": [
+    {
+      "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
+      "definition": "string (short definition in ${userTarget})",
+      "translation": "string (translation in ${userNative})"
+    }
+  ],
   "senses": [
     {
       "word": "string (the target word/expression STRICTLY in target language ${userTarget}, e.g. 'hello')",
@@ -1036,7 +1048,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
       "category": "string",
       "context": "string",
-      "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
+      "suggestedWords": [
+        {
+          "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
+          "definition": "string (short definition in ${userTarget})",
+          "translation": "string (translation in ${userNative})"
+        }
+      ]
     }
   ]
 }`;

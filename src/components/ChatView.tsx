@@ -420,6 +420,7 @@ function ChatView({
         focusInput={focusInput}
         setIsPhotoModalOpen={setIsPhotoModalOpen}
         setSelectedImage={setSelectedImage}
+        words={words}
       />
 
       {/* Input Message Footer Form */}
