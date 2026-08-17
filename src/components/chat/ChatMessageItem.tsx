@@ -128,10 +128,15 @@ function ChatMessageItem({
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
-  const isWelcomeMsg = !isUser && (
-    msg.id.startsWith("welcome-msg") ||
-    (messages.length === 1 && messages[0]?.id === msg.id)
-  );
+  const isQuizActive = useMemo(() => {
+    return messages.some(
+      (m) =>
+        m.id.startsWith("quiz-") ||
+        (m.suggestedActions && m.suggestedActions.some((a) => a.action === "quiz_answer"))
+    );
+  }, [messages]);
+
+  const isWelcomeMsg = !isUser && msg.id.startsWith("welcome-msg") && !isQuizActive;
 
   const quizCandidates = useMemo(() => {
     if (!isWelcomeMsg || !words || words.length === 0) return [];

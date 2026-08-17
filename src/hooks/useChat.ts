@@ -443,6 +443,10 @@ export function useChat({
             accuracy: String(Math.round((newScore / totalQs) * 100)),
           }),
           timestamp: new Date().toISOString(),
+          audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
+          quizSpeechText: isCorrect
+            ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
+            : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
           suggestedActions: [
             { label: t("chat_quiz_start_today_action", currentAppLang), action: "start_quiz" },
             { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
