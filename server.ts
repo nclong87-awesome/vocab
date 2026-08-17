@@ -1170,6 +1170,8 @@ CRITICAL INSTRUCTIONS:
   - If there are multiple misspellings, rank them before other candidate words.
    For each candidate, provide:
    - "word": string (the target language word or expression)
+   - "definition": string (clear, concise definition written strictly in ${userTarget})
+   - "translation": string (direct translation into user's native language ${userNative})
    - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
 `;
 
@@ -1180,6 +1182,8 @@ CRITICAL INSTRUCTIONS:
   "vocabularyCandidates": [
     {
       "word": "string (target word in ${userTarget})",
+      "definition": "string (definition written strictly in ${userTarget})",
+      "translation": "string (direct translation in ${userNative})",
       "reason": "string (short reason)"
     }
   ]

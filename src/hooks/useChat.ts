@@ -1705,11 +1705,18 @@ export function useChat({
       if (candidates && candidates.length > 0) {
         candidates.forEach((cand) => {
           if (cand.word) {
-            const reason = cand.reason || (currentAppLang.toLowerCase().includes("vi") ? "Từ vựng đề xuất" : "Candidate vocabulary");
+            const defVal = cand.definition;
+            const transVal = cand.translation;
+            const hintVal = defVal || transVal || cand.reason || (currentAppLang.toLowerCase().includes("vi") ? "Từ vựng đề xuất" : "Candidate vocabulary");
             actions.push({
-              label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason }),
+              label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason: hintVal }),
               action: "add_word",
-              payload: { word: cand.word, hint: cand.reason },
+              payload: {
+                word: cand.word,
+                definition: defVal,
+                translation: transVal,
+                hint: hintVal,
+              },
             });
           }
         });
@@ -1728,7 +1735,11 @@ export function useChat({
       if (candidates && candidates.length > 0) {
         contentMarkdown += t("chat_recommended_vocabulary_candidates_header", currentAppLang);
         candidates.forEach((c) => {
-          contentMarkdown += `- **${c.word}**: *${c.reason}*\n`;
+          const trans = c.translation ? ` (${c.translation})` : "";
+          const defOrReason = c.definition
+            ? `: *${c.definition}*${c.reason ? ` — ${c.reason}` : ""}`
+            : (c.reason ? `: *${c.reason}*` : "");
+          contentMarkdown += `- **${c.word}**${trans}${defOrReason}\n`;
         });
       }
 

@@ -1014,7 +1014,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Travel & Hospitality", "Business & Work", "Technology", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.
-- "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]).`;
+- "suggestedWords": Array of 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words. ALWAYS output each suggested word as an object containing "word", "definition" (short definition in ${userTarget}), and "translation" (translation in ${userNative}). Example: for "apple" -> [{"word": "crisp", "definition": "Firm, fresh, and brittle", "translation": "giòn"}, {"word": "orchard", "definition": "Land planted with fruit trees", "translation": "vườn cây"}].`;
 
   const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
@@ -1027,7 +1027,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   "exampleTranslation": "string (example translation in ${userNative})",
   "category": "string (topic/category string)",
   "context": "string (specific real-world usage context description)",
-  "suggestedWords": ["string (1 or 2 vocabulary words in ${userTarget} commonly paired with this word, without repeating the word itself)"]
+  "suggestedWords": [
+    {
+      "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
+      "definition": "string (short definition in ${userTarget})",
+      "translation": "string (translation in ${userNative})"
+    }
+  ]
 }`;
 
   const startTime = performance.now();
@@ -1342,6 +1348,8 @@ export interface FixGrammarResult {
   responseTimeMs?: number;
   vocabularyCandidates: {
     word: string;
+    definition?: string;
+    translation?: string;
     reason: string;
   }[];
 }
@@ -1370,6 +1378,8 @@ CRITICAL INSTRUCTIONS:
   - If there are multiple misspellings, rank them before other candidate words.
    For each candidate, provide:
    - "word": string (the target language word or expression)
+   - "definition": string (clear, concise definition written strictly in ${userTarget})
+   - "translation": string (direct translation into user's native language ${userNative})
    - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
 `;
 
@@ -1380,6 +1390,8 @@ CRITICAL INSTRUCTIONS:
   "vocabularyCandidates": [
     {
       "word": "string (target word in ${userTarget})",
+      "definition": "string (definition written strictly in ${userTarget})",
+      "translation": "string (direct translation in ${userNative})",
       "reason": "string (short reason)"
     }
   ]
@@ -1824,8 +1836,10 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
       "label": "string (compelling action text, e.g. 'Add \"serendipity\" to collection', 'Move on to Question 4', or 'Start Vocab Quiz')",
       "action": "string (one of: 'add_word', 'start_quiz', 'send_message')",
       "payload": {
-        "word": "string (required only if action is 'add_word')",
-        "message": "string (required only if action is 'send_message')"
+        "word": "string (required if action is 'add_word')",
+        "definition": "string (concise definition in target language if action is 'add_word')",
+        "translation": "string (translation in native language if action is 'add_word')",
+        "message": "string (required if action is 'send_message')"
       }
     }
   ]
