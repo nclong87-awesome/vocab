@@ -80,10 +80,6 @@ export const syncToGist = async (
         }
       }
 
-      // Explicitly delete any legacy config backup files from Gist if they exist
-      filesToUpdate['VocabLearner_02_store_config.json'] = null;
-      filesToUpdate['store_config.json'] = null;
-
       console.log("[Sync Service] [syncToGist] Prepared files payload details:");
       Object.keys(filesToUpdate).forEach(filename => {
         const fileContent = filesToUpdate[filename]?.content;
