@@ -179,30 +179,7 @@ export function extractOrGenerateTopicActions(
     lowerUser.includes("sửa ngữ pháp") ||
     resultActions.some((a) => a?.action === "fix_another" || a?.action === "copy_text");
 
-  // Check if this is strictly the initial Fix Grammar prompt card (asking user to enter/paste a sentence)
-  const isFixGrammarPromptCard =
-    (lowerMain.includes("enter or paste any sentence below") ||
-      lowerMain.includes("nhập hoặc dán bất kỳ câu nào") ||
-      lowerMain.includes("fix-grammar-prompt")) &&
-    !lowerMain.includes("analyzing sentence") &&
-    !lowerMain.includes("đang phân tích câu") &&
-    !resultActions.some((a) => a?.action === "fix_another");
-
-  if (isFixGrammarPromptCard) {
-    const sampleSentences = [
-      { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
-      { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
-      { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },
-    ];
-    for (const s of sampleSentences) {
-      if (!resultActions.some((a) => a.payload?.message === s.payload.message)) {
-        resultActions.push(s);
-      }
-    }
-    return resultActions;
-  }
-
-  // If this is ANY other Fix Grammar / Polish Sentence message (status, analysis, or fix result), return existing actions without adding any topic suggestions!
+  // If this is related to Polish Sentence / Fix Grammar, return existing actions without adding sample sentences or topic suggestions
   if (isFixGrammarRelated) {
     return resultActions;
   }
