@@ -84,12 +84,13 @@ export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined 
   let overrideConfig: LLMConfig | undefined = undefined;
   const match = getRotatedDefaultModel(RELIABLE_MODELS);
   if (match) {
+    const savedProfile = llmConfig?.savedProviders?.[match.provider];
     overrideConfig = {
       provider: match.provider,
       model: match.model,
-      apiKey: llmConfig?.apiKey || "",
-      baseUrl: match.baseUrl || llmConfig?.baseUrl || "",
-      isLoggedIn: true
+      apiKey: savedProfile?.apiKey || llmConfig?.apiKey || "",
+      baseUrl: savedProfile?.baseUrl || llmConfig?.baseUrl || "",
+      isLoggedIn: savedProfile?.isLoggedIn ?? llmConfig?.isLoggedIn ?? true,
     };
   }
   return overrideConfig || llmConfig;

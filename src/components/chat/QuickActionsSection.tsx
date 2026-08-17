@@ -110,17 +110,7 @@ function QuickActionsSection({
         if (item.id !== "suggest_reply") {
           p.setSelectedImage(null);
         }
-
-        // if (p.llmConfig?.provider === "auto" && item.defaultModels && item.defaultModels.length > 0) {
-        //   const match = getRotatedDefaultModel(item.defaultModels);
-        //   if (match) {
-        //     if (p.onSwitchProvider) {
-        //       p.onSwitchProvider(match.provider, match.model);
-        //       p.showToast(`🔄 Rotated session model to ${match.provider.toUpperCase()}: ${match.model}`);
-        //     }
-        //   }
-        // }
-
+        
         item.getAction({
           targetLanguage: p.targetLanguage,
           nativeLanguage: p.nativeLanguage,

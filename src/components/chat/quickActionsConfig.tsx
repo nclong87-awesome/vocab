@@ -43,11 +43,11 @@ export function getDefaultQuickActionModel(): { provider: string; model: string 
 /**
  * Find provider matching a specific model name across all available providers
  */
-export function findProviderForModel(modelName: string): { provider: LLMProvider; model: string; baseUrl: string } | null {
+export function findProviderForModel(modelName: string): { provider: LLMProvider; model: string } | null {
   for (const option of PROVIDER_OPTIONS) {
     if (option.id === "auto") continue;
     if (option.models.includes(modelName)) {
-      return { provider: option.id as LLMProvider, model: modelName, baseUrl: option.directBaseUrl || option.defaultBaseUrl || "" };
+      return { provider: option.id as LLMProvider, model: modelName };
     }
   }
   if (modelName.includes(":")) {
@@ -56,7 +56,7 @@ export function findProviderForModel(modelName: string): { provider: LLMProvider
     const mod = parts.slice(1).join(":");
     const found = PROVIDER_OPTIONS.find(p => p.id === prov);
     if (found && found.models.includes(mod)) {
-      return { provider: prov, model: mod, baseUrl: found.directBaseUrl || found.defaultBaseUrl || "" };
+      return { provider: prov, model: mod };
     }
   }
   return null;
@@ -66,7 +66,7 @@ export function findProviderForModel(modelName: string): { provider: LLMProvider
  * Sequential rotation for quick actions' default models list to avoid always using the first model.
  * Persists the last-used starting index in localStorage to ensure balanced rotation across user sessions.
  */
-export function getRotatedDefaultModel(defaultModels: string[]): { provider: LLMProvider; model: string, baseUrl: string } | null {
+export function getRotatedDefaultModel(defaultModels: string[]): { provider: LLMProvider; model: string } | null {
   if (!defaultModels || defaultModels.length === 0) return null;
 
   // Get current rotation index
