@@ -337,5 +337,8 @@ export const zhTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "测试语音模型",
     settings_test_voice_playing: "正在播放语音...",
     settings_test_voice_click_btn: "点击按钮测试输出",
-    settings_test_voice_sample: "你好！欢迎来到词汇学习助手。语音发音可以加速记忆保持。"
+    settings_test_voice_sample: "你好！欢迎来到词汇学习助手。语音发音可以加速记忆保持。",
+    chat_with_context_hint: "（语境：*\"{hint}\"*）",
+    label_suggested_vocabulary: "推荐词汇",
+    label_candidate_vocabulary: "候选词汇"
   };

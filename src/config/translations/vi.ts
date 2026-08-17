@@ -358,5 +358,8 @@ export const viTranslations: LanguageTranslations = {
     flashcard_mode_all: "Xem 5 Thẻ",
     flashcard_paired_words_title: "Từ Thường Đi Kèm",
     flashcard_added_word: "Đã thêm vào bộ từ",
-    flashcard_add_paired: "Thêm"
+    flashcard_add_paired: "Thêm",
+    chat_with_context_hint: " với ngữ cảnh *\"{hint}\"*",
+    label_suggested_vocabulary: "Từ vựng đề xuất",
+    label_candidate_vocabulary: "Từ vựng đề xuất"
   };

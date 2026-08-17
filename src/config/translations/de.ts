@@ -337,5 +337,8 @@ export const deTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "Stimmmodell testen",
     settings_test_voice_playing: "Sprache wird abgespielt...",
     settings_test_voice_click_btn: "Klicken Sie auf die Schaltfläche, um die Ausgabe zu testen",
-    settings_test_voice_sample: "Hallo! Willkommen beim Vokabellernen. Die Audio-Aussprache beschleunigt das Behalten im Gedächtnis."
+    settings_test_voice_sample: "Hallo! Willkommen beim Vokabellernen. Die Audio-Aussprache beschleunigt das Behalten im Gedächtnis.",
+    chat_with_context_hint: " mit Kontext *\"{hint}\"*",
+    label_suggested_vocabulary: "Vorgeschlagener Wortschatz",
+    label_candidate_vocabulary: "Kandidaten-Wortschatz"
   };

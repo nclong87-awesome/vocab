@@ -358,5 +358,8 @@ export const enTranslations: LanguageTranslations = {
     flashcard_mode_all: "View All 5",
     flashcard_paired_words_title: "Commonly Paired With",
     flashcard_added_word: "Added to collection",
-    flashcard_add_paired: "Add"
+    flashcard_add_paired: "Add",
+    chat_with_context_hint: " with context *\"{hint}\"*",
+    label_suggested_vocabulary: "Suggested vocabulary",
+    label_candidate_vocabulary: "Candidate vocabulary"
   };

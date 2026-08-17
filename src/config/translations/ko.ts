@@ -337,5 +337,8 @@ export const koTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "음성 모델 테스트",
     settings_test_voice_playing: "음성 재생 중...",
     settings_test_voice_click_btn: "버튼을 클릭하여 출력을 테스트합니다",
-    settings_test_voice_sample: "안녕하세요! 어휘 학습기에 오신 것을 환영합니다. 오디오 발음은 기억력을 빠르게 향상시킵니다."
+    settings_test_voice_sample: "안녕하세요! 어휘 학습기에 오신 것을 환영합니다. 오디오 발음은 기억력을 빠르게 향상시킵니다.",
+    chat_with_context_hint: " (문맥: *\"{hint}\"*)",
+    label_suggested_vocabulary: "추천 어휘",
+    label_candidate_vocabulary: "후보 어휘"
   };

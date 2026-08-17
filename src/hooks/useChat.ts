@@ -485,7 +485,7 @@ export function useChat({
 
     setIsTyping(true);
     const statusMsgId = `add-word-status-${Date.now()}`;
-    const contextHintStr = hint ? (currentAppLang.toLowerCase().includes("vi") ? ` với ngữ cảnh *"${hint}"*` : ` with context *"${hint}"*`) : "";
+    const contextHintStr = hint ? t("chat_with_context_hint", currentAppLang, { hint }) : "";
 
     setChatMessages((prev) => [
       ...prev,
@@ -1582,7 +1582,7 @@ export function useChat({
       if (candidates && candidates.length > 0) {
         candidates.forEach((cand) => {
           if (cand.word) {
-            const reason = cand.reason || (currentAppLang.toLowerCase().includes("vi") ? "Từ vựng đề xuất" : "Suggested vocabulary");
+            const reason = cand.reason || t("label_suggested_vocabulary", currentAppLang);
             actions.push({
               label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason }),
               action: "add_word",
@@ -1711,7 +1711,7 @@ export function useChat({
           if (cand.word) {
             const defVal = cand.definition;
             const transVal = cand.translation;
-            const hintVal = defVal || transVal || cand.reason || (currentAppLang.toLowerCase().includes("vi") ? "Từ vựng đề xuất" : "Candidate vocabulary");
+            const hintVal = defVal || transVal || cand.reason || t("label_candidate_vocabulary", currentAppLang);
             actions.push({
               label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason: hintVal }),
               action: "add_word",

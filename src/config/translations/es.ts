@@ -337,5 +337,8 @@ export const esTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "Probar Modelo de Voz",
     settings_test_voice_playing: "Reproduciendo voz...",
     settings_test_voice_click_btn: "Haz clic en el botón para probar la salida",
-    settings_test_voice_sample: "¡Hola! Bienvenido al Aprendiz de Vocabulario. La pronunciación en audio acelera la retención de la memoria."
+    settings_test_voice_sample: "¡Hola! Bienvenido al Aprendiz de Vocabulario. La pronunciación en audio acelera la retención de la memoria.",
+    chat_with_context_hint: " con contexto *\"{hint}\"*",
+    label_suggested_vocabulary: "Vocabulario sugerido",
+    label_candidate_vocabulary: "Vocabulario candidato"
   };

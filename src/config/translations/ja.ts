@@ -337,5 +337,8 @@ export const jaTranslations: LanguageTranslations = {
     settings_test_voice_model_btn: "音声モデルをテスト",
     settings_test_voice_playing: "音声を再生中...",
     settings_test_voice_click_btn: "ボタンをクリックして出力をテストします",
-    settings_test_voice_sample: "こんにちは！ボキャブラリーラーナーへようこそ。音声発音は記憶の定着をスピードアップします。"
+    settings_test_voice_sample: "こんにちは！ボキャブラリーラーナーへようこそ。音声発音は記憶の定着をスピードアップします。",
+    chat_with_context_hint: "（文脈: *\"{hint}\"*）",
+    label_suggested_vocabulary: "推奨語彙",
+    label_candidate_vocabulary: "候補の語彙"
   };

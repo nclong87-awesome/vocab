@@ -365,7 +365,10 @@ export type TranslationKey =
   | "flashcard_mode_all"
   | "flashcard_paired_words_title"
   | "flashcard_added_word"
-  | "flashcard_add_paired";
+  | "flashcard_add_paired"
+  | "chat_with_context_hint"
+  | "label_suggested_vocabulary"
+  | "label_candidate_vocabulary";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
