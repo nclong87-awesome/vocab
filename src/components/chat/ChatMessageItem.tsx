@@ -50,8 +50,8 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
     return t("action_next_flashcard", currentAppLang);
   }
 
-  if (act.action === "start_quiz" || lower.includes("start quiz") || lower.includes("start vocab quiz")) {
-    return t("chat_quiz_start_today_action", currentAppLang);
+  if (act.action === "start_quiz" || lower.includes("start quiz") || lower.includes("start vocab quiz") || lower.includes("practice")) {
+    return t("chat_practice_start_today_action", currentAppLang);
   }
 
   if (act.action === "fix_another" || lower === "fix another sentence" || lower.includes("fix another")) {

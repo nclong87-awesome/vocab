@@ -448,7 +448,7 @@ export function useChat({
             ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
             : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
           suggestedActions: [
-            { label: t("chat_quiz_start_today_action", currentAppLang), action: "start_quiz" },
+            { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" },
             { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ],
         };
@@ -1489,7 +1489,7 @@ export function useChat({
           payload: { message: topic },
         },
         {
-          label: t("chat_quiz_start_today_action", currentAppLang),
+          label: t("chat_practice_start_today_action", currentAppLang),
           action: "start_quiz",
         }
       ];
@@ -1805,7 +1805,7 @@ export function useChat({
         suggestedActions: [
           { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
           { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
-          { label: t("chat_quiz_start_today_action", currentAppLang), action: "start_quiz" },
+          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" },
         ],
       };
       setChatMessages([noCandidateMsg]);
@@ -1894,7 +1894,7 @@ export function useChat({
         suggestedActions: [
           ...top3SuggestedActions,
           { label: t("action_next_flashcard_deck", currentAppLang), action: "view_flashcard" },
-          { label: t("action_start_quiz_with_words", currentAppLang), action: "start_quiz" }
+          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" }
         ],
       };
 
