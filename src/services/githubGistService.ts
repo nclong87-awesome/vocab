@@ -62,6 +62,9 @@ export const syncToGist = async (
       };
 
       for (const [storeName, storeData] of Object.entries(sanitized.stores)) {
+        if (storeName === 'config') {
+          continue; // Do not upload config store to Gist!
+        }
         if (storeName === 'deletedWords') {
           filesToUpdate['VocabLearner_01_deleted_words.json'] = {
             content: JSON.stringify(storeData, null, 2)
@@ -76,6 +79,10 @@ export const syncToGist = async (
           };
         }
       }
+
+      // Explicitly delete any legacy config backup files from Gist if they exist
+      filesToUpdate['VocabLearner_02_store_config.json'] = null;
+      filesToUpdate['store_config.json'] = null;
 
       console.log("[Sync Service] [syncToGist] Prepared files payload details:");
       Object.keys(filesToUpdate).forEach(filename => {
@@ -236,6 +243,9 @@ export const syncFromGist = async (
         }
 
         if (storeName) {
+          if (storeName === 'config') {
+            continue; // Ignore remote config store
+          }
           // CRITICAL FIX: If a new format file exists for this store, skip legacy store_ file to avoid overwriting newer data!
           if (!isNewFormat && newFormatStoreNames.has(storeName)) {
             continue;

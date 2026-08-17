@@ -4,12 +4,21 @@ import { getDefaultLLMConfig } from "../config/llmProviders";
 import { DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { switchActiveProvider, sanitizeLlmConfig } from "../utils/llmHelpers";
 import { lockModel } from "../utils/autoModeManager";
-import { saveLLMConfigToDB, saveTTSConfigToDB } from "../db/indexedDB";
+import {
+  getLLMConfigFromLocalStorage,
+  saveLLMConfigToLocalStorage,
+  getTTSConfigFromLocalStorage,
+  saveTTSConfigToLocalStorage
+} from "../db/indexedDB";
 import { DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 
 export function useLlmAndTtsConfig() {
-  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => sanitizeLlmConfig(getDefaultLLMConfig()));
-  const [ttsConfig, setTtsConfig] = useState<TTSConfig>(DEFAULT_TTS_CONFIG);
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() =>
+    getLLMConfigFromLocalStorage(getDefaultLLMConfig())
+  );
+  const [ttsConfig, setTtsConfig] = useState<TTSConfig>(() =>
+    getTTSConfigFromLocalStorage(DEFAULT_TTS_CONFIG)
+  );
   const [isLlmModalOpen, setIsLlmModalOpen] = useState<boolean>(false);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState<boolean>(false);
 
@@ -77,7 +86,7 @@ export function useLlmAndTtsConfig() {
 
     const updatedConfig = switchActiveProvider(llmConfig, newProvider);
     setLlmConfig(updatedConfig);
-    saveLLMConfigToDB(updatedConfig).catch(e => console.error("Error saving updated LLM config:", e));
+    saveLLMConfigToLocalStorage(updatedConfig);
 
     setAiErrorModal({
       isOpen: false,
@@ -95,18 +104,13 @@ export function useLlmAndTtsConfig() {
 
   const handleSaveTTSConfig = useCallback((newConfig: TTSConfig) => {
     setTtsConfig(newConfig);
-    saveTTSConfigToDB(newConfig).catch(e => console.error("IndexedDB TTS save error:", e));
+    saveTTSConfigToLocalStorage(newConfig);
   }, []);
 
   const handleSaveLlmConfig = useCallback((newConfig: LLMConfig) => {
     const sanitized = sanitizeLlmConfig(newConfig);
     setLlmConfig(sanitized);
-    saveLLMConfigToDB(sanitized).catch(e => console.error("IndexedDB config save error:", e));
-    try {
-      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(sanitized));
-    } catch (e) {
-      console.error("Failed to save LLM config to localStorage", e);
-    }
+    saveLLMConfigToLocalStorage(sanitized);
     setIsLlmModalOpen(false);
   }, []);
 
@@ -116,24 +120,14 @@ export function useLlmAndTtsConfig() {
       switched = sanitizeLlmConfig({ ...switched, model: modelOverride });
     }
     setLlmConfig(switched);
-    saveLLMConfigToDB(switched).catch(e => console.error("IndexedDB config save error:", e));
-    try {
-      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(switched));
-    } catch (e) {
-      console.error("Failed to save LLM config to localStorage", e);
-    }
+    saveLLMConfigToLocalStorage(switched);
   }, [llmConfig]);
 
   const handleOpenLlmModal = useCallback((initialProvider?: LLMProvider) => {
     if (initialProvider && initialProvider !== llmConfig.provider) {
       const switched = switchActiveProvider(llmConfig, initialProvider);
       setLlmConfig(switched);
-      saveLLMConfigToDB(switched).catch(e => console.error("IndexedDB config save error:", e));
-      try {
-        localStorage.setItem("vocab_learner_llm_config", JSON.stringify(switched));
-      } catch (e) {
-        console.error("Failed to save LLM config to localStorage", e);
-      }
+      saveLLMConfigToLocalStorage(switched);
     }
     setIsLlmModalOpen(true);
   }, [llmConfig]);

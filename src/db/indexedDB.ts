@@ -14,20 +14,17 @@ const DB_SCHEMA_VERSION = 1;
 const STORES = {
   words: "words",
   stats: "stats",
-  config: "config",
   settings: "settings",
   deletedWords: "deleted_words"
 } as const;
 
 type StoreName = keyof typeof STORES;
 
-const ALL_STORES: StoreName[] = ["words", "stats", "config", "settings", "deletedWords"];
+const ALL_STORES: StoreName[] = ["words", "stats", "settings", "deletedWords"];
 
-/** Keys of records kept inside the shared `config` / `settings` stores. */
+/** Keys of records kept inside the shared `settings` store. */
 const KEYS = {
   stats: "user_stats",
-  llmConfig: "llm_config",
-  ttsConfig: "tts_config",
   initialized: "db_initialized"
 } as const;
 
@@ -86,7 +83,6 @@ function parseJSON<T>(raw: string | null, label: string): T | null {
 const STORE_KEY_PATHS: Record<StoreName, string> = {
   words: "id",
   stats: "id",
-  config: "id",
   settings: "key",
   deletedWords: "id"
 };
@@ -490,70 +486,73 @@ export async function saveStatsToDB(stats: UserStats): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* LLM config                                                                 */
+/* LLM & TTS Config (Stored in localStorage)                                 */
 /* -------------------------------------------------------------------------- */
 
-export async function getLLMConfigFromDB(defaultConfig: LLMConfig): Promise<LLMConfig> {
-  try {
-    const stored = await readRecordData<LLMConfig>("config", KEYS.llmConfig);
-    if (stored) {
-      const sanitized = sanitizeLlmConfig(stored);
-      if (JSON.stringify(sanitized) !== JSON.stringify(stored)) {
-        await saveLLMConfigToDB(sanitized);
-      }
-      return sanitized;
-    }
+const LOCAL_CONFIG_KEYS = {
+  llmConfig: "vocab_learner_llm_config",
+  ttsConfig: "vocab_learner_tts_config"
+} as const;
 
-    const legacy = parseJSON<LLMConfig>(lsGet(LEGACY_KEYS.llmConfig), "llm config");
-    if (legacy) {
-      const sanitized = sanitizeLlmConfig(legacy);
-      await saveLLMConfigToDB(sanitized);
-      return sanitized;
+export function getLLMConfigFromLocalStorage(defaultConfig: LLMConfig): LLMConfig {
+  try {
+    const raw = lsGet(LOCAL_CONFIG_KEYS.llmConfig);
+    if (raw) {
+      const parsed = parseJSON<LLMConfig>(raw, "llm config");
+      if (parsed) {
+        return sanitizeLlmConfig(parsed);
+      }
     }
-    return sanitizeLlmConfig(defaultConfig);
   } catch (err) {
-    console.error("Error loading LLM config from IndexedDB:", err);
-    return sanitizeLlmConfig(defaultConfig);
+    console.error("Error loading LLM config from localStorage:", err);
   }
+  return sanitizeLlmConfig(defaultConfig);
+}
+
+export function saveLLMConfigToLocalStorage(config: LLMConfig): void {
+  try {
+    const sanitized = sanitizeLlmConfig(config);
+    lsSet(LOCAL_CONFIG_KEYS.llmConfig, JSON.stringify(sanitized));
+  } catch (err) {
+    console.error("Error saving LLM config to localStorage:", err);
+  }
+}
+
+export function getTTSConfigFromLocalStorage(defaultConfig: TTSConfig): TTSConfig {
+  try {
+    const raw = lsGet(LOCAL_CONFIG_KEYS.ttsConfig);
+    if (raw) {
+      const parsed = parseJSON<Partial<TTSConfig>>(raw, "tts config");
+      if (parsed) return { ...defaultConfig, ...parsed };
+    }
+  } catch (err) {
+    console.error("Error loading TTS config from localStorage:", err);
+  }
+  return defaultConfig;
+}
+
+export function saveTTSConfigToLocalStorage(config: TTSConfig): void {
+  try {
+    lsSet(LOCAL_CONFIG_KEYS.ttsConfig, JSON.stringify(config));
+  } catch (err) {
+    console.error("Error saving TTS config to localStorage:", err);
+  }
+}
+
+export async function getLLMConfigFromDB(defaultConfig: LLMConfig): Promise<LLMConfig> {
+  return getLLMConfigFromLocalStorage(defaultConfig);
 }
 
 export async function saveLLMConfigToDB(config: LLMConfig): Promise<void> {
-  try {
-    await writeRecordData("config", KEYS.llmConfig, config);
-  } catch (err) {
-    console.error("Error saving LLM config to IndexedDB:", err);
-  }
+  saveLLMConfigToLocalStorage(config);
 }
 
-/* -------------------------------------------------------------------------- */
-/* TTS config                                                                 */
-/* -------------------------------------------------------------------------- */
-
 export async function getTTSConfigFromDB(defaultConfig: TTSConfig): Promise<TTSConfig> {
-  try {
-    const stored = await readRecordData<Partial<TTSConfig>>("config", KEYS.ttsConfig);
-    if (stored) return { ...defaultConfig, ...stored };
-
-    const legacy = parseJSON<Partial<TTSConfig>>(lsGet(LEGACY_KEYS.ttsConfig), "tts config");
-    if (legacy) {
-      const merged = { ...defaultConfig, ...legacy };
-      await saveTTSConfigToDB(merged);
-      return merged;
-    }
-    return defaultConfig;
-  } catch (err) {
-    console.error("Error loading TTS config from IndexedDB:", err);
-    return defaultConfig;
-  }
+  return getTTSConfigFromLocalStorage(defaultConfig);
 }
 
 export async function saveTTSConfigToDB(config: TTSConfig): Promise<void> {
-  try {
-    await writeRecordData("config", KEYS.ttsConfig, config);
-    lsSet(LEGACY_KEYS.ttsConfig, JSON.stringify(config));
-  } catch (err) {
-    console.error("Error saving TTS config to IndexedDB:", err);
-  }
+  saveTTSConfigToLocalStorage(config);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -614,19 +613,18 @@ export interface IndexedDBExportData {
   stores: {
     words: Word[];
     stats: StoredRecord<UserStats>[];
-    config: StoredRecord<LLMConfig | TTSConfig>[];
     settings: StoredSetting[];
     deletedWords?: DeletedWordRecord[];
+    config?: never;
   };
 }
 
 // Export the full database as a JSON object (one snapshot-consistent transaction)
 export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
-  const [words, stats, config, settings, deletedWords] = await withStores(ALL_STORES, "readonly", (tx) =>
+  const [words, stats, settings, deletedWords] = await withStores(ALL_STORES, "readonly", (tx) =>
     Promise.all([
       readAll<Word>(tx, "words"),
       readAll<StoredRecord<UserStats>>(tx, "stats"),
-      readAll<StoredRecord<LLMConfig | TTSConfig>>(tx, "config"),
       readAll<StoredSetting>(tx, "settings"),
       readAll<DeletedWordRecord>(tx, "deletedWords")
     ])
@@ -640,7 +638,7 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
     return rec;
   });
 
-  const stores = { words, stats: cleanedStats, config, settings, deletedWords };
+  const stores = { words, stats: cleanedStats, settings, deletedWords };
 
   return {
     version: DB_SCHEMA_VERSION,
@@ -700,41 +698,9 @@ export async function importIndexedDBDatabase(data: unknown): Promise<ImportResu
     });
   }
 
-  // Preserve existing local API keys and settings if the imported payload has empty/missing keys
+  // Preserve existing local settings if the imported payload has empty/missing keys
   try {
-    const existingConfig = await withStores(["config"], "readonly", (tx) => readAll<StoredRecord<any>>(tx, "config"));
     const existingSettings = await withStores(["settings"], "readonly", (tx) => readAll<StoredSetting>(tx, "settings"));
-
-    if (Array.isArray(stores.config)) {
-      stores.config = stores.config.map((incomingRec: any) => {
-        if (!incomingRec || !incomingRec.id) return incomingRec;
-        const localMatch = existingConfig.find((c) => c.id === incomingRec.id);
-        if (!localMatch || !localMatch.data) return incomingRec;
-
-        const updatedData = { ...incomingRec.data };
-
-        // Restore local top-level apiKey if incoming is empty
-        if (!updatedData.apiKey && localMatch.data.apiKey) {
-          updatedData.apiKey = localMatch.data.apiKey;
-        }
-
-        // Restore local savedProviders apiKeys
-        if (localMatch.data.savedProviders && updatedData.savedProviders) {
-          const mergedProviders = { ...updatedData.savedProviders };
-          for (const [pKey, localP] of Object.entries(localMatch.data.savedProviders as Record<string, any>)) {
-            if (localP && localP.apiKey) {
-              mergedProviders[pKey] = {
-                ...(mergedProviders[pKey] || {}),
-                apiKey: localP.apiKey
-              };
-            }
-          }
-          updatedData.savedProviders = mergedProviders;
-        }
-
-        return { ...incomingRec, data: updatedData };
-      });
-    }
 
     if (Array.isArray(stores.settings)) {
       const incomingKeys = new Set(stores.settings.map((s: any) => s?.key));

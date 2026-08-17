@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { ChatMessage, LLMConfig } from "./types";
-import { saveLLMConfigToDB } from "./db/indexedDB";
 import { stopSpeech, unlockAudioElement } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay } from "./utils/spacedRepetition";
 import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
@@ -14,8 +13,9 @@ import {
   getAllWordsFromDB, 
   saveAllWordsToDB, 
   getStatsFromDB, 
-  getLLMConfigFromDB, 
-  getTTSConfigFromDB
+  getLLMConfigFromLocalStorage,
+  saveLLMConfigToLocalStorage,
+  getTTSConfigFromLocalStorage
 } from "./db/indexedDB";
 
 import ChatView from "./components/ChatView";
@@ -173,7 +173,7 @@ export default function App() {
         ...prevConfig,
       };
 
-      saveLLMConfigToDB(updatedConfig);
+      saveLLMConfigToLocalStorage(updatedConfig);
       return updatedConfig;
     });
 
@@ -205,9 +205,8 @@ export default function App() {
     newConfig: LLMConfig
   ) => {
     setLlmConfig(newConfig);
-    saveLLMConfigToDB(newConfig).catch(e => console.error("IndexedDB config save error:", e));
+    saveLLMConfigToLocalStorage(newConfig);
     try {
-      localStorage.setItem("vocab_learner_llm_config", JSON.stringify(newConfig));
       if (userData.email) {
         localStorage.setItem("vocab_learner_user_email", userData.email);
       }
@@ -263,7 +262,7 @@ export default function App() {
       setStats(loadedStats);
 
       const defaultConfig = getDefaultLLMConfig();
-      const loadedConfig = await getLLMConfigFromDB(defaultConfig);
+      const loadedConfig = getLLMConfigFromLocalStorage(defaultConfig);
 
       const activeConfig: LLMConfig = {
         ...loadedConfig,
@@ -273,7 +272,7 @@ export default function App() {
       };
 
       setLlmConfig(activeConfig);
-      await saveLLMConfigToDB(activeConfig);
+      saveLLMConfigToLocalStorage(activeConfig);
 
       if (
         !activeConfig.isLoggedIn &&
@@ -286,7 +285,7 @@ export default function App() {
         setIsLlmModalOpen(true);
       }
 
-      const loadedTTS = await getTTSConfigFromDB(DEFAULT_TTS_CONFIG);
+      const loadedTTS = getTTSConfigFromLocalStorage(DEFAULT_TTS_CONFIG);
       setTtsConfig(loadedTTS);
 
       const refreshedTarget = localStorage.getItem("vocab_learner_target_lang") || "English";
