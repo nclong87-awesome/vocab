@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, Layers } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw } from "lucide-react";
 import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
@@ -145,30 +145,15 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       }
     },
     {
-      id: "view_flashcard",
-      label: t("qa_flash_card_label", appLanguage),
-      category: "study",
-      categoryLabel: t("qa_cat_study", appLanguage),
-      icon: <Layers className="w-4 h-4 text-indigo-600" />,
-      title: t("qa_flash_card_title", appLanguage),
-      description: t("qa_flash_card_desc", appLanguage),
-      className: "bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 2,
-      getAction: ({ onViewFlashcard, onClearHistory }) => {
-        onClearHistory();
-        onViewFlashcard?.();
-      }
-    },
-    {
-      id: "start_quiz",
-      label: t("qa_start_quiz_label", appLanguage),
+      id: "practice",
+      label: t("qa_practice_label", appLanguage),
       category: "study",
       categoryLabel: t("qa_cat_study", appLanguage),
       icon: <Brain className="w-4 h-4 text-amber-600" />,
-      title: t("qa_start_quiz_title", appLanguage),
-      description: t("qa_start_quiz_desc", appLanguage),
+      title: t("qa_practice_title", appLanguage),
+      description: t("qa_practice_desc", appLanguage),
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 3,
+      defaultIndex: 2,
       getAction: ({ onStartQuiz, onClearHistory }) => {
         onClearHistory();
         onStartQuiz();

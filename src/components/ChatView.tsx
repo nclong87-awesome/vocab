@@ -379,6 +379,7 @@ function ChatView({
         onSendMessage={onSendMessage}
         onAddWord={onAddWord}
         onAddMultipleWords={onAddMultipleWords}
+        onGenerateByTopic={onGenerateByTopic}
         onStartQuiz={onStartQuiz}
         onFixGrammar={onFixGrammar}
         onViewFlashcard={onViewFlashcard}

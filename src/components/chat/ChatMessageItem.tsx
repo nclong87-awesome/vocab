@@ -22,6 +22,7 @@ interface ChatMessageItemProps {
   onSendMessage: (text: string) => Promise<void>;
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
+  onGenerateByTopic?: () => void;
   onStartQuiz: () => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
@@ -105,6 +106,7 @@ function ChatMessageItem({
   onSendMessage,
   onAddWord,
   onAddMultipleWords,
+  onGenerateByTopic,
   onStartQuiz,
   onFixGrammar,
   onViewFlashcard,
@@ -382,19 +384,26 @@ function ChatMessageItem({
         navigator.clipboard.writeText(textToCopy);
         showToast(t("toast_copied_selection", currentAppLang));
       }
-    } else if (act.action === "suggest_another") {
+    } else if (act.action === "suggest_another" || act.action === "suggest_reply") {
       handleRecordActionUse("suggest_reply");
       setIsPhotoModalOpen(true);
       onSuggestCasualReplyPrompt?.();
-    } else if (act.action === "fix_another") {
+    } else if (act.action === "fix_another" || act.action === "fix_grammar") {
       handleRecordActionUse("fix_grammar");
       onFixGrammar();
+    } else if (act.action === "generate_topic" || act.action === "generate_words") {
+      handleRecordActionUse("generate_topic");
+      onGenerateByTopic?.();
     } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
       onAddMultipleWords([act.payload]);
       showToast(t("toast_added_word", currentAppLang, { word: act.payload.word }));
-    } else if (act.action === "add_word" && act.payload?.word) {
+    } else if (act.action === "add_word") {
       handleRecordActionUse("add_word");
-      onAddWord(act.payload.word, act.payload?.hint);
+      if (act.payload?.word) {
+        onAddWord(act.payload.word, act.payload?.hint);
+      } else {
+        onAddWord();
+      }
     } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
       onAddMultipleWords(act.payload.words);
       showToast(t("toast_added_multiple_words", currentAppLang, { count: String(act.payload.words.length) }));
@@ -680,77 +689,7 @@ function ChatMessageItem({
               return (
                 <button
                   key={aIdx}
-                  onClick={() => {
-                    if (act.action === "copy_text" || act.action === "copy_sentence") {
-                      const textToCopy = act.payload?.text || msg.fixedSentence || "";
-                      if (textToCopy) {
-                        navigator.clipboard.writeText(textToCopy);
-                        showToast(t("toast_copied_selection", currentAppLang));
-                      }
-                    } else if (act.action === "suggest_another") {
-                      handleRecordActionUse("suggest_reply");
-                      setIsPhotoModalOpen(true);
-                      onSuggestCasualReplyPrompt?.();
-                    } else if (act.action === "fix_another") {
-                      handleRecordActionUse("fix_grammar");
-                      onFixGrammar();
-                    } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
-                      onAddMultipleWords([act.payload]);
-                      showToast(t("toast_added_word", currentAppLang, { word: act.payload.word }));
-                    } else if (act.action === "add_word" && act.payload?.word) {
-                      handleRecordActionUse("add_word");
-                      onAddWord(act.payload.word, act.payload?.hint);
-                    } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
-                      onAddMultipleWords(act.payload.words);
-                      showToast(t("toast_added_multiple_words", currentAppLang, { count: String(act.payload.words.length) }));
-                    } else if (act.action === "start_quiz") {
-                      handleRecordActionUse("start_quiz");
-                      onStartQuiz();
-                    } else if (act.action === "view_flashcard") {
-                      handleRecordActionUse("view_flashcard");
-                      onViewFlashcard?.();
-                    } else if (act.action === "quiz_answer" && act.payload?.answer) {
-                      onSendMessage(act.payload.answer);
-                    } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
-                      onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
-                    } else if (act.action === "common_phrases") {
-                      handleRecordActionUse("common_phrases");
-                      onSendMessage(
-                        `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
-                      );
-                      scrollToBottom("smooth");
-                      focusInput();
-                    } else if (act.action === "explain_grammar") {
-                      handleRecordActionUse("explain_grammar");
-                      onSendMessage(
-                        `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
-                      );
-                      scrollToBottom("smooth");
-                      focusInput();
-                    } else if (act.action === "translate_contrast") {
-                      handleRecordActionUse("translate_contrast");
-                      onSendMessage(
-                        `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
-                      );
-                      scrollToBottom("smooth");
-                      focusInput();
-                    } else if (act.action === "retry_analyze_image" && onAnalyzeImageVocab) {
-                      const imageToRetry = act.payload?.imageDataUrl || [...messages].reverse().find(m => Boolean(m.imageUrl))?.imageUrl;
-                      if (imageToRetry) {
-                        showToast(t("toast_retrying_photo_analysis", currentAppLang));
-                        onAnalyzeImageVocab(imageToRetry, act.payload?.customPrompt);
-                      } else {
-                        showToast(t("toast_photo_upload_prompt", currentAppLang));
-                        setIsPhotoModalOpen(true);
-                      }
-                    } else if (act.action === "retry_suggest_reply" && onSuggestCasualReply) {
-                      showToast(t("toast_retrying_suggest_reply", currentAppLang));
-                      onSuggestCasualReply(act.payload?.imageDataUrl || null, act.payload?.customPrompt || "");
-                    } else if (act.action === "send_message" && act.payload?.message) {
-                      onSendMessage(act.payload.message);
-                    }
-                    scrollToBottom("smooth");
-                  }}
+                  onClick={() => handleActionClick(act)}
                   className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs cursor-pointer group ${
                     isNextQ
                       ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold"

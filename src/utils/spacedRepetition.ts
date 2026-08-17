@@ -11,9 +11,9 @@ export interface BaselinePracticeInfo {
  */
 export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
   const history = word.strengthHistory || [];
-  // Filter out memory_decay entries to find real practice events
+  // Filter out memory_decay, created, and manual_adjust entries to find real practice events
   const practiceEntries = history.filter(
-    entry => entry.reason !== "memory_decay"
+    entry => entry.reason !== "memory_decay" && entry.reason !== "created" && entry.reason !== "manual_adjust"
   );
 
   if (practiceEntries.length > 0) {
@@ -27,8 +27,8 @@ export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
     };
   }
 
-  // Fallback if no non-decay history exists yet:
-  const practiceDate = word.lastReviewed || word.createdAt || null;
+  // Fallback if no practice history exists yet:
+  const practiceDate = word.lastReviewed || null;
   const fallbackStrength = word.learned
     ? Math.max(80, word.strength ?? 100)
     : (word.strength ?? 0);
@@ -40,11 +40,11 @@ export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
 }
 
 /**
- * Calculates hours elapsed since the word was last reviewed or created.
+ * Calculates hours elapsed since the word was last reviewed or practiced.
  */
 export function getHoursSinceLastReview(word: Word, now: Date = new Date()): number {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const dateStr = lastPracticeDate || word.lastReviewed || word.createdAt;
+  const dateStr = lastPracticeDate || word.lastReviewed || null;
   if (!dateStr) return Infinity; // Never reviewed
 
   const reviewDate = new Date(dateStr);
@@ -202,11 +202,11 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
 }
 
 /**
- * Calculates days elapsed since the word was last reviewed or created.
+ * Calculates days elapsed since the word was last reviewed or practiced.
  */
 export function getDaysSinceLastReview(word: Word, now: Date = new Date()): number {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const dateStr = lastPracticeDate || word.lastReviewed || word.createdAt;
+  const dateStr = lastPracticeDate || word.lastReviewed || null;
   if (!dateStr) return 0;
 
   const reviewDate = new Date(dateStr);
@@ -295,40 +295,55 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
 }
 
 /**
- * Determines whether a word is eligible as a candidate for flashcard study:
- * 1. They've never learned it (!word.learned or !word.lastReviewed)
- * 2. They answered a quiz question incorrectly (has 'quiz_incorrect' in strengthHistory)
- * 3. It hasn't been used for a flashcard or quiz in over 7 days (diffDays > 7)
+ * Checks if a word has an unresolved quiz mistake (i.e. its most recent practice/review was a quiz error).
  */
-export function isFlashcardCandidate(word: Word, now: Date = new Date()): boolean {
-  // Condition 1: Never learned it (not marked as learned or never reviewed)
-  if (!word.learned || !word.lastReviewed) {
-    return true;
-  }
+export function hasUnresolvedQuizMistake(word: Word): boolean {
+  const history = word.strengthHistory || [];
+  const practiceEntries = history.filter(entry => entry.reason !== "memory_decay");
+  if (practiceEntries.length === 0) return false;
+  const lastPractice = practiceEntries[practiceEntries.length - 1];
+  return lastPractice?.reason === "quiz_incorrect";
+}
 
-  // Condition 2: Answered a quiz question incorrectly
-  const hasQuizIncorrect = (word.strengthHistory || []).some(
-    entry => entry.reason === "quiz_incorrect"
-  );
-  if (hasQuizIncorrect) {
-    return true;
-  }
-
-  // Condition 3: Hasn't been used for a flashcard or quiz in over 7 days
+/**
+ * Determines whether a word is eligible as a candidate for flashcard study:
+ * 1. Has not been reviewed recently (within cooldownHours, default 12 hours)
+ * 2. Meets at least one of the following criteria:
+ *    a. Has never been reviewed/practiced before (!word.lastReviewed or no practice baseline)
+ *    b. Has an unresolved quiz error (the most recent practice event was 'quiz_incorrect')
+ *    c. Is unlearned/unmastered (!word.learned) and has passed cooldown
+ *    d. Mastered word that hasn't been practiced/reviewed in over 7 days (diffDays > 7)
+ */
+export function isFlashcardCandidate(word: Word, now: Date = new Date(), cooldownHours: number = 12): boolean {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const dateStr = lastPracticeDate || word.lastReviewed;
-  if (!dateStr) {
+  const isNeverPracticed = !lastPracticeDate && !word.lastReviewed;
+
+  // Condition 1: Never reviewed / never practiced before (brand new word) -> ALWAYS eligible immediately!
+  if (isNeverPracticed) {
     return true;
   }
 
-  const reviewDate = new Date(dateStr);
-  if (isNaN(reviewDate.getTime())) {
+  // Condition 2: Has an unresolved quiz mistake (most recent practice was a quiz error)
+  if (hasUnresolvedQuizMistake(word)) {
     return true;
   }
 
-  const diffMs = now.getTime() - reviewDate.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  if (diffDays > 7) {
+  // 0. Cooldown check: If reviewed within cooldownHours, exclude from candidates
+  if (cooldownHours > 0) {
+    const hoursSinceReview = getHoursSinceLastReview(word, now);
+    if (hoursSinceReview < cooldownHours) {
+      return false;
+    }
+  }
+
+  // Condition 3: Unlearned / unmastered word that has passed cooldown
+  if (!word.learned) {
+    return true;
+  }
+
+  // Condition 4: Mastered word that hasn't been used for flashcard or quiz in over 7 days
+  const daysSinceReview = getDaysSinceLastReview(word, now);
+  if (daysSinceReview > 7) {
     return true;
   }
 
@@ -337,21 +352,26 @@ export function isFlashcardCandidate(word: Word, now: Date = new Date()): boolea
 
 /**
  * Selects candidate words for flashcard study (default up to 5) strictly from words meeting
- * the candidate criteria (never learned, quiz incorrect, or idle > 7 days).
+ * the candidate criteria (cooldown passed, never learned, unresolved quiz mistake, or idle > 7 days).
  * Returns empty array if no words meet the conditions.
  */
-export function getCandidateWordsForFlashcards(words: Word[], count: number = 5, now: Date = new Date()): Word[] {
+export function getCandidateWordsForFlashcards(
+  words: Word[],
+  count: number = 5,
+  now: Date = new Date(),
+  cooldownHours: number = 12
+): Word[] {
   if (!words || words.length === 0) return [];
 
-  // Filter ONLY words that meet the 3 strict criteria
-  const eligibleWords = words.filter(word => isFlashcardCandidate(word, now));
+  // Filter ONLY words that meet the candidate criteria (including cooldown)
+  const eligibleWords = words.filter(word => isFlashcardCandidate(word, now, cooldownHours));
 
   if (eligibleWords.length === 0) {
     return [];
   }
 
   // Categorize eligible words by priority to give the most impactful words first:
-  // 1. Words with quiz errors (urgent review)
+  // 1. Words with unresolved quiz errors (urgent remedial review)
   // 2. Never learned / unreviewed words
   // 3. Words idle > 7 days
   const quizErrorWords: Word[] = [];
@@ -359,8 +379,7 @@ export function getCandidateWordsForFlashcards(words: Word[], count: number = 5,
   const idleSevenDaysWords: Word[] = [];
 
   for (const word of eligibleWords) {
-    const hasQuizIncorrect = (word.strengthHistory || []).some(entry => entry.reason === "quiz_incorrect");
-    if (hasQuizIncorrect) {
+    if (hasUnresolvedQuizMistake(word)) {
       quizErrorWords.push(word);
     } else if (!word.learned || !word.lastReviewed) {
       neverLearnedWords.push(word);
@@ -383,8 +402,8 @@ export function getCandidateWordsForFlashcards(words: Word[], count: number = 5,
 /**
  * Selects a candidate word for flashcard viewing strictly from eligible words.
  */
-export function getCandidateWordForFlashcard(words: Word[]): Word | null {
+export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date(), cooldownHours: number = 12): Word | null {
   if (!words || words.length === 0) return null;
-  const candidates = getCandidateWordsForFlashcards(words, 1);
+  const candidates = getCandidateWordsForFlashcards(words, 1, now, cooldownHours);
   return candidates[0] || null;
 }

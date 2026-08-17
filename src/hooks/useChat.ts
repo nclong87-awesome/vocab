@@ -10,7 +10,7 @@ import {
   generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { getQuizCandidateWords, getCandidateWordsForFlashcards, isWordLearnedOrStudied } from "../utils/spacedRepetition";
+import { getQuizCandidateWords, getCandidateWordsForFlashcards } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
@@ -115,7 +115,7 @@ export function useChat({
     }
   }, [chatMessages, targetLanguage, nativeLanguage]);
 
-  // Start the conversational in-chat quiz
+  // Start the unified Practice flow: checks Quiz candidates first, then Flashcard candidates, or displays no-words message
   const startChatQuiz = async (overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
@@ -129,119 +129,197 @@ export function useChat({
 
     if (activeWords.length === 0) {
       const noWordsMsg: ChatMessage = {
-        id: `quiz-no-words-${Date.now()}`,
+        id: `practice-no-words-${Date.now()}`,
         role: "assistant",
         content: t("chat_quiz_no_words_warning", currentAppLang),
         timestamp: new Date().toISOString(),
+        suggestedActions: [
+          { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+        ],
       };
       setChatMessages([noWordsMsg]);
       return;
     }
 
+    // Step 1: Look for candidate words for Quiz questions
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5, cooldownHours: 12 });
-    if (quizWords.length < 2) {
-      const hasLearnedWords = activeWords.some(isWordLearnedOrStudied);
-      let contentWarning = t("chat_quiz_no_candidates_warning", currentAppLang);
-      let suggestedActions: any[] = [
-        { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
-        { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
-      ];
+    if (quizWords.length >= 2) {
+      // Found Quiz candidates: proceed to generate and start Quiz
+      setIsTyping(true);
 
-      if (!hasLearnedWords) {
-        contentWarning = currentAppLang.toLowerCase().startsWith("vi")
-          ? "📚 **Bạn chưa có từ vựng nào đã học để làm bài kiểm tra!**\n\nQuiz được thiết kế để kiểm tra và củng cố trí nhớ cho các từ bạn đã học. Hãy học Flashcards hoặc đánh dấu từ đã thuộc trước khi làm Quiz nhé!"
-          : currentAppLang.toLowerCase().startsWith("es")
-          ? "📚 **¡Aún no has aprendido palabras para el quiz!**\n\nLos cuestionarios están diseñados para reforzar las palabras que ya has estudiado. ¡Estudia tarjetas o marca palabras como aprendidas para desbloquear el quiz!"
-          : currentAppLang.toLowerCase().startsWith("fr")
-          ? "📚 **Vous n'avez pas encore appris de mots pour le quiz !**\n\nLes quiz sont conçus pour réviser les mots que vous avez déjà étudiés. Étudiez des flashcards ou marquez des mots comme appris avant de commencer un quiz !"
-          : currentAppLang.toLowerCase().startsWith("de")
-          ? "📚 **Sie haben noch keine Wörter für das Quiz gelernt!**\n\nQuizze sind dazu da, bereits gelernte Wörter zu wiederholen. Bitte lernen Sie Lernkarten oder markieren Sie Wörter als gelernt!"
-          : currentAppLang.toLowerCase().startsWith("ja")
-          ? "📚 **クイズ用の学習済み単語がまだありません！**\n\nクイズは学習済みの単語を復習・定着させるための機能です。まずはフラッシュカードで学習するか、単語を学習済みに設定してください！"
-          : currentAppLang.toLowerCase().startsWith("ko")
-          ? "📚 **퀴즈에 출제할 학습된 단어가 아직 없습니다!**\n\n퀴즈는 이미 학습한 단어를 복습하고 기억을 강화하기 위한 기능입니다. 먼저 플래시카드로 학습하거나 단어를 학습 완료로 표시해 보세요!"
-          : currentAppLang.toLowerCase().startsWith("zh")
-          ? "📚 **您还没有已学习的单词可用于测验！**\n\n测验旨在复习和巩固已学过的单词。请先通过抽认卡学习或将单词标记为已掌握！"
-          : "📚 **You haven't learned any words yet!**\n\nQuizzes are designed to test and reinforce words you have already studied. Please study some flashcards or mark words as learned before starting a quiz!";
-        
-        suggestedActions = [
-          { label: t("chat_flashcard_deck_title", currentAppLang, { count: "5" }) || "🃏 Study Flashcards", action: "view_flashcard" },
-          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
-        ];
+      try {
+        const quizResult = await generateAiQuizQuestionsService({
+          words: quizWords,
+          targetLanguage,
+          nativeLanguage,
+          llmConfig: configToUse,
+          stats,
+        });
+
+        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
+        const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
+        const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
+
+        if (!generatedQuestions || generatedQuestions.length === 0) {
+          throw new Error("No quiz questions were generated.");
+        }
+
+        const firstQ = generatedQuestions[0];
+
+        setActiveQuiz({
+          questions: generatedQuestions,
+          currentIndex: 0,
+          score: 0,
+          correctIds: [],
+          incorrectIds: [],
+        });
+
+        const introMsg: ChatMessage = {
+          id: `quiz-start-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_quiz_intro", currentAppLang, {
+            count: String(generatedQuestions.length),
+            question: firstQ.question,
+          }),
+          timestamp: new Date().toISOString(),
+          audioWord: firstQ.type === "listening" ? firstQ.word : undefined,
+          quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
+          imageUrl: firstQ.imageUrl,
+          imageKeyword: firstQ.imageKeyword,
+          suggestedActions: firstQ.options?.map((opt: any) => ({
+            label: opt,
+            action: "quiz_answer",
+            payload: { answer: opt, wordId: firstQ.wordId },
+          })) || [
+            { label: firstQ.correctAnswer, action: "quiz_answer", payload: { answer: firstQ.correctAnswer, wordId: firstQ.wordId } },
+          ],
+          provider,
+          model,
+          responseTimeMs,
+        };
+
+        setChatMessages([introMsg]);
+      } catch (e: any) {
+        console.error("Error starting chat quiz:", e);
+        handleAiApiError(e, configToUse, (newConfig) => startChatQuiz(newConfig));
+      } finally {
+        setIsTyping(false);
       }
-
-      const noCandidateMsg: ChatMessage = {
-        id: `quiz-no-candidates-${Date.now()}`,
-        role: "assistant",
-        content: contentWarning,
-        timestamp: new Date().toISOString(),
-        suggestedActions,
-      };
-      setChatMessages([noCandidateMsg]);
       return;
     }
 
-    setIsTyping(true);
+    // Step 2: If no Quiz candidates found (or fewer than 2), search for candidate words for Flashcards
+    const flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 5);
+    if (flashcardCandidates.length > 0) {
+      setIsTyping(true);
 
-    try {
-      const quizResult = await generateAiQuizQuestionsService({
-        words: quizWords,
-        targetLanguage,
-        nativeLanguage,
-        llmConfig: configToUse,
-        stats,
-      });
+      try {
+        const batchResult = await generateBatchFlashcardsService({
+          words: flashcardCandidates,
+          targetLanguage,
+          nativeLanguage,
+          llmConfig: configToUse,
+        });
 
-      const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
-      const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
-      const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
-      const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
+        const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
 
-      if (!generatedQuestions || generatedQuestions.length === 0) {
-        throw new Error("No quiz questions were generated.");
+        // Update strength and review history for all studied words
+        const candidateIds = new Set(flashcardCandidates.map((w) => w.id));
+        setWords((prevWords) => {
+          const updatedWords = prevWords.map((w) => {
+            if (candidateIds.has(w.id)) {
+              const prevStrength = w.strength ?? 0;
+              const calcNewStrength = Math.min(100, prevStrength + 10);
+              const strengthGained = calcNewStrength - prevStrength;
+              return recordStrengthHistory(
+                w, 
+                calcNewStrength, 
+                'flashcard_review', 
+                `Studied Flashcard (+${strengthGained}% strength gained)`
+              );
+            }
+            return w;
+          });
+          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB flashcard word save error:", e));
+          return updatedWords;
+        });
+
+        // Aggregate top 3 unique suggested words across all flashcard cards in the deck
+        const seenSuggested = new Set<string>();
+        const top3SuggestedActions: { label: string; action: string; payload: { word: string; hint?: string } }[] = [];
+        cards.forEach((c) => {
+          (c.suggestedWords || []).forEach((sw: any) => {
+            const swWord = typeof sw === "string" ? sw.trim() : (sw?.word || "").trim();
+            const swHint = typeof sw === "object" ? (sw?.hint || sw?.relationship || sw?.translation || "") : "";
+            if (swWord && !seenSuggested.has(swWord.toLowerCase())) {
+              seenSuggested.add(swWord.toLowerCase());
+              if (top3SuggestedActions.length < 3) {
+                top3SuggestedActions.push({
+                  label: `+ ${swWord}`,
+                  action: "add_word",
+                  payload: { word: swWord, hint: swHint || undefined }
+                });
+              }
+            }
+          });
+        });
+
+        const primaryCard: FlashcardItem | undefined = cards[0];
+        const flashcardMsg: ChatMessage = {
+          id: `flashcard-msg-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_flashcard_deck_title", currentAppLang, { count: String(cards.length) }),
+          timestamp: new Date().toISOString(),
+          audioWord: primaryCard?.word,
+          quizSpeechText: primaryCard ? `${primaryCard.word}. ${primaryCard.definition}` : undefined,
+          imageKeyword: primaryCard?.word,
+          flashcardData: {
+            cards: cards,
+            wordId: primaryCard?.wordId,
+            word: primaryCard?.word,
+            pronunciation: primaryCard?.pronunciation,
+            partOfSpeech: primaryCard?.partOfSpeech,
+            definition: primaryCard?.definition,
+            translation: primaryCard?.translation,
+            example: primaryCard?.example,
+            exampleTranslation: primaryCard?.exampleTranslation,
+            category: primaryCard?.category,
+            context: primaryCard?.context,
+            suggestedWords: primaryCard?.suggestedWords,
+          },
+          provider: batchResult.provider,
+          model: batchResult.model,
+          responseTimeMs: batchResult.responseTimeMs,
+          suggestedActions: [
+            ...top3SuggestedActions,
+            { label: t("action_next_practice", currentAppLang) || t("action_next_flashcard_deck", currentAppLang), action: "start_quiz" },
+          ],
+        };
+
+        setChatMessages([flashcardMsg]);
+      } catch (e: any) {
+        console.error("Error generating flash card deck:", e);
+        handleAiApiError(e, configToUse, (newConfig) => startChatQuiz(newConfig));
+      } finally {
+        setIsTyping(false);
       }
-
-      const firstQ = generatedQuestions[0];
-
-      setActiveQuiz({
-        questions: generatedQuestions,
-        currentIndex: 0,
-        score: 0,
-        correctIds: [],
-        incorrectIds: [],
-      });
-
-      const introMsg: ChatMessage = {
-        id: `quiz-start-${Date.now()}`,
-        role: "assistant",
-        content: t("chat_quiz_intro", currentAppLang, {
-          count: String(generatedQuestions.length),
-          question: firstQ.question,
-        }),
-        timestamp: new Date().toISOString(),
-        audioWord: firstQ.type === "listening" ? firstQ.word : undefined,
-        quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
-        imageUrl: firstQ.imageUrl,
-        imageKeyword: firstQ.imageKeyword,
-        suggestedActions: firstQ.options?.map((opt: any) => ({
-          label: opt,
-          action: "quiz_answer",
-          payload: { answer: opt, wordId: firstQ.wordId },
-        })) || [
-          { label: firstQ.correctAnswer, action: "quiz_answer", payload: { answer: firstQ.correctAnswer, wordId: firstQ.wordId } },
-        ],
-        provider,
-        model,
-        responseTimeMs,
-      };
-
-      setChatMessages([introMsg]);
-    } catch (e: any) {
-      console.error("Error starting chat quiz:", e);
-      handleAiApiError(e, configToUse, (newConfig) => startChatQuiz(newConfig));
-    } finally {
-      setIsTyping(false);
+      return;
     }
+
+    // Step 3: If still none are available, show the message saying there are no words to practice today, and suggest coming back tomorrow or adding more words to learn
+    const noCandidateMsg: ChatMessage = {
+      id: `practice-no-candidates-${Date.now()}`,
+      role: "assistant",
+      content: t("chat_quiz_no_candidates_warning", currentAppLang),
+      timestamp: new Date().toISOString(),
+      suggestedActions: [
+        { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+        { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+      ],
+    };
+    setChatMessages([noCandidateMsg]);
   };
 
   // Handle conversational quiz answers
