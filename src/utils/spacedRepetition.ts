@@ -63,20 +63,40 @@ export interface CandidateWordsOptions {
 
 export interface WeightedCandidate {
   word: Word;
-  tier: "starred" | "memoryDecay" | "neverReviewed" | "weak" | "rest";
+  tier: "starred" | "memoryDecay" | "weak" | "rest";
   weight: number;
 }
 
 /**
- * Assigns probability weight based on word urgency tier:
+ * Checks whether a word has ever been learned or studied (prior exposure).
+ * A word is considered learned/studied if:
+ * - Marked as learned (`word.learned === true`)
+ * - Has been reviewed previously (`word.lastReviewed !== null`)
+ * - Has memory strength > 0 (`word.strength > 0`)
+ * - Has relevant study history entries (e.g. flashcard_review, quiz_correct, quiz_incorrect, mastered, etc.)
+ */
+export function isWordLearnedOrStudied(word: Word): boolean {
+  if (word.learned) return true;
+  if (word.lastReviewed) return true;
+  if ((word.strength ?? 0) > 0) return true;
+  if (word.strengthHistory && word.strengthHistory.length > 0) {
+    const hasStudyHistory = word.strengthHistory.some(
+      entry => entry.reason !== "created" && entry.reason !== "manual_adjust"
+    );
+    if (hasStudyHistory) return true;
+  }
+  return false;
+}
+
+/**
+ * Assigns probability weight based on word urgency tier for learned/studied words:
  * - Starred: weight 5
  * - Memory Decay: weight 4
- * - Never Reviewed: weight 3
  * - Weak (strength < 50): weight 3
  * - Rest: weight 1
  */
 export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
-  tier: "starred" | "memoryDecay" | "neverReviewed" | "weak" | "rest";
+  tier: "starred" | "memoryDecay" | "weak" | "rest";
   weight: number;
 } {
   if (word.starred) {
@@ -88,11 +108,7 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
     return { tier: "memoryDecay", weight: 4 };
   }
 
-  if (!word.lastReviewed) {
-    return { tier: "neverReviewed", weight: 3 };
-  }
-
-  if (word.strength < 50) {
+  if ((word.strength ?? 0) < 50) {
     return { tier: "weak", weight: 3 };
   }
 
@@ -118,9 +134,9 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 
 /**
  * Selects candidate words for a new quiz based on recency, memory decay, and cooldown rules.
- * Gathers a candidate pool across non-cooldown tiers (e.g. 20-30 words) and applies
- * weighted random sampling (starred: weight 5, memoryDecay: weight 4, weak/neverReviewed: weight 3, rest: weight 1)
- * to ensure urgent words are favored overall while dramatically reducing overlap across devices/sessions.
+ * Strictly selects from words that have been learned or studied previously (excluding unlearned words),
+ * gathers a candidate pool across non-cooldown priority tiers (starred: 5, memoryDecay: 4, weak: 3, rest: 1),
+ * and applies weighted random sampling (A-Res algorithm) to pick candidate words.
  */
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
@@ -128,9 +144,15 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   const { maxCandidates = 10, cooldownHours = 12, candidatePoolSize = 30 } = options;
   const now = new Date();
 
-  // 1. Filter out words that were reviewed recently (within cooldownHours)
-  const eligibleWords = words.filter(word => {
-    if (!word.lastReviewed) return true; // Never reviewed -> always eligible
+  // 1. Strictly filter for words that have actually been learned or studied before
+  const learnedWords = words.filter(isWordLearnedOrStudied);
+  if (learnedWords.length === 0) {
+    return [];
+  }
+
+  // 2. Filter out words that were reviewed recently (within cooldownHours)
+  const eligibleWords = learnedWords.filter(word => {
+    if (!word.lastReviewed) return true; // Learned but hasn't had a spaced review yet -> eligible
     const hours = getHoursSinceLastReview(word, now);
     return hours >= cooldownHours;
   });
@@ -143,10 +165,9 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     return [];
   }
 
-  // 2. Categorize eligible words into priority tiers
+  // 3. Categorize eligible learned words into priority tiers
   const starred: Word[] = [];
   const memoryDecay: Word[] = [];
-  const neverReviewed: Word[] = [];
   const weak: Word[] = [];
   const rest: Word[] = [];
 
@@ -154,7 +175,6 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     const { tier } = getWordTierAndWeight(word, now);
     if (tier === "starred") starred.push(word);
     else if (tier === "memoryDecay") memoryDecay.push(word);
-    else if (tier === "neverReviewed") neverReviewed.push(word);
     else if (tier === "weak") weak.push(word);
     else rest.push(word);
   }
@@ -162,9 +182,9 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   // Helper to shuffle an array randomly
   const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
 
-  // 3. Gather candidate pool (e.g., 20–30 eligible words across all non-cooldown tiers)
+  // 4. Gather candidate pool across all non-cooldown tiers
   const candidatePool: WeightedCandidate[] = [];
-  const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "neverReviewed" | "weak" | "rest", weight: number) => {
+  const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "weak" | "rest", weight: number) => {
     const shuffled = shuffle(tierWords);
     for (const word of shuffled) {
       if (candidatePool.length >= candidatePoolSize) break;
@@ -174,11 +194,10 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
 
   addTierToPool(starred, "starred", 5);
   addTierToPool(memoryDecay, "memoryDecay", 4);
-  addTierToPool(neverReviewed, "neverReviewed", 3);
   addTierToPool(weak, "weak", 3);
   addTierToPool(rest, "rest", 1);
 
-  // 4. Perform Weighted Random Sampling from the enlarged candidate pool
+  // 5. Perform Weighted Random Sampling from the candidate pool
   return sampleWeightedCandidates(candidatePool, maxCandidates);
 }
 

@@ -10,7 +10,7 @@ import {
   generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { getQuizCandidateWords, getCandidateWordsForFlashcards } from "../utils/spacedRepetition";
+import { getQuizCandidateWords, getCandidateWordsForFlashcards, isWordLearnedOrStudied } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
@@ -140,11 +140,42 @@ export function useChat({
 
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5, cooldownHours: 12 });
     if (quizWords.length < 2) {
+      const hasLearnedWords = activeWords.some(isWordLearnedOrStudied);
+      let contentWarning = t("chat_quiz_no_candidates_warning", currentAppLang);
+      let suggestedActions: any[] = [
+        { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+        { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+      ];
+
+      if (!hasLearnedWords) {
+        contentWarning = currentAppLang.toLowerCase().startsWith("vi")
+          ? "📚 **Bạn chưa có từ vựng nào đã học để làm bài kiểm tra!**\n\nQuiz được thiết kế để kiểm tra và củng cố trí nhớ cho các từ bạn đã học. Hãy học Flashcards hoặc đánh dấu từ đã thuộc trước khi làm Quiz nhé!"
+          : currentAppLang.toLowerCase().startsWith("es")
+          ? "📚 **¡Aún no has aprendido palabras para el quiz!**\n\nLos cuestionarios están diseñados para reforzar las palabras que ya has estudiado. ¡Estudia tarjetas o marca palabras como aprendidas para desbloquear el quiz!"
+          : currentAppLang.toLowerCase().startsWith("fr")
+          ? "📚 **Vous n'avez pas encore appris de mots pour le quiz !**\n\nLes quiz sont conçus pour réviser les mots que vous avez déjà étudiés. Étudiez des flashcards ou marquez des mots comme appris avant de commencer un quiz !"
+          : currentAppLang.toLowerCase().startsWith("de")
+          ? "📚 **Sie haben noch keine Wörter für das Quiz gelernt!**\n\nQuizze sind dazu da, bereits gelernte Wörter zu wiederholen. Bitte lernen Sie Lernkarten oder markieren Sie Wörter als gelernt!"
+          : currentAppLang.toLowerCase().startsWith("ja")
+          ? "📚 **クイズ用の学習済み単語がまだありません！**\n\nクイズは学習済みの単語を復習・定着させるための機能です。まずはフラッシュカードで学習するか、単語を学習済みに設定してください！"
+          : currentAppLang.toLowerCase().startsWith("ko")
+          ? "📚 **퀴즈에 출제할 학습된 단어가 아직 없습니다!**\n\n퀴즈는 이미 학습한 단어를 복습하고 기억을 강화하기 위한 기능입니다. 먼저 플래시카드로 학습하거나 단어를 학습 완료로 표시해 보세요!"
+          : currentAppLang.toLowerCase().startsWith("zh")
+          ? "📚 **您还没有已学习的单词可用于测验！**\n\n测验旨在复习和巩固已学过的单词。请先通过抽认卡学习或将单词标记为已掌握！"
+          : "📚 **You haven't learned any words yet!**\n\nQuizzes are designed to test and reinforce words you have already studied. Please study some flashcards or mark words as learned before starting a quiz!";
+        
+        suggestedActions = [
+          { label: t("chat_flashcard_deck_title", currentAppLang, { count: "5" }) || "🃏 Study Flashcards", action: "view_flashcard" },
+          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+        ];
+      }
+
       const noCandidateMsg: ChatMessage = {
         id: `quiz-no-candidates-${Date.now()}`,
         role: "assistant",
-        content: t("chat_quiz_no_candidates_warning", currentAppLang),
+        content: contentWarning,
         timestamp: new Date().toISOString(),
+        suggestedActions,
       };
       setChatMessages([noCandidateMsg]);
       return;
