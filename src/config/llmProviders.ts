@@ -88,7 +88,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       // "pro/minimax-m2.5", 
       "pro/claude-haiku-4-5", 
       "pro/gpt-5.6-luna",
-      "pro/gpt-5-mini"
+      // "pro/gpt-5-mini",
       // "pro/glm-5"
     ],
     visionModels: ["pro/gpt-5.6-luna"],
@@ -144,7 +144,7 @@ export const RELIABLE_MODELS: string[] = [
   "gemma4:31b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
-  "pro/gpt-5-mini"
+  // "pro/gpt-5-mini"
 ];
 
 export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {
