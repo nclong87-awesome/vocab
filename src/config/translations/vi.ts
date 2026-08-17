@@ -47,7 +47,7 @@ export const viTranslations: LanguageTranslations = {
     add_word_btn: "Thêm Từ",
     search_placeholder: "Tìm kiếm từ vựng...",
     ai_coach_title: "Trợ Lý Học Tập AI",
-    chat_welcome_msg: "Xin chào! Chào mừng bạn đến với Trợ Lý Học Ngôn Ngữ AI. Tôi ở đây để giúp bạn thành thạo **{target}** từ ngôn ngữ mẹ đẻ **{native}**.\n\nBạn có thể trò chuyện với tôi, yêu cầu tôi dịch cụm từ, giải thích ngữ pháp hoặc giới thiệu từ mới.\n\nHãy thử hỏi tôi: *'Một số thành ngữ phổ biến trong {target} là gì?'* hoặc nhấp vào một trong các thao tác nhanh bên dưới để bắt đầu học!",
+    chat_welcome_msg: "Xin chào! Chào mừng bạn đến với Trợ Lý Học Ngôn Ngữ AI. Tôi ở đây để giúp bạn thành thạo **{target}** từ ngôn ngữ mẹ đẻ **{native}**.\n\nBạn có thể trò chuyện với tôi, yêu cầu tôi dịch cụm từ, giải thích ngữ pháp hoặc giới thiệu từ mới.",
     chat_placeholder_adding_word: "Đang thêm từ mới vào bộ từ vựng...",
     chat_placeholder_photo: "Hỏi AI Vision về hình ảnh này hoặc nhấn Gửi để phân tích...",
     chat_placeholder_default: "Hỏi gia sư AI, luyện trò chuyện hoặc yêu cầu nhận xét ngữ pháp...",

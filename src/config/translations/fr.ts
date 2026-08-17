@@ -47,7 +47,7 @@ export const frTranslations: LanguageTranslations = {
     add_word_btn: "Ajouter un Mot",
     search_placeholder: "Rechercher du vocabulaire...",
     ai_coach_title: "Compagnon d'Étude IA",
-    chat_welcome_msg: "Bonjour ! Bienvenue dans votre Coach Linguistique IA interactif. Je suis là pour vous aider à maîtriser le **{target}** depuis votre langue maternelle **{native}**.\n\nVous pouvez discuter avec moi, me demander de traduire des phrases, d'expliquer la grammaire ou d'introduire de nouveaux mots.\n\nEssayez de me demander : *'Quelles sont les expressions courantes en {target} ?'* ou cliquez sur l'une des actions rapides ci-dessous pour commencer !",
+    chat_welcome_msg: "Bonjour ! Bienvenue dans votre Coach Linguistique IA interactif. Je suis là pour vous aider à maîtriser le **{target}** depuis votre langue maternelle **{native}**.\n\nVous pouvez discuter avec moi, me demander de traduire des phrases, d'expliquer la grammaire ou d'introduire de nouveaux mots.",
     chat_placeholder_adding_word: "Ajout du nouveau mot à la collection...",
     chat_placeholder_photo: "Posez une question à AI Vision sur cette image ou cliquez sur Envoyer pour analyser...",
     chat_placeholder_default: "Posez une question au tuteur IA, pratiquez la conversation ou demandez un retour grammaire...",

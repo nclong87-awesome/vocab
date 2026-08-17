@@ -47,7 +47,7 @@ export const jaTranslations: LanguageTranslations = {
     add_word_btn: "単語を追加",
     search_placeholder: "単語を検索...",
     ai_coach_title: "AI学習パートナー",
-    chat_welcome_msg: "こんにちは！インタラクティブAI言語コーチへようこそ。母国語**{native}**から学習対象言語**{target}**のマスターをお手伝いします。\n\n日常会話の練習、フレーズの翻訳、文法解説、新しい単語の紹介など何でもお尋ねください。\n\n例：*'【{target}】のよく使われる慣用句を教えて'* と尋ねるか、下のクイックアクションをクリックして学習を開始しましょう！",
+    chat_welcome_msg: "こんにちは！インタラクティブAI言語コーチへようこそ。母国語**{native}**から学習対象言語**{target}**のマスターをお手伝いします。\n\n日常会話の練習、フレーズの翻訳、文法解説、新しい単語の紹介など何でもお尋ねください。",
     chat_placeholder_adding_word: "新しい単語を単語帳に追加中...",
     chat_placeholder_photo: "AI Visionにこの画像について質問するか、「送信」をクリックして解析...",
     chat_placeholder_default: "AIチューターに質問、会話練習、文法アドバイスをリクエスト...",

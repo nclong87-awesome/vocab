@@ -47,7 +47,7 @@ export const enTranslations: LanguageTranslations = {
     add_word_btn: "Add Word",
     search_placeholder: "Search vocabulary...",
     ai_coach_title: "AI Study Companion",
-    chat_welcome_msg: "Hello! Welcome to your interactive AI Language Coach. I'm here to help you master **{target}** from your native language **{native}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.\n\nTry asking me: *'What are some common idioms in {target}?'* or click one of the quick actions below to start learning!",
+    chat_welcome_msg: "Hello! Welcome to your interactive AI Language Coach. I'm here to help you master **{target}** from your native language **{native}**.\n\nYou can chat with me, ask me to translate phrases, explain grammar rules, or introduce new words.",
     chat_placeholder_adding_word: "Adding new word to collection...",
     chat_placeholder_photo: "Ask AI Vision about this image or click Send to analyze...",
     chat_placeholder_default: "Ask AI tutor, practice conversation, or request grammar feedback...",

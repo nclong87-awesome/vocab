@@ -47,7 +47,7 @@ export const deTranslations: LanguageTranslations = {
     add_word_btn: "Wort Hinzufügen",
     search_placeholder: "Vokabeln suchen...",
     ai_coach_title: "KI-Lernbegleiter",
-    chat_welcome_msg: "Hallo! Willkommen bei Ihrem interaktiven KI-Sprachcoach. Ich bin hier, um Ihnen zu helfen, **{target}** aus Ihrer Muttersprache **{native}** zu meistern.\n\nSie können mit mir chatten, mich bitten, Sätze zu übersetzen, Grammatikregeln zu erklären oder neue Wörter vorzustellen.\n\nFragen Sie mich zum Beispiel: *'Was sind einige häufige Redewendungen in {target}?'* oder klicken Sie unten auf eine der Schnellaktionen, um zu beginnen!",
+    chat_welcome_msg: "Hallo! Willkommen bei Ihrem interaktiven KI-Sprachcoach. Ich bin hier, um Ihnen zu helfen, **{target}** aus Ihrer Muttersprache **{native}** zu meistern.\n\nSie können mit mir chatten, mich bitten, Sätze zu übersetzen, Grammatikregeln zu erklären oder neue Wörter vorzustellen.",
     chat_placeholder_adding_word: "Neues Wort wird zur Sammlung hinzugefügt...",
     chat_placeholder_photo: "Fragen Sie KI Vision zu diesem Bild oder klicken Sie zum Analysieren auf Senden...",
     chat_placeholder_default: "Fragen Sie den KI-Tutor, üben Sie Konversation oder fordern Sie Grammatik-Feedback an...",

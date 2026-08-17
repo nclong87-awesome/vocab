@@ -47,7 +47,7 @@ export const zhTranslations: LanguageTranslations = {
     add_word_btn: "添加词汇",
     search_placeholder: "搜索词汇...",
     ai_coach_title: "AI 学习助手",
-    chat_welcome_msg: "你好！欢迎使用互动式 AI 语言教练。我将协助你用母语 **{native}** 轻松掌握 **{target}**。\n\n你可以和我聊天、要求翻译短语、讲解语法规则或学习新词汇。\n\n不妨试着问我：*'【{target}】中有哪些常用成语或俗语？'*，或者点击下方的快捷操作开始学习吧！",
+    chat_welcome_msg: "你好！欢迎使用互动式 AI 语言教练。我将协助你用母语 **{native}** 轻松掌握 **{target}**。\n\n你可以和我聊天、要求翻译短语、讲解语法规则或学习新词汇。",
     chat_placeholder_adding_word: "正在将新词汇添加到词汇本...",
     chat_placeholder_photo: "向 AI Vision 咨询关于此图片的问题，或点击发送进行分析...",
     chat_placeholder_default: "向 AI 导师提问、练习口语对话，或请求语法反馈...",

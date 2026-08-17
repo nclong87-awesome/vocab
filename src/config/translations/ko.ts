@@ -47,7 +47,7 @@ export const koTranslations: LanguageTranslations = {
     add_word_btn: "단어 추가",
     search_placeholder: "단어 검색...",
     ai_coach_title: "AI 학습 도우미",
-    chat_welcome_msg: "안녕하세요! 대화형 AI 언어 코치에 오신 것을 환영합니다. 모국어인 **{native}**로 학습 목표 언어인 **{target}**을(를) 마스터할 수 있도록 도와드리겠습니다.\n\n저와 대화하거나, 문장 번역, 문법 설명, 새로운 단어 추천 등을 요청해 보세요.\n\n예를 들어 *'{target}의 자주 쓰이는 관용구는 뭐야?'*라고 물어보시거나 아래의 빠른 작업을 클릭하여 학습을 시작하세요!",
+    chat_welcome_msg: "안녕하세요! 대화형 AI 언어 코치에 오신 것을 환영합니다. 모국어인 **{native}**로 학습 목표 언어인 **{target}**을(를) 마스터할 수 있도록 도와드리겠습니다.\n\n저와 대화하거나, 문장 번역, 문법 설명, 새로운 단어 추천 등을 요청해 보세요.",
     chat_placeholder_adding_word: "단어장에 새 단어를 추가하는 중...",
     chat_placeholder_photo: "AI Vision에 이미지에 대해 질문하거나 전송을 눌러 분석하세요...",
     chat_placeholder_default: "AI 튜터에게 질문하거나 대화 연습, 문법 피드백을 요청하세요...",

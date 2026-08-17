@@ -47,7 +47,7 @@ export const esTranslations: LanguageTranslations = {
     add_word_btn: "Añadir Palabra",
     search_placeholder: "Buscar vocabulario...",
     ai_coach_title: "Compañero de Estudio AI",
-    chat_welcome_msg: "¡Hola! Bienvenido a tu Entrenador de Idiomas AI interactivo. Estoy aquí para ayudarte a dominar el **{target}** desde tu idioma nativo **{native}**.\n\nPuedes chatear conmigo, pedirme que traduzca frases, me explique reglas gramaticales o introduzca nuevas palabras.\n\nPrueba a preguntarme: *'¿Cuáles son algunas expresiones comunes en {target}?'* ¡o haz clic en una de las acciones rápidas a continuación para comenzar!",
+    chat_welcome_msg: "¡Hola! Bienvenido a tu Entrenador de Idiomas AI interactivo. Estoy aquí para ayudarte a dominar el **{target}** desde tu idioma nativo **{native}**.\n\nPuedes chatear conmigo, pedirme que traduzca frases, me explique reglas gramaticales o introduzca nuevas palabras.",
     chat_placeholder_adding_word: "Añadiendo nueva palabra a la colección...",
     chat_placeholder_photo: "Pregunta a AI Vision sobre esta imagen o haz clic en Enviar para analizar...",
     chat_placeholder_default: "Pide ayuda al tutor AI, practica conversación o solicita corrección gramatical...",
