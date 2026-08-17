@@ -8,7 +8,6 @@ import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
   getAutoModelCandidates, 
   getAutoCandidateWithMeta,
-  lockModel, 
   recordModelResponse, 
   recordModelFailure
 } from "../utils/autoModeManager";
@@ -428,10 +427,9 @@ async function callLLMClientSideSingleCandidate(
       }
 
       const primaryModel = model || "gemini-3.6-flash";
-      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
 
       return callWithRetry(
-        async (attempt) => {
+        async () => {
           const ai = new GoogleGenAI({ 
             apiKey: effectiveApiKey || proxyKeyToUse || "dummy-key",
             httpOptions: {
@@ -440,61 +438,30 @@ async function callLLMClientSideSingleCandidate(
               }
             }
           });
-          let activeModel = primaryModel;
 
-          if (attempt > 1 && fallbackModels.length > 0) {
-            activeModel = fallbackModels[(attempt - 2) % fallbackModels.length];
-            console.warn(`[Gemini Fallback] Retrying with model ${activeModel}`);
-          }
-
-          try {
-            const response = await ai.models.generateContent({
-              model: activeModel,
-              contents: prompt,
-              config: {
-                systemInstruction,
-                responseMimeType: "application/json"
-              }
-            });
-
-            if (!response.text) {
-              throw new Error("Empty response received from Gemini API.");
+          const response = await ai.models.generateContent({
+            model: primaryModel,
+            contents: prompt,
+            config: {
+              systemInstruction,
+              responseMimeType: "application/json"
             }
-            return cleanJsonResponse(response.text);
-          } catch (err: any) {
-            const parsed = parseLlmError(err, "gemini");
-            // If primary model returns 404 or NOT_FOUND, fallback immediately to default model
-            if ((parsed.statusCode === 404 || parsed.errorType === "NOT_FOUND") && activeModel === primaryModel && fallbackModels.length > 0) {
-              console.warn(`[Gemini Model Fallback] Model ${primaryModel} not found (404), trying ${fallbackModels[0]}`);
-              const fallbackRes = await ai.models.generateContent({
-                model: fallbackModels[0],
-                contents: prompt,
-                config: {
-                  systemInstruction,
-                  responseMimeType: "application/json"
-                }
-              });
-              if (fallbackRes.text) {
-                return cleanJsonResponse(fallbackRes.text);
-              }
-            }
-            throw err;
+          });
+
+          if (!response.text) {
+            throw new Error("Empty response received from Gemini API.");
           }
+          return cleanJsonResponse(response.text);
         },
         { maxRetries: 1, provider: "gemini" }
       );
     } else {
       const primaryModel = model || "gemini-3.6-flash";
-      const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
 
       return callWithRetry(
-        async (attempt) => {
-          let activeModel = primaryModel;
-          if (attempt > 1 && fallbackModels.length > 0) {
-            activeModel = fallbackModels[(attempt - 2) % fallbackModels.length];
-          }
+        async () => {
           const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
-          const targetEndpoint = `${cleanBaseUrl}/models/${activeModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
+          const targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
 
           const headers: Record<string, string> = {
             "Content-Type": "application/json"
@@ -1101,25 +1068,11 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    console.warn("[autofillWordService] Server returned error status:", res.status, errData, "Attempting client-side LLM fallback...");
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-    if (resWithMeta.provider && resWithMeta.model) {
-      recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-    }
-    return cleanAndParseJson(resWithMeta.text);
+    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    console.warn("[autofillWordService] Server call failed:", err?.message || err, "Attempting client-side LLM fallback...");
-    try {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return cleanAndParseJson(resWithMeta.text);
-    } catch (clientErr) {
-      throw err;
-    }
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Failed to auto-fill word definition.");
   }
 }
 
@@ -1256,53 +1209,12 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       };
     }
 
-    if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        ...parsed,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    }
-
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    console.warn("[checkWordDefinitionsService] Server returned error status, attempting client-side LLM auto mode fallback...", res.status, errData);
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsed = JSON.parse(resWithMeta.text);
-    const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-    if (resWithMeta.provider && resWithMeta.model) {
-      recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-    }
-    return {
-      ...parsed,
-      provider: resWithMeta.provider,
-      model: resWithMeta.model,
-      responseTimeMs: duration
-    };
+    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    console.warn("[checkWordDefinitionsService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
-    try {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        ...parsed,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    } catch (clientErr) {
-      throw err;
-    }
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Failed to check word definitions.");
   }
 }
 
@@ -1392,56 +1304,12 @@ CRITICAL INSTRUCTIONS:
       };
     }
 
-    if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = cleanAndParseJson(resWithMeta.text);
-      const words = extractWordsFromPayload(parsed);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        words,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    }
-
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    console.warn("[generateRandomWordsService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsed = cleanAndParseJson(resWithMeta.text);
-    const words = extractWordsFromPayload(parsed);
-    const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-    if (resWithMeta.provider && resWithMeta.model) {
-      recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-    }
-    return {
-      words,
-      provider: resWithMeta.provider,
-      model: resWithMeta.model,
-      responseTimeMs: duration
-    };
+    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    console.warn("[generateRandomWordsService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
-    try {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = cleanAndParseJson(resWithMeta.text);
-      const words = extractWordsFromPayload(parsed);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        words,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    } catch (clientErr) {
-      throw err;
-    }
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Failed to generate random words.");
   }
 }
 
@@ -1542,53 +1410,12 @@ CRITICAL INSTRUCTIONS:
       };
     }
 
-    if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        ...parsed,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    }
-
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    console.warn("[fixGrammarService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsed = JSON.parse(resWithMeta.text);
-    const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-    if (resWithMeta.provider && resWithMeta.model) {
-      recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-    }
-    return {
-      ...parsed,
-      provider: resWithMeta.provider,
-      model: resWithMeta.model,
-      responseTimeMs: duration
-    };
+    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    console.warn("[fixGrammarService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
-    try {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        ...parsed,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    } catch (clientErr) {
-      throw err;
-    }
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Failed to check or fix grammar.");
   }
 }
 
@@ -1859,7 +1686,17 @@ Provide a structured AI analysis with constructive insights, memory retention st
     const res = await fetchWithTimeout("/api/analyze-performance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stats, totalWords, masteredWords, improvingWords, llmConfig })
+      body: JSON.stringify({ 
+        stats, 
+        totalWords, 
+        masteredWords, 
+        improvingWords, 
+        recentlyUsedWords, 
+        neverUsedWords, 
+        targetLanguage, 
+        nativeLanguage, 
+        llmConfig 
+      })
     });
 
     if (res.ok) {
@@ -1879,56 +1716,12 @@ Provide a structured AI analysis with constructive insights, memory retention st
       };
     }
 
-    if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsedRaw = JSON.parse(resWithMeta.text);
-      const result = normalizePerformanceAnalysis(parsedRaw);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        ...result,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    }
-
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    console.warn("[analyzePerformanceService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsedRaw = JSON.parse(resWithMeta.text);
-    const result = normalizePerformanceAnalysis(parsedRaw);
-    const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-    if (resWithMeta.provider && resWithMeta.model) {
-      recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-    }
-    return {
-      ...result,
-      provider: resWithMeta.provider,
-      model: resWithMeta.model,
-      responseTimeMs: duration
-    };
+    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    console.warn("[analyzePerformanceService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
-    try {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsedRaw = JSON.parse(resWithMeta.text);
-      const result = normalizePerformanceAnalysis(parsedRaw);
-      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
-      }
-      return {
-        ...result,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-    } catch (clientErr) {
-      throw err;
-    }
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Unable to complete AI Performance Analysis. Please check your AI model settings.");
   }
 }
 
@@ -2067,59 +1860,12 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
       return result;
     }
 
-    if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
-      const endTime = performance.now();
-      const duration = resWithMeta.responseTimeMs || Math.round(endTime - startTime);
-      const result = {
-        ...parsed,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-      if (result.provider && result.model && result.responseTimeMs) {
-        recordModelResponse(result.provider, result.model, result.responseTimeMs);
-      }
-      return result;
-    }
-
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    console.warn("[sendChatMessageService] Server returned error, attempting client-side LLM auto mode fallback...", res.status, errData);
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-    const parsed = JSON.parse(resWithMeta.text);
-    const endTime = performance.now();
-    const duration = resWithMeta.responseTimeMs || Math.round(endTime - startTime);
-    const result = {
-      ...parsed,
-      provider: resWithMeta.provider,
-      model: resWithMeta.model,
-      responseTimeMs: duration
-    };
-    if (result.provider && result.model && result.responseTimeMs) {
-      recordModelResponse(result.provider, result.model, result.responseTimeMs);
-    }
-    return result;
+    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    console.warn("[sendChatMessageService] Server call failed, attempting client-side LLM auto mode fallback...", err?.message || err);
-    try {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
-      const parsed = JSON.parse(resWithMeta.text);
-      const endTime = performance.now();
-      const duration = resWithMeta.responseTimeMs || Math.round(endTime - startTime);
-      const result = {
-        ...parsed,
-        provider: resWithMeta.provider,
-        model: resWithMeta.model,
-        responseTimeMs: duration
-      };
-      if (result.provider && result.model && result.responseTimeMs) {
-        recordModelResponse(result.provider, result.model, result.responseTimeMs);
-      }
-      return result;
-    } catch (clientErr) {
-      throw err;
-    }
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Failed to send chat message.");
   }
 }
 
@@ -2745,22 +2491,15 @@ Output MUST be strictly valid JSON matching this schema:
     });
 
     return {
-      cards: cards.length > 0 ? cards : fallbackCards,
+      cards,
       provider: prov,
       model: mod,
       responseTimeMs: duration
     };
   } catch (err: any) {
     console.error("AI Batch Flashcard Generation API error:", err);
-    if (llmConfig?.provider && llmConfig?.model) {
-      lockModel(llmConfig.provider, llmConfig.model, 3600000, err?.message || String(err));
-    }
-    return {
-      cards: fallbackCards,
-      provider: llmConfig?.provider,
-      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
-      responseTimeMs: Math.round(performance.now() - startTime)
-    };
+    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    throw new Error(parsedErr.userMessage || err?.message || "Failed to generate flashcards.");
   }
 }
 

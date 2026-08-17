@@ -39,6 +39,7 @@ export default function AnalyticsDashboard({
   onStartPracticeWeakWords,
   onToggleLearnedWord,
   onToggleStarWord,
+  onNavigateToView,
 }: AnalyticsDashboardProps) {
   const safeWords = Array.isArray(words) ? words : [];
 
@@ -253,6 +254,7 @@ export default function AnalyticsDashboard({
               onRunAiAnalysis={handleRunAiAnalysis}
               onStartPracticeWords={(wordsToPractice) => onStartPracticeWeakWords(wordsToPractice)}
               onSpeakWord={handleSpeakWord}
+              onNavigateToView={onNavigateToView}
             />
           </motion.div>
         )}

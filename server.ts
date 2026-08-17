@@ -239,10 +239,17 @@ function isServerModelLocked(provider: string, model: string): boolean {
   return false;
 }
 
-const SERVER_AUTO_CANDIDATES = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom").map(p => ({
-  provider: p.id,
-  model: p.defaultModel
-}));
+const SERVER_AUTO_CANDIDATES = [
+  ...(process.env.GEMINI_API_KEY ? [
+    { provider: "gemini", model: "gemini-3.6-flash" },
+    { provider: "gemini", model: "gemini-3.5-flash" },
+    { provider: "gemini", model: "gemini-3.5-flash-lite" }
+  ] : []),
+  ...PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom" && (!process.env.GEMINI_API_KEY || p.id !== "gemini")).map(p => ({
+    provider: p.id,
+    model: p.defaultModel
+  }))
+];
 
 let serverAutoRotationIndex = 0;
 
@@ -270,7 +277,7 @@ async function callLLMSingle(
   schemaDescription: string,
   llmConfig?: LLMRequestConfig
 ): Promise<string> {
-  const provider = llmConfig?.provider || "openrouter";
+  const provider = llmConfig?.provider || "gemini";
   const model = sanitizeModel(provider, llmConfig?.model);
   const apiKey = llmConfig?.apiKey;
   const proxyKey = process.env.PROXY_SECRET;
@@ -278,12 +285,13 @@ async function callLLMSingle(
   const baseUrl = llmConfig?.baseUrl || providerMeta?.defaultBaseUrl || "";
 
   if (provider === "gemini") {
-    const effectiveGeminiUrl = baseUrl || providerMeta?.defaultBaseUrl || "https://gemini.nclong87.workers.dev/v1beta";
+    const effectiveGeminiKey = apiKey || process.env.GEMINI_API_KEY || "";
+    const effectiveGeminiUrl = baseUrl || (effectiveGeminiKey ? "https://generativelanguage.googleapis.com/v1beta" : (providerMeta?.defaultBaseUrl || "https://generativelanguage.googleapis.com/v1beta"));
     const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
 
-    if (!isCustomOrProxyUrl) {
+    if (!isCustomOrProxyUrl && effectiveGeminiKey) {
       const ai = new GoogleGenAI({
-        apiKey: apiKey,
+        apiKey: effectiveGeminiKey,
         httpOptions: { 
           headers: { 
             'User-Agent': 'aistudio-build',
@@ -307,25 +315,6 @@ async function callLLMSingle(
         }
         return cleanJsonResponse(response.text);
       } catch (err: any) {
-        const fallbackModels = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"].filter(m => m !== primaryModel);
-        const parsed = parseServerError(err, "gemini");
-        if ((parsed.statusCode === 404 || parsed.errorType === "NOT_FOUND") && fallbackModels.length > 0) {
-          try {
-            const fallbackRes = await ai.models.generateContent({
-              model: fallbackModels[0],
-              contents: prompt,
-              config: {
-                systemInstruction,
-                responseMimeType: "application/json"
-              }
-            });
-            if (fallbackRes.text) {
-              return cleanJsonResponse(fallbackRes.text);
-            }
-          } catch {
-            // throw original error
-          }
-        }
         throw err;
       }
     } else {
@@ -341,8 +330,11 @@ async function callLLMSingle(
       if (proxyKey) {
         headers["X-Proxy-Key"] = proxyKey;
       }
-      if (apiKey) {
-        headers["x-goog-api-key"] = apiKey;
+      if (effectiveGeminiKey) {
+        headers["x-goog-api-key"] = effectiveGeminiKey;
+        if (!headers["X-Proxy-Key"]) {
+          headers["X-Proxy-Key"] = effectiveGeminiKey;
+        }
       }
 
       const payload = {
@@ -401,8 +393,10 @@ async function callLLMSingle(
     headers["X-Title"] = "Vocabulary Learner";
   }
 
-  if (effectiveTargetBaseUrl.includes("workers.dev")) {
-    headers["X-Proxy-Key"] = proxyKey!;
+  if (proxyKey) {
+    headers["X-Proxy-Key"] = proxyKey;
+  } else if (apiKey) {
+    headers["X-Proxy-Key"] = apiKey;
   }
 
   const reqBody: any = {
@@ -455,6 +449,53 @@ async function callLLMSingle(
   return JSON.stringify(result);
 }
 
+async function callLLMAutoCandidates(
+  prompt: string,
+  systemInstruction: string,
+  schemaDescription: string,
+  llmConfig?: LLMRequestConfig,
+  initialExcludedKeys?: Set<string>
+): Promise<string> {
+  const excludedKeys = new Set<string>(initialExcludedKeys || []);
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt < SERVER_AUTO_CANDIDATES.length; attempt++) {
+    const cand = getNextServerAutoCandidate(excludedKeys);
+    const candKey = `${cand.provider}:${cand.model}`;
+    excludedKeys.add(candKey);
+
+    const candProfile = llmConfig?.savedProviders?.[cand.provider];
+    const candMeta = PROVIDER_OPTIONS.find(p => p.id === cand.provider);
+    const candConfig: LLMRequestConfig = {
+      provider: cand.provider,
+      model: cand.model,
+      apiKey: candProfile?.apiKey || (llmConfig?.provider === cand.provider ? llmConfig.apiKey : ""),
+      proxyKey: process.env.PROXY_SECRET,
+      baseUrl: candProfile?.baseUrl || candMeta?.defaultBaseUrl || "",
+      savedProviders: llmConfig?.savedProviders
+    };
+
+    try {
+      console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${SERVER_AUTO_CANDIDATES.length}: Routing request to ${candKey}`);
+      const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
+      if (schemaDescription) {
+        try {
+          cleanAndParseJson(resultText);
+        } catch (jsonErr: any) {
+          throw new Error(`Invalid JSON response from ${candKey}: ${jsonErr.message}`);
+        }
+      }
+      return resultText;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[Server Auto Mode] Model ${candKey} failed: ${err?.message || err}. Locking model for 1 hour and switching...`);
+      lockServerModel(cand.provider, cand.model, 3600000);
+    }
+  }
+
+  throw lastError || new Error("All AI models in Auto Mode failed on server.");
+}
+
 // Main callLLM function supporting Auto Mode
 async function callLLM(
   prompt: string, 
@@ -465,46 +506,10 @@ async function callLLM(
   const provider = llmConfig?.provider || "auto";
 
   if (provider === "auto" || llmConfig?.model === "auto") {
-    const excludedKeys = new Set<string>();
-    let lastError: any = null;
-
-    for (let attempt = 0; attempt < SERVER_AUTO_CANDIDATES.length; attempt++) {
-      const cand = getNextServerAutoCandidate(excludedKeys);
-      const candKey = `${cand.provider}:${cand.model}`;
-      excludedKeys.add(candKey);
-
-      const candProfile = llmConfig?.savedProviders?.[cand.provider];
-      const candMeta = PROVIDER_OPTIONS.find(p => p.id === cand.provider);
-      const candConfig: LLMRequestConfig = {
-        provider: cand.provider,
-        model: cand.model,
-        apiKey: candProfile?.apiKey || (llmConfig?.provider === cand.provider ? llmConfig.apiKey : ""),
-        proxyKey: process.env.PROXY_SECRET,
-        baseUrl: candProfile?.baseUrl || candMeta?.defaultBaseUrl || "",
-        savedProviders: llmConfig?.savedProviders
-      };
-
-      try {
-        console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${SERVER_AUTO_CANDIDATES.length}: Routing request to ${candKey}`);
-        const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
-        if (schemaDescription) {
-          try {
-            cleanAndParseJson(resultText);
-          } catch (jsonErr: any) {
-            throw new Error(`Invalid JSON response from ${candKey}: ${jsonErr.message}`);
-          }
-        }
-        return resultText;
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`[Server Auto Mode] Model ${candKey} failed: ${err?.message || err}. Locking model for 1 hour and switching...`);
-        lockServerModel(cand.provider, cand.model, 3600000);
-      }
-    }
-
-    throw lastError || new Error("All AI models in Auto Mode failed on server.");
+    return callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig);
   }
 
+  // When a specific provider is configured, call it directly and throw on error without fallbacks
   return callLLMSingle(prompt, systemInstruction, schemaDescription, llmConfig);
 }
 
@@ -1368,7 +1373,7 @@ app.get("/api/tts/stream", async (req, res) => {
 
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text: rawText, engine, model, voice, apiKey, customEndpoint, lang, llmConfig } = req.body;
+    const { text: rawText, engine, model, voice, apiKey, customEndpoint, llmConfig } = req.body;
 
     if (!rawText) {
       return res.status(400).json({ error: "Text is required for TTS generation" });
@@ -1377,178 +1382,119 @@ app.post("/api/tts", async (req, res) => {
     const text = normalizeServerTextForTTS(rawText);
     const effectiveApiKey = apiKey || (llmConfig?.provider === engine ? llmConfig?.apiKey : undefined) || (engine === "gemini" ? process.env.GEMINI_API_KEY : "");
 
-    // Fallback helper to fetch audio stream from Google Translate TTS
-    const fetchFallbackTtsAudio = async (): Promise<string | null> => {
-      try {
-        const cleanLang = (lang || "en").split("-")[0].toLowerCase();
-        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q=${encodeURIComponent(text.slice(0, 300))}&tl=${cleanLang}`;
-        const response = await fetchWithTimeout(googleTtsUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          }
-        });
-        if (response.ok) {
-          const arrayBuf = await response.arrayBuffer();
-          const base64 = Buffer.from(arrayBuf).toString("base64");
-          return `data:audio/mp3;base64,${base64}`;
-        }
-      } catch (fbErr) {
-        console.warn("Fallback TTS fetch failed:", fbErr);
-      }
-      return null;
-    };
-
     if (engine === "gemini") {
       const keyToUse = effectiveApiKey || process.env.GEMINI_API_KEY;
-      if (keyToUse) {
-        try {
-          const ai = new GoogleGenAI({
-            apiKey: keyToUse,
-            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-          });
+      if (!keyToUse) {
+        return res.status(400).json({ error: "Gemini API key is required for Gemini TTS model" });
+      }
 
-          // Try Gemini audio model aliases
-          const modelsToTry = [
-            (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-2.0-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-3.6-flash"
-          ];
+      const ai = new GoogleGenAI({
+        apiKey: keyToUse,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
 
-          for (const m of Array.from(new Set(modelsToTry))) {
-            try {
-              const response = await ai.models.generateContent({
-                model: m,
-                contents: `Pronounce clearly: "${text}"`,
-                config: {
-                  responseModalities: ["AUDIO"],
-                  speechConfig: {
-                    voiceConfig: {
-                      prebuiltVoiceConfig: {
-                        voiceName: voice || "Puck"
-                      }
-                    }
-                  }
-                }
-              });
-
-              const candidate = response.candidates?.[0];
-              const part = candidate?.content?.parts?.find((p: any) => p.inlineData);
-
-              if (part && part.inlineData) {
-                const mimeType = part.inlineData.mimeType || "audio/mp3";
-                const base64Data = part.inlineData.data || "";
-
-                if (mimeType.includes("l16") || mimeType.includes("pcm") || mimeType.includes("raw") || (!mimeType.includes("mp3") && !mimeType.includes("wav"))) {
-                  const rawPcm = Buffer.from(base64Data, "base64");
-                  const rateMatch = mimeType.match(/rate=(\d+)/);
-                  const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-                  const wavBuffer = pcmToWav(rawPcm, sampleRate, 1, 16);
-                  return res.json({ audioDataUrl: `data:audio/wav;base64,${wavBuffer.toString("base64")}` });
-                }
-                return res.json({ audioDataUrl: `data:${mimeType};base64,${base64Data}` });
+      const audioModel = (model && VALID_GEMINI_MODELS.includes(model)) ? model : "gemini-2.0-flash";
+      const response = await ai.models.generateContent({
+        model: audioModel,
+        contents: `Pronounce clearly: "${text}"`,
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voice || "Puck"
               }
-            } catch (mErr) {
-              console.warn(`Gemini TTS model ${m} failed:`, mErr);
             }
           }
-        } catch (genErr) {
-          console.warn("Gemini AI TTS generation exception:", genErr);
         }
+      });
+
+      const candidate = response.candidates?.[0];
+      const part = candidate?.content?.parts?.find((p: any) => p.inlineData);
+
+      if (part && part.inlineData) {
+        const mimeType = part.inlineData.mimeType || "audio/mp3";
+        const base64Data = part.inlineData.data || "";
+
+        if (mimeType.includes("l16") || mimeType.includes("pcm") || mimeType.includes("raw") || (!mimeType.includes("mp3") && !mimeType.includes("wav"))) {
+          const rawPcm = Buffer.from(base64Data, "base64");
+          const rateMatch = mimeType.match(/rate=(\d+)/);
+          const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+          const wavBuffer = pcmToWav(rawPcm, sampleRate, 1, 16);
+          return res.json({ audioDataUrl: `data:audio/wav;base64,${wavBuffer.toString("base64")}` });
+        }
+        return res.json({ audioDataUrl: `data:${mimeType};base64,${base64Data}` });
       }
 
-      // If Gemini did not return audio or key missing, use high-quality TTS fallback stream
-      const fbAudio = await fetchFallbackTtsAudio();
-      if (fbAudio) {
-        return res.json({ audioDataUrl: fbAudio });
-      }
       return res.status(422).json({ error: "Gemini model did not return inline audio." });
     }
 
     if (engine === "openai") {
-      if (effectiveApiKey) {
-        try {
-          const ttsRes = await fetchWithTimeout("https://api.openai.com/v1/audio/speech", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${effectiveApiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              model: model || "tts-1",
-              input: text,
-              voice: voice || "alloy"
-            })
-          });
-
-          if (ttsRes.ok) {
-            const audioBuffer = await ttsRes.arrayBuffer();
-            const base64Audio = Buffer.from(audioBuffer).toString("base64");
-            return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
-          }
-        } catch (oaErr) {
-          console.warn("OpenAI TTS error:", oaErr);
-        }
+      if (!effectiveApiKey) {
+        return res.status(400).json({ error: "OpenAI API key is required for OpenAI TTS model" });
       }
 
-      const fbAudio = await fetchFallbackTtsAudio();
-      if (fbAudio) {
-        return res.json({ audioDataUrl: fbAudio });
+      const ttsRes = await fetchWithTimeout("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${effectiveApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: model || "tts-1",
+          input: text,
+          voice: voice || "alloy"
+        })
+      });
+
+      if (ttsRes.ok) {
+        const audioBuffer = await ttsRes.arrayBuffer();
+        const base64Audio = Buffer.from(audioBuffer).toString("base64");
+        return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
+      } else {
+        const errText = await ttsRes.text();
+        return res.status(ttsRes.status).json({ error: `OpenAI TTS error (${ttsRes.status}): ${errText}` });
       }
-      return res.status(400).json({ error: "OpenAI API key is required for OpenAI TTS model" });
     }
 
     if (engine === "custom") {
-      if (customEndpoint) {
-        try {
-          const customRes = await fetchWithTimeout(customEndpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(effectiveApiKey ? { "Authorization": `Bearer ${effectiveApiKey}` } : {})
-            },
-            body: JSON.stringify({ text, voice, model })
-          });
+      if (!customEndpoint) {
+        return res.status(400).json({ error: "Custom endpoint URL is required for custom TTS model" });
+      }
 
-          if (customRes.ok) {
-            const contentType = customRes.headers.get("content-type") || "";
-            if (contentType.includes("json")) {
-              const json: any = await customRes.json();
-              return res.json({ audioDataUrl: json.audioDataUrl || json.url || json.audio });
-            } else {
-              const audioBuffer = await customRes.arrayBuffer();
-              const base64Audio = Buffer.from(audioBuffer).toString("base64");
-              return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
-            }
-          }
-        } catch (cErr) {
-          console.warn("Custom TTS error:", cErr);
+      const customRes = await fetchWithTimeout(customEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(effectiveApiKey ? { "Authorization": `Bearer ${effectiveApiKey}` } : {})
+        },
+        body: JSON.stringify({ text, voice, model })
+      });
+
+      if (customRes.ok) {
+        const contentType = customRes.headers.get("content-type") || "";
+        if (contentType.includes("json")) {
+          const json: any = await customRes.json();
+          return res.json({ audioDataUrl: json.audioDataUrl || json.url || json.audio });
+        } else {
+          const audioBuffer = await customRes.arrayBuffer();
+          const base64Audio = Buffer.from(audioBuffer).toString("base64");
+          return res.json({ audioDataUrl: `data:audio/mp3;base64,${base64Audio}` });
         }
+      } else {
+        const errText = await customRes.text();
+        return res.status(customRes.status).json({ error: `Custom TTS error (${customRes.status}): ${errText}` });
       }
-
-      const fbAudio = await fetchFallbackTtsAudio();
-      if (fbAudio) {
-        return res.json({ audioDataUrl: fbAudio });
-      }
-      return res.status(400).json({ error: "Custom endpoint URL is required for custom TTS model" });
-    }
-
-    // Default or Browser engine requested via POST /api/tts
-    const fbAudio = await fetchFallbackTtsAudio();
-    if (fbAudio) {
-      return res.json({ audioDataUrl: fbAudio });
     }
 
     return res.status(400).json({ error: "Unsupported TTS engine specified" });
   } catch (error: any) {
     const engine = req.body?.engine || "gemini";
     const parsed = parseServerError(error, engine);
-    console.warn(`[TTS API Fallback - ${engine}]`, parsed.userMessage);
     res.status(parsed.statusCode || 400).json({ 
       error: parsed.userMessage, 
       statusCode: parsed.statusCode, 
-      errorType: parsed.errorType,
-      fallback: true 
+      errorType: parsed.errorType
     });
   }
 });

@@ -1,7 +1,21 @@
 import { useState, useMemo } from "react";
-import { Brain, X, AlertTriangle, Sparkles, Target, Volume2, Clock, Bookmark, HelpCircle } from "lucide-react";
+import { 
+  Brain, 
+  X, 
+  AlertTriangle, 
+  Sparkles, 
+  Target, 
+  Volume2, 
+  Clock, 
+  Bookmark, 
+  HelpCircle, 
+  Layers, 
+  PlusCircle, 
+  ArrowRight 
+} from "lucide-react";
 import { PerformanceAnalysisResult } from "../../services/llmClientService";
 import { Word } from "../../types";
+import { getQuizCandidates, getFlashcardCandidates } from "../../utils/spacedRepetition";
 
 interface AiPerformanceCoachCardProps {
   aiReport: PerformanceAnalysisResult | null;
@@ -13,17 +27,33 @@ interface AiPerformanceCoachCardProps {
   onRunAiAnalysis: () => void;
   onStartPracticeWords?: (words: Word[]) => void;
   onSpeakWord?: (wordText: string, wordId: string, customLang?: string) => void;
+  onNavigateToView?: (view: 'chatview' | 'manage' | 'analytics' | 'settings') => void;
 }
 
 export default function AiPerformanceCoachCard({
   aiReport,
   isAnalyzing,
   analysisError,
+  words = [],
   setAiReport,
   onRunAiAnalysis,
-  onSpeakWord
+  onSpeakWord,
+  onNavigateToView
 }: AiPerformanceCoachCardProps) {
   const [practiceFilter, setPracticeFilter] = useState<'all' | 'recently_used' | 'never_used'>('all');
+
+  // Potential Quiz and Flashcard Candidates
+  const quizCandidates = useMemo(() => {
+    return getQuizCandidates(words || []);
+  }, [words]);
+
+  const flashcardCandidates = useMemo(() => {
+    return getFlashcardCandidates(words || []);
+  }, [words]);
+
+  const noQuizCandidates = quizCandidates.length === 0;
+  const noFlashcardCandidates = flashcardCandidates.length === 0;
+  const noCandidatesForEither = noQuizCandidates && noFlashcardCandidates;
 
   // Top practice words list from AI report
   const practiceWords = useMemo(() => {
@@ -110,6 +140,197 @@ export default function AiPerformanceCoachCard({
             <p className="text-stone-800 text-sm leading-relaxed font-serif italic">
               "{aiReport.overallAssessment}"
             </p>
+          </div>
+
+          {/* PRACTICE READINESS & CANDIDATE SUMMARY SECTION */}
+          <div className="bg-gradient-to-br from-stone-50/90 to-amber-50/20 border border-stone-200/90 p-5 rounded-2xl space-y-4 shadow-3xs" id="practice-candidates-summary-section">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/60 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 bg-amber-500 text-white font-black rounded-lg flex items-center justify-center text-xs shadow-3xs">
+                    <Layers className="w-3.5 h-3.5" />
+                  </span>
+                  <h4 className="font-bold text-stone-900 text-sm tracking-tight">Practice Readiness & Candidate Summary</h4>
+                </div>
+                <p className="text-[11px] text-stone-500 font-serif italic mt-0.5">
+                  Cognitive evaluation of eligible words for spaced quizzes and flashcards
+                </p>
+              </div>
+            </div>
+
+            {/* 2-Column Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Potential Quiz Candidates */}
+              <div className={`p-4 border rounded-xl space-y-3 transition-all ${
+                quizCandidates.length > 0
+                  ? 'bg-white border-amber-200/90 shadow-3xs'
+                  : 'bg-stone-100/60 border-stone-200 text-stone-600'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                      quizCandidates.length > 0 ? 'bg-amber-100 text-amber-900' : 'bg-stone-200 text-stone-500'
+                    }`}>
+                      <HelpCircle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-stone-900 text-xs">Potential Quiz Candidates</h5>
+                      <span className="text-[10px] text-stone-500">Words ready for active recall testing</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xl font-mono font-black ${
+                      quizCandidates.length > 0 ? 'text-amber-600' : 'text-stone-400'
+                    }`}>
+                      {quizCandidates.length}
+                    </span>
+                    <span className="text-[10px] text-stone-400 block -mt-1 font-sans">words</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-stone-600 leading-relaxed font-sans">
+                  {quizCandidates.length > 0
+                    ? `${quizCandidates.length} learned/studied words have completed review cooldown and are primed for quiz assessment.`
+                    : 'No studied words are currently eligible for quiz testing (either none studied yet or all are in active review cooldown).'}
+                </p>
+
+                {quizCandidates.length > 0 && (
+                  <div className="space-y-1.5 pt-1 border-t border-stone-100">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Candidate Sample:</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {quizCandidates.slice(0, 5).map((w, i) => (
+                        <span key={w.id || i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-md text-[10px] font-medium">
+                          <span>{w.word}</span>
+                          <span className="text-amber-600/70 text-[9px]">({w.strength ?? 0}%)</span>
+                        </span>
+                      ))}
+                      {quizCandidates.length > 5 && (
+                        <span className="text-[10px] text-stone-400 font-serif italic">+{quizCandidates.length - 5} more</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Potential Flashcard Candidates */}
+              <div className={`p-4 border rounded-xl space-y-3 transition-all ${
+                flashcardCandidates.length > 0
+                  ? 'bg-white border-indigo-200/90 shadow-3xs'
+                  : 'bg-stone-100/60 border-stone-200 text-stone-600'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                      flashcardCandidates.length > 0 ? 'bg-indigo-100 text-indigo-900' : 'bg-stone-200 text-stone-500'
+                    }`}>
+                      <Bookmark className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-stone-900 text-xs">Potential Flashcard Candidates</h5>
+                      <span className="text-[10px] text-stone-500">Words ready for spaced repetition</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xl font-mono font-black ${
+                      flashcardCandidates.length > 0 ? 'text-indigo-600' : 'text-stone-400'
+                    }`}>
+                      {flashcardCandidates.length}
+                    </span>
+                    <span className="text-[10px] text-stone-400 block -mt-1 font-sans">words</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-stone-600 leading-relaxed font-sans">
+                  {flashcardCandidates.length > 0
+                    ? `${flashcardCandidates.length} words available for study (unstudied terms, missed quiz items, or unlearned words past cooldown).`
+                    : 'No words currently eligible for flashcards (all terms are mastered or in cooldown).'}
+                </p>
+
+                {flashcardCandidates.length > 0 && (
+                  <div className="space-y-1.5 pt-1 border-t border-stone-100">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Candidate Sample:</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {flashcardCandidates.slice(0, 5).map((w, i) => (
+                        <span key={w.id || i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200/80 rounded-md text-[10px] font-medium">
+                          <span>{w.word}</span>
+                          {w.translation && <span className="text-indigo-600/70 text-[9px]">({w.translation})</span>}
+                        </span>
+                      ))}
+                      {flashcardCandidates.length > 5 && (
+                        <span className="text-[10px] text-stone-400 font-serif italic">+{flashcardCandidates.length - 5} more</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Coach Recommendations when candidate counts are 0 */}
+            {noCandidatesForEither ? (
+              <div className="bg-amber-50/90 border border-amber-300/80 p-4 rounded-xl space-y-2.5" id="no-candidates-recommendation-alert">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-900 text-xs">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Coach Recommendation: Add More Words to Learn</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-amber-200/80 text-amber-950 font-bold text-[9px] uppercase tracking-wider rounded-md">
+                    Action Recommended
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-900/90 leading-relaxed font-sans">
+                  You currently have <strong>0 potential quiz candidates</strong> and <strong>0 potential flashcard candidates</strong>. All words in your collection are either completely mastered or resting in their active cooldown window. We strongly recommend adding new vocabulary words to your collection to continue your daily momentum and unlock fresh study sessions!
+                </p>
+                {onNavigateToView && (
+                  <div className="pt-1">
+                    <button
+                      onClick={() => onNavigateToView('chatview')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-3xs transition-all cursor-pointer"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Add More Words to Learn</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : noQuizCandidates ? (
+              <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-xl space-y-2" id="no-quiz-candidates-recommendation">
+                <div className="flex items-center gap-2 font-bold text-amber-900 text-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Coach Recommendation for Quizzes: Expand Your Learned Words</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  You currently have 0 quiz candidates ready. Quizzes require words that have prior study exposure. Complete flashcard sessions for your {flashcardCandidates.length} flashcard candidate{flashcardCandidates.length === 1 ? '' : 's'} or add more words to build up your quiz pool!
+                </p>
+                {onNavigateToView && (
+                  <button
+                    onClick={() => onNavigateToView('chatview')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer"
+                  >
+                    <span>Add more words in Chat</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ) : noFlashcardCandidates ? (
+              <div className="bg-indigo-50/70 border border-indigo-200/80 p-3.5 rounded-xl space-y-2" id="no-flashcard-candidates-recommendation">
+                <div className="flex items-center gap-2 font-bold text-indigo-900 text-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>Coach Recommendation for Flashcards: Add New Words</span>
+                </div>
+                <p className="text-[11px] text-indigo-800 leading-relaxed">
+                  You currently have 0 flashcard candidates. All your current terms are mastered or cooling down. Take quizzes with your {quizCandidates.length} quiz candidate{quizCandidates.length === 1 ? '' : 's'} or add new words to keep expanding your vocabulary deck!
+                </p>
+                {onNavigateToView && (
+                  <button
+                    onClick={() => onNavigateToView('chatview')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-800 hover:text-indigo-950 underline cursor-pointer"
+                  >
+                    <span>Add new words to learn</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
 
           {/* TOP 10 WORDS TO PRACTICE SECTION */}

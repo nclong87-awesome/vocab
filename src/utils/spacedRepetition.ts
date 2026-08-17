@@ -407,3 +407,31 @@ export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date
   const candidates = getCandidateWordsForFlashcards(words, 1, now, cooldownHours);
   return candidates[0] || null;
 }
+
+/**
+ * Checks whether a word is an eligible potential candidate for taking a quiz.
+ * A word is a quiz candidate if it has prior exposure (learned or studied before)
+ * and is not currently in review cooldown (>= cooldownHours since last review, or unreviewed since initial study).
+ */
+export function isQuizCandidate(word: Word, now: Date = new Date(), cooldownHours: number = 12): boolean {
+  if (!isWordLearnedOrStudied(word)) return false;
+  if (!word.lastReviewed) return true;
+  const hours = getHoursSinceLastReview(word, now);
+  return hours >= cooldownHours;
+}
+
+/**
+ * Gets all words that are potential candidates for quizzes.
+ */
+export function getQuizCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = 12): Word[] {
+  if (!words || words.length === 0) return [];
+  return words.filter(word => isQuizCandidate(word, now, cooldownHours));
+}
+
+/**
+ * Gets all words that are potential candidates for flashcards.
+ */
+export function getFlashcardCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = 12): Word[] {
+  if (!words || words.length === 0) return [];
+  return words.filter(word => isFlashcardCandidate(word, now, cooldownHours));
+}
