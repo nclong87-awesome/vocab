@@ -153,6 +153,74 @@ export function extractOrGenerateTopicActions(
   const resultActions = Array.isArray(existingActions) ? [...existingActions] : [];
 
   const lowerMain = (mainText || "").toLowerCase();
+  const lowerUser = (lastUserMsg || "").toLowerCase();
+
+  // 1. Check if this message or context is related to "Polish Sentence" / Fix Grammar
+  const isFixGrammarRelated =
+    lowerMain.includes("polish sentence") ||
+    lowerMain.includes("fix grammar") ||
+    lowerMain.includes("polishing expression") ||
+    lowerMain.includes("analyzing sentence") ||
+    lowerMain.includes("trau chuốt câu") ||
+    lowerMain.includes("sửa ngữ pháp") ||
+    lowerMain.includes("đang phân tích câu") ||
+    lowerMain.includes("satz verfeinern") ||
+    lowerMain.includes("pulir oración") ||
+    lowerMain.includes("polir la phrase") ||
+    lowerMain.includes("文章のブラッシュアップ") ||
+    lowerMain.includes("문장 다듬기") ||
+    lowerMain.includes("句子润色") ||
+    lowerMain.includes("enter or paste any sentence below") ||
+    lowerMain.includes("nhập hoặc dán bất kỳ câu nào") ||
+    lowerMain.includes("fix-grammar-prompt") ||
+    lowerUser.includes("polish sentence") ||
+    lowerUser.includes("fix grammar") ||
+    lowerUser.includes("trau chuốt câu") ||
+    lowerUser.includes("sửa ngữ pháp") ||
+    resultActions.some((a) => a?.action === "fix_another" || a?.action === "copy_text");
+
+  // Check if this is strictly the initial Fix Grammar prompt card (asking user to enter/paste a sentence)
+  const isFixGrammarPromptCard =
+    (lowerMain.includes("enter or paste any sentence below") ||
+      lowerMain.includes("nhập hoặc dán bất kỳ câu nào") ||
+      lowerMain.includes("fix-grammar-prompt")) &&
+    !lowerMain.includes("analyzing sentence") &&
+    !lowerMain.includes("đang phân tích câu") &&
+    !resultActions.some((a) => a?.action === "fix_another");
+
+  if (isFixGrammarPromptCard) {
+    const sampleSentences = [
+      { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
+      { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
+      { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },
+    ];
+    for (const s of sampleSentences) {
+      if (!resultActions.some((a) => a.payload?.message === s.payload.message)) {
+        resultActions.push(s);
+      }
+    }
+    return resultActions;
+  }
+
+  // If this is ANY other Fix Grammar / Polish Sentence message (status, analysis, or fix result), return existing actions without adding any topic suggestions!
+  if (isFixGrammarRelated) {
+    return resultActions;
+  }
+
+  // 2. Check for general analyzing / status / loading messages
+  const isStatusOrAnalyzing =
+    lowerMain.includes("analyzing") ||
+    lowerMain.includes("đang phân tích") ||
+    lowerMain.includes("generating") ||
+    lowerMain.includes("đang tạo") ||
+    lowerMain.includes("thinking") ||
+    lowerMain.includes("đang suy nghĩ");
+
+  if (isStatusOrAnalyzing) {
+    return resultActions;
+  }
+
+  // 3. Welcome & Word Confirmation check
   const isWelcomeMsg =
     lowerMain.includes("interactive ai language coach") ||
     lowerMain.includes("trợ lý học ngôn ngữ ai") ||
@@ -174,36 +242,6 @@ export function extractOrGenerateTopicActions(
     return resultActions;
   }
 
-  // Check if this is the "Polish Sentence" prompt card asking user to enter/paste a sentence
-  const isFixGrammarPrompt =
-    lowerMain.includes("polish sentence") ||
-    lowerMain.includes("fix grammar") ||
-    lowerMain.includes("trau chuốt câu") ||
-    lowerMain.includes("sửa ngữ pháp") ||
-    lowerMain.includes("satz verfeinern") ||
-    lowerMain.includes("pulir oración") ||
-    lowerMain.includes("polir la phrase") ||
-    lowerMain.includes("文章のブラッシュアップ") ||
-    lowerMain.includes("문장 다듬기") ||
-    lowerMain.includes("句子润色") ||
-    lowerMain.includes("enter or paste any sentence below") ||
-    lowerMain.includes("nhập hoặc dán bất kỳ câu nào") ||
-    lowerMain.includes("fix-grammar-prompt");
-
-  if (isFixGrammarPrompt) {
-    const sampleSentences = [
-      { label: '✏️ "I have went to the store yesterday."', action: "send_message", payload: { message: "I have went to the store yesterday." } },
-      { label: '✏️ "She don\'t like coffee very much."', action: "send_message", payload: { message: "She don't like coffee very much." } },
-      { label: '✏️ "If I will see him, I will call you."', action: "send_message", payload: { message: "If I will see him, I will call you." } },
-    ];
-    for (const s of sampleSentences) {
-      if (!resultActions.some(a => a.payload?.message === s.payload.message)) {
-        resultActions.push(s);
-      }
-    }
-    return resultActions;
-  }
-
   // Check if existingActions already has word addition actions
   const hasWordActions = resultActions.some(
     (act) =>
@@ -219,28 +257,26 @@ export function extractOrGenerateTopicActions(
   }
 
   // Check if existingActions already has interactive navigation actions
-  const hasInteractive = resultActions.some(act =>
-    act && (
-      act.action === "send_message" ||
-      act.action === "start_quiz" ||
-      act.action === "common_phrases" ||
-      act.action === "explain_grammar" ||
-      act.action === "translate_contrast" ||
-      act.action === "quiz_answer"
-    )
+  const hasInteractive = resultActions.some(
+    (act) =>
+      act &&
+      (act.action === "send_message" ||
+        act.action === "start_quiz" ||
+        act.action === "common_phrases" ||
+        act.action === "explain_grammar" ||
+        act.action === "translate_contrast" ||
+        act.action === "quiz_answer")
   );
 
-  // If we already have 2+ send_message or quiz_answer actions, return
-  if (hasInteractive && resultActions.filter(a => a.action === "send_message" || a.action === "quiz_answer").length >= 2) {
+  if (hasInteractive && resultActions.filter((a) => a.action === "send_message" || a.action === "quiz_answer").length >= 2) {
     return resultActions;
   }
 
-  // 1. Try parsing bullet points or numbered lists in mainText
+  // 4. Try parsing bullet points or numbered lists in mainText
   const listItems: string[] = [];
   const lines = (mainText || "").split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
-    // Match lines starting with -, *, or 1., 2. etc.
     const match = trimmed.match(/^(?:[\-*•]|\d+[\.\)])\s*(?:\*{1,2})?([^\*\n\r]+?)(?:\*{1,2})?(?:\s*\(([^)]+)\))?$/);
     if (match && match[1]) {
       let labelCandidate = match[1].replace(/^[\-*•\d\.\)\s]+/, "").trim();
@@ -261,26 +297,30 @@ export function extractOrGenerateTopicActions(
 
   if (listItems.length >= 2 && listItems.length <= 8) {
     for (const item of listItems) {
-      if (!resultActions.some(a => a.label?.toLowerCase() === item.toLowerCase())) {
+      if (!resultActions.some((a) => a.label?.toLowerCase() === item.toLowerCase())) {
         resultActions.push({
           label: item,
           action: "send_message",
-          payload: { message: item }
+          payload: { message: item },
         });
       }
     }
     return resultActions;
   }
 
-  // 2. Check keywords if AI or User text invites topic/scenario choices or is a common phrase/grammar/translate query
-  const combinedText = ((mainText || "") + " " + (lastUserMsg || "")).toLowerCase();
+  // 5. Topic suggestions should ONLY appear for explicit "Generate words by topic" requests
+  const isGenerateByTopic =
+    lowerMain.includes("generate words by topic") ||
+    lowerMain.includes("tạo từ vựng theo chủ đề") ||
+    lowerMain.includes("generate_topic") ||
+    lowerMain.includes("by topic") ||
+    lowerUser.includes("generate words by topic") ||
+    lowerUser.includes("tạo từ vựng theo chủ đề") ||
+    lowerUser.includes("generate_topic") ||
+    lowerMain.includes("select a topic below") ||
+    lowerMain.includes("chọn một chủ đề bên dưới");
 
-  const isCommonPhrases = combinedText.includes("common phrase") || combinedText.includes("idiom") || combinedText.includes("cụm từ") || combinedText.includes("thành ngữ") || combinedText.includes("phrases");
-  const isGrammar = combinedText.includes("grammar") || combinedText.includes("ngữ pháp") || combinedText.includes("rule") || combinedText.includes("luật");
-  const isTranslation = combinedText.includes("translate") || combinedText.includes("dịch") || combinedText.includes("compare") || combinedText.includes("so sánh") || combinedText.includes("nuance");
-  const isAskingToChoose = combinedText.includes("chủ đề") || combinedText.includes("gợi ý") || combinedText.includes("chọn") || combinedText.includes("lựa chọn") || combinedText.includes("topic") || combinedText.includes("scenario") || combinedText.includes("dưới đây") || combinedText.includes("choose") || combinedText.includes("select");
-
-  if (isCommonPhrases || (isAskingToChoose && !isGrammar && !isTranslation)) {
+  if (isGenerateByTopic) {
     const defaults = [
       { label: t("topic_dining", appLang), action: "send_message", payload: { message: "Dining Out & Restaurants" } },
       { label: t("topic_travel", appLang), action: "send_message", payload: { message: "Travel & Airports" } },
@@ -288,42 +328,7 @@ export function extractOrGenerateTopicActions(
       { label: t("topic_daily", appLang), action: "send_message", payload: { message: "Daily Conversations & Emotions" } },
     ];
     for (const d of defaults) {
-      if (!resultActions.some(a => a.label === d.label)) {
-        resultActions.push(d);
-      }
-    }
-  } else if (isGrammar) {
-    const defaults = [
-      { label: t("topic_grammar_tenses", appLang), action: "send_message", payload: { message: "Past Simple vs Present Perfect" } },
-      { label: t("topic_grammar_conditional", appLang), action: "send_message", payload: { message: "Conditional Sentences (If clauses)" } },
-      { label: t("topic_grammar_relative", appLang), action: "send_message", payload: { message: "Relative Clauses & Pronouns" } },
-      { label: t("topic_grammar_passive", appLang), action: "send_message", payload: { message: "Passive Voice & Formality" } },
-    ];
-    for (const d of defaults) {
-      if (!resultActions.some(a => a.label === d.label)) {
-        resultActions.push(d);
-      }
-    }
-  } else if (isTranslation) {
-    const defaults = [
-      { label: t("topic_translate_coffee", appLang), action: "send_message", payload: { message: "Ordering Coffee & Polite Requests" } },
-      { label: t("topic_translate_opinions", appLang), action: "send_message", payload: { message: "Expressing Opinions & Disagreeing" } },
-      { label: t("topic_translate_greetings", appLang), action: "send_message", payload: { message: "Formal vs Casual Greetings" } },
-    ];
-    for (const d of defaults) {
-      if (!resultActions.some(a => a.label === d.label)) {
-        resultActions.push(d);
-      }
-    }
-  } else if (isAskingToChoose) {
-    const defaults = [
-      { label: t("topic_choose_daily", appLang), action: "send_message", payload: { message: "Daily Life & Small Talk" } },
-      { label: t("topic_choose_career", appLang), action: "send_message", payload: { message: "Career & Education" } },
-      { label: t("topic_choose_travel", appLang), action: "send_message", payload: { message: "Travel & Culture" } },
-      { label: t("topic_choose_hobbies", appLang), action: "send_message", payload: { message: "Hobbies & Free Time" } },
-    ];
-    for (const d of defaults) {
-      if (!resultActions.some(a => a.label === d.label)) {
+      if (!resultActions.some((a) => a.label === d.label)) {
         resultActions.push(d);
       }
     }
