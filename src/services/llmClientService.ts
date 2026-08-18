@@ -2083,41 +2083,45 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
    - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.
 
-7. FREQUENTLY PAIRED WORDS / COLLOCATIONS REQUIREMENT:
-   - For EVERY quiz question / vocabulary word, generate 1 to 3 suggestions for companion words, collocations, or phrases that frequently appear alongside this target word in natural usage ('suggestedWords': array of 1 to 3 items, where each item contains 'word' in ${targetLanguage}, 'translation' in ${nativeLanguage}, and 'hint' or brief collocation note explaining why/how they appear together, e.g. "frequent adjective + noun collocation" or "common idiomatic verb pairing").
+7. FREQUENTLY PAIRED WORDS (EXACTLY 3 WORDS TOTAL ACROSS THE QUIZ):
+   - For all the selected vocabulary items in the quiz, generate EXACTLY THREE (3) companion words, collocations, or phrases in total that frequently appear alongside the tested words (not per question, but 3 suggestions total for the entire quiz).
+   - Each suggestion must contain 'word' in ${targetLanguage}, 'translation' in ${nativeLanguage}, 'pairedWith' (indicating which quiz word it accompanies), and a short 'hint' explaining the collocation.
 
 8. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
-[
-  {
-    "id": "string",
-    "wordId": "string",
-    "word": "string",
-    "type": "definition" | "sentence" | "listening" | "picture",
-    "question": "string",
-    "options": ["string", "string", "string", "string"],
-    "correctAnswer": "string",
-    "hint": "string",
-    "imageKeyword": "string (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object, scene, or action that symbolizes the word)",
-    "suggestedWords": [
-      {
-        "word": "string (Companion word/collocation in ${targetLanguage})",
-        "translation": "string (Translation in ${nativeLanguage})",
-        "hint": "string (Brief note on how/why it frequently appears alongside the quiz word)"
-      }
-    ]
-  }
-]`;
+{
+  "questions": [
+    {
+      "id": "string",
+      "wordId": "string",
+      "word": "string",
+      "type": "definition" | "sentence" | "listening" | "picture",
+      "question": "string",
+      "options": ["string", "string", "string", "string"],
+      "correctAnswer": "string",
+      "hint": "string",
+      "imageKeyword": "string (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object, scene, or action that symbolizes the word)"
+    }
+  ],
+  "suggestedWords": [
+    {
+      "word": "string (Companion word/collocation in ${targetLanguage})",
+      "translation": "string (Translation in ${nativeLanguage})",
+      "pairedWith": "string (Which quiz word this pairs with)",
+      "hint": "string (Brief note on how/why it frequently appears alongside the quiz word)"
+    }
+  ]
+}`;
 
   const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
 CRITICAL MANDATORY REQUIREMENTS:
 1. Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.
-2. For EVERY question, include 1 to 3 suggestions for words that frequently appear alongside the word used in the quiz ('suggestedWords' array with 'word', 'translation', and 'hint').\n\n` +
+2. Generate EXACTLY THREE (3) suggested words total for all selected quiz items ('suggestedWords' array with 3 items: 'word', 'translation', 'pairedWith', 'hint').\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword, and suggestedWords (array of 1 to 3 items with word, translation, hint).`;
+  const schemaDesc = `Object with questions (array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of EXACTLY 3 items with word, translation, pairedWith, hint).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2125,10 +2129,18 @@ CRITICAL MANDATORY REQUIREMENTS:
 
   try {
     let rawQuestions: any[] = [];
+    let topLevelSuggestions: any[] = [];
+
     if (isStaticHost()) {
       const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
       const cleaned = cleanJsonResponse(resWithMeta.text);
-      rawQuestions = JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        rawQuestions = parsed;
+      } else if (parsed && typeof parsed === "object") {
+        rawQuestions = parsed.questions || [];
+        topLevelSuggestions = parsed.suggestedWords || [];
+      }
       provider = resWithMeta.provider;
       model = resWithMeta.model;
       responseTimeMs = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
@@ -2146,6 +2158,7 @@ CRITICAL MANDATORY REQUIREMENTS:
           rawQuestions = data;
         } else if (data && typeof data === "object") {
           rawQuestions = data.questions || [];
+          topLevelSuggestions = data.suggestedWords || [];
           if (data.provider) provider = data.provider;
           if (data.model) model = data.model;
           if (data.responseTimeMs) responseTimeMs = data.responseTimeMs;
@@ -2153,7 +2166,13 @@ CRITICAL MANDATORY REQUIREMENTS:
       } else {
         const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
         const cleaned = cleanJsonResponse(resWithMeta.text);
-        rawQuestions = JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed)) {
+          rawQuestions = parsed;
+        } else if (parsed && typeof parsed === "object") {
+          rawQuestions = parsed.questions || [];
+          topLevelSuggestions = parsed.suggestedWords || [];
+        }
         provider = resWithMeta.provider;
         model = resWithMeta.model;
         responseTimeMs = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
@@ -2161,6 +2180,61 @@ CRITICAL MANDATORY REQUIREMENTS:
     }
 
     if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
+      // Collect up to 3 total suggestions across all questions or topLevelSuggestions
+      let collectedSuggestions: any[] = [...topLevelSuggestions];
+
+      if (collectedSuggestions.length === 0) {
+        rawQuestions.forEach((q: any) => {
+          const list = Array.isArray(q.suggestedWords) ? q.suggestedWords : (Array.isArray(q.suggestedVocabulary) ? q.suggestedVocabulary : (Array.isArray(q.collocations) ? q.collocations : []));
+          list.forEach((item: any) => {
+            if (item) collectedSuggestions.push(typeof item === "object" ? { ...item, pairedWith: item.pairedWith || q.word } : { word: item, pairedWith: q.word });
+          });
+        });
+      }
+
+      const seenWordKeys = new Set<string>();
+      const normalizedTop3Suggestions: any[] = [];
+
+      for (const item of collectedSuggestions) {
+        const w = typeof item === "string" ? item.trim() : (item.word || item.vocab || item.term || "").trim();
+        if (!w) continue;
+        const key = w.toLowerCase();
+        if (seenWordKeys.has(key)) continue;
+        seenWordKeys.add(key);
+
+        normalizedTop3Suggestions.push({
+          word: w,
+          translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
+          hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Frequently appears in context`) : `Frequently appears in context`,
+          pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : (words[0]?.word || "")
+        });
+
+        if (normalizedTop3Suggestions.length >= 3) break;
+      }
+
+      // Fallback if needed
+      if (normalizedTop3Suggestions.length < 3) {
+        for (const w of words) {
+          if (Array.isArray(w.suggestedWords)) {
+            for (const sw of w.suggestedWords) {
+              const swText = typeof sw === "string" ? sw.trim() : (sw.word || "").trim();
+              if (!swText) continue;
+              const key = swText.toLowerCase();
+              if (seenWordKeys.has(key) || key === w.word.toLowerCase()) continue;
+              seenWordKeys.add(key);
+              normalizedTop3Suggestions.push({
+                word: swText,
+                translation: typeof sw === "object" ? (sw.translation || "") : "",
+                hint: typeof sw === "object" ? (sw.hint || `Frequently appears with ${w.word}`) : `Frequently appears with ${w.word}`,
+                pairedWith: w.word
+              });
+              if (normalizedTop3Suggestions.length >= 3) break;
+            }
+          }
+          if (normalizedTop3Suggestions.length >= 3) break;
+        }
+      }
+
       const validQuestions: QuizQuestion[] = rawQuestions.map((q: any, idx: number) => {
         const matchingWord = words.find(w => w.id === q.wordId || w.word.toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length];
         
@@ -2180,31 +2254,6 @@ CRITICAL MANDATORY REQUIREMENTS:
         const keywordText = q.imageKeyword || (q.type === 'picture' ? getImageKeyword(matchingWord) : undefined);
         const imgUrl = q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : (keywordText ? `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}` : undefined);
 
-        let rawSuggestions = Array.isArray(q.suggestedWords) 
-          ? q.suggestedWords 
-          : (Array.isArray(q.suggestedVocabulary) ? q.suggestedVocabulary : (Array.isArray(q.collocations) ? q.collocations : []));
-        
-        if (rawSuggestions.length === 0 && matchingWord && Array.isArray(matchingWord.suggestedWords)) {
-          rawSuggestions = matchingWord.suggestedWords;
-        }
-
-        const normalizedSuggestions = rawSuggestions.slice(0, 3).map((item: any) => {
-          if (typeof item === "string") {
-            return {
-              word: item,
-              translation: "",
-              hint: `Frequently appears with ${q.word || matchingWord.word}`,
-              pairedWith: q.word || matchingWord.word
-            };
-          }
-          return {
-            word: item.word || item.vocab || item.term || "",
-            translation: item.translation || item.meaning || "",
-            hint: item.hint || item.reason || item.relationship || item.usage || `Frequently appears with ${q.word || matchingWord.word}`,
-            pairedWith: q.word || matchingWord.word
-          };
-        }).filter((s: any) => Boolean(s.word && s.word.trim()));
-
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
@@ -2216,7 +2265,7 @@ CRITICAL MANDATORY REQUIREMENTS:
           hint: q.hint || matchingWord.pronunciation,
           imageKeyword: keywordText,
           imageUrl: imgUrl,
-          suggestedWords: normalizedSuggestions
+          suggestedWords: idx === 0 ? normalizedTop3Suggestions : undefined
         };
       });
 

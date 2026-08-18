@@ -467,6 +467,8 @@ export function useChat({
           });
         });
 
+        const top3SuggestedWords = allSuggestedWords.slice(0, 3);
+
         let finishedContent = t("chat_quiz_finished_msg", currentAppLang, {
           feedback: feedback,
           score: String(newScore),
@@ -474,9 +476,9 @@ export function useChat({
           accuracy: String(Math.round((newScore / totalQs) * 100)),
         });
 
-        if (allSuggestedWords.length > 0) {
+        if (top3SuggestedWords.length > 0) {
           const header = t("chat_quiz_suggested_words_header", currentAppLang);
-          const itemsText = allSuggestedWords.map((sw) => {
+          const itemsText = top3SuggestedWords.map((sw) => {
             const transText = sw.translation ? ` *("${sw.translation}")*` : "";
             const pairedText = sw.pairedWith ? ` — ${t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}` : "";
             const hintText = sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") ? ` (${sw.hint})` : "";
@@ -486,7 +488,7 @@ export function useChat({
           finishedContent += `\n\n---\n\n${header}\n${itemsText}`;
         }
 
-        const wordAddActions = allSuggestedWords.slice(0, 4).map((sw) => ({
+        const wordAddActions = top3SuggestedWords.map((sw) => ({
           label: `+ ${t("add_word_btn", currentAppLang)} "${sw.word}"`,
           action: "add_word",
           payload: { word: sw.word, hint: sw.translation || sw.hint },
@@ -505,7 +507,7 @@ export function useChat({
             score: newScore,
             total: totalQs,
             accuracy: Math.round((newScore / totalQs) * 100),
-            suggestedWords: allSuggestedWords,
+            suggestedWords: top3SuggestedWords,
           },
           suggestedActions: [
             ...wordAddActions,

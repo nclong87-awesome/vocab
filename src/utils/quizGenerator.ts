@@ -179,18 +179,6 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
 
-    let suggestedWords = Array.isArray(word.suggestedWords) ? word.suggestedWords.map((item: any) => {
-      if (typeof item === "string") {
-        return { word: item, translation: "", hint: `Frequently appears with ${word.word}`, pairedWith: word.word };
-      }
-      return {
-        word: item.word || item.vocab || item.term || "",
-        translation: item.translation || item.meaning || "",
-        hint: item.hint || item.reason || item.relationship || `Frequently appears with ${word.word}`,
-        pairedWith: word.word
-      };
-    }).filter((s: any) => Boolean(s.word)) : [];
-
     generated.push({
       id: `q-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
       wordId: word.id,
@@ -201,10 +189,38 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       correctAnswer,
       hint: hintText,
       imageKeyword,
-      imageUrl,
-      suggestedWords
+      imageUrl
     });
   });
 
-  return generated.sort(() => 0.5 - Math.random());
+  // Collect up to 3 unique companion words across all words in the quiz
+  const seenKeys = new Set<string>();
+  const top3Suggestions: any[] = [];
+  for (const w of wordList) {
+    if (Array.isArray(w.suggestedWords)) {
+      for (const item of w.suggestedWords) {
+        const wordText = typeof item === "string" ? item.trim() : (item.word || "").trim();
+        if (!wordText) continue;
+        const key = wordText.toLowerCase();
+        if (seenKeys.has(key) || key === w.word.toLowerCase()) continue;
+        seenKeys.add(key);
+
+        top3Suggestions.push({
+          word: wordText,
+          translation: typeof item === "object" ? (item.translation || "") : "",
+          hint: typeof item === "object" ? (item.hint || `Frequently appears with ${w.word}`) : `Frequently appears with ${w.word}`,
+          pairedWith: w.word
+        });
+        if (top3Suggestions.length >= 3) break;
+      }
+    }
+    if (top3Suggestions.length >= 3) break;
+  }
+
+  const randomized = generated.sort(() => 0.5 - Math.random());
+  if (randomized.length > 0 && top3Suggestions.length > 0) {
+    randomized[0].suggestedWords = top3Suggestions;
+  }
+
+  return randomized;
 }
