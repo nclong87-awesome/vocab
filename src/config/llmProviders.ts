@@ -103,7 +103,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
     models: [
       "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-      "@cf/ibm-granite/granite-4.0-h-micro"
+      // "@cf/ibm-granite/granite-4.0-h-micro"
     ],
     defaultBaseUrl: "https://cloudflare.nclong87.workers.dev",
     directBaseUrl: "https://api.cloudflare.com/client/v4/accounts/12345678/ai/run",
@@ -157,8 +157,7 @@ export const RELIABLE_MODELS: string[] = [
   "gemma4:31b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
-  "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-  "@cf/ibm-granite/granite-4.0-h-micro"
+  "@cf/aisingapore/gemma-sea-lion-v4-27b-it"
 ];
 
 export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {
