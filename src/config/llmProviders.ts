@@ -56,6 +56,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Fast & highly structured intelligence",
     defaultModel: "gemini-3.6-flash",
     models: [
+      "gemini-3.1-flash-lite", 
       "gemini-3.5-flash-lite", 
       "gemini-3.5-flash", 
       "gemini-3.6-flash"
@@ -149,8 +150,7 @@ export function getDefaultLLMConfig(): LLMConfig {
 export const RELIABLE_MODELS: string[] = [
   "openai/gpt-oss-120b", 
   "openai/gpt-oss-20b", 
-  "llama-3.3-70b-versatile",
-  "nvidia/nemotron-3-super-120b-a12b:free",
+  "gemini-3.1-flash-lite",
   "gemini-3.5-flash-lite", 
   "gemini-3.5-flash", 
   "gemini-3.6-flash",
