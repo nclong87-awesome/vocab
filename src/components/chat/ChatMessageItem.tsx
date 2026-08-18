@@ -125,16 +125,16 @@ function ChatMessageItem({
 }: ChatMessageItemProps) {
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [addedWordsMap, setAddedWordsMap] = useState<Record<string, boolean>>({});
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
   const handleAddSuggestedWord = (wordText: string, hint?: string) => {
     const key = wordText.trim().toLowerCase();
-    if (addedWordsMap[key]) return;
+    const isAlreadyInWords = words?.some(
+      (w) => w.word.trim().toLowerCase() === key
+    );
+    if (isAlreadyInWords) return;
     onAddWord(wordText, hint);
-    setAddedWordsMap((prev) => ({ ...prev, [key]: true }));
-    showToast(t("toast_added_word", currentAppLang, { word: wordText }));
   };
 
   const isQuizActive = useMemo(() => {
@@ -431,7 +431,6 @@ function ChatMessageItem({
       onGenerateByTopic?.();
     } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
       onAddMultipleWords([act.payload]);
-      showToast(t("toast_added_word", currentAppLang, { word: act.payload.word }));
     } else if (act.action === "add_word") {
       handleRecordActionUse("add_word");
       if (act.payload?.word) {
@@ -599,7 +598,7 @@ function ChatMessageItem({
                     {msg.quizFinishedData.suggestedWords.map((sw, idx) => {
                       const isAlreadyInWords = words?.some(
                         (w) => w.word.trim().toLowerCase() === sw.word.trim().toLowerCase()
-                      ) || addedWordsMap[sw.word.trim().toLowerCase()];
+                      );
 
                       return (
                         <div
