@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Clock
+  Volume2, ChevronRight, Check, Sparkles, Clock, Plus
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -125,8 +125,17 @@ function ChatMessageItem({
 }: ChatMessageItemProps) {
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [addedWordsMap, setAddedWordsMap] = useState<Record<string, boolean>>({});
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
+
+  const handleAddSuggestedWord = (wordText: string, hint?: string) => {
+    const key = wordText.trim().toLowerCase();
+    if (addedWordsMap[key]) return;
+    onAddWord(wordText, hint);
+    setAddedWordsMap((prev) => ({ ...prev, [key]: true }));
+    showToast(t("toast_added_word", currentAppLang, { word: wordText }));
+  };
 
   const isQuizActive = useMemo(() => {
     return messages.some(
@@ -565,6 +574,111 @@ function ChatMessageItem({
                 onActionClick={handleActionClick}
                 appLanguage={currentAppLang}
               />
+
+              {/* Frequently Paired Words (Collocations) Card on Quiz Finish */}
+              {msg.quizFinishedData?.suggestedWords && msg.quizFinishedData.suggestedWords.length > 0 && (
+                <div className="mt-4 pt-3.5 border-t border-stone-200/80 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-md bg-amber-500 text-stone-950 flex items-center justify-center font-bold text-xs">
+                        💡
+                      </div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 font-mono flex items-center gap-1.5">
+                        {t("quiz_suggested_words_title", currentAppLang)}
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300/60 px-1.5 py-0.2 rounded-full">
+                          {msg.quizFinishedData.suggestedWords.length}
+                        </span>
+                      </h4>
+                    </div>
+                  </div>
+                  <p className="text-xs text-stone-600 font-medium">
+                    {t("quiz_suggested_words_desc", currentAppLang)}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    {msg.quizFinishedData.suggestedWords.map((sw, idx) => {
+                      const isAlreadyInWords = words?.some(
+                        (w) => w.word.trim().toLowerCase() === sw.word.trim().toLowerCase()
+                      ) || addedWordsMap[sw.word.trim().toLowerCase()];
+
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3 bg-stone-50/90 hover:bg-stone-50 border border-stone-200/90 rounded-xl flex flex-col justify-between gap-2 transition-all shadow-3xs"
+                        >
+                          <div>
+                            <div className="flex items-start justify-between gap-1.5">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-sm font-bold text-stone-950 font-serif">
+                                    {sw.word}
+                                  </span>
+                                  {sw.partOfSpeech && (
+                                    <span className="text-[9px] font-bold uppercase bg-stone-200 text-stone-700 px-1 py-0.2 rounded">
+                                      {sw.partOfSpeech}
+                                    </span>
+                                  )}
+                                </div>
+                                {sw.translation && (
+                                  <p className="text-xs font-semibold text-amber-900 mt-0.5">
+                                    "{sw.translation}"
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => speakText(sw.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                                className="p-1.5 bg-white hover:bg-stone-200 text-stone-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                                title={`Pronounce "${sw.word}"`}
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {sw.pairedWith && (
+                              <div className="mt-1.5 flex items-center gap-1 text-[11px] text-stone-500 font-mono">
+                                <span className="text-stone-400">🔗</span>
+                                <span>{t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}</span>
+                              </div>
+                            )}
+
+                            {sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") && (
+                              <p className="text-[11px] text-stone-600 mt-1 italic leading-tight">
+                                {sw.hint}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="pt-2 border-t border-stone-200/60 flex items-center justify-end">
+                            <button
+                              type="button"
+                              disabled={Boolean(isAlreadyInWords)}
+                              onClick={() => handleAddSuggestedWord(sw.word, sw.translation || sw.hint)}
+                              className={`px-2.5 py-1 text-xs font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                                isAlreadyInWords
+                                  ? "bg-emerald-100 text-emerald-850 cursor-default"
+                                  : "bg-stone-900 hover:bg-stone-800 text-white shadow-3xs active:scale-95"
+                              }`}
+                            >
+                              {isAlreadyInWords ? (
+                                <>
+                                  <Check className="w-3 h-3" />
+                                  <span>{t("quiz_suggested_word_added", currentAppLang)}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3 h-3" />
+                                  <span>{t("quiz_add_suggested_word", currentAppLang)}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Suggested replies cards with direct Copy buttons */}
               {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (

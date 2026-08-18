@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChatMessage, Word, WordSense, LLMConfig, UserStats, QuizQuestion, FlashcardItem } from "../types";
+import { ChatMessage, Word, WordSense, LLMConfig, UserStats, QuizQuestion, FlashcardItem, QuizSuggestedWord } from "../types";
 import {
   sendChatMessageService,
   checkWordDefinitionsService,
@@ -10,7 +10,7 @@ import {
   generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { getQuizCandidateWords, getCandidateWordsForFlashcards } from "../utils/spacedRepetition";
+import { getQuizCandidateWords, getCandidateWordsForFlashcards, DEFAULT_COOLDOWN_HOURS } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
@@ -143,7 +143,7 @@ export function useChat({
     }
 
     // Step 1: Look for candidate words for Quiz questions
-    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5, cooldownHours: 12 });
+    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5, cooldownHours: DEFAULT_COOLDOWN_HOURS });
     if (quizWords.length >= 2) {
       // Found Quiz candidates: proceed to generate and start Quiz
       setIsTyping(true);
@@ -433,21 +433,82 @@ export function useChat({
 
         handleFinishQuiz(newScore, totalQs, newCorrectIds, newIncorrectIds);
 
+        // Aggregate 1 to 3 suggestions for words that frequently appear alongside the words used in the quiz
+        const allSuggestedWords: QuizSuggestedWord[] = [];
+        const seenWords = new Set<string>();
+
+        activeQuiz.questions.forEach((q) => {
+          const targetWord = q.word || "";
+          let list = Array.isArray(q.suggestedWords) ? q.suggestedWords : [];
+          if (list.length === 0) {
+            const matched = words.find((w) => w.id === q.wordId || w.word.toLowerCase() === targetWord.toLowerCase());
+            if (matched && Array.isArray(matched.suggestedWords)) {
+              list = matched.suggestedWords;
+            }
+          }
+
+          list.forEach((item: any) => {
+            let wordText = typeof item === "string" ? item : (item.word || item.vocab || item.term || "");
+            wordText = wordText.trim();
+            if (!wordText || wordText.toLowerCase() === targetWord.toLowerCase()) return;
+
+            const key = wordText.toLowerCase();
+            if (seenWords.has(key)) return;
+            seenWords.add(key);
+
+            allSuggestedWords.push({
+              word: wordText,
+              translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
+              hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Frequently appears with ${targetWord}`) : `Frequently appears with ${targetWord}`,
+              pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWord,
+              relationship: typeof item === "object" ? item.relationship : undefined,
+              partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+            });
+          });
+        });
+
+        let finishedContent = t("chat_quiz_finished_msg", currentAppLang, {
+          feedback: feedback,
+          score: String(newScore),
+          total: String(totalQs),
+          accuracy: String(Math.round((newScore / totalQs) * 100)),
+        });
+
+        if (allSuggestedWords.length > 0) {
+          const header = t("chat_quiz_suggested_words_header", currentAppLang);
+          const itemsText = allSuggestedWords.map((sw) => {
+            const transText = sw.translation ? ` *("${sw.translation}")*` : "";
+            const pairedText = sw.pairedWith ? ` — ${t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}` : "";
+            const hintText = sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") ? ` (${sw.hint})` : "";
+            return `• **${sw.word}**${transText}${pairedText}${hintText}`;
+          }).join("\n");
+
+          finishedContent += `\n\n---\n\n${header}\n${itemsText}`;
+        }
+
+        const wordAddActions = allSuggestedWords.slice(0, 4).map((sw) => ({
+          label: `+ ${t("add_word_btn", currentAppLang)} "${sw.word}"`,
+          action: "add_word",
+          payload: { word: sw.word, hint: sw.translation || sw.hint },
+        }));
+
         const finishedMsg: ChatMessage = {
           id: `quiz-end-${Date.now()}`,
           role: "assistant",
-          content: t("chat_quiz_finished_msg", currentAppLang, {
-            feedback: feedback,
-            score: String(newScore),
-            total: String(totalQs),
-            accuracy: String(Math.round((newScore / totalQs) * 100)),
-          }),
+          content: finishedContent,
           timestamp: new Date().toISOString(),
           audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
           quizSpeechText: isCorrect
             ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
             : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
+          quizFinishedData: {
+            score: newScore,
+            total: totalQs,
+            accuracy: Math.round((newScore / totalQs) * 100),
+            suggestedWords: allSuggestedWords,
+          },
           suggestedActions: [
+            ...wordAddActions,
             { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" },
             { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ],

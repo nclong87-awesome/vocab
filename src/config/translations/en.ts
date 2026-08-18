@@ -353,5 +353,11 @@ export const enTranslations: LanguageTranslations = {
     flashcard_add_paired: "Add",
     chat_with_context_hint: " with context *\"{hint}\"*",
     label_suggested_vocabulary: "Suggested vocabulary",
-    label_candidate_vocabulary: "Candidate vocabulary"
+    label_candidate_vocabulary: "Candidate vocabulary",
+    quiz_suggested_words_title: "Frequently Paired Words",
+    quiz_suggested_words_desc: "Words that frequently appear alongside the words used in this quiz:",
+    quiz_paired_with: "Paired with {word}",
+    quiz_add_suggested_word: "Add to Collection",
+    quiz_suggested_word_added: "Added ✓",
+    chat_quiz_suggested_words_header: "💡 **Frequently Paired Words (Collocations):**"
   };

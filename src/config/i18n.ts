@@ -360,7 +360,13 @@ export type TranslationKey =
   | "flashcard_add_paired"
   | "chat_with_context_hint"
   | "label_suggested_vocabulary"
-  | "label_candidate_vocabulary";
+  | "label_candidate_vocabulary"
+  | "quiz_suggested_words_title"
+  | "quiz_suggested_words_desc"
+  | "quiz_paired_with"
+  | "quiz_add_suggested_word"
+  | "quiz_suggested_word_added"
+  | "chat_quiz_suggested_words_header";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

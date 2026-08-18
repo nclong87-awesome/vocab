@@ -96,6 +96,22 @@ export interface WordSense {
 
 
 
+export interface QuizSuggestedWord {
+  word: string;
+  translation?: string;
+  hint?: string;
+  pairedWith?: string;
+  relationship?: string;
+  partOfSpeech?: string;
+}
+
+export interface QuizFinishedData {
+  score: number;
+  total: number;
+  accuracy: number;
+  suggestedWords?: QuizSuggestedWord[];
+}
+
 export interface QuizQuestion {
   id: string;
   wordId: string;
@@ -107,6 +123,7 @@ export interface QuizQuestion {
   hint?: string;
   imageKeyword?: string;
   imageUrl?: string;
+  suggestedWords?: (string | QuizSuggestedWord | SuggestedPairedWord)[];
 }
 
 export interface Streak {
@@ -199,6 +216,7 @@ export interface ChatMessage {
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
   flashcardData?: FlashcardData;
+  quizFinishedData?: QuizFinishedData;
   suggestedReplies?: {
     reply: string;
     translation: string;

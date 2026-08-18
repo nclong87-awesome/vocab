@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { motion } from "motion/react";
 import { 
   Brain, 
   X, 
@@ -6,28 +7,33 @@ import {
   Sparkles, 
   Target, 
   Volume2, 
-  Clock, 
-  Bookmark, 
-  HelpCircle, 
-  Layers, 
-  PlusCircle, 
-  ArrowRight 
+  Zap, 
+  Lightbulb, 
+  BookOpen, 
+  ShieldAlert, 
+  Award, 
+  CheckCircle2, 
+  ChevronRight, 
+  Flame, 
+  RefreshCw, 
+  Activity, 
+  Check 
 } from "lucide-react";
 import { PerformanceAnalysisResult } from "../../services/llmClientService";
-import { Word } from "../../types";
-import { getQuizCandidates, getFlashcardCandidates } from "../../utils/spacedRepetition";
+import { Word, UserStats } from "../../types";
+import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
+import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
 interface AiPerformanceCoachCardProps {
   aiReport: PerformanceAnalysisResult | null;
   isAnalyzing: boolean;
   analysisError: string | null;
   words?: Word[];
+  stats?: UserStats;
   appLanguage?: string;
   setAiReport: (report: PerformanceAnalysisResult | null) => void;
   onRunAiAnalysis: () => void;
-  onStartPracticeWords?: (words: Word[]) => void;
   onSpeakWord?: (wordText: string, wordId: string, customLang?: string) => void;
-  onNavigateToView?: (view: 'chatview' | 'manage' | 'analytics' | 'settings') => void;
 }
 
 export default function AiPerformanceCoachCard({
@@ -35,539 +41,514 @@ export default function AiPerformanceCoachCard({
   isAnalyzing,
   analysisError,
   words = [],
+  stats,
+  appLanguage: _appLanguage = "Vietnamese",
   setAiReport,
   onRunAiAnalysis,
   onSpeakWord,
-  onNavigateToView
 }: AiPerformanceCoachCardProps) {
-  const [practiceFilter, setPracticeFilter] = useState<'all' | 'recently_used' | 'never_used'>('all');
+  // Filter state for the Top 10 Words table/grid
+  const [filterType, setFilterType] = useState<'all' | 'recently_used' | 'never_used' | 'at_risk'>('all');
+  const [showMicroStory, setShowMicroStory] = useState(true);
+  const [copiedMnemonic, setCopiedMnemonic] = useState<string | null>(null);
 
-  // Potential Quiz and Flashcard Candidates
-  const quizCandidates = useMemo(() => {
-    return getQuizCandidates(words || []);
-  }, [words]);
+  // Performance calculations
+  const performanceStats = useMemo(() => {
+    const totalWords = words.length;
+    const mastered = words.filter(w => w.learned || (w.strength ?? 0) >= 80).length;
+    const atRisk = words.filter(w => {
+      const days = getDaysSinceLastReview(w);
+      return (w.strength ?? 0) < 50 || (w.learned && days >= 5);
+    }).length;
+    const untouched = words.filter(w => w.lastReviewed === null && (w.strength ?? 0) === 0 && !w.learned).length;
+    const inProgress = totalWords - mastered - untouched;
 
-  const flashcardCandidates = useMemo(() => {
-    return getFlashcardCandidates(words || []);
-  }, [words]);
+    const avgStrength = totalWords > 0 
+      ? Math.round(words.reduce((acc, w) => acc + (w.strength ?? 0), 0) / totalWords)
+      : 0;
 
-  const noQuizCandidates = quizCandidates.length === 0;
-  const noFlashcardCandidates = flashcardCandidates.length === 0;
-  const noCandidatesForEither = noQuizCandidates && noFlashcardCandidates;
+    const quizAccuracy = stats && stats.totalQuizzesTaken > 0
+      ? Math.round((stats.totalCorrectAnswers / stats.totalQuizzesTaken) * 100)
+      : null;
 
-  // Top practice words list from AI report
+    return {
+      totalWords,
+      mastered,
+      atRisk,
+      untouched,
+      inProgress,
+      avgStrength,
+      quizAccuracy,
+      streakCount: stats?.streak?.count ?? 0,
+    };
+  }, [words, stats]);
+
+  // Filtered practice words
   const practiceWords = useMemo(() => {
-    return aiReport?.topPracticeWords || [];
-  }, [aiReport]);
+    const list = aiReport?.topPracticeWords || [];
+    if (filterType === 'recently_used') {
+      return list.filter(w => w.type === 'recently_used');
+    }
+    if (filterType === 'never_used') {
+      return list.filter(w => w.type === 'never_used');
+    }
+    if (filterType === 'at_risk') {
+      return list.filter(w => w.riskLevel === 'critical' || w.riskLevel === 'high' || w.strength < 40);
+    }
+    return list;
+  }, [aiReport?.topPracticeWords, filterType]);
 
-  const recentPracticeWords = useMemo(() => {
-    return practiceWords.filter(w => w.type === 'recently_used');
-  }, [practiceWords]);
+  const copyMnemonic = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMnemonic(id);
+    setTimeout(() => setCopiedMnemonic(null), 2000);
+  };
 
-  const neverUsedPracticeWords = useMemo(() => {
-    return practiceWords.filter(w => w.type === 'never_used');
-  }, [practiceWords]);
-
-  const filteredPracticeWords = useMemo(() => {
-    if (practiceFilter === 'recently_used') return recentPracticeWords;
-    if (practiceFilter === 'never_used') return neverUsedPracticeWords;
-    return practiceWords;
-  }, [practiceWords, recentPracticeWords, neverUsedPracticeWords, practiceFilter]);
-
-  if (!aiReport && !isAnalyzing && !analysisError) return null;
-
-  return (
-    <div className="bg-white border border-stone-200/80 p-6 sm:p-8 space-y-6 rounded-2xl shadow-2xs hover:shadow-xs transition-shadow duration-300" id="ai-performance-coach-card">
-      {/* Card Header */}
-      <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+  // Loading state
+  if (isAnalyzing) {
+    return (
+      <div className="bg-white border border-stone-200/90 p-8 rounded-2xl shadow-3xs space-y-5" id="ai-coach-loading">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-50/60 border border-amber-200/60 rounded-xl flex items-center justify-center text-amber-700 shadow-3xs shrink-0">
-            <Brain className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-700">
+            <Brain className="w-5 h-5 animate-pulse" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-stone-900 tracking-tight">AI Learning Coach Analysis</h3>
-            <p className="text-xs text-stone-500 font-serif italic">Personalized cognitive assessment & top practice recommendations</p>
+            <h3 className="text-base font-bold text-stone-900">AI Performance Diagnostics</h3>
+            <p className="text-xs text-stone-500">Evaluating learning velocity, memory decay curves, and recent review accuracy...</p>
           </div>
         </div>
+        <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
+          <motion.div 
+            className="h-full bg-amber-500 rounded-full"
+            animate={{ x: ["-100%", "100%"] }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+          />
+        </div>
+      </div>
+    );
+  }
 
-        {aiReport && (
-          <button
+  // Error state
+  if (analysisError) {
+    return (
+      <div className="bg-rose-50/50 border border-rose-200 p-6 rounded-2xl space-y-4" id="ai-coach-error">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2.5 text-rose-800">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <h4 className="font-bold text-sm">Diagnostic Generation Unavailable</h4>
+          </div>
+          <button 
             onClick={() => setAiReport(null)}
-            className="p-2 border border-stone-200 rounded-lg hover:border-stone-400 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer shadow-3xs"
-            title="Dismiss AI report"
+            className="text-stone-400 hover:text-stone-700 p-1"
           >
             <X className="w-4 h-4" />
           </button>
-        )}
+        </div>
+        <p className="text-xs text-rose-700 leading-relaxed font-mono bg-white/70 p-3 rounded-lg border border-rose-200/50">
+          {analysisError}
+        </p>
+        <button
+          onClick={onRunAiAnalysis}
+          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Retry Analysis</span>
+        </button>
       </div>
+    );
+  }
 
-      {/* Loading Spinner */}
-      {isAnalyzing && (
-        <div className="py-8 text-center space-y-4">
-          <div className="w-10 h-10 border-2 border-stone-200 border-t-amber-500 rounded-full animate-spin mx-auto" />
-          <p className="text-xs text-stone-500 font-serif italic">
-            Analyzing vocabulary mastery, quiz patterns, and word strength levels...
-          </p>
-        </div>
-      )}
+  if (!aiReport) return null;
 
-      {/* Error State */}
-      {analysisError && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-3 rounded-xl">
-          <div className="font-bold flex items-center gap-2 text-rose-800">
-            <AlertTriangle className="w-4 h-4 text-rose-600" />
-            <span>AI Analysis Error</span>
+  return (
+    <div className="bg-white border border-stone-200/90 rounded-2xl shadow-3xs overflow-hidden space-y-6" id="ai-coach-report-card">
+      {/* 1. Header Bar with Level Badge & Actions */}
+      <div className="p-6 pb-0 flex flex-wrap items-center justify-between gap-4 border-b border-stone-100 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
+            <Brain className="w-5 h-5 text-amber-700" />
           </div>
-          <p className="text-rose-700">{analysisError}</p>
-          <button
-            onClick={onRunAiAnalysis}
-            className="px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-xs cursor-pointer mt-2"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* Analysis Content */}
-      {aiReport && !isAnalyzing && (
-        <div className="space-y-6 text-xs">
-          {/* Overall Trajectory Assessment */}
-          <div className="bg-amber-50/15 p-5 border border-amber-200/30 rounded-xl space-y-2 shadow-3xs">
-            <div className="flex items-center gap-2 text-stone-900 font-bold text-[10px] uppercase tracking-widest">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>Overall Trajectory Assessment</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-stone-900 tracking-tight">AI Performance & Activity Diagnosis</h2>
+              {aiReport.cefrLevel && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100/70 text-amber-900 border border-amber-200 font-mono">
+                  {aiReport.cefrLevel}
+                </span>
+              )}
             </div>
-            <p className="text-stone-800 text-sm leading-relaxed font-serif italic">
-              "{aiReport.overallAssessment}"
+            <p className="text-xs text-stone-500 font-serif italic">
+              Pedagogical analysis based on your recent activity, review accuracy, and memory decay rates.
             </p>
           </div>
+        </div>
 
-          {/* PRACTICE READINESS & CANDIDATE SUMMARY SECTION */}
-          <div className="bg-gradient-to-br from-stone-50/90 to-amber-50/20 border border-stone-200/90 p-5 rounded-2xl space-y-4 shadow-3xs" id="practice-candidates-summary-section">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-200/60 pb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 bg-amber-500 text-white font-black rounded-lg flex items-center justify-center text-xs shadow-3xs">
-                    <Layers className="w-3.5 h-3.5" />
-                  </span>
-                  <h4 className="font-bold text-stone-900 text-sm tracking-tight">Practice Readiness & Candidate Summary</h4>
-                </div>
-                <p className="text-[11px] text-stone-500 font-serif italic mt-0.5">
-                  Cognitive evaluation of eligible words for spaced quizzes and flashcards
-                </p>
-              </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRunAiAnalysis}
+            className="px-3 py-1.5 bg-stone-50 hover:bg-stone-100 text-stone-700 border border-stone-200/80 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs"
+            title="Refresh AI Analysis"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-stone-500" />
+            <span>Re-analyze</span>
+          </button>
+
+          <button
+            onClick={() => setAiReport(null)}
+            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-all cursor-pointer"
+            title="Dismiss Diagnostic View"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-6 space-y-6">
+        {/* 2. Key Performance & Activity Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5" id="diagnostic-kpi-grid">
+          {/* Retention Health */}
+          <div className="p-4 bg-stone-50/70 border border-stone-200/70 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-600">Retention Health</span>
+              <Activity className="w-3.5 h-3.5 text-amber-600" />
             </div>
-
-            {/* 2-Column Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Potential Quiz Candidates */}
-              <div className={`p-4 border rounded-xl space-y-3 transition-all ${
-                quizCandidates.length > 0
-                  ? 'bg-white border-amber-200/90 shadow-3xs'
-                  : 'bg-stone-100/60 border-stone-200 text-stone-600'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                      quizCandidates.length > 0 ? 'bg-amber-100 text-amber-900' : 'bg-stone-200 text-stone-500'
-                    }`}>
-                      <HelpCircle className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-stone-900 text-xs">Potential Quiz Candidates</h5>
-                      <span className="text-[10px] text-stone-500">Words ready for active recall testing</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-xl font-mono font-black ${
-                      quizCandidates.length > 0 ? 'text-amber-600' : 'text-stone-400'
-                    }`}>
-                      {quizCandidates.length}
-                    </span>
-                    <span className="text-[10px] text-stone-400 block -mt-1 font-sans">words</span>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-stone-600 leading-relaxed font-sans">
-                  {quizCandidates.length > 0
-                    ? `${quizCandidates.length} learned/studied words have completed review cooldown and are primed for quiz assessment.`
-                    : 'No studied words are currently eligible for quiz testing (either none studied yet or all are in active review cooldown).'}
-                </p>
-
-                {quizCandidates.length > 0 && (
-                  <div className="space-y-1.5 pt-1 border-t border-stone-100">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Candidate Sample:</span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {quizCandidates.slice(0, 5).map((w, i) => (
-                        <span key={w.id || i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200/80 rounded-md text-[10px] font-medium">
-                          <span>{w.word}</span>
-                          <span className="text-amber-600/70 text-[9px]">({w.strength ?? 0}%)</span>
-                        </span>
-                      ))}
-                      {quizCandidates.length > 5 && (
-                        <span className="text-[10px] text-stone-400 font-serif italic">+{quizCandidates.length - 5} more</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Potential Flashcard Candidates */}
-              <div className={`p-4 border rounded-xl space-y-3 transition-all ${
-                flashcardCandidates.length > 0
-                  ? 'bg-white border-indigo-200/90 shadow-3xs'
-                  : 'bg-stone-100/60 border-stone-200 text-stone-600'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                      flashcardCandidates.length > 0 ? 'bg-indigo-100 text-indigo-900' : 'bg-stone-200 text-stone-500'
-                    }`}>
-                      <Bookmark className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-stone-900 text-xs">Potential Flashcard Candidates</h5>
-                      <span className="text-[10px] text-stone-500">Words ready for spaced repetition</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-xl font-mono font-black ${
-                      flashcardCandidates.length > 0 ? 'text-indigo-600' : 'text-stone-400'
-                    }`}>
-                      {flashcardCandidates.length}
-                    </span>
-                    <span className="text-[10px] text-stone-400 block -mt-1 font-sans">words</span>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-stone-600 leading-relaxed font-sans">
-                  {flashcardCandidates.length > 0
-                    ? `${flashcardCandidates.length} words available for study (unstudied terms, missed quiz items, or unlearned words past cooldown).`
-                    : 'No words currently eligible for flashcards (all terms are mastered or in cooldown).'}
-                </p>
-
-                {flashcardCandidates.length > 0 && (
-                  <div className="space-y-1.5 pt-1 border-t border-stone-100">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block">Candidate Sample:</span>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {flashcardCandidates.slice(0, 5).map((w, i) => (
-                        <span key={w.id || i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-900 border border-indigo-200/80 rounded-md text-[10px] font-medium">
-                          <span>{w.word}</span>
-                          {w.translation && <span className="text-indigo-600/70 text-[9px]">({w.translation})</span>}
-                        </span>
-                      ))}
-                      {flashcardCandidates.length > 5 && (
-                        <span className="text-[10px] text-stone-400 font-serif italic">+{flashcardCandidates.length - 5} more</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="text-2xl font-bold text-stone-900 tracking-tight">
+              {aiReport.retentionHealthScore || performanceStats.avgStrength}%
             </div>
-
-            {/* Coach Recommendations when candidate counts are 0 */}
-            {noCandidatesForEither ? (
-              <div className="bg-amber-50/90 border border-amber-300/80 p-4 rounded-xl space-y-2.5" id="no-candidates-recommendation-alert">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 font-bold text-amber-900 text-xs">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Coach Recommendation: Add More Words to Learn</span>
-                  </div>
-                  <span className="px-2 py-0.5 bg-amber-200/80 text-amber-950 font-bold text-[9px] uppercase tracking-wider rounded-md">
-                    Action Recommended
-                  </span>
-                </div>
-                <p className="text-[11px] text-amber-900/90 leading-relaxed font-sans">
-                  You currently have <strong>0 potential quiz candidates</strong> and <strong>0 potential flashcard candidates</strong>. All words in your collection are either completely mastered or resting in their active cooldown window. We strongly recommend adding new vocabulary words to your collection to continue your daily momentum and unlock fresh study sessions!
-                </p>
-                {onNavigateToView && (
-                  <div className="pt-1">
-                    <button
-                      onClick={() => onNavigateToView('chatview')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-3xs transition-all cursor-pointer"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      <span>Add More Words to Learn</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : noQuizCandidates ? (
-              <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-xl space-y-2" id="no-quiz-candidates-recommendation">
-                <div className="flex items-center gap-2 font-bold text-amber-900 text-xs">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>Coach Recommendation for Quizzes: Expand Your Learned Words</span>
-                </div>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  You currently have 0 quiz candidates ready. Quizzes require words that have prior study exposure. Complete flashcard sessions for your {flashcardCandidates.length} flashcard candidate{flashcardCandidates.length === 1 ? '' : 's'} or add more words to build up your quiz pool!
-                </p>
-                {onNavigateToView && (
-                  <button
-                    onClick={() => onNavigateToView('chatview')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer"
-                  >
-                    <span>Add more words in Chat</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            ) : noFlashcardCandidates ? (
-              <div className="bg-indigo-50/70 border border-indigo-200/80 p-3.5 rounded-xl space-y-2" id="no-flashcard-candidates-recommendation">
-                <div className="flex items-center gap-2 font-bold text-indigo-900 text-xs">
-                  <AlertTriangle className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                  <span>Coach Recommendation for Flashcards: Add New Words</span>
-                </div>
-                <p className="text-[11px] text-indigo-800 leading-relaxed">
-                  You currently have 0 flashcard candidates. All your current terms are mastered or cooling down. Take quizzes with your {quizCandidates.length} quiz candidate{quizCandidates.length === 1 ? '' : 's'} or add new words to keep expanding your vocabulary deck!
-                </p>
-                {onNavigateToView && (
-                  <button
-                    onClick={() => onNavigateToView('chatview')}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-800 hover:text-indigo-950 underline cursor-pointer"
-                  >
-                    <span>Add new words to learn</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            ) : null}
+            <div className="text-[11px] text-stone-500 font-serif italic">
+              {performanceStats.avgStrength >= 70 ? "Optimal retention" : "Needs reinforcement"}
+            </div>
           </div>
 
-          {/* TOP 10 WORDS TO PRACTICE SECTION */}
-          {practiceWords.length > 0 && (
-            <div className="bg-gradient-to-br from-stone-50/80 to-amber-50/20 border border-amber-200/60 p-5 rounded-2xl space-y-4 shadow-3xs" id="top-words-to-practice-section">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200/60 pb-3.5">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 bg-amber-400 text-stone-950 font-black rounded-lg flex items-center justify-center text-xs shadow-3xs">
-                      10
-                    </span>
-                    <h4 className="font-bold text-stone-900 text-sm tracking-tight">Top Words to Practice Today</h4>
-                  </div>
-                  <p className="text-[11px] text-stone-500 font-serif italic mt-0.5">
-                    Curated by AI: Recently used terms needing reinforcement & untouched words to expand vocabulary
-                  </p>
-                </div>
+          {/* Quiz Accuracy */}
+          <div className="p-4 bg-stone-50/70 border border-stone-200/70 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-600">Quiz Accuracy</span>
+              <Award className="w-3.5 h-3.5 text-emerald-600" />
+            </div>
+            <div className="text-2xl font-bold text-stone-900 tracking-tight">
+              {performanceStats.quizAccuracy !== null ? `${performanceStats.quizAccuracy}%` : "—"}
+            </div>
+            <div className="text-[11px] text-stone-500 font-serif italic">
+              {stats && stats.totalQuizzesTaken > 0 ? `${stats.totalCorrectAnswers}/${stats.totalQuizzesTaken} questions correct` : "No quizzes taken yet"}
+            </div>
+          </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Category Filter Tabs */}
-                  <div className="inline-flex p-1 bg-stone-200/70 rounded-xl text-[10px] font-semibold">
-                    <button
-                      onClick={() => setPracticeFilter('all')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                        practiceFilter === 'all'
-                          ? 'bg-white text-stone-900 shadow-3xs font-bold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      All ({practiceWords.length})
-                    </button>
-                    <button
-                      onClick={() => setPracticeFilter('recently_used')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                        practiceFilter === 'recently_used'
-                          ? 'bg-amber-400 text-stone-950 shadow-3xs font-bold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      Recent ({recentPracticeWords.length})
-                    </button>
-                    <button
-                      onClick={() => setPracticeFilter('never_used')}
-                      className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                        practiceFilter === 'never_used'
-                          ? 'bg-indigo-600 text-white shadow-3xs font-bold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      Never Used ({neverUsedPracticeWords.length})
-                    </button>
-                  </div>
+          {/* Activity Consistency */}
+          <div className="p-4 bg-stone-50/70 border border-stone-200/70 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-600">Study Streak</span>
+              <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+            </div>
+            <div className="text-2xl font-bold text-stone-900 tracking-tight">
+              {performanceStats.streakCount} <span className="text-xs font-normal text-stone-500">days</span>
+            </div>
+            <div className="text-[11px] text-stone-500 font-serif italic">
+              {performanceStats.streakCount > 0 ? "Active study momentum" : "Start a streak today"}
+            </div>
+          </div>
+
+          {/* Decay / At-Risk Vocabulary */}
+          <div className="p-4 bg-stone-50/70 border border-stone-200/70 rounded-xl space-y-1.5">
+            <div className="flex items-center justify-between text-stone-500">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">At-Risk Terms</span>
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+            </div>
+            <div className="text-2xl font-bold text-rose-950 tracking-tight">
+              {performanceStats.atRisk}
+            </div>
+            <div className="text-[11px] text-rose-700 font-serif italic">
+              {performanceStats.atRisk > 0 ? "Fading memory / Overdue" : "All words well-retained"}
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Executive Assessment & Strengths / Weaknesses Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" id="assessment-and-breakdown">
+          {/* Assessment Overview */}
+          <div className="lg:col-span-1 p-5 bg-amber-50/25 border border-amber-200/70 rounded-xl space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span>Coach's Trajectory Assessment</span>
+              </div>
+              <p className="text-xs text-stone-700 leading-relaxed font-serif">
+                {aiReport.overallAssessment || "Your vocabulary acquisition is progressing steadily. Focus on reviewing high-decay words to maintain recall accuracy."}
+              </p>
+            </div>
+
+            {aiReport.motivationQuote && (
+              <div className="pt-3 border-t border-amber-200/50">
+                <p className="text-[11px] text-amber-950 italic font-serif">
+                  "{aiReport.motivationQuote}"
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Strengths & Vulnerabilities */}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {/* Strengths */}
+            <div className="p-4 bg-emerald-50/20 border border-emerald-200/60 rounded-xl space-y-2">
+              <div className="flex items-center gap-1.5 text-emerald-800 text-xs font-bold">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Key Strengths & Mastery</span>
+              </div>
+              <p className="text-xs text-stone-700 leading-relaxed">
+                {aiReport.strengthsSummary || "High retention on learned verbs and consistent vocabulary exploration."}
+              </p>
+            </div>
+
+            {/* Vulnerabilities */}
+            <div className="p-4 bg-rose-50/20 border border-rose-200/60 rounded-xl space-y-2">
+              <div className="flex items-center gap-1.5 text-rose-800 text-xs font-bold">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                <span>Improvement Areas & Gaps</span>
+              </div>
+              <p className="text-xs text-stone-700 leading-relaxed">
+                {aiReport.weaknessesSummary || "Untouched vocabulary and words with over 5 days since the last active quiz review."}
+              </p>
+            </div>
+
+            {/* Actionable Tips (spans 2 cols) */}
+            {aiReport.actionableTips && aiReport.actionableTips.length > 0 && (
+              <div className="sm:col-span-2 p-4 bg-stone-50 border border-stone-200/70 rounded-xl space-y-2">
+                <div className="flex items-center gap-1.5 text-stone-800 text-xs font-bold">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Actionable Study Recommendations</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {aiReport.actionableTips.slice(0, 4).map((tip, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-stone-600">
+                      <ChevronRight className="w-3 h-3 text-amber-600 shrink-0 mt-0.5" />
+                      <span>{tip}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
+          </div>
+        </div>
 
-              {/* 10 Words Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {filteredPracticeWords.map((item, idx) => {
-                  const isRecent = item.type === 'recently_used';
+        {/* 4. Context Immersion Micro-Story (Collapsible) */}
+        {aiReport.contextStory && aiReport.contextStory.story && (
+          <div className="border border-stone-200/80 rounded-xl overflow-hidden bg-stone-50/40">
+            <button
+              onClick={() => setShowMicroStory(!showMicroStory)}
+              className="w-full px-4 py-3 flex items-center justify-between bg-stone-50/80 hover:bg-stone-100/80 text-left transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-bold text-stone-900">
+                  {aiReport.contextStory.title || "AI Context Immersion Micro-Story"}
+                </span>
+                <span className="text-[10px] text-stone-500 font-mono">
+                  (Target vocabulary in authentic context)
+                </span>
+              </div>
+              <span className="text-xs font-medium text-stone-500">
+                {showMicroStory ? "Hide" : "Show"}
+              </span>
+            </button>
 
-                  return (
-                    <div
-                      key={idx}
-                      className={`p-3.5 border rounded-xl transition-all duration-200 space-y-2 relative ${
-                        isRecent
-                          ? 'bg-white/90 border-amber-200/80 hover:border-amber-400 hover:shadow-2xs'
-                          : 'bg-indigo-50/20 border-indigo-200/80 hover:border-indigo-400 hover:shadow-2xs'
-                      }`}
-                    >
-                      {/* Top status bar */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-5 h-5 bg-stone-100 text-stone-700 font-mono text-[10px] font-bold rounded-md flex items-center justify-center border border-stone-200">
-                            #{idx + 1}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-md ${
-                              isRecent
-                                ? 'bg-amber-100/90 text-amber-900 border border-amber-300/60'
-                                : 'bg-indigo-100/90 text-indigo-900 border border-indigo-300/60'
-                            }`}
-                          >
-                            {isRecent ? (
-                              <>
-                                <Clock className="w-2.5 h-2.5" />
-                                <span>Recently Used</span>
-                              </>
-                            ) : (
-                              <>
-                                <Bookmark className="w-2.5 h-2.5" />
-                                <span>Never Used</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
+            {showMicroStory && (
+              <div className="p-4 bg-white border-t border-stone-200/60 space-y-2.5">
+                <p className="text-xs sm:text-sm text-stone-800 leading-relaxed font-serif">
+                  {aiReport.contextStory.story.split(/(\*\*.*?\*\*)/).map((part, i) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                      return (
+                        <span key={i} className="font-bold text-amber-900 bg-amber-100/70 px-1 py-0.5 rounded font-sans">
+                          {part.slice(2, -2)}
+                        </span>
+                      );
+                    }
+                    return part;
+                  })}
+                </p>
+                {aiReport.contextStory.storyTranslation && (
+                  <p className="text-xs text-stone-500 italic border-t border-stone-100 pt-2 font-serif">
+                    {aiReport.contextStory.storyTranslation}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
-                        {/* Strength Indicator */}
-                        <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                          <span className="text-stone-400 text-[9px]">Strength:</span>
-                          <span
-                            className={`font-bold ${
-                              (item.strength ?? 0) >= 50
-                                ? 'text-amber-600'
-                                : (item.strength ?? 0) > 0
-                                ? 'text-stone-700'
-                                : 'text-indigo-600'
-                            }`}
-                          >
-                            {item.strength ?? 0}%
-                          </span>
-                        </div>
-                      </div>
+        {/* 5. Top 10 Prioritized Words for Practice */}
+        <div className="space-y-4 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                <Target className="w-4 h-4 text-amber-600" />
+                <span>Top Recommended Target Vocabulary ({aiReport.topPracticeWords?.length || 0})</span>
+              </h3>
+              <p className="text-xs text-stone-500 font-serif italic">
+                Identified based on low retention, memory decay, and untouched vocabulary in your library.
+              </p>
+            </div>
 
-                      {/* Word Title & Translation */}
-                      <div className="flex items-start justify-between gap-2 pt-0.5">
-                        <div>
-                          <h5 className="font-bold text-stone-900 text-sm tracking-tight capitalize">
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-lg border border-stone-200/80 shrink-0 text-xs">
+              <button
+                onClick={() => setFilterType('all')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                  filterType === 'all' ? "bg-white text-stone-900 font-bold shadow-3xs" : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                All ({aiReport.topPracticeWords?.length || 0})
+              </button>
+              <button
+                onClick={() => setFilterType('recently_used')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                  filterType === 'recently_used' ? "bg-white text-stone-900 font-bold shadow-3xs" : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                Recent / Low Strength
+              </button>
+              <button
+                onClick={() => setFilterType('never_used')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                  filterType === 'never_used' ? "bg-white text-stone-900 font-bold shadow-3xs" : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                Untouched
+              </button>
+              <button
+                onClick={() => setFilterType('at_risk')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                  filterType === 'at_risk' ? "bg-white text-rose-700 font-bold shadow-3xs" : "text-stone-600 hover:text-stone-900"
+                }`}
+              >
+                At Risk
+              </button>
+            </div>
+          </div>
+
+          {/* Words List Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5" id="top-practice-words-grid">
+            {practiceWords.map((item, idx) => {
+              const matchedWord = words.find(w => w.word.toLowerCase() === item.word.toLowerCase());
+              const isAtRisk = item.riskLevel === 'critical' || item.riskLevel === 'high' || item.strength < 40;
+              const isNeverUsed = item.type === 'never_used';
+
+              return (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-xl border transition-all space-y-3 flex flex-col justify-between ${
+                    isAtRisk 
+                      ? "border-rose-200/80 bg-rose-50/10 hover:border-rose-300"
+                      : isNeverUsed
+                        ? "border-stone-200/90 bg-stone-50/20 hover:border-stone-300"
+                        : "border-amber-200/70 bg-amber-50/10 hover:border-amber-300"
+                  }`}
+                >
+                  {/* Top: Word, POS, Strength & Audio */}
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-base font-bold text-stone-900 tracking-tight">
                             {item.word}
-                          </h5>
-                          {item.translation && (
-                            <p className="text-stone-600 font-medium text-xs">
-                              {item.translation}
-                            </p>
+                          </h4>
+                          {item.pos && (
+                            <span className="text-[10px] text-stone-500 font-mono uppercase bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200/60">
+                              {item.pos}
+                            </span>
+                          )}
+                          {isNeverUsed ? (
+                            <span className="text-[9px] font-bold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
+                              Untouched
+                            </span>
+                          ) : (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                              isAtRisk 
+                                ? "text-rose-700 bg-rose-50 border-rose-200" 
+                                : "text-amber-800 bg-amber-50 border-amber-200"
+                            }`}>
+                              {item.strength}% Strength
+                            </span>
                           )}
                         </div>
+                        <p className="text-xs font-semibold text-stone-700 mt-0.5">
+                          {item.translation}
+                        </p>
+                      </div>
 
-                        {/* Speaker Button */}
+                      <div className="flex items-center gap-1 shrink-0">
                         {onSpeakWord && (
                           <button
-                            onClick={() => onSpeakWord(item.word, `coach-${item.word}-${idx}`)}
-                            className="p-1.5 bg-stone-100 hover:bg-amber-100 text-stone-600 hover:text-amber-800 rounded-lg transition-colors cursor-pointer shrink-0"
-                            title="Listen to pronunciation"
+                            onClick={() => onSpeakWord(item.word, matchedWord?.id || `rec-${idx}`)}
+                            className="p-1.5 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 transition-all cursor-pointer shadow-3xs"
+                            title="Listen Pronunciation"
                           >
                             <Volume2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
+                    </div>
 
-                      {/* Coach Pedagogical Reason */}
-                      <div className="bg-stone-50/70 p-2 rounded-lg border border-stone-200/50 text-[11px] text-stone-700 leading-snug flex items-start gap-1.5">
-                        <HelpCircle className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
-                        <span className="font-serif italic text-stone-600">
-                          {item.reason}
-                        </span>
+                    {/* Diagnostic Reason */}
+                    <div className="p-2 bg-white/80 rounded-lg border border-stone-200/60 text-xs space-y-1">
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-stone-600 uppercase tracking-wide">
+                        <Zap className="w-3 h-3 text-amber-600" />
+                        <span>Why Review This:</span>
                       </div>
+                      <p className="text-[11px] text-stone-700 leading-relaxed font-serif italic">
+                        {item.reason}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
-          {/* Strengths & Weaknesses Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-emerald-50/15 p-5 border border-emerald-200/50 rounded-xl space-y-2">
-              <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs uppercase tracking-wider">
-                <Target className="w-4 h-4 text-emerald-600" />
-                <span>Key Mastery Strengths</span>
-              </div>
-              <p className="text-stone-700 leading-relaxed text-xs">
-                {aiReport.strengthsSummary}
-              </p>
-            </div>
+                    {/* Memory Mnemonic Hook */}
+                    {item.mnemonic && (
+                      <div className="p-2 bg-amber-50/50 rounded-lg border border-amber-200/50 text-xs space-y-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-amber-900 uppercase tracking-wide">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-600" />
+                            Memory Hook / Mnemonic
+                          </span>
+                          <button
+                            onClick={() => copyMnemonic(item.mnemonic!, `rec-${idx}`)}
+                            className="text-[10px] text-amber-700 hover:text-amber-950 font-sans normal-case cursor-pointer"
+                          >
+                            {copiedMnemonic === `rec-${idx}` ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-amber-950 leading-relaxed">
+                          {item.mnemonic}
+                        </p>
+                      </div>
+                    )}
 
-            <div className="bg-rose-50/15 p-5 border border-rose-250/50 rounded-xl space-y-2">
-              <div className="flex items-center gap-2 text-rose-800 font-bold text-xs uppercase tracking-wider">
-                <AlertTriangle className="w-4 h-4 text-rose-600" />
-                <span>Target Areas Needing Focus</span>
-              </div>
-              <p className="text-stone-700 leading-relaxed text-xs">
-                {aiReport.weaknessesSummary}
-              </p>
-            </div>
-          </div>
-
-          {/* Actionable Tips */}
-          {aiReport.actionableTips && aiReport.actionableTips.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="font-bold text-stone-900 text-xs uppercase tracking-wider flex items-center gap-2">
-                <Target className="w-4 h-4 text-stone-900" />
-                Actionable Memory Retention Strategies
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {aiReport.actionableTips.map((tip, idx) => (
-                  <div key={idx} className="bg-stone-50/50 p-4 border border-stone-200/80 rounded-xl space-y-2">
-                    <div className="font-bold text-stone-900 text-[11px] flex items-center gap-2">
-                      <span className="w-5 h-5 bg-stone-900 text-white rounded-full flex items-center justify-center text-[10px] font-mono shadow-3xs shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span>Strategy {idx + 1}</span>
-                    </div>
-                    <p className="text-stone-600 text-xs leading-relaxed font-sans">{tip}</p>
+                    {/* Context Example Sentence */}
+                    {item.exampleSentence && (
+                      <div className="text-[11px] text-stone-600 space-y-0.5 pt-0.5">
+                        <p className="font-serif italic text-stone-800">"{item.exampleSentence}"</p>
+                        {item.exampleTranslation && (
+                          <p className="text-[10px] text-stone-400 font-serif">{item.exampleTranslation}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Recommended Focus Topics & Motivation Quote */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t border-stone-100">
-            {aiReport.recommendedFocusTopics && aiReport.recommendedFocusTopics.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-stone-600 text-[10px] uppercase tracking-wider">AI Suggested Topics:</span>
-                {aiReport.recommendedFocusTopics.map((topic, idx) => (
-                  <span key={idx} className="bg-amber-50 text-amber-900 border border-amber-200/50 font-bold px-2.5 py-1 text-[10px] rounded-lg">
-                    {topic}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {aiReport.motivationQuote && (
-              <p className="text-stone-400 font-serif italic text-xs">
-                "{aiReport.motivationQuote}"
-              </p>
-            )}
+                  {/* Bottom: Memory Strength Bar */}
+                  <div className="pt-2 border-t border-stone-100">
+                    <MemoryStrengthBar strength={item.strength || 0} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          {(aiReport.provider || aiReport.model || aiReport.responseTimeMs !== undefined) && (
-            <div className="flex items-center gap-2 pt-2 text-[10px] text-stone-400 border-t border-stone-100/60 font-mono">
-              <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-semibold uppercase tracking-wider">
-                {aiReport.provider || "AI"}
-              </span>
-              {aiReport.model && (
-                <span className="text-stone-500 font-medium">
-                  {aiReport.model}
-                </span>
-              )}
-              {aiReport.responseTimeMs !== undefined && (
-                <span className="text-stone-400 ml-auto font-mono">
-                  {(aiReport.responseTimeMs / 1000).toFixed(1)}s
-                </span>
-              )}
-            </div>
-          )}
         </div>
-      )}
+      </div>
+
+      {/* Bottom Footer Information */}
+      <div className="p-4 bg-stone-50 border-t border-stone-100 flex items-center justify-between gap-3 text-xs text-stone-500">
+        <div className="flex items-center gap-2">
+          <Check className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Diagnostic updates continuously incorporate your recent review sessions and recall strength.</span>
+        </div>
+      </div>
     </div>
   );
 }

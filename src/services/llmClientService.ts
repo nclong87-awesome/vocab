@@ -1452,6 +1452,13 @@ export interface RecommendedPracticeWord {
   type: 'recently_used' | 'never_used';
   strength?: number;
   priority?: 'high' | 'medium';
+  mnemonic?: string;
+  etymology?: string;
+  exampleSentence?: string;
+  exampleTranslation?: string;
+  commonTrap?: string;
+  pos?: string;
+  riskLevel?: 'critical' | 'high' | 'moderate';
 }
 
 export interface PerformanceAnalysisRequest {
@@ -1475,6 +1482,20 @@ export interface PerformanceAnalysisResult {
   recommendedFocusTopics: string[];
   topPracticeWords?: RecommendedPracticeWord[];
   motivationQuote: string;
+  cefrLevel?: string;
+  retentionHealthScore?: number;
+  forgettingRiskSummary?: string;
+  contextStory?: {
+    title: string;
+    story: string;
+    storyTranslation?: string;
+    featuredWords: string[];
+  };
+  diagnosticBadges?: {
+    label: string;
+    value: string;
+    tone?: 'emerald' | 'amber' | 'indigo' | 'rose';
+  }[];
   provider?: string;
   model?: string;
   responseTimeMs?: number;
@@ -1489,7 +1510,9 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
       topPracticeWords: [],
       actionableTips: ["Review weak terms daily", "Take quick practice quizzes", "Use spaced repetition"],
       recommendedFocusTopics: ["Core Vocabulary"],
-      motivationQuote: "Consistency in practice builds lasting language fluency."
+      motivationQuote: "Consistency in practice builds lasting language fluency.",
+      cefrLevel: "B1 Intermediate",
+      retentionHealthScore: 75
     };
   }
 
@@ -1558,14 +1581,25 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
       const rawType = String(item.type || item.category || item.status || "").toLowerCase();
       const isNeverUsed = rawType.includes("never") || rawType.includes("new") || rawType.includes("untouched") || item.strength === 0 || item.lastReviewed === null;
       const type: 'recently_used' | 'never_used' = isNeverUsed ? 'never_used' : 'recently_used';
+      const strength = typeof item.strength === "number" ? Math.max(0, Math.min(100, item.strength)) : (isNeverUsed ? 0 : 30);
+      
+      const riskLevel: 'critical' | 'high' | 'moderate' = 
+        strength <= 20 ? 'critical' : strength <= 45 ? 'high' : 'moderate';
 
       return {
         word: String(item.word || item.name || item.term || "").trim(),
         translation: String(item.translation || item.meaning || item.definition || "").trim(),
         reason: String(item.reason || item.note || item.explanation || (isNeverUsed ? "Never practiced yet - start initial recall" : "Needs reinforcement and practice")).trim(),
         type,
-        strength: typeof item.strength === "number" ? Math.max(0, Math.min(100, item.strength)) : (isNeverUsed ? 0 : 30),
-        priority: (item.priority === "medium" ? "medium" : "high") as 'high' | 'medium'
+        strength,
+        priority: (item.priority === "medium" ? "medium" : "high") as 'high' | 'medium',
+        mnemonic: item.mnemonic || item.memory_hook || item.hook || item.memoryHook || undefined,
+        etymology: item.etymology || item.roots || item.word_origin || item.origin || undefined,
+        exampleSentence: item.exampleSentence || item.example || item.example_sentence || item.sentence || undefined,
+        exampleTranslation: item.exampleTranslation || item.example_translation || item.sentence_translation || undefined,
+        commonTrap: item.commonTrap || item.common_trap || item.trap || item.pitfall || item.false_friend || undefined,
+        pos: item.pos || item.partOfSpeech || item.part_of_speech || undefined,
+        riskLevel
       };
     }).filter((item: RecommendedPracticeWord) => Boolean(item.word));
   }
@@ -1590,6 +1624,30 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
 
   let motivationQuote = raw.motivationQuote || raw.motivation_quote || raw.quote || raw.motivational_quote || "";
 
+  // Parse CEFR Level & Retention Score
+  const cefrLevel = raw.cefrLevel || raw.cefr_level || raw.proficiency_level || raw.student_level || "B1 Intermediate";
+  const retentionHealthScore = typeof raw.retentionHealthScore === "number" 
+    ? Math.max(10, Math.min(100, raw.retentionHealthScore)) 
+    : typeof raw.retention_score === "number"
+    ? Math.max(10, Math.min(100, raw.retention_score))
+    : undefined;
+
+  const forgettingRiskSummary = raw.forgettingRiskSummary || raw.forgetting_risk_summary || raw.risk_forecast || undefined;
+
+  // Context Story
+  let contextStory: PerformanceAnalysisResult['contextStory'] = undefined;
+  const rawStory = raw.contextStory || raw.context_story || raw.micro_story || raw.story;
+  if (rawStory && typeof rawStory === "object") {
+    contextStory = {
+      title: rawStory.title || "AI Context Immersion Story",
+      story: rawStory.story || rawStory.text || rawStory.paragraph || "",
+      storyTranslation: rawStory.storyTranslation || rawStory.translation || rawStory.meaning || undefined,
+      featuredWords: Array.isArray(rawStory.featuredWords || rawStory.featured_words || rawStory.target_words) 
+        ? (rawStory.featuredWords || rawStory.featured_words || rawStory.target_words) 
+        : []
+    };
+  }
+
   return {
     overallAssessment: overallAssessment || "Your vocabulary practice shows steady progress and active momentum.",
     strengthsSummary: strengthsSummary || "Demonstrating solid recall on core vocabulary terms.",
@@ -1598,6 +1656,10 @@ export function normalizePerformanceAnalysis(raw: any): PerformanceAnalysisResul
     actionableTips: actionableTips.length > 0 ? actionableTips : ["Review weak terms daily", "Practice with active quizzes", "Focus on spaced repetition"],
     recommendedFocusTopics: recommendedFocusTopics.length > 0 ? recommendedFocusTopics : ["Core Vocabulary"],
     motivationQuote: motivationQuote || "Consistency in practice builds lasting language fluency.",
+    cefrLevel,
+    retentionHealthScore,
+    forgettingRiskSummary,
+    contextStory,
     provider: raw.provider,
     model: raw.model,
     responseTimeMs: raw.responseTimeMs
@@ -1657,26 +1719,53 @@ You MUST identify and select the TOP 10 WORDS the learner needs to practice righ
 For each of the 10 practice words, specify:
 - "word": The word in ${targetLanguage}
 - "translation": Translation or meaning in ${nativeLanguage}
-- "reason": A crisp, encouraging 1-sentence pedagogical reason explaining why the student should practice this word (e.g., "Never practiced yet — establish initial memory", "Low retention (30%) after recent review — needs active quiz recall", "Memory decay — reinforce before forgetting").
-- "type": Strictly either "recently_used" (if reviewed before) or "never_used" (if never reviewed/studied yet).
+- "pos": Part of speech (e.g. noun, verb, adjective)
+- "reason": A crisp, encouraging 1-sentence pedagogical reason explaining why the student should practice this word.
+- "mnemonic": A vivid, memorable cognitive memory hook or visual association in ${nativeLanguage} or bilingual format to help lock this word in memory forever.
+- "etymology": Word root, prefix/suffix breakdown, or morphological anatomy.
+- "exampleSentence": Practical, realistic usage sentence in ${targetLanguage}.
+- "exampleTranslation": Translation of the sentence in ${nativeLanguage}.
+- "commonTrap": A common mistake learners make (confused words, false friends, incorrect prepositions).
+- "type": Strictly either "recently_used" or "never_used".
 - "strength": Current retention strength (0-100).
 - "priority": "high" or "medium".
+- "riskLevel": "critical" | "high" | "moderate".
+
+ALSO INCLUDE:
+- "contextStory": An engaging 2-3 sentence micro-story written in ${targetLanguage} that naturally integrates 3-4 of the top practice words (bolded like **word**), with "storyTranslation" in ${nativeLanguage}.
+- "retentionHealthScore": Calculated retention health percentage (0-100) based on student performance.
+- "cefrLevel": Estimated CEFR milestone (e.g. "A2 Elementary", "B1 Intermediate", "B2 Upper Intermediate").
 
 Provide a structured AI analysis with constructive insights, memory retention strategies, the top 10 words to practice, and actionable guidance for the learner.`;
 
-  const systemInstruction = `You are an encouraging, expert AI vocabulary coach. Output strictly valid JSON-only analytics matching the schema below. CRITICAL: Use the exact JSON field names specified in schemaDesc. Ensure topPracticeWords contains up to 10 prioritized words combining both recently used and never-used words. Do not include any conversational filler outside the JSON.`;
+  const systemInstruction = `You are an elite, highly encouraging AI vocabulary coach. Output strictly valid JSON-only analytics matching the schema below. CRITICAL: Use the exact JSON field names specified in schemaDesc. Ensure topPracticeWords contains up to 10 prioritized words combining both recently used and never-used words. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
   "overallAssessment": "string (Empowering 2-3 sentence overview of learner's trajectory)",
   "strengthsSummary": "string (Key strengths and patterns where the learner excels)",
   "weaknessesSummary": "string (Specific word patterns or areas needing improvement)",
+  "retentionHealthScore": 75,
+  "cefrLevel": "B1 Intermediate",
+  "contextStory": {
+    "title": "AI Context Immersion Micro-Story",
+    "story": "Short 2-3 sentence narrative in ${targetLanguage} embedding **targetWords**",
+    "storyTranslation": "Translation in ${nativeLanguage}",
+    "featuredWords": ["word1", "word2"]
+  },
   "topPracticeWords": [
     {
       "word": "string (Word in ${targetLanguage})",
       "translation": "string (Translation in ${nativeLanguage})",
+      "pos": "string",
       "reason": "string (Pedagogical reason why the user should practice this word)",
+      "mnemonic": "string (Vivid memory hook / association)",
+      "etymology": "string (Root or word anatomy breakdown)",
+      "exampleSentence": "string (Practical sentence)",
+      "exampleTranslation": "string (Sentence translation)",
+      "commonTrap": "string (Common mistake or false friend warning)",
       "type": "recently_used | never_used",
       "strength": 0,
-      "priority": "high | medium"
+      "priority": "high | medium",
+      "riskLevel": "critical | high | moderate"
     }
   ],
   "actionableTips": [
@@ -1992,9 +2081,12 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
 6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
    - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-  - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.
+   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.
 
-7. Output Schema:
+7. FREQUENTLY PAIRED WORDS / COLLOCATIONS REQUIREMENT:
+   - For EVERY quiz question / vocabulary word, generate 1 to 3 suggestions for companion words, collocations, or phrases that frequently appear alongside this target word in natural usage ('suggestedWords': array of 1 to 3 items, where each item contains 'word' in ${targetLanguage}, 'translation' in ${nativeLanguage}, and 'hint' or brief collocation note explaining why/how they appear together, e.g. "frequent adjective + noun collocation" or "common idiomatic verb pairing").
+
+8. Output Schema:
 Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
 [
   {
@@ -2006,17 +2098,26 @@ Return strictly valid JSON-only output when requested matching this schema. Do n
     "options": ["string", "string", "string", "string"],
     "correctAnswer": "string",
     "hint": "string",
-    "imageKeyword": "string (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object, scene, or action that symbolizes the word)"
+    "imageKeyword": "string (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object, scene, or action that symbolizes the word)",
+    "suggestedWords": [
+      {
+        "word": "string (Companion word/collocation in ${targetLanguage})",
+        "translation": "string (Translation in ${nativeLanguage})",
+        "hint": "string (Brief note on how/why it frequently appears alongside the quiz word)"
+      }
+    ]
   }
 ]`;
 
   const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
 
-CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.\n\n` +
+CRITICAL MANDATORY REQUIREMENTS:
+1. Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with an 'imageKeyword' that is a highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word.
+2. For EVERY question, include 1 to 3 suggestions for words that frequently appear alongside the word used in the quiz ('suggestedWords' array with 'word', 'translation', and 'hint').\n\n` +
     (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
     `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
 
-  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword (A highly focused, 1-3 word English search term representing a concrete, physical, photogenic object or action that symbolizes the word).`;
+  const schemaDesc = `Array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword, and suggestedWords (array of 1 to 3 items with word, translation, hint).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2079,6 +2180,31 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
         const keywordText = q.imageKeyword || (q.type === 'picture' ? getImageKeyword(matchingWord) : undefined);
         const imgUrl = q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : (keywordText ? `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}` : undefined);
 
+        let rawSuggestions = Array.isArray(q.suggestedWords) 
+          ? q.suggestedWords 
+          : (Array.isArray(q.suggestedVocabulary) ? q.suggestedVocabulary : (Array.isArray(q.collocations) ? q.collocations : []));
+        
+        if (rawSuggestions.length === 0 && matchingWord && Array.isArray(matchingWord.suggestedWords)) {
+          rawSuggestions = matchingWord.suggestedWords;
+        }
+
+        const normalizedSuggestions = rawSuggestions.slice(0, 3).map((item: any) => {
+          if (typeof item === "string") {
+            return {
+              word: item,
+              translation: "",
+              hint: `Frequently appears with ${q.word || matchingWord.word}`,
+              pairedWith: q.word || matchingWord.word
+            };
+          }
+          return {
+            word: item.word || item.vocab || item.term || "",
+            translation: item.translation || item.meaning || "",
+            hint: item.hint || item.reason || item.relationship || item.usage || `Frequently appears with ${q.word || matchingWord.word}`,
+            pairedWith: q.word || matchingWord.word
+          };
+        }).filter((s: any) => Boolean(s.word && s.word.trim()));
+
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
@@ -2089,7 +2215,8 @@ CRITICAL MANDATORY REQUIREMENT: Ensure at least ONE question in the generated qu
           correctAnswer: q.correctAnswer || matchingWord.word,
           hint: q.hint || matchingWord.pronunciation,
           imageKeyword: keywordText,
-          imageUrl: imgUrl
+          imageUrl: imgUrl,
+          suggestedWords: normalizedSuggestions
         };
       });
 

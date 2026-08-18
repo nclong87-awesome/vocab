@@ -353,5 +353,11 @@ export const viTranslations: LanguageTranslations = {
     flashcard_add_paired: "Thêm",
     chat_with_context_hint: " với ngữ cảnh *\"{hint}\"*",
     label_suggested_vocabulary: "Từ vựng đề xuất",
-    label_candidate_vocabulary: "Từ vựng đề xuất"
+    label_candidate_vocabulary: "Từ vựng đề xuất",
+    quiz_suggested_words_title: "Từ Thường Đi Kèm",
+    quiz_suggested_words_desc: "Các từ và cụm từ thường xuất hiện cùng với các từ trong bài kiểm tra này:",
+    quiz_paired_with: "Đi kèm với {word}",
+    quiz_add_suggested_word: "Thêm vào Bộ Từ",
+    quiz_suggested_word_added: "Đã thêm ✓",
+    chat_quiz_suggested_words_header: "💡 **Các từ thường xuất hiện cùng (Cụm từ / Collocations):**"
   };

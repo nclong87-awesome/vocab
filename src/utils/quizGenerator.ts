@@ -179,6 +179,18 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
 
+    let suggestedWords = Array.isArray(word.suggestedWords) ? word.suggestedWords.map((item: any) => {
+      if (typeof item === "string") {
+        return { word: item, translation: "", hint: `Frequently appears with ${word.word}`, pairedWith: word.word };
+      }
+      return {
+        word: item.word || item.vocab || item.term || "",
+        translation: item.translation || item.meaning || "",
+        hint: item.hint || item.reason || item.relationship || `Frequently appears with ${word.word}`,
+        pairedWith: word.word
+      };
+    }).filter((s: any) => Boolean(s.word)) : [];
+
     generated.push({
       id: `q-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
       wordId: word.id,
@@ -189,7 +201,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       correctAnswer,
       hint: hintText,
       imageKeyword,
-      imageUrl
+      imageUrl,
+      suggestedWords
     });
   });
 

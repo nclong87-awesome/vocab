@@ -36,10 +36,10 @@ export default function AnalyticsDashboard({
   llmConfig,
   ttsConfig = DEFAULT_TTS_CONFIG,
   appLanguage = "Vietnamese",
-  onStartPracticeWeakWords,
+  onStartPracticeWeakWords: _onStartPracticeWeakWords,
   onToggleLearnedWord,
   onToggleStarWord,
-  onNavigateToView,
+  onNavigateToView: _onNavigateToView,
 }: AnalyticsDashboardProps) {
   const safeWords = Array.isArray(words) ? words : [];
 
@@ -249,61 +249,160 @@ export default function AnalyticsDashboard({
               isAnalyzing={isAnalyzing}
               analysisError={analysisError}
               words={safeWords}
+              stats={stats}
               appLanguage={appLanguage}
               setAiReport={setAiReport}
               onRunAiAnalysis={handleRunAiAnalysis}
-              onStartPracticeWords={(wordsToPractice) => onStartPracticeWeakWords(wordsToPractice)}
               onSpeakWord={handleSpeakWord}
-              onNavigateToView={onNavigateToView}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-
       {/* Primary KPI Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="kpi-metrics-grid">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5" id="kpi-metrics-grid">
+        {/* Total Words & Mastery */}
+        <button 
+          onClick={() => setActiveTab('all')}
+          className={`p-4 border text-left transition-all duration-200 cursor-pointer rounded-xl space-y-2 ${
+            activeTab === 'all' 
+              ? 'bg-stone-50 border-stone-400 ring-2 ring-stone-900/10 shadow-xs' 
+              : 'bg-white border-stone-200 hover:border-stone-300'
+          }`}
+          title="Click to view all vocabulary"
+        >
+          <div className="flex justify-between items-center text-stone-500">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-700">Vocabulary Size</span>
+            <BookOpen className="w-3.5 h-3.5 text-stone-600" />
+          </div>
+          <div className="text-2xl font-bold text-stone-900 tracking-tight">{totalWordsCount}</div>
+          <p className="text-[11px] text-stone-500 font-serif italic">
+            Total active words in library
+          </p>
+        </button>
+
+        {/* Mastered Words */}
         <button 
           onClick={() => setActiveTab('mastered')}
-          className={`p-6 border text-left transition-all duration-300 cursor-pointer rounded-2xl space-y-3 ${
+          className={`p-4 border text-left transition-all duration-200 cursor-pointer rounded-xl space-y-2 ${
             activeTab === 'mastered' 
-              ? 'bg-emerald-50/20 border-emerald-300 ring-2 ring-emerald-500/10 shadow-xs' 
-              : 'bg-white border-stone-200/80 hover:border-emerald-350 hover:shadow-2xs hover:bg-emerald-50/5'
+              ? 'bg-emerald-50/30 border-emerald-400 ring-2 ring-emerald-500/10 shadow-xs' 
+              : 'bg-white border-stone-200 hover:border-emerald-300'
           }`}
           title="Click to view mastered words"
         >
           <div className="flex justify-between items-center text-stone-500">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Mastered Words</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           </div>
-          <div className="text-3xl font-bold text-emerald-950 tracking-tight">{masteredWords.length}</div>
+          <div className="text-2xl font-bold text-emerald-950 tracking-tight">{masteredWords.length}</div>
           <p className="text-[11px] text-emerald-700 font-serif italic">
-            {overallMasteryPercent}% overall collection mastery (click to filter)
+            {overallMasteryPercent}% mastery rate (≥80% strength)
           </p>
         </button>
 
+        {/* Need Improvement */}
         <button 
           onClick={() => setActiveTab('improving')}
-          className={`p-6 border text-left transition-all duration-300 cursor-pointer rounded-2xl space-y-3 ${
+          className={`p-4 border text-left transition-all duration-200 cursor-pointer rounded-xl space-y-2 ${
             activeTab === 'improving' 
-              ? 'bg-rose-50/20 border-rose-300 ring-2 ring-rose-500/10 shadow-xs' 
-              : 'bg-white border-stone-200/80 hover:border-rose-350 hover:shadow-2xs hover:bg-rose-50/5'
+              ? 'bg-rose-50/30 border-rose-400 ring-2 ring-rose-500/10 shadow-xs' 
+              : 'bg-white border-stone-200 hover:border-rose-300'
           }`}
           title="Click to view words needing improvement"
         >
           <div className="flex justify-between items-center text-stone-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800">Need Improvement</span>
-            <AlertTriangle className="w-4 h-4 text-rose-500" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800">Need Practice</span>
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
           </div>
-          <div className="text-3xl font-bold text-rose-950 tracking-tight">{improvingWords.length}</div>
+          <div className="text-2xl font-bold text-rose-950 tracking-tight">{improvingWords.length}</div>
           <p className="text-[11px] text-rose-700 font-serif italic">
-            Strength &lt; 50% or unlearned (click to filter)
+            Low strength (&lt;50%) or unlearned
+          </p>
+        </button>
+
+        {/* Memory Refresher / Decayed */}
+        <button 
+          onClick={() => setActiveTab('decayed')}
+          className={`p-4 border text-left transition-all duration-200 cursor-pointer rounded-xl space-y-2 ${
+            activeTab === 'decayed' 
+              ? 'bg-amber-50/30 border-amber-400 ring-2 ring-amber-500/10 shadow-xs' 
+              : 'bg-white border-stone-200 hover:border-amber-300'
+          }`}
+          title="Click to view words needing memory refresher"
+        >
+          <div className="flex justify-between items-center text-stone-500">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Decay / Overdue</span>
+            <RefreshCw className="w-3.5 h-3.5 text-amber-600" />
+          </div>
+          <div className="text-2xl font-bold text-amber-950 tracking-tight">{decayedWords.length}</div>
+          <p className="text-[11px] text-amber-700 font-serif italic">
+            Overdue for review (≥5 days)
           </p>
         </button>
       </div>
 
       {/* DETAILED WORDS ANALYSIS & MANAGEMENT SECTION */}
-      <div className="bg-white border border-stone-200/80 p-6 sm:p-8 space-y-6 rounded-2xl shadow-3xs" id="words-breakdown-section">
+      <div className="bg-white border border-stone-200/80 p-6 space-y-6 rounded-2xl shadow-3xs" id="words-breakdown-section">
+        {/* Tab Selection Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-4">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'all' 
+                  ? 'bg-stone-900 text-white shadow-3xs' 
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+              }`}
+            >
+              All ({totalWordsCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('improving')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'improving' 
+                  ? 'bg-rose-600 text-white shadow-3xs' 
+                  : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+              }`}
+            >
+              Need Practice ({improvingWords.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('mastered')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'mastered' 
+                  ? 'bg-emerald-600 text-white shadow-3xs' 
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+              }`}
+            >
+              Mastered ({masteredWords.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('decayed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'decayed' 
+                  ? 'bg-amber-600 text-white shadow-3xs' 
+                  : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              Decay Risk ({decayedWords.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('starred')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                activeTab === 'starred' 
+                  ? 'bg-amber-500 text-stone-950 font-bold shadow-3xs' 
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              ★ Starred ({starredWords.length})
+            </button>
+          </div>
+
+          <div className="text-xs text-stone-500 font-mono">
+            Showing {filteredWords.length} words
+          </div>
+        </div>
         
         {/* Search & Sorting Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

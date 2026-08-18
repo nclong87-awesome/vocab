@@ -61,6 +61,8 @@ export interface CandidateWordsOptions {
   candidatePoolSize?: number;
 }
 
+export const DEFAULT_COOLDOWN_HOURS = 72; // 3 days (72 hours)
+
 export interface WeightedCandidate {
   word: Word;
   tier: "starred" | "memoryDecay" | "weak" | "rest";
@@ -141,7 +143,7 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
 
-  const { maxCandidates = 10, cooldownHours = 12, candidatePoolSize = 30 } = options;
+  const { maxCandidates = 10, cooldownHours = DEFAULT_COOLDOWN_HOURS, candidatePoolSize = 30 } = options;
   const now = new Date();
 
   // 1. Strictly filter for words that have actually been learned or studied before
@@ -307,14 +309,14 @@ export function hasUnresolvedQuizMistake(word: Word): boolean {
 
 /**
  * Determines whether a word is eligible as a candidate for flashcard study:
- * 1. Has not been reviewed recently (within cooldownHours, default 12 hours)
+ * 1. Has not been reviewed recently (within cooldownHours, default 72 hours / 3 days)
  * 2. Meets at least one of the following criteria:
  *    a. Has never been reviewed/practiced before (!word.lastReviewed or no practice baseline)
  *    b. Has an unresolved quiz error (the most recent practice event was 'quiz_incorrect')
  *    c. Is unlearned/unmastered (!word.learned) and has passed cooldown
  *    d. Mastered word that hasn't been practiced/reviewed in over 7 days (diffDays > 7)
  */
-export function isFlashcardCandidate(word: Word, now: Date = new Date(), cooldownHours: number = 12): boolean {
+export function isFlashcardCandidate(word: Word, now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): boolean {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
   const isNeverPracticed = !lastPracticeDate && !word.lastReviewed;
 
@@ -359,7 +361,7 @@ export function getCandidateWordsForFlashcards(
   words: Word[],
   count: number = 5,
   now: Date = new Date(),
-  cooldownHours: number = 12
+  cooldownHours: number = DEFAULT_COOLDOWN_HOURS
 ): Word[] {
   if (!words || words.length === 0) return [];
 
@@ -402,7 +404,7 @@ export function getCandidateWordsForFlashcards(
 /**
  * Selects a candidate word for flashcard viewing strictly from eligible words.
  */
-export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date(), cooldownHours: number = 12): Word | null {
+export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): Word | null {
   if (!words || words.length === 0) return null;
   const candidates = getCandidateWordsForFlashcards(words, 1, now, cooldownHours);
   return candidates[0] || null;
@@ -413,7 +415,7 @@ export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date
  * A word is a quiz candidate if it has prior exposure (learned or studied before)
  * and is not currently in review cooldown (>= cooldownHours since last review, or unreviewed since initial study).
  */
-export function isQuizCandidate(word: Word, now: Date = new Date(), cooldownHours: number = 12): boolean {
+export function isQuizCandidate(word: Word, now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): boolean {
   if (!isWordLearnedOrStudied(word)) return false;
   if (!word.lastReviewed) return true;
   const hours = getHoursSinceLastReview(word, now);
@@ -423,7 +425,7 @@ export function isQuizCandidate(word: Word, now: Date = new Date(), cooldownHour
 /**
  * Gets all words that are potential candidates for quizzes.
  */
-export function getQuizCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = 12): Word[] {
+export function getQuizCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): Word[] {
   if (!words || words.length === 0) return [];
   return words.filter(word => isQuizCandidate(word, now, cooldownHours));
 }
@@ -431,7 +433,7 @@ export function getQuizCandidates(words: Word[], now: Date = new Date(), cooldow
 /**
  * Gets all words that are potential candidates for flashcards.
  */
-export function getFlashcardCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = 12): Word[] {
+export function getFlashcardCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): Word[] {
   if (!words || words.length === 0) return [];
   return words.filter(word => isFlashcardCandidate(word, now, cooldownHours));
 }
