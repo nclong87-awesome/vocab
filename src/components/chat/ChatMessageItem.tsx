@@ -24,7 +24,7 @@ interface ChatMessageItemProps {
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
-  onStartQuiz: () => void;
+  startPractice: () => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
@@ -46,11 +46,7 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
   const lower = rawLabel.toLowerCase();
 
-  if (act.action === "view_flashcard" || lower.includes("next flash card") || lower.includes("next flashcard")) {
-    return t("action_next_flashcard", currentAppLang);
-  }
-
-  if (act.action === "start_quiz" || lower.includes("start quiz") || lower.includes("start vocab quiz") || lower.includes("practice")) {
+  if (act.action === "start_practice" || lower.includes("start practice") || lower.includes("practice")) {
     return t("chat_practice_start_today_action", currentAppLang);
   }
 
@@ -108,7 +104,7 @@ function ChatMessageItem({
   onAddWord,
   onAddMultipleWords,
   onGenerateByTopic,
-  onStartQuiz,
+  startPractice,
   onFixGrammar,
   onViewFlashcard,
   onAnalyzeImageVocab,
@@ -250,7 +246,7 @@ function ChatMessageItem({
           }
         }));
 
-        // Keep non-word actions from msg.suggestedActions (e.g. view_flashcard, start_quiz)
+        // Keep non-word actions from msg.suggestedActions (e.g. view_flashcard, start_practice)
         const nonWordActions = (msg.suggestedActions || []).filter(
           a => a && a.action !== "add_word" && a.action !== "confirm_save_word" && a.action !== "add_multiplewords"
         );
@@ -441,9 +437,9 @@ function ChatMessageItem({
     } else if (act.action === "add_multiplewords" && act.payload?.words && onAddMultipleWords) {
       onAddMultipleWords(act.payload.words);
       showToast(t("toast_added_multiple_words", currentAppLang, { count: String(act.payload.words.length) }));
-    } else if (act.action === "start_quiz") {
-      handleRecordActionUse("start_quiz");
-      onStartQuiz();
+    } else if (act.action === "start_practice") {
+      handleRecordActionUse("start_practice");
+      startPractice();
     } else if (act.action === "view_flashcard") {
       handleRecordActionUse("view_flashcard");
       onViewFlashcard?.();
@@ -841,12 +837,12 @@ function ChatMessageItem({
                     type="button"
                     onClick={() => {
                       if (candidateType === "quiz") {
-                        handleRecordActionUse("start_quiz");
-                        onStartQuiz();
+                        handleRecordActionUse("start_practice");
+                        startPractice();
                       } else {
                         handleRecordActionUse("view_flashcard");
                         if (onViewFlashcard) onViewFlashcard();
-                        else onStartQuiz();
+                        else startPractice();
                       }
                     }}
                     className="w-full sm:w-auto px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-102 active:scale-98"

@@ -22,7 +22,7 @@ interface FlashcardsViewProps {
   onToggleStar: (wordId: string) => void;
   onToggleLearned: (wordId: string) => void;
   onGoBack: () => void;
-  onStartQuiz: () => void;
+  startPractice: () => void;
   ttsConfig?: TTSConfig;
   llmConfig?: LLMConfig;
   targetLanguage?: string;
@@ -35,7 +35,7 @@ export default function FlashcardsView({
   onToggleStar,
   onToggleLearned,
   onGoBack,
-  onStartQuiz,
+  startPractice,
   ttsConfig = DEFAULT_TTS_CONFIG,
   llmConfig,
   targetLanguage = "English",
@@ -350,7 +350,7 @@ export default function FlashcardsView({
               </button>
             ) : (
               <button
-                onClick={onStartQuiz}
+                onClick={startPractice}
                 className="px-6 py-3 bg-stone-950 hover:bg-black text-white font-semibold rounded-none transition-all text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 {t("flashcards_take_quiz", appLanguage)} <Trophy className="w-4 h-4" />
@@ -427,10 +427,10 @@ export default function FlashcardsView({
 
           <div className="p-6 bg-stone-50 border-t border-stone-200 text-center">
             <button
-              onClick={onStartQuiz}
+              onClick={startPractice}
               className="inline-flex items-center gap-1.5 px-8 py-3 bg-stone-950 hover:bg-black text-white font-semibold rounded-none text-xs transition-all cursor-pointer"
             >
-              Start Practice Quiz <Trophy className="w-4 h-4 text-white" />
+              Start Practice <Trophy className="w-4 h-4 text-white" />
             </button>
           </div>
         </div>

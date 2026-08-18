@@ -116,7 +116,7 @@ export function useChat({
   }, [chatMessages, targetLanguage, nativeLanguage]);
 
   // Start the unified Practice flow: checks Quiz candidates first, then Flashcard candidates, or displays no-words message
-  const startChatQuiz = async (overrideConfig?: LLMConfig) => {
+  const startPractice = async (overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
     setConversationalState("none");
@@ -203,7 +203,7 @@ export function useChat({
         setChatMessages([introMsg]);
       } catch (e: any) {
         console.error("Error starting chat quiz:", e);
-        handleAiApiError(e, configToUse, (newConfig) => startChatQuiz(newConfig));
+        handleAiApiError(e, configToUse, (newConfig) => startPractice(newConfig));
       } finally {
         setIsTyping(false);
       }
@@ -294,14 +294,14 @@ export function useChat({
           responseTimeMs: batchResult.responseTimeMs,
           suggestedActions: [
             ...top3SuggestedActions,
-            { label: t("action_next_practice", currentAppLang) || t("action_next_flashcard_deck", currentAppLang), action: "start_quiz" },
+            { label: t("action_next_practice", currentAppLang), action: "start_practice" },
           ],
         };
 
         setChatMessages([flashcardMsg]);
       } catch (e: any) {
         console.error("Error generating flash card deck:", e);
-        handleAiApiError(e, configToUse, (newConfig) => startChatQuiz(newConfig));
+        handleAiApiError(e, configToUse, (newConfig) => startPractice(newConfig));
       } finally {
         setIsTyping(false);
       }
@@ -511,7 +511,7 @@ export function useChat({
           },
           suggestedActions: [
             ...wordAddActions,
-            { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" },
+            { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
             { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ],
         };
@@ -1553,7 +1553,7 @@ export function useChat({
         },
         {
           label: t("chat_practice_start_today_action", currentAppLang),
-          action: "start_quiz",
+          action: "start_practice",
         }
       ];
 
@@ -1868,7 +1868,7 @@ export function useChat({
         suggestedActions: [
           { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
           { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
-          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" },
+          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
         ],
       };
       setChatMessages([noCandidateMsg]);
@@ -1956,8 +1956,7 @@ export function useChat({
         responseTimeMs: batchResult.responseTimeMs,
         suggestedActions: [
           ...top3SuggestedActions,
-          { label: t("action_next_flashcard_deck", currentAppLang), action: "view_flashcard" },
-          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_quiz" }
+          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" }
         ],
       };
 
@@ -2004,7 +2003,7 @@ export function useChat({
     setPendingConfirmWord,
     activeQuiz,
     setActiveQuiz,
-    startChatQuiz,
+    startPractice,
     handleQuizAnswer,
     handleSendChatMessage,
     handleConversationalAddWord,

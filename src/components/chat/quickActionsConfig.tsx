@@ -21,7 +21,7 @@ export interface QuickActionItem {
     targetLanguage: string;
     nativeLanguage: string;
     onFixGrammar: () => void;
-    onStartQuiz: () => void;
+    startPractice: () => void;
     onGenerateByTopic: () => void;
     onAddWord: () => void;
     onSendMessage: (text: string) => void;
@@ -154,9 +154,9 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_practice_desc", appLanguage),
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 2,
-      getAction: ({ onStartQuiz, onClearHistory }) => {
+      getAction: ({ startPractice, onClearHistory }) => {
         onClearHistory();
-        onStartQuiz();
+        startPractice();
       }
     },
     {

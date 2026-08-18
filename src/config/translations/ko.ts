@@ -148,7 +148,6 @@ export const koTranslations: LanguageTranslations = {
     qa_cat_chat: "대화",
     action_add_to_col: "단어장에 \"{word}\" 추가",
     action_confirm_add: "➕ 확인 및 \"{word}\" ({translation}) 추가",
-    action_next_flashcard: "🃏 다음 플래시카드",
     action_suggest_another: "💬 다른 답장 추천받기",
     action_add_all_remaining: "✨ 남은 단어 ({count}개) 모두 단어장에 추가",
     action_confirm_add_word: "✨ + 확인 및 \"{word}\" 추가 ({details})",

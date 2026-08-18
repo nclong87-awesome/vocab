@@ -148,7 +148,6 @@ export const deTranslations: LanguageTranslations = {
     qa_cat_chat: "Chat",
     action_add_to_col: "\"{word}\" zur Sammlung hinzufügen",
     action_confirm_add: "➕ Bestätigen & \"{word}\" ({translation}) hinzufügen",
-    action_next_flashcard: "🃏 Nächste Karteikarte",
     action_suggest_another: "💬 Weitere Antwort Vorschlagen",
     action_add_all_remaining: "✨ Alle ({count}) verbleibenden Wörter zur Sammlung hinzufügen",
     action_confirm_add_word: "✨ + Bestätigen & \"{word}\" ({details}) hinzufügen",

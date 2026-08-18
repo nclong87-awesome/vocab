@@ -94,7 +94,7 @@ export default function App() {
     setChatMessages,
     isTyping,
     conversationalState,
-    startChatQuiz,
+    startPractice,
     handleSendChatMessage,
     handleSelectDefinition,
     handleConversationalAddWordOrPrompt,
@@ -425,7 +425,7 @@ export default function App() {
                     onSendMessage={handleSendChatMessage}
                     onAddWord={handleConversationalAddWordOrPrompt}
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
-                    onStartQuiz={startChatQuiz}
+                    startPractice={startPractice}
                     onFixGrammar={handlePromptFixGrammar}
                     onViewFlashcard={handleViewFlashcard}
                     onSelectDefinition={handleSelectDefinition}

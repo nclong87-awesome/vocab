@@ -1929,7 +1929,7 @@ export interface ChatMessageResult {
   text: string;
   suggestedActions?: {
     label: string;
-    action: "add_word" | "start_quiz";
+    action: "add_word" | "start_practice";
     payload?: {
       word?: string;
     };
@@ -1992,7 +1992,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 6. **General Rules**:
    - Answer questions about grammar, translation, and pronunciation clearly and encouragingly.
    - If you introduce a valuable vocabulary word or expression, include an "add_word" action in suggestedActions.
-   - If the user wants to practice flashcards or take a test, include a "start_quiz" action in suggestedActions.
+   - If the user wants to practice flashcards or take a test, include a "start_practice" action in suggestedActions.
    - You MUST strictly output valid JSON-only output matching the schema below.
    - Do not include any conversational filler outside the JSON.`;
 
@@ -2000,8 +2000,8 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
   "text": "string (the main conversation response in markdown format. Keep it beautifully styled, use bolding, bullet points, etc. where helpful)",
   "suggestedActions": [
     {
-      "label": "string (compelling action text, e.g. 'Add \"serendipity\" to collection', 'Move on to Question 4', or 'Start Vocab Quiz')",
-      "action": "string (one of: 'add_word', 'start_quiz', 'send_message')",
+      "label": "string (compelling action text, e.g. 'Add \"serendipity\" to collection', 'Move on to Question 4', or 'Start Practice')",
+      "action": "string (one of: 'add_word', 'start_practice', 'send_message')",
       "payload": {
         "word": "string (required if action is 'add_word')",
         "definition": "string (concise definition in target language if action is 'add_word')",

@@ -148,7 +148,6 @@ export const frTranslations: LanguageTranslations = {
     qa_cat_chat: "Chat",
     action_add_to_col: "Ajouter \"{word}\" à la collection",
     action_confirm_add: "➕ Confirmer et Ajouter \"{word}\" ({translation})",
-    action_next_flashcard: "🃏 Carte Suivante",
     action_suggest_another: "💬 Suggérer une Autre Réponse Informelle",
     action_add_all_remaining: "✨ Ajouter tous les ({count}) mots restants à la collection",
     action_confirm_add_word: "✨ + Confirmer & ajouter \"{word}\" ({details})",

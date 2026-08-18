@@ -148,7 +148,6 @@ export const jaTranslations: LanguageTranslations = {
     qa_cat_chat: "チャット",
     action_add_to_col: "「{word}」を単語帳に追加",
     action_confirm_add: "➕ 確認して「{word}」({translation}) を追加",
-    action_next_flashcard: "🃏 次のカード",
     action_suggest_another: "💬 別の返信案をリクエスト",
     action_add_all_remaining: "✨ すべての残り ({count}) 単語を単語帳に追加",
     action_confirm_add_word: "✨ + 確認して「{word}」を追加 ({details})",

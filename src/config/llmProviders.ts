@@ -103,7 +103,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultModel: "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
     models: [
       "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-      "@cf/google/gemma-4-26b-a4b-it",
       "@cf/ibm-granite/granite-4.0-h-micro"
     ],
     defaultBaseUrl: "https://cloudflare.nclong87.workers.dev",
@@ -159,7 +158,6 @@ export const RELIABLE_MODELS: string[] = [
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
   "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-  "@cf/google/gemma-4-26b-a4b-it",
   "@cf/ibm-granite/granite-4.0-h-micro"
 ];
 

@@ -238,7 +238,7 @@ export function extractOrGenerateTopicActions(
     (act) =>
       act &&
       (act.action === "send_message" ||
-        act.action === "start_quiz" ||
+        act.action === "start_practice" ||
         act.action === "common_phrases" ||
         act.action === "explain_grammar" ||
         act.action === "translate_contrast" ||

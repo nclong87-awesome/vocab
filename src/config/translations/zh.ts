@@ -148,7 +148,6 @@ export const zhTranslations: LanguageTranslations = {
     qa_cat_chat: "聊天",
     action_add_to_col: "添加“{word}”到词汇本",
     action_confirm_add: "➕ 确认并添加“{word}”（{translation}）",
-    action_next_flashcard: "🃏 下一张卡片",
     action_suggest_another: "💬 换一个回复建议",
     action_add_all_remaining: "✨ 将所有 ({count}) 剩余单词添加到词汇本",
     action_confirm_add_word: "✨ + 确认并添加“{word}”({details})",

@@ -17,7 +17,7 @@ interface QuickActionsSectionProps {
   onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
   onGenerateByTopic?: () => void;
-  onStartQuiz: () => void;
+  startPractice: () => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onSuggestCasualReplyPrompt?: () => void;
@@ -41,7 +41,7 @@ function QuickActionsSection({
   onClearHistory,
   onAddWord,
   onGenerateByTopic,
-  onStartQuiz,
+  startPractice,
   onFixGrammar,
   onViewFlashcard,
   onSuggestCasualReplyPrompt,
@@ -78,7 +78,7 @@ function QuickActionsSection({
     onClearHistory,
     onAddWord,
     onGenerateByTopic,
-    onStartQuiz,
+    startPractice,
     onFixGrammar,
     onViewFlashcard,
     onSuggestCasualReplyPrompt,
@@ -101,7 +101,7 @@ function QuickActionsSection({
       onClearHistory,
       onAddWord,
       onGenerateByTopic,
-      onStartQuiz,
+      startPractice,
       onFixGrammar,
       onViewFlashcard,
       onSuggestCasualReplyPrompt,
@@ -128,7 +128,7 @@ function QuickActionsSection({
           targetLanguage: p.targetLanguage,
           nativeLanguage: p.nativeLanguage,
           onFixGrammar: p.onFixGrammar,
-          onStartQuiz: p.onStartQuiz,
+          startPractice: p.startPractice,
           onGenerateByTopic: () => {
             if (p.onGenerateByTopic) {
               p.onGenerateByTopic();

@@ -14,7 +14,7 @@ interface MessageListProps {
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
-  onStartQuiz: () => void;
+  startPractice: () => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
@@ -44,7 +44,7 @@ function MessageList({
   onAddWord,
   onAddMultipleWords,
   onGenerateByTopic,
-  onStartQuiz,
+  startPractice,
   onFixGrammar,
   onViewFlashcard,
   onAnalyzeImageVocab,
@@ -86,7 +86,7 @@ function MessageList({
               onAddWord={onAddWord}
               onAddMultipleWords={onAddMultipleWords}
               onGenerateByTopic={onGenerateByTopic}
-              onStartQuiz={onStartQuiz}
+              startPractice={startPractice}
               onFixGrammar={onFixGrammar}
               onViewFlashcard={onViewFlashcard}
               onAnalyzeImageVocab={onAnalyzeImageVocab}
