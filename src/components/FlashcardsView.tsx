@@ -91,7 +91,12 @@ export default function FlashcardsView({
   const handleNext = () => {
     setIsFlipped(false);
     if (currentIndex < sortedWords.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+      const nextIdx = currentIndex + 1;
+      setCurrentIndex(nextIdx);
+      const nextWord = sortedWords[nextIdx];
+      if (nextWord && nextWord.word) {
+        speakWord(nextWord.word);
+      }
     }
   };
 

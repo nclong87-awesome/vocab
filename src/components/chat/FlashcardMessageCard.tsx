@@ -132,7 +132,12 @@ function FlashcardMessageCard({
 
   const handleNext = () => {
     if (currentIndex >= cards.length - 1) return;
-    setCurrentIndex((prev) => Math.min(cards.length - 1, prev + 1));
+    const nextIndex = Math.min(cards.length - 1, currentIndex + 1);
+    setCurrentIndex(nextIndex);
+    const nextCard = cards[nextIndex];
+    if (nextCard && nextCard.word) {
+      handleSpeak(nextCard.word);
+    }
     setTimeout(scrollToCardTop, 30);
   };
 
