@@ -2059,12 +2059,20 @@ STRICT GENERATION RULES & RESTRICTIONS:
 1. Target-Language Immersion Restrictions:
    - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
    - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
-2. Distractor Logic:
+2. Unambiguous Question Context & Single Correct Answer Directive (CRITICAL):
+   - When generating 'sentence' fill-in-the-blank or 'definition' questions, the sentence context, collocations, prepositions, or grammatical constraints MUST UNIQUELY fit the target word.
+   - NEVER write generic or vague sentences where another common synonym or interchangeable phrasal verb (e.g. 'figure out' vs 'work out', 'solve' vs 'resolve', 'look after' vs 'take care of') would also be an equally valid, natural, and correct answer.
+   - Tailor the sentence to specific idioms, fixed prepositions, or distinct contextual nuances of the target word so there is unambiguously ONLY ONE correct answer.
+3. Distractor Logic (Clever & Confusing, but NEVER Valid Synonyms):
    - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
-   - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech or phonetically/spelling close).
-   - Ensure distractors are tricky enough to challenge and confuse the user, but not so obscure that they are irrelevant or nonsensical.
+   - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech, similar prefix/suffix, or similar phrasal verb particles).
+   - STRICT DISTRACTOR BAN: Distractors MUST NOT be valid synonyms, near-synonyms, or semantically acceptable alternative answers for the given blank/question.
+   - Distractors SHOULD BE clever confusers:
+     * Orthographic / phonetic confusers (words that look/sound similar but have completely different meanings).
+     * Phrasal verb particle shifts (e.g. if the answer is 'work out', distractors could be 'work on', 'carry out', 'burn out' — they look similar and challenge the learner, but cannot mean the target concept in this sentence).
+     * Related theme words that fail the sentence's grammatical structure, preposition, or collocation.
    - Never put the same option twice.
-3. Adaptive Difficulty & Spaced Repetition Personalization:
+4. Adaptive Difficulty & Spaced Repetition Personalization:
    - Use each word's mastery stats (strength 0-100, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
      * Memory Decay / Overdue Words (daysSinceLastReview >= 5, or recalculated strength): The student may have forgotten this word since it hasn't been reviewed in a while. Generate targeted context fill-in-the-blank or usage questions with challenging distractors to test active memory recall.
      * Weak / New Words (strength < 50, never reviewed): Generate foundational questions (e.g. direct definition matching or simple supportive sentences) with helpful hints to reinforce basic recall.
