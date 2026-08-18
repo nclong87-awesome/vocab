@@ -506,6 +506,64 @@ async function callLLMClientSideSingleCandidate(
     }
   }
 
+  // Cloudflare Workers AI provider handling
+  if (provider === "cloudflare") {
+    const effectiveCloudflareUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : "https://cloudflare.nclong87.workers.dev";
+    const targetEndpoint = effectiveCloudflareUrl.replace(/\/+$/, "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+
+    if (proxyKeyToUse) {
+      headers["X-Proxy-Key"] = proxyKeyToUse;
+    } else if (effectiveApiKey) {
+      headers["X-Proxy-Key"] = effectiveApiKey;
+    }
+
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemInstruction) {
+      messages.push({
+        role: "system",
+        content: systemInstruction + (schemaDescription ? "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." : "")
+      });
+    }
+    messages.push({
+      role: "user",
+      content: prompt
+    });
+
+    const payload = {
+      model: model || "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+      input: {
+        messages,
+        max_tokens: 2048
+      }
+    };
+
+    return callWithRetry(
+      async () => {
+        const res = await fetchWithTimeout(targetEndpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          throw new Error(`Cloudflare AI Error (${res.status}): ${errText}`);
+        }
+
+        return await parseOpenAiStyleResponse(res);
+      },
+      { maxRetries: 1, provider: "cloudflare" }
+    );
+  }
+
   // OpenAI-compatible providers: openai, 9flare, ollama, groq, openrouter, custom, gemini (worker proxy)
   let defaultBaseUrl = "https://openai.nclong87.workers.dev/v1";
   if (provider === "groq") defaultBaseUrl = "https://groq.nclong87.workers.dev/openai/v1";
@@ -756,6 +814,27 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   try {
     const data = JSON.parse(trimmedText);
     if (data && typeof data === "object") {
+      // Cloudflare Workers AI wrapper support
+      if (data.result !== undefined && data.result !== null) {
+        if (typeof data.result === "string") {
+          return cleanJsonResponse(data.result);
+        }
+        if (typeof data.result === "object") {
+          const resText = extractTextFromContentClient(data.result.response) ||
+                          extractTextFromContentClient(data.result.text) ||
+                          extractTextFromContentClient(data.result.output) ||
+                          extractTextFromContentClient(data.result.content) ||
+                          extractTextFromChoiceClient(data.result.choices?.[0]);
+          if (resText) {
+            return cleanJsonResponse(resText);
+          }
+        }
+      }
+      if (data.response) {
+        const resText = extractTextFromContentClient(data.response);
+        if (resText) return cleanJsonResponse(resText);
+      }
+
       const content = extractTextFromChoiceClient(data.choices?.[0]) ||
                       data.output ||
                       data.text ||

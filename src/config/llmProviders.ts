@@ -96,6 +96,21 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://9flare.com/api/v1",
     requiresKey: false
   },
+  {
+    id: "cloudflare",
+    name: "Cloudflare Workers AI",
+    tagline: "Serverless inference at the edge",
+    defaultModel: "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+    models: [
+      "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+      "@cf/google/gemma-4-26b-a4b-it",
+      "@cf/qwen/qwen3.8-27b",
+      "@cf/ibm-granite/granite-4.0-h-micro"
+    ],
+    defaultBaseUrl: "https://cloudflare.nclong87.workers.dev",
+    directBaseUrl: "https://api.cloudflare.com/client/v4/accounts/12345678/ai/run",
+    requiresKey: false
+  },
   // {
   //   id: "openai",
   //   name: "OpenAI",
@@ -144,7 +159,10 @@ export const RELIABLE_MODELS: string[] = [
   "gemma4:31b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
-  // "pro/gpt-5-mini"
+  "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+  "@cf/google/gemma-4-26b-a4b-it",
+  "@cf/qwen/qwen3.8-27b",
+  "@cf/ibm-granite/granite-4.0-h-micro"
 ];
 
 export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {

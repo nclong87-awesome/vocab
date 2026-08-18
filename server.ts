@@ -372,6 +372,66 @@ async function callLLMSingle(
     }
   }
 
+  // Cloudflare Workers AI provider handling
+  if (provider === "cloudflare") {
+    const effectiveCloudflareUrl = (baseUrl && baseUrl.trim()) ? baseUrl.trim() : (providerMeta?.defaultBaseUrl || "https://cloudflare.nclong87.workers.dev");
+    const targetEndpoint = effectiveCloudflareUrl.replace(/\/+$/, "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+
+    const proxyKeyToUse = proxyKey || apiKey || process.env.PROXY_SECRET || "";
+    if (proxyKeyToUse) {
+      headers["X-Proxy-Key"] = proxyKeyToUse;
+    }
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemInstruction) {
+      messages.push({
+        role: "system",
+        content: systemInstruction + (schemaDescription ? "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." : "")
+      });
+    }
+    messages.push({
+      role: "user",
+      content: prompt
+    });
+
+    const payload = {
+      model: model || "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+      input: {
+        messages,
+        max_tokens: 2048
+      }
+    };
+
+    console.log(`[Server] Calling Cloudflare Workers AI model ${payload.model} at ${targetEndpoint}`);
+    const startTime = Date.now();
+
+    const res = await fetchWithTimeout(targetEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`Cloudflare AI Error (${res.status}): ${errText}`);
+    }
+
+    const text = await parseOpenAiStyleResponse(res);
+    const responseTimeMs = Date.now() - startTime;
+    const result = cleanAndParseJson(text);
+    result.model = sanitizeModel(provider, llmConfig?.model);
+    result.provider = provider;
+    result.responseTimeMs = responseTimeMs;
+    return JSON.stringify(result);
+  }
+
   let effectiveTargetBaseUrl = baseUrl.trim();
   effectiveTargetBaseUrl = effectiveTargetBaseUrl.replace(/\/+$/, "");
   if (effectiveTargetBaseUrl.endsWith("/chat/completions")) {
@@ -569,6 +629,27 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
   try {
     const data = JSON.parse(trimmedText);
     if (data && typeof data === "object") {
+      // Cloudflare Workers AI wrapper support
+      if (data.result !== undefined && data.result !== null) {
+        if (typeof data.result === "string") {
+          return cleanJsonResponse(data.result);
+        }
+        if (typeof data.result === "object") {
+          const resText = extractTextFromChoice(data.result.response) ||
+                          extractTextFromChoice(data.result.text) ||
+                          extractTextFromChoice(data.result.output) ||
+                          extractTextFromChoice(data.result.content) ||
+                          extractTextFromChoice(data.result.choices?.[0]);
+          if (resText) {
+            return cleanJsonResponse(resText);
+          }
+        }
+      }
+      if (data.response) {
+        const resText = extractTextFromChoice(data.response);
+        if (resText) return cleanJsonResponse(resText);
+      }
+
       const content = extractTextFromChoice(data.choices?.[0]) ||
                       data.output ||
                       data.text ||

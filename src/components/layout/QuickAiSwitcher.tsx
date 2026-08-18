@@ -26,6 +26,7 @@ interface QuickAiSwitcherProps {
 
 function getShortProviderName(name: string): string {
   if (name.includes("Auto")) return "Auto";
+  if (name.includes("Cloudflare")) return "Cloudflare";
   if (name.includes("Gemini")) return "Gemini";
   if (name.includes("Custom")) return "Custom";
   if (name.includes("Ollama")) return "Ollama";
