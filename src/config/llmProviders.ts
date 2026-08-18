@@ -104,7 +104,6 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
       "@cf/google/gemma-4-26b-a4b-it",
-      "@cf/qwen/qwen3.8-27b",
       "@cf/ibm-granite/granite-4.0-h-micro"
     ],
     defaultBaseUrl: "https://cloudflare.nclong87.workers.dev",
@@ -161,7 +160,6 @@ export const RELIABLE_MODELS: string[] = [
   "pro/gpt-5.6-luna",
   "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
   "@cf/google/gemma-4-26b-a4b-it",
-  "@cf/qwen/qwen3.8-27b",
   "@cf/ibm-granite/granite-4.0-h-micro"
 ];
 
