@@ -2148,133 +2148,77 @@ Output MUST be strictly valid JSON matching this schema:
 // 8. Quiz Question Generation endpoint
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const { words, stats, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
+    const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
 
     if (!words || !Array.isArray(words) || words.length === 0) {
       return res.status(400).json({ error: "Words array is required and cannot be empty" });
     }
 
-    const getDaysSinceReview = (dateStr?: string | null) => {
-      if (!dateStr) return 0;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return 0;
-      return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)));
-    };
-
-    const wordDataSummary = words.map((w: any) => {
-      const daysSinceReview = getDaysSinceReview(w.lastReviewed || w.createdAt);
-      return {
-        id: w.id,
-        word: w.word,
-        partOfSpeech: w.partOfSpeech,
-        definition: w.definition,
-        translation: w.translation,
-        example: w.example || "",
-        category: w.category || "General",
-        context: w.context || w.definition,
-        strength: w.strength ?? 0,
-        learned: Boolean(w.learned),
-        starred: Boolean(w.starred),
-        daysSinceLastReview: daysSinceReview,
-        lastReviewed: w.lastReviewed ? `${daysSinceReview} day(s) ago` : "Never reviewed",
-        memoryStatus: daysSinceReview >= 5 ? "Needs Refresher (Memory Decay / Overdue)" : (w.strength ?? 0) >= 3 ? "Mastered / Strong" : "Learning / Developing"
-      };
-    });
-
-    const accuracyPercent = stats && stats.totalQuizzesTaken > 0
-      ? `${Math.round((stats.totalCorrectAnswers / Math.max(1, stats.totalQuizzesTaken * 5)) * 100)}%`
-      : stats && stats.totalCorrectAnswers > 0
-      ? `${stats.totalCorrectAnswers} total correct answers`
-      : "New learner";
-
-    const totalMasteredFromWords = (words || []).filter((w: any) => w.learned || (w.strength ?? 0) >= 3).length;
-    const totalStudiedFromWords = (words || []).filter((w: any) => w.lastReviewed !== null || (w.strength ?? 0) > 0).length;
-
-    const usefulStatsSummary = stats ? {
-      activeStreakDays: stats.streak?.count || 0,
-      totalWordsMastered: totalMasteredFromWords,
-      totalWordsStudied: totalStudiedFromWords,
-      totalQuizzesTaken: stats.totalQuizzesTaken || 0,
-      accuracyTrend: accuracyPercent
-    } : null;
+    // Optimize payload: Only send essential fields to reduce token count and AI latency
+    const minimalWordList = words.map((w: any) => ({
+      word: w.word,
+      partOfSpeech: w.partOfSpeech || "noun",
+      definition: w.definition,
+      example: w.example || undefined
+    }));
 
     const systemInstruction = `You are a world-class AI Language Pedagogy Engine specializing in ${targetLanguage} assessment.
-Your goal is to generate a JSON array of high-quality, targeted quiz questions for the given vocabulary words based on the student's mastery stats.
+Your goal is to generate a JSON array of high-quality, targeted quiz questions for the given vocabulary words.
 
 STRICT GENERATION RULES & RESTRICTIONS:
-1. Target-Language Immersion Restrictions:
-   - ALL question text, prompts, hints, audio descriptions, and options MUST be written 100% strictly in ${targetLanguage}.
-   - ABSOLUTELY DO NOT include native language (${nativeLanguage} or any non-${targetLanguage} translations) anywhere in questions, prompts, hints, or options.
-2. Unambiguous Question Context & Single Correct Answer Directive (CRITICAL):
-   - When generating 'sentence' fill-in-the-blank or 'definition' questions, the sentence context, collocations, prepositions, or grammatical constraints MUST UNIQUELY fit the target word.
-   - NEVER write generic or vague sentences where another common synonym or interchangeable phrasal verb (e.g. 'figure out' vs 'work out', 'solve' vs 'resolve', 'look after' vs 'take care of') would also be an equally valid, natural, and correct answer.
-   - Tailor the sentence to specific idioms, fixed prepositions, or distinct contextual nuances of the target word so there is unambiguously ONLY ONE correct answer.
-3. Distractor Logic (Clever & Confusing, but NEVER Valid Synonyms):
-   - Exactly 4 options per multiple-choice question (1 correct answer + 3 distractors).
-   - Options must be unique, non-overlapping, and grammatically/morphologically similar (same part of speech, similar prefix/suffix, or similar phrasal verb particles).
-   - STRICT DISTRACTOR BAN: Distractors MUST NOT be valid synonyms, near-synonyms, or semantically acceptable alternative answers for the given blank/question.
-   - Distractors SHOULD BE clever confusers:
-     * Orthographic / phonetic confusers (words that look/sound similar but have completely different meanings).
-     * Phrasal verb particle shifts (e.g. if the answer is 'work out', distractors could be 'work on', 'carry out', 'burn out' — they look similar and challenge the learner, but cannot mean the target concept in this sentence).
-     * Related theme words that fail the sentence's grammatical structure, preposition, or collocation.
-   - Never put the same option twice.
-4. Adaptive Difficulty & Spaced Repetition Personalization:
-   - Use each word's mastery stats (strength 0-4, daysSinceLastReview, memoryStatus, starred, learned) and overall stats (streak, accuracy, mastered count) to customize question difficulty:
-     * Memory Decay / Overdue Words (daysSinceLastReview >= 5, or recalculated strength): The student may have forgotten this word since it hasn't been reviewed in a while. Generate targeted context fill-in-the-blank or usage questions with challenging distractors to test active memory recall.
-     * Weak / New Words (strength 0-1, never reviewed): Generate foundational questions (e.g. direct definition matching or simple supportive sentences) with helpful hints to reinforce basic recall.
-     * Starred / Priority Words: Focus on practical usage and clear context sentences to solidify active vocabulary.
-     * High Strength / Recently Reviewed Words (strength 3-4): Challenge the learner with nuanced context or subtle distractor choices to ensure long-term mastery.
-4. Question Types (mix across questions):
+1. Target-Language Immersion:
+   - ALL question text, prompts, hints, and options MUST be written 100% strictly in ${targetLanguage}.
+   - Absolutely NO native language translations anywhere in questions, prompts, hints, or options.
+2. STRICT DISTRACTOR INDEPENDENCE DIRECTIVE (CRITICAL):
+   - ABSOLUTE BAN: DO NOT USE OR REUSE THE OTHER WORDS IN THE INPUT LIST AS DISTRACTORS/OPTIONS!
+   - Every question's 3 incorrect options (distractors) MUST be external, plausible words/phrases crafted specifically for THAT target word.
+   - Distractors MUST match the target word's EXACT part of speech, grammatical category, and structural format:
+     * For a single noun (e.g., "inquiry"): all 3 distractors MUST be nouns (e.g., "requisition", "proposal", "query").
+     * For a phrasal verb (e.g., "back off"): all 3 distractors MUST be phrasal verbs (e.g., "step down", "hold back", "stand by").
+     * For an idiom/phrase (e.g., "tone it down"): all 3 distractors MUST be parallel phrases (e.g., "play it down", "wind it up", "brush it off").
+   - Distractors must be challenging and convincing (phonetic/orthographic confusers, common particle shifts, or contextual near-misses).
+   - Distractors MUST NOT be valid synonyms or semantically acceptable answers for the given blank/question.
+   - Exactly 4 unique options per question (1 correct answer + 3 distractors).
+3. Question Types (mix across questions):
+   - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'" (Ensure unambiguous single correct answer with distinct collocation/preposition cues).
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
-     * CRITICAL SINGULAR/PLURAL & COUNTABILITY RULE: Ensure the definition clearly aligns with the target word's grammatical number and part of speech. If the target word is singular or uncountable (e.g., 'junk', 'furniture', 'information', 'equipment'), do NOT phrase the definition in a misleading plural way or, if helpful, explicitly include part of speech / countability cues in the prompt (e.g., "Which word (uncountable noun) matches...").
-   - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} tailored strictly to the word's category/context with target word replaced by ______]'"
-     * Ensure the sentence context matches the exact grammatical form (tense, singular/plural) of the target word.
-   - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words)
-   - 'picture': "Which word matches the visual concept shown below?" (set imageKeyword to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)
-5. Context & Category Alignment:
-   - Each word provided contains its stored 'category' and 'context'. You MUST tailor sentence blanks, definitions, and picture descriptions specifically around the word's given category and context scenario.
-6. MANDATORY PICTURE/IMAGE QUESTION REQUIREMENT:
-   - At least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture').
-   - For picture questions, set question to "Which word matches the visual concept shown below?" and set 'imageKeyword' to a 3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search.
+   - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words).
+   - 'picture': "Which word matches the visual concept shown below?" (set 'imageKeyword' to a concise 1-3 word English search term representing a concrete, physical object or scene).
+4. MANDATORY REQUIREMENTS:
+   - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'.
+   - Generate EXACTLY THREE (3) companion collocations/words across the entire quiz ('suggestedWords' array with 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
 
-7. FREQUENTLY PAIRED WORDS (EXACTLY 3 WORDS TOTAL ACROSS THE QUIZ):
-   - For all the selected vocabulary items in the quiz, generate EXACTLY THREE (3) companion words, collocations, or phrases in total that frequently appear alongside the tested words (not per question, but 3 suggestions total for the entire quiz).
-   - Each suggestion must contain 'word' in ${targetLanguage}, 'translation' in ${nativeLanguage}, 'pairedWith' (indicating which quiz word it accompanies), and a short 'hint' explaining the collocation.
-
-8. Output Schema:
-Return strictly valid JSON-only output when requested matching this schema. Do not include any conversational filler outside the JSON:
+Output MUST be strictly valid JSON matching this schema:
 {
   "questions": [
     {
-      "id": "string",
-      "wordId": "string",
-      "word": "string",
+      "word": "string (the target word)",
       "type": "definition" | "sentence" | "listening" | "picture",
       "question": "string",
       "options": ["string", "string", "string", "string"],
       "correctAnswer": "string",
       "hint": "string",
-      "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)"
+      "imageKeyword": "string (1-3 word English search term)"
     }
   ],
   "suggestedWords": [
     {
       "word": "string (Companion word/collocation in ${targetLanguage})",
       "translation": "string (Translation in ${nativeLanguage})",
-      "pairedWith": "string (Which quiz word this pairs with)",
+      "pairedWith": "string (Which quiz word it accompanies)",
       "hint": "string (Brief note on how/why it frequently appears alongside the quiz word)"
     }
   ]
 }`;
 
-    const prompt = `Generate 1 quiz question for each of these vocabulary words, adapting question depth and distractors according to the provided word stats and learner progress stats.
+    const prompt = `Generate 1 quiz question for each of these vocabulary words:\n${JSON.stringify(minimalWordList, null, 2)}\n\n` +
+      `CRITICAL INSTRUCTIONS:\n` +
+      `1. Return exactly 1 question per word.\n` +
+      `2. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
+      `3. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n` +
+      `4. Include exactly 3 suggested companion words ('suggestedWords' array) total.`;
 
-CRITICAL MANDATORY REQUIREMENTS:
-1. Ensure at least ONE question in the generated quiz MUST be a picture or image-based question ('type': 'picture') with relevant 'imageKeyword' keywords.
-2. Generate EXACTLY THREE (3) suggested words total for all selected quiz items ('suggestedWords' array with 3 items: 'word', 'translation', 'pairedWith', 'hint').\n\n` +
-      (usefulStatsSummary ? `Learner Progress Stats:\n${JSON.stringify(usefulStatsSummary, null, 2)}\n\n` : "") +
-      `Vocabulary Words with Word Mastery Stats:\n${JSON.stringify(wordDataSummary, null, 2)}`;
-    const schemaDesc = `Object with questions (array of QuizQuestion objects with id, wordId, word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of EXACTLY 3 items with word, translation, pairedWith, hint).`;
+    const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of EXACTLY 3 items with word, translation, pairedWith, hint).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
     const cleaned = cleanJsonResponse(text);
@@ -2362,14 +2306,94 @@ CRITICAL MANDATORY REQUIREMENTS:
         }
       }
 
-      // Attach the strictly 3 suggested words to the first question and ensure other questions do not duplicate
-      questionsArray.forEach((q: any, idx: number) => {
-        if (idx === 0) {
-          q.suggestedWords = normalizedTop3Suggestions;
-        } else {
-          delete q.suggestedWords;
+      // Build a set of all tested target words to strictly filter out any lazy cross-word distractors
+      const allTargetWordKeys = new Set(words.map((w: any) => (w.word || "").toLowerCase().trim()));
+
+      // Helper for fallback confusers on server
+      const generateServerConfusers = (target: string): string[] => {
+        const list: string[] = [];
+        if (target.includes(" ")) {
+          const particleMap: Record<string, string[]> = {
+            "off": ["out", "down", "up", "away"],
+            "out": ["in", "up", "down", "off"],
+            "up": ["down", "out", "in", "off"],
+            "down": ["up", "off", "out"],
+            "in": ["out", "up", "down"],
+            "on": ["off", "in", "out", "up"],
+            "away": ["off", "out", "back"],
+          };
+          for (const [p, reps] of Object.entries(particleMap)) {
+            const regex = new RegExp(`\\b${p}\\b`, 'gi');
+            if (regex.test(target)) {
+              for (const r of reps) list.push(target.replace(regex, r));
+            }
+          }
         }
+        list.push(
+          target.replace(/ie/gi, 'ei'),
+          target.replace(/ei/gi, 'ie'),
+          target.replace(/tion/gi, 'sion'),
+          target.replace(/sion/gi, 'tion'),
+          target.replace(/c/gi, 's'),
+          target.replace(/s/gi, 'c'),
+          target + "e",
+          target.endsWith('e') ? target.slice(0, -1) : target + "s",
+          target + "ing",
+          target + "ed",
+          target + "ly",
+          target + "er"
+        );
+        return Array.from(new Set(list)).filter(c => c.toLowerCase() !== target.toLowerCase() && c.trim().length > 1);
+      };
+
+      const normalizedQuestions = questionsArray.map((q: any, idx: number) => {
+        const matchingWord = words.find((w: any) => w.id === q.wordId || (w.word || "").toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length] || {};
+        const targetWordText = matchingWord.word || q.word || "";
+        const targetWordLower = targetWordText.toLowerCase().trim();
+        const correctAns = q.correctAnswer || targetWordText;
+        const correctAnsLower = correctAns.toLowerCase().trim();
+
+        // 1. Sanitize options rejecting any cross-word reuse from the test batch
+        let cleanOptions: string[] = [correctAns];
+        const rawOptions = Array.isArray(q.options) ? q.options : [];
+
+        for (const opt of rawOptions) {
+          const optStr = String(opt || "").trim();
+          const optLower = optStr.toLowerCase();
+          if (!optStr) continue;
+          if (optLower === correctAnsLower || optLower === targetWordLower) continue;
+          if (cleanOptions.some(o => o.toLowerCase().trim() === optLower)) continue;
+          if (allTargetWordKeys.has(optLower)) continue;
+          cleanOptions.push(optStr);
+        }
+
+        // 2. Fill if under 4 options
+        if (cleanOptions.length < 4) {
+          const confusers = generateServerConfusers(targetWordText);
+          for (const c of confusers) {
+            if (cleanOptions.length >= 4) break;
+            const cLower = c.toLowerCase().trim();
+            if (!cleanOptions.some(o => o.toLowerCase().trim() === cLower) && !allTargetWordKeys.has(cLower)) {
+              cleanOptions.push(c);
+            }
+          }
+        }
+
+        return {
+          id: q.id || `ai-q-${matchingWord.id || idx}-${idx}`,
+          wordId: matchingWord.id || `w-${idx}`,
+          word: targetWordText,
+          type: q.type || 'definition',
+          question: q.question || `Which word matches: ${matchingWord.definition || targetWordText}`,
+          options: cleanOptions.sort(() => 0.5 - Math.random()),
+          correctAnswer: correctAns,
+          hint: q.hint || matchingWord.pronunciation || "",
+          imageKeyword: q.imageKeyword || targetWordText,
+          suggestedWords: idx === 0 ? normalizedTop3Suggestions : undefined
+        };
       });
+
+      questionsArray = normalizedQuestions;
 
       await Promise.all(
         questionsArray.map(async (q: any) => {

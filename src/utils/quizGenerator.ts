@@ -78,9 +78,62 @@ export async function fetchWorkerImageUrl(keyword: string): Promise<string> {
   return "";
 }
 
-// Helper to generate confusing sound-alike or misspelling distractors
+// Helper to generate confusing sound-alike, particle-shift, or morphological distractors
 export function generateConfusers(w: string): string[] {
-  return Array.from(new Set([
+  const confusers: string[] = [];
+
+  // 1. Phrasal verb & particle shifts for multi-word phrases
+  if (w.includes(" ")) {
+    const particleMap: Record<string, string[]> = {
+      "off": ["out", "down", "up", "away", "back", "in"],
+      "out": ["in", "up", "down", "off", "away", "over"],
+      "up": ["down", "out", "in", "off", "over", "away"],
+      "down": ["up", "off", "out", "over", "away"],
+      "in": ["out", "up", "down", "off", "into"],
+      "on": ["off", "in", "out", "up", "over"],
+      "away": ["off", "out", "back", "down"],
+      "over": ["out", "up", "down", "through"],
+      "through": ["over", "out", "by", "down"],
+      "back": ["away", "off", "out", "down", "up"],
+      "it down": ["it up", "it out", "it off", "it away"],
+      "it up": ["it down", "it out", "it off"],
+      "it out": ["it in", "it up", "it down"],
+      "it off": ["it on", "it out", "it down"],
+    };
+
+    for (const [particle, replacements] of Object.entries(particleMap)) {
+      const regex = new RegExp(`\\b${particle}\\b`, 'gi');
+      if (regex.test(w)) {
+        for (const rep of replacements) {
+          confusers.push(w.replace(regex, rep));
+        }
+      }
+    }
+
+    // Verb phrase starters
+    const phrasePrefixMap: Record<string, string[]> = {
+      "lower": ["raise", "ease", "curb", "boost", "elevate"],
+      "reduce": ["increase", "lower", "sustain", "boost"],
+      "increase": ["reduce", "lower", "limit", "stabilize"],
+      "take": ["make", "give", "have", "hold"],
+      "give": ["take", "bring", "hand", "hold"],
+      "make": ["take", "have", "do", "keep"],
+      "keep": ["make", "hold", "stay", "remain"],
+      "bring": ["take", "carry", "send", "pull"],
+    };
+
+    for (const [prefix, replacements] of Object.entries(phrasePrefixMap)) {
+      const regex = new RegExp(`^${prefix}\\b`, 'gi');
+      if (regex.test(w)) {
+        for (const rep of replacements) {
+          confusers.push(w.replace(regex, rep));
+        }
+      }
+    }
+  }
+
+  // 2. Single word morphological / phonetic confusers
+  confusers.push(
     w.replace(/ie/gi, 'ei'),
     w.replace(/ei/gi, 'ie'),
     w.replace(/tion/gi, 'sion'),
@@ -107,7 +160,9 @@ export function generateConfusers(w: string): string[] {
     w.replace(/[aeiou]/ig, 'i'),
     w.replace(/[aeiou]/ig, 'o'),
     w.replace(/[aeiou]/ig, 'u')
-  ])).filter(c => c.toLowerCase() !== w.toLowerCase() && c.length > 1);
+  );
+
+  return Array.from(new Set(confusers)).filter(c => c.toLowerCase() !== w.toLowerCase() && c.trim().length > 1);
 }
 
 // Rule-based Quiz Question Generator with strict distractor logic & target-language restrictions
