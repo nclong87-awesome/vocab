@@ -1217,6 +1217,10 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted || req.destroyed) return;
     let result = cleanAndParseJson(text);
+    const parsedProvider = result?.provider || llmConfig?.provider || "gemini";
+    const parsedModel = result?.model || sanitizeModel(parsedProvider, llmConfig?.model);
+    const responseTimeMs = result?.responseTimeMs;
+
     if (Array.isArray(result)) {
       result = {
         word: result[0]?.word || word,
@@ -1232,7 +1236,14 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
         senses: [result]
       };
     }
-    res.json(result);
+
+    res.json({
+      ...result,
+      provider: parsedProvider,
+      model: parsedModel,
+      responseTimeMs,
+      serverLockedModels: getServerLockedModelsArray()
+    });
   } catch (error: any) {
     if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
       console.log("[/api/check-word-definitions] Request aborted by client");
@@ -1294,8 +1305,16 @@ CRITICAL INSTRUCTIONS:
     if (controller.signal.aborted || req.destroyed) return;
     const result = cleanAndParseJson(text);
     const words = extractWordsFromPayload(result);
+    const parsedProvider = result?.provider || llmConfig?.provider || "gemini";
+    const parsedModel = result?.model || sanitizeModel(parsedProvider, llmConfig?.model);
+    const responseTimeMs = result?.responseTimeMs;
+
     res.json({
       words,
+      provider: parsedProvider,
+      model: parsedModel,
+      responseTimeMs,
+      serverLockedModels: getServerLockedModelsArray(),
       ...(typeof result === "object" && !Array.isArray(result) ? result : {})
     });
   } catch (error: any) {
@@ -2257,8 +2276,16 @@ Output MUST be strictly valid JSON matching this schema:
       };
     });
 
+    const parsedProvider = parsed?.provider || llmConfig?.provider || "gemini";
+    const parsedModel = parsed?.model || sanitizeModel(parsedProvider, llmConfig?.model);
+    const responseTimeMs = parsed?.responseTimeMs;
+
     res.json({
       cards: normalizedCards,
+      provider: parsedProvider,
+      model: parsedModel,
+      responseTimeMs,
+      serverLockedModels: getServerLockedModelsArray(),
       // If single card was requested, also expose top-level properties for backward compatibility
       ...(normalizedCards[0] || {})
     });
@@ -2613,14 +2640,34 @@ app.post("/api/suggest-casual-reply", async (req, res) => {
           result = cleanAndParseJson(cleaned);
         }
         if (result && (result.suggestedReplies || result.vocabularyCandidates)) {
-          return res.json(result);
+          const parsedProvider = result.provider || provider || "gemini";
+          const parsedModel = result.model || sanitizeModel(parsedProvider, model);
+          return res.json({
+            ...result,
+            provider: parsedProvider,
+            model: parsedModel,
+            serverLockedModels: getServerLockedModelsArray()
+          });
         }
       }
-
+      throw new Error("Image analysis worker did not return valid JSON with suggestedReplies and vocabularyCandidates.");
     } else {
       // no image, just use the prompt directly with the LLM
+      const configToUse = req.body.llmConfig || { provider, model };
+      const text = await callLLM(userText, systemPrompt, "", configToUse, controller.signal);
+      if (controller.signal.aborted || req.destroyed) return;
+      const cleaned = cleanJsonResponse(text);
+      const parsed = cleanAndParseJson(cleaned);
+      const parsedProvider = parsed?.provider || configToUse.provider || "gemini";
+      const parsedModel = parsed?.model || sanitizeModel(parsedProvider, configToUse.model);
+      return res.json({
+        ...parsed,
+        provider: parsedProvider,
+        model: parsedModel,
+        responseTimeMs: parsed?.responseTimeMs,
+        serverLockedModels: getServerLockedModelsArray()
+      });
     }
-    throw new Error("Image analysis worker did not return valid JSON with suggestedReplies and vocabularyCandidates.");
       
   } catch (error: any) {
     if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
@@ -2682,7 +2729,14 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
         result = cleanAndParseJson(cleaned);
       }
       if (result && (result.vocabularyItems || result.imageDescription)) {
-        return res.json(result);
+        const parsedProvider = result.provider || provider || "gemini";
+        const parsedModel = result.model || sanitizeModel(parsedProvider, model);
+        return res.json({
+          ...result,
+          provider: parsedProvider,
+          model: parsedModel,
+          serverLockedModels: getServerLockedModelsArray()
+        });
       }
     }
     throw new Error(`Image analysis worker failed with status ${workerRes.status}: ${await workerRes.text()}`);

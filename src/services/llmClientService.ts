@@ -1163,6 +1163,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
 
     if (res.ok) {
       const data = await res.json();
+      syncServerLocks(data.serverLockedModels);
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
       const prov = data.provider || llmConfig?.provider || "gemini";
       const mod = data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
@@ -1182,6 +1183,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
+    syncServerLocks(errData.serverLockedModels);
     const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
@@ -1323,6 +1325,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
 
     if (res.ok) {
       const data = await res.json();
+      syncServerLocks(data.serverLockedModels);
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
       const prov = data.provider || llmConfig?.provider || "gemini";
       const mod = data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
@@ -1338,6 +1341,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
+    syncServerLocks(errData.serverLockedModels);
     const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
@@ -1419,6 +1423,7 @@ CRITICAL INSTRUCTIONS:
 
     if (res.ok) {
       const data = await res.json();
+      syncServerLocks(data.serverLockedModels);
       const words = extractWordsFromPayload(data);
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
       const prov = data.provider || llmConfig?.provider || "gemini";
@@ -1435,6 +1440,7 @@ CRITICAL INSTRUCTIONS:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
+    syncServerLocks(errData.serverLockedModels);
     const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {

@@ -1078,6 +1078,10 @@ export function useChat({
         signal: controller.signal,
       });
 
+      if (result && result.provider && result.model) {
+        setActiveModelInfo({ provider: result.provider, model: result.model });
+      }
+
       const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
       const resAny = result as any;
@@ -1177,6 +1181,10 @@ export function useChat({
         nativeLanguage,
         llmConfig: configForServer,
       });
+
+      if (res && res.provider && res.model) {
+        setActiveModelInfo({ provider: res.provider, model: res.model });
+      }
 
       const items = res.vocabularyItems || [];
       const actions: any[] = [];
@@ -1753,6 +1761,10 @@ export function useChat({
         llmConfig: configForServer,
       });
 
+      if (res && res.provider && res.model) {
+        setActiveModelInfo({ provider: res.provider, model: res.model });
+      }
+
       const replies = res.suggestedReplies || [];
       const candidates = res.vocabularyCandidates || [];
 
@@ -1853,6 +1865,10 @@ export function useChat({
         nativeLanguage,
         llmConfig: configForServer,
       });
+
+      if (res && res.provider && res.model) {
+        setActiveModelInfo({ provider: res.provider, model: res.model });
+      }
 
       const fixedSentence = res.fixedSentence || userText;
       const explanation = res.explanation || "";
