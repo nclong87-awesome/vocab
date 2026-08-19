@@ -424,200 +424,195 @@ export function useChat({
   const handleQuizAnswer = (userAnswer: string) => {
     if (!activeQuiz || !activeQuiz.questions || activeQuiz.questions.length === 0) return;
 
-    setIsTyping(true);
+    const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
-    setTimeout(() => {
-      const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
+    const currentQ = activeQuiz.questions[activeQuiz.currentIndex];
+    const targetWordObj = words.find((w) => w.id === currentQ.wordId || w.word.toLowerCase() === currentQ.word.toLowerCase());
 
-      const currentQ = activeQuiz.questions[activeQuiz.currentIndex];
-      const targetWordObj = words.find((w) => w.id === currentQ.wordId || w.word.toLowerCase() === currentQ.word.toLowerCase());
+    const normalizedUser = userAnswer.toLowerCase().trim();
+    const normalizedCorrect = currentQ.correctAnswer.toLowerCase().trim();
 
-      const normalizedUser = userAnswer.toLowerCase().trim();
-      const normalizedCorrect = currentQ.correctAnswer.toLowerCase().trim();
+    let isCorrect = normalizedUser === normalizedCorrect || (targetWordObj && normalizedUser === targetWordObj.word.toLowerCase().trim());
 
-      let isCorrect = normalizedUser === normalizedCorrect || (targetWordObj && normalizedUser === targetWordObj.word.toLowerCase().trim());
+    if (!isCorrect && currentQ.options && currentQ.options.length > 0) {
+      const correctIdx = currentQ.options.findIndex((opt) => opt.toLowerCase().trim() === normalizedCorrect);
+      if (correctIdx !== -1) {
+        const letters = ["a", "b", "c", "d", "e"];
+        const correctLetter = letters[correctIdx];
 
-      if (!isCorrect && currentQ.options && currentQ.options.length > 0) {
-        const correctIdx = currentQ.options.findIndex((opt) => opt.toLowerCase().trim() === normalizedCorrect);
-        if (correctIdx !== -1) {
-          const letters = ["a", "b", "c", "d", "e"];
-          const correctLetter = letters[correctIdx];
+        const userMatchesLetter =
+          normalizedUser === correctLetter ||
+          normalizedUser === `${correctLetter})` ||
+          normalizedUser === `${correctLetter}.` ||
+          normalizedUser.startsWith(`${correctLetter})`) ||
+          normalizedUser.startsWith(`${correctLetter}.`);
 
-          const userMatchesLetter =
-            normalizedUser === correctLetter ||
-            normalizedUser === `${correctLetter})` ||
-            normalizedUser === `${correctLetter}.` ||
-            normalizedUser.startsWith(`${correctLetter})`) ||
-            normalizedUser.startsWith(`${correctLetter}.`);
+        if (userMatchesLetter) {
+          isCorrect = true;
+        }
+      }
+    }
 
-          if (userMatchesLetter) {
-            isCorrect = true;
+    const wordId = targetWordObj ? targetWordObj.id : currentQ.wordId;
+    const newScore = isCorrect ? activeQuiz.score + 1 : activeQuiz.score;
+    const newCorrectIds = isCorrect ? [...activeQuiz.correctIds, wordId] : activeQuiz.correctIds;
+    const newIncorrectIds = !isCorrect ? [...activeQuiz.incorrectIds, wordId] : activeQuiz.incorrectIds;
+
+    let feedback = "";
+    if (isCorrect) {
+      feedback = t("chat_quiz_feedback_correct_msg", currentAppLang, {
+        questionTitle: currentQ.question.split("\n")[0],
+        answer: currentQ.correctAnswer,
+      });
+      if (targetWordObj) {
+        feedback += t("chat_quiz_word_details", currentAppLang, {
+          word: targetWordObj.word,
+          partOfSpeech: targetWordObj.partOfSpeech,
+          pronunciation: targetWordObj.pronunciation || "",
+          translation: targetWordObj.translation,
+        });
+      }
+    } else {
+      feedback = t("chat_quiz_feedback_incorrect_msg", currentAppLang, {
+        answer: currentQ.correctAnswer,
+        userAnswer: userAnswer,
+      });
+      if (targetWordObj) {
+        feedback += t("chat_quiz_word_details", currentAppLang, {
+          word: targetWordObj.word,
+          partOfSpeech: targetWordObj.partOfSpeech,
+          pronunciation: targetWordObj.pronunciation || "",
+          translation: targetWordObj.translation,
+        });
+      }
+    }
+
+    const nextIndex = activeQuiz.currentIndex + 1;
+
+    if (nextIndex < activeQuiz.questions.length) {
+      const nextQ = activeQuiz.questions[nextIndex];
+
+      setActiveQuiz({
+        ...activeQuiz,
+        currentIndex: nextIndex,
+        score: newScore,
+        correctIds: newCorrectIds,
+        incorrectIds: newIncorrectIds,
+      });
+
+      const nextMsg: ChatMessage = {
+        id: `quiz-next-${Date.now()}`,
+        role: "assistant",
+        content: `${feedback}\n\n---\n\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}:\n**${nextQ.question}**`,
+        timestamp: new Date().toISOString(),
+        audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
+        quizSpeechText: isCorrect
+          ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
+          : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
+        nextQuestionSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
+        imageUrl: nextQ.imageUrl,
+        imageKeyword: nextQ.imageKeyword,
+        suggestedActions: nextQ.options?.map((opt) => ({
+          label: opt,
+          action: "quiz_answer",
+          payload: { answer: opt, wordId: nextQ.wordId },
+        })) || [
+          { label: nextQ.correctAnswer, action: "quiz_answer", payload: { answer: nextQ.correctAnswer, wordId: nextQ.wordId } },
+        ],
+      };
+
+      setChatMessages((prev) => [...prev, nextMsg]);
+    } else {
+      const totalQs = activeQuiz.questions.length;
+      setActiveQuiz(null);
+
+      handleFinishQuiz(newScore, totalQs, newCorrectIds, newIncorrectIds);
+
+      // Aggregate 1 to 3 suggestions for words that frequently appear alongside the words used in the quiz
+      const allSuggestedWords: QuizSuggestedWord[] = [];
+      const seenWords = new Set<string>();
+
+      activeQuiz.questions.forEach((q) => {
+        const targetWord = q.word || "";
+        let list = Array.isArray(q.suggestedWords) ? q.suggestedWords : [];
+        if (list.length === 0) {
+          const matched = words.find((w) => w.id === q.wordId || w.word.toLowerCase() === targetWord.toLowerCase());
+          if (matched && Array.isArray(matched.suggestedWords)) {
+            list = matched.suggestedWords;
           }
         }
+
+        list.forEach((item: any) => {
+          let wordText = typeof item === "string" ? item : (item.word || item.vocab || item.term || "");
+          wordText = wordText.trim();
+          if (!wordText || wordText.toLowerCase() === targetWord.toLowerCase()) return;
+
+          const key = wordText.toLowerCase();
+          if (seenWords.has(key)) return;
+          seenWords.add(key);
+
+          allSuggestedWords.push({
+            word: wordText,
+            translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
+            hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Frequently appears with ${targetWord}`) : `Frequently appears with ${targetWord}`,
+            pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWord,
+            relationship: typeof item === "object" ? item.relationship : undefined,
+            partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+          });
+        });
+      });
+
+      const top3SuggestedWords = allSuggestedWords.slice(0, 3);
+
+      let finishedContent = t("chat_quiz_finished_msg", currentAppLang, {
+        feedback: feedback,
+        score: String(newScore),
+        total: String(totalQs),
+        accuracy: String(Math.round((newScore / totalQs) * 100)),
+      });
+
+      if (top3SuggestedWords.length > 0) {
+        const header = t("chat_quiz_suggested_words_header", currentAppLang);
+        const itemsText = top3SuggestedWords.map((sw) => {
+          const transText = sw.translation ? ` *("${sw.translation}")*` : "";
+          const pairedText = sw.pairedWith ? ` — ${t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}` : "";
+          const hintText = sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") ? ` (${sw.hint})` : "";
+          return `• **${sw.word}**${transText}${pairedText}${hintText}`;
+        }).join("\n");
+
+        finishedContent += `\n\n---\n\n${header}\n${itemsText}`;
       }
 
-      const wordId = targetWordObj ? targetWordObj.id : currentQ.wordId;
-      const newScore = isCorrect ? activeQuiz.score + 1 : activeQuiz.score;
-      const newCorrectIds = isCorrect ? [...activeQuiz.correctIds, wordId] : activeQuiz.correctIds;
-      const newIncorrectIds = !isCorrect ? [...activeQuiz.incorrectIds, wordId] : activeQuiz.incorrectIds;
+      const wordAddActions = top3SuggestedWords.map((sw) => ({
+        label: `+ ${t("add_word_btn", currentAppLang)} "${sw.word}"`,
+        action: "add_word",
+        payload: { word: sw.word, hint: sw.translation || sw.hint },
+      }));
 
-      let feedback = "";
-      if (isCorrect) {
-        feedback = t("chat_quiz_feedback_correct_msg", currentAppLang, {
-          questionTitle: currentQ.question.split("\n")[0],
-          answer: currentQ.correctAnswer,
-        });
-        if (targetWordObj) {
-          feedback += t("chat_quiz_word_details", currentAppLang, {
-            word: targetWordObj.word,
-            partOfSpeech: targetWordObj.partOfSpeech,
-            pronunciation: targetWordObj.pronunciation || "",
-            translation: targetWordObj.translation,
-          });
-        }
-      } else {
-        feedback = t("chat_quiz_feedback_incorrect_msg", currentAppLang, {
-          answer: currentQ.correctAnswer,
-          userAnswer: userAnswer,
-        });
-        if (targetWordObj) {
-          feedback += t("chat_quiz_word_details", currentAppLang, {
-            word: targetWordObj.word,
-            partOfSpeech: targetWordObj.partOfSpeech,
-            pronunciation: targetWordObj.pronunciation || "",
-            translation: targetWordObj.translation,
-          });
-        }
-      }
-
-      const nextIndex = activeQuiz.currentIndex + 1;
-
-      if (nextIndex < activeQuiz.questions.length) {
-        const nextQ = activeQuiz.questions[nextIndex];
-
-        setActiveQuiz({
-          ...activeQuiz,
-          currentIndex: nextIndex,
+      const finishedMsg: ChatMessage = {
+        id: `quiz-end-${Date.now()}`,
+        role: "assistant",
+        content: finishedContent,
+        timestamp: new Date().toISOString(),
+        audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
+        quizSpeechText: isCorrect
+          ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
+          : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
+        quizFinishedData: {
           score: newScore,
-          correctIds: newCorrectIds,
-          incorrectIds: newIncorrectIds,
-        });
+          total: totalQs,
+          accuracy: Math.round((newScore / totalQs) * 100),
+          suggestedWords: top3SuggestedWords,
+        },
+        suggestedActions: [
+          ...wordAddActions,
+          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
+          { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
+        ],
+      };
 
-        const nextMsg: ChatMessage = {
-          id: `quiz-next-${Date.now()}`,
-          role: "assistant",
-          content: `${feedback}\n\n---\n\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}:\n**${nextQ.question}**`,
-          timestamp: new Date().toISOString(),
-          audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
-          quizSpeechText: isCorrect
-            ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
-            : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
-          nextQuestionSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
-          imageUrl: nextQ.imageUrl,
-          imageKeyword: nextQ.imageKeyword,
-          suggestedActions: nextQ.options?.map((opt) => ({
-            label: opt,
-            action: "quiz_answer",
-            payload: { answer: opt, wordId: nextQ.wordId },
-          })) || [
-            { label: nextQ.correctAnswer, action: "quiz_answer", payload: { answer: nextQ.correctAnswer, wordId: nextQ.wordId } },
-          ],
-        };
-
-        setChatMessages((prev) => [...prev, nextMsg]);
-      } else {
-        const totalQs = activeQuiz.questions.length;
-        setActiveQuiz(null);
-
-        handleFinishQuiz(newScore, totalQs, newCorrectIds, newIncorrectIds);
-
-        // Aggregate 1 to 3 suggestions for words that frequently appear alongside the words used in the quiz
-        const allSuggestedWords: QuizSuggestedWord[] = [];
-        const seenWords = new Set<string>();
-
-        activeQuiz.questions.forEach((q) => {
-          const targetWord = q.word || "";
-          let list = Array.isArray(q.suggestedWords) ? q.suggestedWords : [];
-          if (list.length === 0) {
-            const matched = words.find((w) => w.id === q.wordId || w.word.toLowerCase() === targetWord.toLowerCase());
-            if (matched && Array.isArray(matched.suggestedWords)) {
-              list = matched.suggestedWords;
-            }
-          }
-
-          list.forEach((item: any) => {
-            let wordText = typeof item === "string" ? item : (item.word || item.vocab || item.term || "");
-            wordText = wordText.trim();
-            if (!wordText || wordText.toLowerCase() === targetWord.toLowerCase()) return;
-
-            const key = wordText.toLowerCase();
-            if (seenWords.has(key)) return;
-            seenWords.add(key);
-
-            allSuggestedWords.push({
-              word: wordText,
-              translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
-              hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Frequently appears with ${targetWord}`) : `Frequently appears with ${targetWord}`,
-              pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWord,
-              relationship: typeof item === "object" ? item.relationship : undefined,
-              partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
-            });
-          });
-        });
-
-        const top3SuggestedWords = allSuggestedWords.slice(0, 3);
-
-        let finishedContent = t("chat_quiz_finished_msg", currentAppLang, {
-          feedback: feedback,
-          score: String(newScore),
-          total: String(totalQs),
-          accuracy: String(Math.round((newScore / totalQs) * 100)),
-        });
-
-        if (top3SuggestedWords.length > 0) {
-          const header = t("chat_quiz_suggested_words_header", currentAppLang);
-          const itemsText = top3SuggestedWords.map((sw) => {
-            const transText = sw.translation ? ` *("${sw.translation}")*` : "";
-            const pairedText = sw.pairedWith ? ` — ${t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}` : "";
-            const hintText = sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") ? ` (${sw.hint})` : "";
-            return `• **${sw.word}**${transText}${pairedText}${hintText}`;
-          }).join("\n");
-
-          finishedContent += `\n\n---\n\n${header}\n${itemsText}`;
-        }
-
-        const wordAddActions = top3SuggestedWords.map((sw) => ({
-          label: `+ ${t("add_word_btn", currentAppLang)} "${sw.word}"`,
-          action: "add_word",
-          payload: { word: sw.word, hint: sw.translation || sw.hint },
-        }));
-
-        const finishedMsg: ChatMessage = {
-          id: `quiz-end-${Date.now()}`,
-          role: "assistant",
-          content: finishedContent,
-          timestamp: new Date().toISOString(),
-          audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
-          quizSpeechText: isCorrect
-            ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
-            : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
-          quizFinishedData: {
-            score: newScore,
-            total: totalQs,
-            accuracy: Math.round((newScore / totalQs) * 100),
-            suggestedWords: top3SuggestedWords,
-          },
-          suggestedActions: [
-            ...wordAddActions,
-            { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
-            { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
-          ],
-        };
-
-        setChatMessages((prev) => [...prev, finishedMsg]);
-      }
-      setIsTyping(false);
-    }, 600);
+      setChatMessages((prev) => [...prev, finishedMsg]);
+    }
   };
 
   // Add individual word directly from chat suggestions (or conversational input)
