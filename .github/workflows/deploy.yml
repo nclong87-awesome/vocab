@@ -1,32 +1,74 @@
-name: Deploy to GitHub Pages
+name: Version Bump + Deploy
 
 on:
   push:
     branches:
       - main
-    paths:
-      - "package.json"
-
+    paths-ignore:
+      - "package-lock.json"   # optional, keep if you want
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued run.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  bump-version:
     runs-on: ubuntu-latest
+    # Skip if the commit message already contains [skip ci]
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    outputs:
+      version-bumped: ${{ steps.bump.outputs.bumped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Needed so the subsequent push can trigger the same workflow again
+          # (or use a PAT if you prefer)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Only bump if package.json was NOT the only change that triggered us
+          # (this prevents the version-bump commit from bumping again)
+          if git diff --name-only HEAD~1 | grep -q '^package.json$'; then
+            echo "bumped=false" >> $GITHUB_OUTPUT
+            echo "Skipping bump – this looks like a version commit"
+          else
+            npm version patch -m "chore(release): bump version to %s [skip ci]"
+            echo "bumped=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push version bump
+        if: steps.bump.outputs.bumped == 'true'
+        run: git push origin main
+
+  deploy:
+    needs: bump-version
+    # Only deploy when we actually bumped (or on manual run)
+    if: |
+      always() &&
+      (needs.bump-version.outputs.version-bumped == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages          # ← this is where you enable required reviewers
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,9 +80,9 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Build static site
+      - name: Build
         run: npx vite build
 
       - name: Setup Pages
