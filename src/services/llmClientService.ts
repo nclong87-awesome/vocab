@@ -765,7 +765,7 @@ export async function callLLMClientSideWithMeta(
   const activeModel = sanitizeModel(activeProvider, llmConfig?.model);
   const singleStartTime = Date.now();
   try {
-    const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig);
+    const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig, signal);
     const singleDuration = Date.now() - singleStartTime;
     recordModelResponse(activeProvider, activeModel, singleDuration);
 
@@ -815,9 +815,10 @@ export async function callLLMClientSide(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
-  llmConfig?: LLMConfig
+  llmConfig?: LLMConfig,
+  signal?: AbortSignal
 ): Promise<string> {
-  const res = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig);
+  const res = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig, signal);
   return res.text;
 }
 
@@ -1111,8 +1112,9 @@ export async function autofillWordService(params: {
   targetLanguage?: string;
   nativeLanguage?: string;
   cfg?: LLMConfig;
+  signal?: AbortSignal;
 }): Promise<any> {
-  const { word, hint, targetLanguage, nativeLanguage, cfg } = params;
+  const { word, hint, targetLanguage, nativeLanguage, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
 
   const userNative = nativeLanguage || "Vietnamese";
@@ -1181,7 +1183,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   const startTime = performance.now();
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
@@ -1193,7 +1195,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     const res = await fetchWithTimeout("/api/autofill-word", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
+      body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig }),
+      signal
     });
 
     if (res.ok) {
@@ -1208,7 +1211,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     }
 
     if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
       const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
       if (resWithMeta.provider && resWithMeta.model) {
         recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
@@ -1232,8 +1235,9 @@ export async function checkWordDefinitionsService(params: {
   targetLanguage?: string;
   nativeLanguage?: string;
   cfg?: LLMConfig;
+  signal?: AbortSignal;
 }): Promise<any> {
-  const { word, hint, targetLanguage, nativeLanguage, cfg } = params;
+  const { word, hint, targetLanguage, nativeLanguage, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
@@ -1333,7 +1337,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   const startTime = performance.now();
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
     const parsed = JSON.parse(resWithMeta.text);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
@@ -1351,7 +1355,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     const res = await fetchWithTimeout("/api/check-word-definitions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
+      body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig }),
+      signal
     });
 
     if (res.ok) {
@@ -1386,8 +1391,9 @@ export async function generateRandomWordsService(params: {
   nativeLanguage?: string;
   count?: number;
   cfg?: LLMConfig;
+  signal?: AbortSignal;
 }): Promise<{ words: any[]; provider?: string; model?: string; responseTimeMs?: number }> {
-  const { topic, targetLanguage, nativeLanguage, count = 5, cfg } = params;
+  const { topic, targetLanguage, nativeLanguage, count = 5, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
@@ -1426,7 +1432,7 @@ CRITICAL INSTRUCTIONS:
 }`;
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
     const parsed = cleanAndParseJson(resWithMeta.text);
     const words = extractWordsFromPayload(parsed);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
@@ -1445,7 +1451,8 @@ CRITICAL INSTRUCTIONS:
     const res = await fetchWithTimeout("/api/generate-random-words", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, llmConfig })
+      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, llmConfig }),
+      signal
     });
 
     if (res.ok) {
@@ -1480,6 +1487,7 @@ export interface FixGrammarRequest {
   targetLanguage?: string;
   nativeLanguage?: string;
   llmConfig?: LLMConfig;
+  signal?: AbortSignal;
 }
 
 export interface FixGrammarResult {
@@ -1497,7 +1505,7 @@ export interface FixGrammarResult {
 }
 
 export async function fixGrammarService(params: FixGrammarRequest): Promise<FixGrammarResult> {
-  const { userText, targetLanguage, nativeLanguage, llmConfig } = params;
+  const { userText, targetLanguage, nativeLanguage, llmConfig, signal } = params;
   const userTarget = targetLanguage || "English";
   const userNative = nativeLanguage || "Vietnamese";
   const startTime = performance.now();
@@ -1540,7 +1548,7 @@ CRITICAL INSTRUCTIONS:
 }`;
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
     const parsed = JSON.parse(resWithMeta.text);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
@@ -1558,7 +1566,8 @@ CRITICAL INSTRUCTIONS:
     const res = await fetchWithTimeout("/api/fix-grammar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userText, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig })
+      body: JSON.stringify({ userText, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig }),
+      signal
     });
 
     if (res.ok) {
@@ -2135,6 +2144,7 @@ export interface QuizGenerationRequest {
   nativeLanguage?: string;
   llmConfig?: LLMConfig;
   stats?: UserStats;
+  signal?: AbortSignal;
 }
 
 export interface QuizGenerationResult {
@@ -2147,7 +2157,7 @@ export interface QuizGenerationResult {
 export async function generateAiQuizQuestionsService(
   params: QuizGenerationRequest
 ): Promise<QuizGenerationResult> {
-  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal } = params;
   const startTime = performance.now();
 
   if (!words || words.length === 0) {
@@ -2233,7 +2243,7 @@ Output MUST be strictly valid JSON matching this schema:
     let topLevelSuggestions: any[] = [];
 
     if (isStaticHost()) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
       const cleaned = cleanJsonResponse(resWithMeta.text);
       const parsed = JSON.parse(cleaned);
       if (Array.isArray(parsed)) {
@@ -2249,7 +2259,8 @@ Output MUST be strictly valid JSON matching this schema:
       const res = await fetchWithTimeout("/api/generate-quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: minimalWordList, targetLanguage, nativeLanguage, llmConfig })
+        body: JSON.stringify({ words: minimalWordList, targetLanguage, nativeLanguage, llmConfig }),
+        signal
       });
       if (res.ok) {
         const data = await res.json();
@@ -2265,7 +2276,7 @@ Output MUST be strictly valid JSON matching this schema:
           if (data.responseTimeMs) responseTimeMs = data.responseTimeMs;
         }
       } else {
-        const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+        const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
         const cleaned = cleanJsonResponse(resWithMeta.text);
         const parsed = JSON.parse(cleaned);
         if (Array.isArray(parsed)) {
@@ -2439,6 +2450,7 @@ export async function analyzeImageVocabService(params: {
   targetLanguage: string;
   nativeLanguage: string;
   llmConfig?: LLMConfig;
+  signal?: AbortSignal;
 }): Promise<{
   imageDescription: string;
   vocabularyItems: Array<{
@@ -2457,7 +2469,7 @@ export async function analyzeImageVocabService(params: {
   responseTimeMs?: number;
 }> {
   const startTime = performance.now();
-  let { imageDataUrl, targetLanguage, nativeLanguage, llmConfig } = params;
+  let { imageDataUrl, targetLanguage, nativeLanguage, llmConfig, signal } = params;
 
   // Resize client-side before sending to server or worker if image is large
   if (typeof window !== "undefined" && imageDataUrl && imageDataUrl.startsWith("data:image")) {
@@ -2499,7 +2511,8 @@ export async function analyzeImageVocabService(params: {
       const res = await fetchWithTimeout("/api/analyze-image-vocab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, systemPrompt, userText, provider, model })
+        body: JSON.stringify({ imageDataUrl, systemPrompt, userText, provider, model }),
+        signal
       });
       if (res.ok) {
         const data = await res.json();
@@ -2569,7 +2582,8 @@ export async function analyzeImageVocabService(params: {
       userText,
       provider,
       model
-    })
+    }),
+    signal
   });
 
   if (workerRes.ok) {
@@ -2627,6 +2641,7 @@ export interface FlashcardGenerationRequest {
   targetLanguage?: string;
   nativeLanguage?: string;
   llmConfig?: LLMConfig;
+  signal?: AbortSignal;
 }
 
 export interface FlashcardsBatchGenerationRequest {
@@ -2634,6 +2649,7 @@ export interface FlashcardsBatchGenerationRequest {
   targetLanguage?: string;
   nativeLanguage?: string;
   llmConfig?: LLMConfig;
+  signal?: AbortSignal;
 }
 
 export interface GeneratedBatchFlashcardsResult {
@@ -2673,7 +2689,7 @@ const MAX_SUGGESTED_PAIRED_WORDS = 3;
 export async function generateBatchFlashcardsService(
   params: FlashcardsBatchGenerationRequest
 ): Promise<GeneratedBatchFlashcardsResult> {
-  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+  const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal } = params;
   const startTime = performance.now();
 
   const wordsList = Array.isArray(words) ? words : [];
@@ -2764,7 +2780,7 @@ Output MUST be strictly valid JSON matching this schema:
     let metaModel: string | undefined;
 
     if (isStaticHost()) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
       rawResultText = resWithMeta.text;
       metaProvider = resWithMeta.provider;
       metaModel = resWithMeta.model;
@@ -2772,7 +2788,8 @@ Output MUST be strictly valid JSON matching this schema:
       const res = await fetchWithTimeout("/api/generate-flashcards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ words: wordsList, targetLanguage, nativeLanguage, llmConfig })
+        body: JSON.stringify({ words: wordsList, targetLanguage, nativeLanguage, llmConfig }),
+        signal
       });
       if (res.ok) {
         const data = await res.json();
@@ -2887,12 +2904,13 @@ Output MUST be strictly valid JSON matching this schema:
 export async function generateFlashcardContentService(
   params: FlashcardGenerationRequest
 ): Promise<GeneratedFlashcardContent> {
-  const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = params;
+  const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal } = params;
   const batchRes = await generateBatchFlashcardsService({
     words: [word],
     targetLanguage,
     nativeLanguage,
-    llmConfig
+    llmConfig,
+    signal
   });
 
   const card = batchRes.cards[0] || {
@@ -2940,6 +2958,7 @@ export interface SuggestReplyRequest {
   targetLanguage: string;
   nativeLanguage: string;
   llmConfig?: LLMConfig;
+  signal?: AbortSignal;
 }
 
 export interface SuggestReplyResult {
@@ -2960,7 +2979,7 @@ export interface SuggestReplyResult {
 }
 
 export async function suggestCasualReplyService(params: SuggestReplyRequest): Promise<SuggestReplyResult> {
-  const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig } = params;
+  const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig, signal } = params;
   const startTime = performance.now();
 
   const userTarget = targetLanguage || "English";
@@ -3010,7 +3029,8 @@ ${schemaDesc}`;
       const res = await fetchWithTimeout("/api/suggest-casual-reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, systemPrompt, userText, provider, model })
+        body: JSON.stringify({ imageDataUrl, systemPrompt, userText, provider, model }),
+        signal
       });
 
       if (res.ok) {
@@ -3063,7 +3083,8 @@ ${schemaDesc}`;
           userText,
           provider,
           model
-        })
+        }),
+        signal
       });
 
       if (!workerRes.ok) {
@@ -3074,7 +3095,7 @@ ${schemaDesc}`;
       rawText = await workerRes.text();
     } else {
       // no image, just use the prompt directly with the LLM
-      const resWithMeta = await callLLMClientSideWithMeta(userText, systemPrompt, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(userText, systemPrompt, schemaDesc, llmConfig, signal);
       rawText = resWithMeta.text;
     }
 
