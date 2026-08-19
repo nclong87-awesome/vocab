@@ -9,13 +9,15 @@ import {
   X,
   Server,
   RotateCcw,
-  Activity
+  Activity,
+  Clock
 } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
 import { isModelLocked, clearAllLocks, resetAllModelStates } from "../../utils/autoModeManager";
 import ModelStatusModal from "../ModelStatusModal";
+import RequestHistoryModal from "../RequestHistoryModal";
 
 interface QuickAiSwitcherProps {
   llmConfig: LLMConfig;
@@ -47,6 +49,7 @@ export default function QuickAiSwitcher({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
+  const [isRequestHistoryModalOpen, setIsRequestHistoryModalOpen] = useState(false);
 
   const activeProviderMeta = PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider) || PROVIDER_OPTIONS[0];
   const savedMap = getSavedProvidersMap(llmConfig);
@@ -164,13 +167,27 @@ export default function QuickAiSwitcher({
                   type="button"
                   onClick={() => {
                     setIsOpen(false);
+                    setIsRequestHistoryModalOpen(true);
+                  }}
+                  className="px-2.5 py-1 text-xs font-semibold text-stone-700 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200/90 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  title="View last 100 LLM requests & responses"
+                  id="open-request-history-btn"
+                >
+                  <Clock className="w-3.5 h-3.5 text-stone-600" />
+                  <span>History</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
                     setIsModelStatusModalOpen(true);
                   }}
                   className="px-2.5 py-1 text-xs font-semibold text-stone-700 hover:text-stone-900 bg-white hover:bg-stone-100 border border-stone-200/90 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
                   title="View Model Status & Metrics"
+                  id="open-model-status-btn"
                 >
                   <Activity className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Models Status</span>
+                  <span>Status</span>
                 </button>
                 <button
                   type="button"
@@ -366,6 +383,14 @@ export default function QuickAiSwitcher({
           setIsModelStatusModalOpen(false);
         }}
         llmConfig={llmConfig}
+      />
+
+      {/* LLM Request & Response History Modal */}
+      <RequestHistoryModal
+        isOpen={isRequestHistoryModalOpen}
+        onClose={() => {
+          setIsRequestHistoryModalOpen(false);
+        }}
       />
     </div>
   );

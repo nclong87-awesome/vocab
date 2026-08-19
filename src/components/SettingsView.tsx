@@ -29,6 +29,7 @@ import {
   Cloud,
   Smartphone,
   HelpCircle,
+  Clock,
 } from "lucide-react";
 import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
@@ -43,6 +44,7 @@ import {
 } from "../db/indexedDB";
 import { syncToGist, syncFromGist } from "../services/githubGistService";
 import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
+import RequestHistoryModal from "./RequestHistoryModal";
 
 import { SUPPORTED_LANGUAGES } from "../config/languages";
 import { t } from "../config/i18n";
@@ -94,6 +96,7 @@ export default function SettingsView({
   const [langSaveSuccess, setLangSaveSuccess] = useState<string | null>(null);
   const [ttsSaveSuccess, setTtsSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
+  const [isRequestHistoryModalOpen, setIsRequestHistoryModalOpen] = useState(false);
   
 
   useEffect(() => {
@@ -621,24 +624,37 @@ export default function SettingsView({
               <span className="text-xs font-bold uppercase tracking-wider text-stone-600">Active AI Engine</span>
             </div>
 
-            <button
-              type="button"
-              onClick={handleTestActiveLLM}
-              disabled={testingLlm}
-              className="px-3.5 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs shrink-0 self-start sm:self-auto"
-            >
-              {testingLlm ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-600" />
-                  <span>Testing Active Engine...</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                  <span>Test Active Connection</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={() => setIsRequestHistoryModalOpen(true)}
+                className="px-3 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-800 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs shrink-0"
+                title="View last 100 LLM requests and responses"
+                id="settings-request-history-btn"
+              >
+                <Clock className="w-3.5 h-3.5 text-stone-600" />
+                <span>Request History</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTestActiveLLM}
+                disabled={testingLlm}
+                className="px-3.5 py-1.5 bg-white hover:bg-stone-100 border border-stone-300 text-stone-900 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs shrink-0"
+              >
+                {testingLlm ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-stone-600" />
+                    <span>Testing Active Engine...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                    <span>Test Active Connection</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
@@ -2038,6 +2054,12 @@ export default function SettingsView({
           </div>
         </div>
       )}
+
+      {/* LLM Request & Response History Modal */}
+      <RequestHistoryModal
+        isOpen={isRequestHistoryModalOpen}
+        onClose={() => setIsRequestHistoryModalOpen(false)}
+      />
     </div>
   );
 }

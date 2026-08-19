@@ -204,6 +204,22 @@ export interface FlashcardData {
   strengthGained?: number;
 }
 
+export interface ApiRequestLog {
+  id: string;
+  timestamp: string; // ISO string
+  provider: string;
+  model: string;
+  action?: string; // e.g. "Chat", "Autofill Word", "Definition Lookup", "Grammar Check", "Quiz Generator", "Test Connection", etc.
+  prompt: string;
+  systemInstruction?: string;
+  schemaDescription?: string;
+  response: string;
+  responseTimeMs: number;
+  status: 'success' | 'error';
+  statusCode?: number;
+  errorMessage?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";

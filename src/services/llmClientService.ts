@@ -10,6 +10,7 @@ import {
   recordModelResponse, 
   recordModelFailure
 } from "../utils/autoModeManager";
+import { logApiRequest } from "./requestHistoryService";
 
 import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
@@ -709,6 +710,19 @@ export async function callLLMClientSideWithMeta(
 
         recordModelResponse(candidate.provider, candidate.model, candidateDuration);
 
+        // Record successful request/response history log
+        logApiRequest({
+          provider: candidate.provider,
+          model: candidate.model,
+          prompt,
+          systemInstruction,
+          schemaDescription,
+          response: text,
+          responseTimeMs: candidateDuration,
+          status: "success",
+          statusCode: 200
+        }).catch(() => undefined);
+
         return {
           text,
           provider: candidate.provider,
@@ -720,6 +734,20 @@ export async function callLLMClientSideWithMeta(
         const candidateDuration = Date.now() - candidateStartTime;
         console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour and switching automatically...`);
         recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
+
+        // Record failed request/response history log
+        logApiRequest({
+          provider: candidate.provider,
+          model: candidate.model,
+          prompt,
+          systemInstruction,
+          schemaDescription,
+          response: err?.message || String(err),
+          responseTimeMs: candidateDuration,
+          status: "error",
+          statusCode: err?.statusCode || 500,
+          errorMessage: err?.message || String(err)
+        }).catch(() => undefined);
       }
     }
 
@@ -733,6 +761,20 @@ export async function callLLMClientSideWithMeta(
     const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig);
     const singleDuration = Date.now() - singleStartTime;
     recordModelResponse(activeProvider, activeModel, singleDuration);
+
+    // Record successful single request/response history log
+    logApiRequest({
+      provider: activeProvider,
+      model: activeModel,
+      prompt,
+      systemInstruction,
+      schemaDescription,
+      response: text,
+      responseTimeMs: singleDuration,
+      status: "success",
+      statusCode: 200
+    }).catch(() => undefined);
+
     return {
       text,
       provider: activeProvider,
@@ -742,6 +784,21 @@ export async function callLLMClientSideWithMeta(
   } catch (err: any) {
     const singleDuration = Date.now() - singleStartTime;
     recordModelFailure(activeProvider, activeModel, err?.message || String(err), singleDuration);
+
+    // Record failed single request/response history log
+    logApiRequest({
+      provider: activeProvider,
+      model: activeModel,
+      prompt,
+      systemInstruction,
+      schemaDescription,
+      response: err?.message || String(err),
+      responseTimeMs: singleDuration,
+      status: "error",
+      statusCode: err?.statusCode || 500,
+      errorMessage: err?.message || String(err)
+    }).catch(() => undefined);
+
     throw err;
   }
 }
@@ -2437,15 +2494,40 @@ export async function analyzeImageVocabService(params: {
       });
       if (res.ok) {
         const data = await res.json();
+        const responseTimeMs = data.responseTimeMs || Math.round(performance.now() - startTime);
+        logApiRequest({
+          provider,
+          model,
+          prompt: userText,
+          systemInstruction: systemPrompt,
+          response: JSON.stringify(data),
+          responseTimeMs,
+          status: "success",
+          statusCode: 200,
+          action: "Image Analysis"
+        }).catch(() => undefined);
         return {
           ...data,
           provider,
           model,
-          responseTimeMs: data.responseTimeMs || Math.round(performance.now() - startTime)
+          responseTimeMs
         };
       }
       const errorJson = await res.json().catch(() => null);
-      throw new Error(errorJson?.error || `Server API analyze-image-vocab failed with status ${res.status}`);
+      const errMsg = errorJson?.error || `Server API analyze-image-vocab failed with status ${res.status}`;
+      logApiRequest({
+        provider,
+        model,
+        prompt: userText,
+        systemInstruction: systemPrompt,
+        response: errMsg,
+        responseTimeMs: Math.round(performance.now() - startTime),
+        status: "error",
+        statusCode: res.status,
+        errorMessage: errMsg,
+        action: "Image Analysis"
+      }).catch(() => undefined);
+      throw new Error(errMsg);
     } catch (e: any) {
       console.error("Server API analyze-image-vocab failed:", e);
       throw e;
@@ -2493,6 +2575,17 @@ export async function analyzeImageVocabService(params: {
     if (data && (data.vocabularyItems || data.imageDescription)) {
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
       recordModelResponse(provider, model, duration);
+      logApiRequest({
+        provider,
+        model,
+        prompt: userText,
+        systemInstruction: systemPrompt,
+        response: rawText,
+        responseTimeMs: duration,
+        status: "success",
+        statusCode: 200,
+        action: "Image Analysis"
+      }).catch(() => undefined);
       return {
         ...data,
         provider,
@@ -2503,6 +2596,18 @@ export async function analyzeImageVocabService(params: {
   } else {
     const errText = await workerRes.text().catch(() => workerRes.statusText);
     serverOrWorkerError = new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
+    logApiRequest({
+      provider,
+      model,
+      prompt: userText,
+      systemInstruction: systemPrompt,
+      response: serverOrWorkerError.message,
+      responseTimeMs: Math.round(performance.now() - startTime),
+      status: "error",
+      statusCode: workerRes.status,
+      errorMessage: serverOrWorkerError.message,
+      action: "Image Analysis"
+    }).catch(() => undefined);
   }
   
   throw serverOrWorkerError || new Error("Image analysis failed without a specific error.");

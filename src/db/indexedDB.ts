@@ -1,4 +1,4 @@
-import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
+import { Word, UserStats, LLMConfig, TTSConfig, ApiRequestLog } from "../types";
 import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { sanitizeLlmConfig } from "../utils/llmHelpers";
 
@@ -15,12 +15,13 @@ const STORES = {
   words: "words",
   stats: "stats",
   settings: "settings",
-  deletedWords: "deleted_words"
+  deletedWords: "deleted_words",
+  apiLogs: "api_logs"
 } as const;
 
 type StoreName = keyof typeof STORES;
 
-const ALL_STORES: StoreName[] = ["words", "stats", "settings", "deletedWords"];
+const ALL_STORES: StoreName[] = ["words", "stats", "settings", "deletedWords", "apiLogs"];
 
 /** Keys of records kept inside the shared `settings` store. */
 const KEYS = {
@@ -84,7 +85,8 @@ const STORE_KEY_PATHS: Record<StoreName, string> = {
   words: "id",
   stats: "id",
   settings: "key",
-  deletedWords: "id"
+  deletedWords: "id",
+  apiLogs: "id"
 };
 
 function createMissingStores(db: IDBDatabase): void {
@@ -766,4 +768,65 @@ export async function resetIndexedDBDatabase(): Promise<void> {
 export function clearAllWordsAndStatsFromDB(): Promise<void> {
   return clearStores(["words", "stats", "deletedWords"]);
 }
+
+/* -------------------------------------------------------------------------- */
+/* API Request & Response Logs (Max 100 entries, IndexedDB local storage)     */
+/* -------------------------------------------------------------------------- */
+
+const MAX_API_LOGS = 100;
+
+export async function saveApiRequestLogToDB(log: ApiRequestLog): Promise<void> {
+  try {
+    await withStores(["apiLogs"], "readwrite", async (tx) => {
+      const store = tx.objectStore(STORES.apiLogs);
+      store.put(log);
+
+      // Read all records to trim to last 100 entries
+      const allLogsReq = store.getAll();
+      allLogsReq.onsuccess = () => {
+        const allLogs = (allLogsReq.result ?? []) as ApiRequestLog[];
+        if (allLogs.length > MAX_API_LOGS) {
+          // Sort oldest first and delete overflow entries
+          allLogs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          const toDelete = allLogs.slice(0, allLogs.length - MAX_API_LOGS);
+          for (const item of toDelete) {
+            if (item.id) store.delete(item.id);
+          }
+        }
+      };
+    });
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-api-logs-updated"));
+    }
+  } catch (err) {
+    console.warn("Notice: could not save API request log to IndexedDB:", err);
+  }
+}
+
+export async function getApiRequestLogsFromDB(limit = 100): Promise<ApiRequestLog[]> {
+  try {
+    const logs = await withStores(["apiLogs"], "readonly", (tx) => readAll<ApiRequestLog>(tx, "apiLogs"));
+    // Sort newest first
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return logs.slice(0, limit);
+  } catch (err) {
+    console.warn("Notice: could not load API request logs from IndexedDB:", err);
+    return [];
+  }
+}
+
+export async function clearApiRequestLogsFromDB(): Promise<void> {
+  try {
+    await withStores(["apiLogs"], "readwrite", (tx) => {
+      tx.objectStore(STORES.apiLogs).clear();
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-api-logs-updated"));
+    }
+  } catch (err) {
+    console.warn("Notice: could not clear API request logs in IndexedDB:", err);
+  }
+}
+
 
