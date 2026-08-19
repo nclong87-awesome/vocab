@@ -288,91 +288,61 @@ async function callLLMSingle(
   if (provider === "gemini") {
     const effectiveGeminiKey = apiKey || process.env.GEMINI_API_KEY || "";
     const effectiveGeminiUrl = baseUrl || (effectiveGeminiKey ? "https://generativelanguage.googleapis.com/v1beta" : (providerMeta?.defaultBaseUrl || "https://generativelanguage.googleapis.com/v1beta"));
-    const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
+    const primaryModel = model || "gemini-3.6-flash";
+    const cleanBaseUrl = effectiveGeminiUrl.replace(/\/+$/, "");
 
-    if (!isCustomOrProxyUrl && effectiveGeminiKey) {
-      const ai = new GoogleGenAI({
-        apiKey: effectiveGeminiKey,
-        httpOptions: { 
-          headers: { 
-            'User-Agent': 'aistudio-build',
-          } 
-        }
-      });
-
-      const primaryModel = model || "gemini-3.6-flash";
-      try {
-        const response = await ai.models.generateContent({
-          model: primaryModel,
-          contents: prompt,
-          config: {
-            systemInstruction,
-            responseMimeType: "application/json",
-            abortSignal: signal
-          }
-        });
-
-        if (!response.text) {
-          throw new Error("Empty response received from Gemini model.");
-        }
-        return cleanJsonResponse(response.text);
-      } catch (err: any) {
-        throw err;
-      }
-    } else {
-      // Worker proxy handling for Gemini (uses native generateContent endpoint rather than /chat/completions)
-      const primaryModel = model || "gemini-3.6-flash";
-      const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
-      const targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent`;
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-      };
-
-      if (proxyKey) {
-        headers["X-Proxy-Key"] = proxyKey;
-      }
-      if (effectiveGeminiKey) {
-        headers["x-goog-api-key"] = effectiveGeminiKey;
-        if (!headers["X-Proxy-Key"]) {
-          headers["X-Proxy-Key"] = effectiveGeminiKey;
-        }
-      }
-
-      const payload = {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
-      };
-
-      const startTime = Date.now();
-      const res = await fetchWithTimeout(targetEndpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`Gemini Worker Proxy Error (${res.status}): ${errText}`);
-      }
-
-      const data: any = await res.json();
-      const parts = data.candidates?.[0]?.content?.parts || [];
-      const text = parts.map((p: any) => p.text || "").join("").trim() || data.text || data.candidates?.[0]?.output || "";
-      if (!text) {
-        throw new Error("Empty text response from Gemini worker proxy.");
-      }
-      const cleanedText = cleanJsonResponse(text);
-      const result = cleanAndParseJson(cleanedText);
-      result.model = sanitizeModel(provider, llmConfig?.model);
-      result.provider = provider;
-      result.responseTimeMs = Date.now() - startTime;
-      return JSON.stringify(result);
+    let targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent`;
+    if (effectiveGeminiKey && !effectiveGeminiUrl.includes("workers.dev")) {
+      targetEndpoint += `?key=${effectiveGeminiKey}`;
     }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+
+    if (proxyKey) {
+      headers["X-Proxy-Key"] = proxyKey;
+    }
+    if (effectiveGeminiKey) {
+      headers["x-goog-api-key"] = effectiveGeminiKey;
+      if (!headers["X-Proxy-Key"]) {
+        headers["X-Proxy-Key"] = effectiveGeminiKey;
+      }
+    }
+
+    const payload = {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    };
+
+    const startTime = Date.now();
+    const res = await fetchWithTimeout(targetEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`Gemini API Error (${res.status}): ${errText}`);
+    }
+
+    const data: any = await res.json();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const text = parts.map((p: any) => p.text || "").join("").trim() || data.text || data.candidates?.[0]?.output || "";
+    if (!text) {
+      throw new Error("Empty text response from Gemini API.");
+    }
+    const cleanedText = cleanJsonResponse(text);
+    const result = cleanAndParseJson(cleanedText);
+    result.model = sanitizeModel(provider, llmConfig?.model);
+    result.provider = provider;
+    result.responseTimeMs = Date.now() - startTime;
+    return JSON.stringify(result);
   }
 
   // Cloudflare Workers AI provider handling
@@ -554,6 +524,9 @@ async function callLLMAutoCandidates(
       }
       return resultText;
     } catch (err: any) {
+      if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted")) {
+        throw err;
+      }
       lastError = err;
       console.warn(`[Server Auto Mode] Model ${candKey} failed: ${err?.message || err}. Locking model for 1 hour and switching...`);
       lockServerModel(cand.provider, cand.model, 3600000);
@@ -1799,6 +1772,11 @@ function normalizePerformanceAnalysis(raw: any): any {
 
 // 6. Analyze Performance with AI endpoint
 app.post("/api/analyze-performance", async (req, res) => {
+  const controller = new AbortController();
+  req.on("close", () => {
+    controller.abort();
+  });
+
   try {
     const { 
       stats, 
@@ -1912,7 +1890,7 @@ ALSO INCLUDE:
   "motivationQuote": "string (Short inspiring quote for language learners)"
 }`;
 
-    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     const rawParsed = cleanAndParseJson(text);
     const result: any = normalizePerformanceAnalysis(rawParsed);
     if (rawParsed.provider) result.provider = rawParsed.provider;

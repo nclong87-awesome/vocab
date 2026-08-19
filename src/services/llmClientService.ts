@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord, FlashcardItem, SuggestedPairedWord } from "../types";
 import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
@@ -357,6 +356,9 @@ export async function callWithRetry<T>(
     try {
       return await fn(attempt);
     } catch (err: any) {
+      if (err?.name === "AbortError" || String(err?.message || "").includes("aborted") || String(err).includes("aborted")) {
+        throw err;
+      }
       const parsed = parseLlmError(err, provider);
       lastParsedError = parsed;
 
@@ -413,100 +415,60 @@ async function callLLMClientSideSingleCandidate(
 
   // Gemini API client-side handling
   if (provider === "gemini") {
-    const effectiveGeminiUrl = baseUrl || "https://gemini.nclong87.workers.dev/v1beta";
-    const isCustomOrProxyUrl = Boolean(effectiveGeminiUrl && !effectiveGeminiUrl.includes("googleapis.com"));
+    const effectiveGeminiUrl = baseUrl || "https://generativelanguage.googleapis.com/v1beta";
+    const primaryModel = model || "gemini-3.6-flash";
+    const cleanBaseUrl = effectiveGeminiUrl.replace(/\/+$/, "");
 
-    if (!isCustomOrProxyUrl) {
-      if (!effectiveApiKey && !proxyKeyToUse) {
-        throw new LLMConnectionError({
-          statusCode: 401,
-          errorType: "INVALID_KEY",
-          userMessage: "Gemini API Key or Proxy Secret is missing. Please configure LLM settings.",
-          originalMessage: "Missing Gemini API key",
-          isRetryable: false,
-          provider: "gemini"
-        });
-      }
-
-      const primaryModel = model || "gemini-3.6-flash";
-
-      return callWithRetry(
-        async () => {
-          const ai = new GoogleGenAI({ 
-            apiKey: effectiveApiKey || proxyKeyToUse || "dummy-key",
-            httpOptions: {
-              headers: {
-                ...(proxyKeyToUse ? { "X-Proxy-Key": proxyKeyToUse } : {})
-              }
-            }
-          });
-
-          const response = await ai.models.generateContent({
-            model: primaryModel,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json",
-              abortSignal: signal
-            }
-          });
-
-          if (!response.text) {
-            throw new Error("Empty response received from Gemini API.");
-          }
-          return cleanJsonResponse(response.text);
-        },
-        { maxRetries: 1, provider: "gemini" }
-      );
-    } else {
-      const primaryModel = model || "gemini-3.6-flash";
-
-      return callWithRetry(
-        async () => {
-          const cleanBaseUrl = effectiveGeminiUrl.replace(/\/$/, "");
-          const targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent${effectiveApiKey ? `?key=${effectiveApiKey}` : ""}`;
-
-          const headers: Record<string, string> = {
-            "Content-Type": "application/json"
-          };
-          if (proxyKeyToUse) {
-            headers["X-Proxy-Key"] = proxyKeyToUse;
-          }
-          if (effectiveApiKey) {
-            headers["x-goog-api-key"] = effectiveApiKey;
-          }
-
-          const payload = {
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-            generationConfig: {
-              responseMimeType: "application/json"
-            }
-          };
-
-          const res = await fetchWithTimeout(targetEndpoint, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-            signal
-          });
-
-          if (!res.ok) {
-            const errText = await res.text().catch(() => res.statusText);
-            throw new Error(`Gemini Proxy Error (${res.status}): ${errText}`);
-          }
-
-          const data = await res.json();
-          const parts = data.candidates?.[0]?.content?.parts || [];
-          const text = parts.map((p: any) => p.text || "").join("").trim() || data.text || data.candidates?.[0]?.output || "";
-          if (!text) {
-            throw new Error("Empty response from Gemini worker proxy.");
-          }
-          return cleanJsonResponse(text);
-        },
-        { maxRetries: 1, provider: "gemini" }
-      );
+    let targetEndpoint = `${cleanBaseUrl}/models/${primaryModel}:generateContent`;
+    if (effectiveApiKey && !effectiveGeminiUrl.includes("workers.dev")) {
+      targetEndpoint += `?key=${effectiveApiKey}`;
     }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (proxyKeyToUse) {
+      headers["X-Proxy-Key"] = proxyKeyToUse;
+    }
+    if (effectiveApiKey) {
+      headers["x-goog-api-key"] = effectiveApiKey;
+      if (!headers["X-Proxy-Key"]) {
+        headers["X-Proxy-Key"] = effectiveApiKey;
+      }
+    }
+
+    const payload = {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    };
+
+    return callWithRetry(
+      async () => {
+        const res = await fetchWithTimeout(targetEndpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          signal
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          throw new Error(`Gemini API Error (${res.status}): ${errText}`);
+        }
+
+        const data = await res.json();
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        const text = parts.map((p: any) => p.text || "").join("").trim() || data.text || data.candidates?.[0]?.output || "";
+        if (!text) {
+          throw new Error("Empty response from Gemini API.");
+        }
+        return cleanJsonResponse(text);
+      },
+      { maxRetries: 1, provider: "gemini" }
+    );
   }
 
   // Cloudflare Workers AI provider handling
@@ -737,6 +699,9 @@ export async function callLLMClientSideWithMeta(
           responseTimeMs: candidateDuration
         };
       } catch (err: any) {
+        if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted") || String(err).includes("aborted")) {
+          throw err;
+        }
         lastError = err;
         const candidateDuration = Date.now() - candidateStartTime;
         console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour and switching automatically...`);

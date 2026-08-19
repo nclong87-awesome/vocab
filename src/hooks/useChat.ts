@@ -160,6 +160,8 @@ export function useChat({
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
     if (quizWords.length >= 2) {
       // Found Quiz candidates: proceed to generate and start Quiz
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       setIsTyping(true);
 
       try {
@@ -169,6 +171,7 @@ export function useChat({
           nativeLanguage,
           llmConfig: configToUse,
           stats,
+          signal: controller.signal,
         });
 
         const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
@@ -216,6 +219,10 @@ export function useChat({
 
         setChatMessages([introMsg]);
       } catch (e: any) {
+        if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
+          console.log("Quiz generation was cancelled by user.");
+          return;
+        }
         console.error("Error starting chat quiz:", e);
         handleAiApiError(e, configToUse, (newConfig) => startPractice(newConfig));
       } finally {
@@ -227,6 +234,8 @@ export function useChat({
     // Step 2: If no Quiz candidates found (or fewer than 2), search for candidate words for Flashcards
     const flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
     if (flashcardCandidates.length > 0) {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       setIsTyping(true);
 
       try {
@@ -235,6 +244,7 @@ export function useChat({
           targetLanguage,
           nativeLanguage,
           llmConfig: configToUse,
+          signal: controller.signal,
         });
 
         const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
@@ -560,6 +570,8 @@ export function useChat({
       return;
     }
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsTyping(true);
     const statusMsgId = `add-word-status-${Date.now()}`;
     const contextHintStr = hint ? t("chat_with_context_hint", currentAppLang, { hint }) : "";
@@ -581,6 +593,7 @@ export function useChat({
         targetLanguage,
         nativeLanguage,
         cfg: configToUse,
+        signal: controller.signal,
       });
 
       const validSenses = (data.senses || []).filter((s: any) => s && (s.definition || s.translation));
@@ -774,8 +787,12 @@ export function useChat({
         });
       }
     } catch (err: any) {
-      console.error(err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
+      if (controller.signal.aborted || err?.name === "AbortError" || String(err).includes("aborted")) {
+        console.log("Conversational add word was aborted by user.");
+        return;
+      }
+      console.error(err);
       handleAiApiError(err, configToUse, (newConfig) => {
         handleConversationalAddWord(wordText, hint, newConfig);
       });
