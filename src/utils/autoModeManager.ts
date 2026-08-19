@@ -194,6 +194,8 @@ export interface ModelMetricsRecord {
   provider: string;
   model: string;
   lastResponseTimeMs?: number | null;
+  avgResponseTimeMs?: number | null;
+  recentResponseTimes?: number[];
   lastTestedAt?: number | null;
   lastError?: string | null;
   totalCalls?: number;
@@ -271,11 +273,24 @@ export function recordModelResponse(provider: string, model: string, durationMs:
   const prevCalls = existing?.totalCalls ?? (existing?.lastTestedAt ? 1 : 0);
   const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
 
+  const validDuration = Math.max(1, Math.round(durationMs));
+  const prevTimes = Array.isArray(existing?.recentResponseTimes)
+    ? existing.recentResponseTimes
+    : (typeof existing?.lastResponseTimeMs === "number" && existing.lastResponseTimeMs > 0 ? [existing.lastResponseTimeMs] : []);
+
+  // Maintain the last 10 successful requests (skip failed requests)
+  const updatedRecentTimes = [...prevTimes, validDuration].slice(-10);
+  const avgTime = Math.round(
+    updatedRecentTimes.reduce((sum, t) => sum + t, 0) / updatedRecentTimes.length
+  );
+
   metrics[key] = {
     ...existing,
     provider,
     model,
-    lastResponseTimeMs: Math.max(1, Math.round(durationMs)),
+    lastResponseTimeMs: avgTime,
+    avgResponseTimeMs: avgTime,
+    recentResponseTimes: updatedRecentTimes,
     lastTestedAt: Date.now(),
     lastError: null,
     totalCalls: prevCalls + 1,
@@ -349,11 +364,22 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
   // Keep only up to 10 deduplicated failure log entries (newest first)
   const updatedLogs = deduplicateFailureLogs([newLogEntry, ...existingLogs]).slice(0, 10);
 
+  // Preserve existing successful response times; failed requests are skipped
+  const existingTimes = Array.isArray(existing?.recentResponseTimes)
+    ? existing.recentResponseTimes
+    : (typeof existing?.lastResponseTimeMs === "number" && existing.lastResponseTimeMs > 0 ? [existing.lastResponseTimeMs] : []);
+
+  const avgTime = existingTimes.length > 0
+    ? Math.round(existingTimes.reduce((sum, t) => sum + t, 0) / existingTimes.length)
+    : null;
+
   metrics[key] = {
     ...existing,
     provider,
     model,
-    lastResponseTimeMs: null, // Reset response time on failure so failed models don't report stale or misleading latency
+    lastResponseTimeMs: avgTime,
+    avgResponseTimeMs: avgTime,
+    recentResponseTimes: existingTimes,
     lastTestedAt: now,
     lastError: reason,
     totalCalls: prevCalls + 1,
@@ -478,6 +504,9 @@ export interface ModelStatusItem {
   lockedAt?: number;
   expiresAt?: number;
   lastResponseTimeMs: number | null;
+  avgResponseTimeMs: number | null;
+  recentResponseTimes: number[];
+  recentSamplesCount: number;
   lastTestedAt: number | null;
   lastError: string | null;
   status: ModelStatusIndicator;
@@ -584,14 +613,20 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         metric?.lastError
       );
 
-      // Reset response time to null if model is locked, last attempt failed, or 0 successes out of total calls
-      const lastResponseTimeMs = (isLocked || hasLastError || (totalCalls > 0 && totalSuccesses === 0))
-        ? null
-        : (metric?.lastResponseTimeMs ?? null);
+      const recentResponseTimes: number[] = Array.isArray(metric?.recentResponseTimes)
+        ? metric.recentResponseTimes
+        : (typeof metric?.lastResponseTimeMs === 'number' && metric.lastResponseTimeMs > 0 ? [metric.lastResponseTimeMs] : []);
+
+      const avgResponseTimeMs = recentResponseTimes.length > 0
+        ? Math.round(recentResponseTimes.reduce((acc, val) => acc + val, 0) / recentResponseTimes.length)
+        : (typeof metric?.avgResponseTimeMs === 'number' ? metric.avgResponseTimeMs : (totalSuccesses > 0 ? metric?.lastResponseTimeMs ?? null : null));
+
+      // Effective response time is the average of recent successful requests (null if 0 successes)
+      const effectiveResponseTimeMs = (totalCalls > 0 && totalSuccesses === 0) ? null : avgResponseTimeMs;
 
       const lastTestedAt = metric?.lastTestedAt ?? null;
-      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
-      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
+      const status = getModelStatusIndicator(isLocked, effectiveResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
+      const performanceTier = getModelPerformanceTier(status, effectiveResponseTimeMs, lastTestedAt);
 
       result.push({
         provider: p.id,
@@ -600,7 +635,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         isLocked,
         lockedAt: lockedInfo?.lockedAt,
         expiresAt: lockedInfo?.expiresAt,
-        lastResponseTimeMs,
+        lastResponseTimeMs: effectiveResponseTimeMs,
+        avgResponseTimeMs: effectiveResponseTimeMs,
+        recentResponseTimes,
+        recentSamplesCount: recentResponseTimes.length,
         lastTestedAt,
         lastError: metric?.lastError ?? null,
         status,
@@ -652,14 +690,19 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         metric?.lastError
       );
 
-      // Reset response time to null if model is locked, last attempt failed, or 0 successes out of total calls
-      const lastResponseTimeMs = (isLocked || hasLastError || (totalCalls > 0 && totalSuccesses === 0))
-        ? null
-        : (metric?.lastResponseTimeMs ?? null);
+      const recentResponseTimes: number[] = Array.isArray(metric?.recentResponseTimes)
+        ? metric.recentResponseTimes
+        : (typeof metric?.lastResponseTimeMs === 'number' && metric.lastResponseTimeMs > 0 ? [metric.lastResponseTimeMs] : []);
+
+      const avgResponseTimeMs = recentResponseTimes.length > 0
+        ? Math.round(recentResponseTimes.reduce((acc, val) => acc + val, 0) / recentResponseTimes.length)
+        : (typeof metric?.avgResponseTimeMs === 'number' ? metric.avgResponseTimeMs : (totalSuccesses > 0 ? metric?.lastResponseTimeMs ?? null : null));
+
+      const effectiveResponseTimeMs = (totalCalls > 0 && totalSuccesses === 0) ? null : avgResponseTimeMs;
 
       const lastTestedAt = metric?.lastTestedAt ?? null;
-      const status = getModelStatusIndicator(isLocked, lastResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
-      const performanceTier = getModelPerformanceTier(status, lastResponseTimeMs, lastTestedAt);
+      const status = getModelStatusIndicator(isLocked, effectiveResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
+      const performanceTier = getModelPerformanceTier(status, effectiveResponseTimeMs, lastTestedAt);
 
       result.push({
         provider: pId,
@@ -668,7 +711,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         isLocked,
         lockedAt: lockedInfo?.lockedAt,
         expiresAt: lockedInfo?.expiresAt,
-        lastResponseTimeMs,
+        lastResponseTimeMs: effectiveResponseTimeMs,
+        avgResponseTimeMs: effectiveResponseTimeMs,
+        recentResponseTimes,
+        recentSamplesCount: recentResponseTimes.length,
         lastTestedAt,
         lastError: metric?.lastError ?? null,
         status,

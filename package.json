@@ -1,7 +1,7 @@
 {
-  "name": "vocab-learner",
+  "name": "react-example",
   "private": true,
-  "version": "1.0.210",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

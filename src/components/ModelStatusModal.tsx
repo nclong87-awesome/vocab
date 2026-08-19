@@ -217,7 +217,7 @@ export default function ModelStatusModal({
                 <h2 className="text-base font-bold text-stone-900 leading-tight truncate">
                   Model Status
                 </h2>
-                <p className="text-xs text-stone-500 truncate">Sorted fastest response first</p>
+                <p className="text-xs text-stone-500 truncate">Avg of last 10 requests (skips errors) • Sorted fastest first</p>
               </div>
             </div>
           )}
@@ -434,12 +434,26 @@ export default function ModelStatusModal({
                   {/* Middle Row: Metrics (Response Time, Success Rate, Status Badge) */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-100/80 text-xs">
                     <div className="flex flex-wrap items-center gap-3 text-stone-500 font-mono">
-                      {/* Response Time */}
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <span className="text-stone-400">Time:</span>
-                        <span className="font-semibold text-stone-800 text-xs">
-                          {formatResponseTime(item.lastResponseTimeMs)}
+                      {/* Average Response Time */}
+                      <div 
+                        className="flex items-center gap-1.5 text-[11px]" 
+                        title="Average response time calculated based on the last 10 requests (skipping failed requests)"
+                      >
+                        <span className="text-stone-400 flex items-center gap-0.5">
+                          <Clock className="w-3 h-3 text-stone-400" />
+                          Avg Time:
                         </span>
+                        <span className="font-semibold text-stone-800 text-xs">
+                          {formatResponseTime(item.avgResponseTimeMs ?? item.lastResponseTimeMs)}
+                        </span>
+                        {item.recentResponseTimes && item.recentResponseTimes.length > 0 && (
+                          <span 
+                            className="text-[10px] text-stone-500 font-sans font-medium bg-stone-100 px-1.5 py-0.2 rounded border border-stone-200/80" 
+                            title={`Calculated from ${item.recentResponseTimes.length} successful ${item.recentResponseTimes.length === 1 ? 'request' : 'requests'} (up to last 10)`}
+                          >
+                            {item.recentResponseTimes.length} {item.recentResponseTimes.length === 1 ? 'req' : 'reqs'}
+                          </span>
+                        )}
                       </div>
 
                       {/* Success Rate */}
