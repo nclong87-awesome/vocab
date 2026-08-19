@@ -6,6 +6,7 @@ import TypingIndicator from "./TypingIndicator";
 interface MessageListProps {
   messages: ChatMessage[];
   isTyping: boolean;
+  activeModelInfo?: { provider: string; model: string } | null;
   onCancelTyping?: () => void;
   targetLanguage: string;
   nativeLanguage: string;
@@ -39,6 +40,7 @@ interface MessageListProps {
 function MessageList({
   messages,
   isTyping,
+  activeModelInfo,
   onCancelTyping,
   targetLanguage,
   nativeLanguage,
@@ -116,7 +118,7 @@ function MessageList({
 
       {/* Typing Indicator */}
       {isTyping && (
-        <TypingIndicator llmConfig={llmConfig} onCancel={onCancelTyping} />
+        <TypingIndicator llmConfig={llmConfig} activeModelInfo={activeModelInfo} onCancel={onCancelTyping} />
       )}
       <div ref={messagesEndRef} />
     </div>

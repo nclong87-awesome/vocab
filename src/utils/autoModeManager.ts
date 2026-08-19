@@ -182,15 +182,23 @@ export interface AutoCandidate {
  */
 export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
   const candidates: AutoCandidate[] = [];
-  const providersToInclude = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom");
+  let providersToInclude = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom");
+
+  if (llmConfig?.provider && llmConfig.provider !== "auto" && llmConfig.provider !== "custom") {
+    providersToInclude = providersToInclude.filter(p => p.id === llmConfig.provider);
+  }
 
   // Include custom if user has saved custom endpoint or custom provider config
   if (
     llmConfig?.savedProviders?.custom?.baseUrl ||
     (llmConfig?.provider === "custom" && llmConfig.baseUrl)
   ) {
-    const customMeta = PROVIDER_OPTIONS.find(p => p.id === "custom");
-    if (customMeta) providersToInclude.push(customMeta);
+    if (!llmConfig?.provider || llmConfig.provider === "auto" || llmConfig.provider === "custom") {
+      const customMeta = PROVIDER_OPTIONS.find(p => p.id === "custom");
+      if (customMeta && !providersToInclude.some(p => p.id === "custom")) {
+        providersToInclude.push(customMeta);
+      }
+    }
   }
 
   const maxModels = Math.max(...providersToInclude.map(p => p.models.length), 0);

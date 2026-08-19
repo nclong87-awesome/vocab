@@ -7,15 +7,16 @@ import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 interface TypingIndicatorProps {
   llmConfig: LLMConfig;
   onCancel?: () => void;
+  activeModelInfo?: { provider: string; model: string } | null;
 }
 
-export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicatorProps) {
+export default function TypingIndicator({ llmConfig, onCancel, activeModelInfo }: TypingIndicatorProps) {
   // Resolve active provider and model
-  let provider = llmConfig.provider;
-  let model = llmConfig.model;
+  let provider = activeModelInfo?.provider || llmConfig.provider;
+  let model = activeModelInfo?.model || llmConfig.model;
   const isAutoMode = llmConfig.provider === "auto" || llmConfig.model === "auto";
 
-  if (provider === "auto") {
+  if (!activeModelInfo && (provider === "auto" || model === "auto")) {
     try {
       const nextCand = getNextAutoCandidate(llmConfig, undefined, false);
       provider = nextCand.provider;

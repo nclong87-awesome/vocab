@@ -93,6 +93,7 @@ export default function App() {
     chatMessages,
     setChatMessages,
     isTyping,
+    activeModelInfo,
     setIsTyping,
     conversationalState,
     startPractice,
@@ -425,6 +426,7 @@ export default function App() {
                   <ChatView
                     messages={chatMessages}
                     isTyping={isTyping}
+                    activeModelInfo={activeModelInfo}
                     onCancelTyping={() => setIsTyping(false)}
                     onSendMessage={handleSendChatMessage}
                     onAddWord={handleConversationalAddWordOrPrompt}

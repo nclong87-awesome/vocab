@@ -17,7 +17,7 @@ import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
-import { lockModel } from "../utils/autoModeManager";
+import { lockModel, getNextAutoCandidate } from "../utils/autoModeManager";
 import { t } from "../config/i18n";
 
 interface UseChatProps {
@@ -57,9 +57,10 @@ export function useChat({
   });
 
   const [isTyping, setIsTypingState] = useState(false);
+  const [activeModelInfo, setActiveModelInfo] = useState<{ provider: string; model: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const setIsTyping = (val: boolean | ((prev: boolean) => boolean)) => {
+  const setIsTyping = (val: boolean | ((prev: boolean) => boolean), overrideConfig?: LLMConfig) => {
     setIsTypingState((prev) => {
       const next = typeof val === "function" ? val(prev) : val;
       if (!next && prev) {
@@ -67,6 +68,21 @@ export function useChat({
           abortControllerRef.current.abort();
           abortControllerRef.current = null;
         }
+        setActiveModelInfo(null);
+      } else if (next) {
+        const cfg = overrideConfig || llmConfig;
+        let prov = cfg.provider;
+        let mod = cfg.model;
+        if (prov === "auto" || mod === "auto") {
+          try {
+            const cand = getNextAutoCandidate(cfg, undefined, false);
+            prov = cand.provider;
+            mod = cand.model;
+          } catch (e) {
+            // fallback
+          }
+        }
+        setActiveModelInfo({ provider: prov, model: mod });
       }
       return next;
     });
@@ -2062,6 +2078,7 @@ export function useChat({
     chatMessages,
     setChatMessages,
     isTyping,
+    activeModelInfo,
     setIsTyping,
     conversationalState,
     setConversationalState,

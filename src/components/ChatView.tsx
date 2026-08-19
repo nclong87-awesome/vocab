@@ -14,6 +14,7 @@ interface ChatViewProps {
   onSendMessage: (text: string) => Promise<void>;
   onClearHistory: () => void;
   isTyping: boolean;
+  activeModelInfo?: { provider: string; model: string } | null;
   onCancelTyping?: () => void;
   targetLanguage: string;
   nativeLanguage: string;
@@ -45,6 +46,7 @@ function ChatView({
   onSendMessage,
   onClearHistory,
   isTyping,
+  activeModelInfo,
   onCancelTyping,
   targetLanguage,
   nativeLanguage,
@@ -377,6 +379,7 @@ function ChatView({
       <MessageList
         messages={messages}
         isTyping={isTyping}
+        activeModelInfo={activeModelInfo}
         onCancelTyping={onCancelTyping}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
