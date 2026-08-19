@@ -1,10 +1,12 @@
 import React, { Fragment } from "react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import ChatMessageItem from "./ChatMessageItem";
+import TypingIndicator from "./TypingIndicator";
 
 interface MessageListProps {
   messages: ChatMessage[];
   isTyping: boolean;
+  onCancelTyping?: () => void;
   targetLanguage: string;
   nativeLanguage: string;
   appLanguage?: string;
@@ -35,6 +37,7 @@ interface MessageListProps {
 function MessageList({
   messages,
   isTyping,
+  onCancelTyping,
   targetLanguage,
   nativeLanguage,
   appLanguage,
@@ -107,13 +110,7 @@ function MessageList({
 
       {/* Typing Indicator */}
       {isTyping && (
-        <div className="flex mr-auto animate-chat-msg">
-          <div className="bg-stone-50 border border-stone-100 p-4 rounded-2xl rounded-tl-none flex items-center gap-1.5 shadow-sm">
-            <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
-            <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
-            <span className="w-2 h-2 bg-stone-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
-          </div>
-        </div>
+        <TypingIndicator llmConfig={llmConfig} onCancel={onCancelTyping} />
       )}
       <div ref={messagesEndRef} />
     </div>

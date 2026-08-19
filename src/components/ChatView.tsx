@@ -14,6 +14,7 @@ interface ChatViewProps {
   onSendMessage: (text: string) => Promise<void>;
   onClearHistory: () => void;
   isTyping: boolean;
+  onCancelTyping?: () => void;
   targetLanguage: string;
   nativeLanguage: string;
   appLanguage?: string;
@@ -42,6 +43,7 @@ function ChatView({
   onSendMessage,
   onClearHistory,
   isTyping,
+  onCancelTyping,
   targetLanguage,
   nativeLanguage,
   appLanguage = "Vietnamese",
@@ -371,6 +373,7 @@ function ChatView({
       <MessageList
         messages={messages}
         isTyping={isTyping}
+        onCancelTyping={onCancelTyping}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
         appLanguage={appLanguage}
