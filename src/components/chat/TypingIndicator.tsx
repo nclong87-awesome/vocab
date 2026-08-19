@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Clock, X } from "lucide-react";
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses, getNextAutoCandidate } from "../../utils/autoModeManager";
+import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 
 interface TypingIndicatorProps {
   llmConfig: LLMConfig;
@@ -12,6 +13,8 @@ export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicator
   // Resolve active provider and model
   let provider = llmConfig.provider;
   let model = llmConfig.model;
+  const isAutoMode = llmConfig.provider === "auto" || llmConfig.model === "auto";
+
   if (provider === "auto") {
     try {
       const nextCand = getNextAutoCandidate(llmConfig, undefined, false);
@@ -21,6 +24,18 @@ export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicator
       // fallback
     }
   }
+
+  // Format provider name
+  const providerMeta = PROVIDER_OPTIONS.find((p) => p.id === provider);
+  const displayProvider = providerMeta?.name
+    ? (provider === "cloudflare"
+        ? "Cloudflare"
+        : provider === "gemini"
+        ? "Gemini"
+        : provider === "custom"
+        ? "Custom"
+        : providerMeta.name.replace(/\s*\(Default\)/i, "").trim())
+    : (provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : "");
 
   // Find the model status to get the average response time
   const statuses = getAllModelStatuses(llmConfig);
@@ -51,7 +66,7 @@ export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicator
       {/* Subtle warm animated gradient accent line at the very top of the card */}
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 opacity-90 animate-pulse" />
 
-      {/* Header Row: Model details, active spinner, and Cancel button */}
+      {/* Header Row: Provider & Model details, active spinner, and Cancel button */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Pulsing indicator & model label */}
@@ -60,9 +75,21 @@ export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicator
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
           </div>
           <div className="min-w-0">
-            <h4 className="text-xs font-bold text-stone-800 font-mono truncate leading-none mb-1">
-              {displayModel}
-            </h4>
+            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+              {displayProvider && (
+                <span className="capitalize font-semibold text-stone-600 bg-stone-200/80 px-1.5 py-0.5 rounded text-[10.5px] leading-none shrink-0">
+                  {displayProvider}
+                </span>
+              )}
+              <h4 className="text-xs font-bold text-stone-800 font-mono truncate leading-none">
+                {displayModel}
+              </h4>
+              {isAutoMode && (
+                <span className="text-[9.5px] font-medium text-amber-800 bg-amber-100/90 border border-amber-300/60 px-1 py-0.2 rounded leading-none shrink-0">
+                  Auto
+                </span>
+              )}
+            </div>
             <p className="text-[10px] text-stone-400 font-semibold font-sans leading-none">
               generating response...
             </p>
@@ -74,7 +101,7 @@ export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicator
           <button
             onClick={onCancel}
             type="button"
-            className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-stone-500 hover:text-stone-800 hover:border-stone-300 bg-stone-100/80 hover:bg-stone-200/60 rounded-lg border border-stone-200/60 transition-all cursor-pointer shadow-2xs select-none"
+            className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-stone-500 hover:text-stone-800 hover:border-stone-300 bg-stone-100/80 hover:bg-stone-200/60 rounded-lg border border-stone-200/60 transition-all cursor-pointer shadow-2xs select-none shrink-0"
             title="Cancel Generation"
           >
             <X className="w-3 h-3 stroke-[2.5]" />
