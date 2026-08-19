@@ -399,7 +399,8 @@ async function callLLMClientSideSingleCandidate(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
-  llmConfig?: LLMConfig
+  llmConfig?: LLMConfig,
+  signal?: AbortSignal
 ): Promise<string> {
   const provider = llmConfig?.provider || "openrouter";
   const model = sanitizeModel(provider, llmConfig?.model);
@@ -485,7 +486,8 @@ async function callLLMClientSideSingleCandidate(
           const res = await fetchWithTimeout(targetEndpoint, {
             method: "POST",
             headers,
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal
           });
 
           if (!res.ok) {
@@ -550,7 +552,8 @@ async function callLLMClientSideSingleCandidate(
         const res = await fetchWithTimeout(targetEndpoint, {
           method: "POST",
           headers,
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal
         });
 
         if (!res.ok) {
@@ -622,7 +625,8 @@ async function callLLMClientSideSingleCandidate(
       let res = await fetchWithTimeout(targetUrl, {
         method: "POST",
         headers,
-        body: JSON.stringify(reqBody)
+        body: JSON.stringify(reqBody),
+        signal
       });
 
       // If request failed with 400 due to response_format or JSON mode incompatibility, retry once without response_format
@@ -634,7 +638,8 @@ async function callLLMClientSideSingleCandidate(
           res = await fetchWithTimeout(targetUrl, {
             method: "POST",
             headers,
-            body: JSON.stringify(reqBody)
+            body: JSON.stringify(reqBody),
+            signal
           });
         }
       }
@@ -662,7 +667,8 @@ export async function callLLMClientSideWithMeta(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
-  llmConfig?: LLMConfig
+  llmConfig?: LLMConfig,
+  signal?: AbortSignal
 ): Promise<LLMResponseWithMeta> {
   const provider = llmConfig?.provider || "auto";
 
@@ -691,7 +697,7 @@ export async function callLLMClientSideWithMeta(
       const candidateStartTime = Date.now();
       try {
         console.log(`[Auto Mode - ${tierMeta.badgeLabel}] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
-        let text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig);
+        let text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig, signal);
         const candidateDuration = Date.now() - candidateStartTime;
 
         if (schemaDescription) {
@@ -1980,6 +1986,7 @@ export interface ChatMessageRequest {
   targetLanguage: string;
   nativeLanguage: string;
   llmConfig?: LLMConfig;
+  signal?: AbortSignal;
 }
 
 export interface ChatMessageResult {
@@ -1997,7 +2004,7 @@ export interface ChatMessageResult {
 }
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
-  const { messages, targetLanguage, nativeLanguage, llmConfig } = params;
+  const { messages, targetLanguage, nativeLanguage, llmConfig, signal } = params;
   const startTime = performance.now();
 
   const chatHistoryStr = messages
@@ -2090,7 +2097,8 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     const res = await fetchWithTimeout("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig })
+      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig }),
+      signal
     });
 
     if (res.ok) {

@@ -56,7 +56,21 @@ export function useChat({
     ];
   });
 
-  const [isTyping, setIsTyping] = useState(false);
+  const [isTyping, setIsTypingState] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const setIsTyping = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsTypingState((prev) => {
+      const next = typeof val === "function" ? val(prev) : val;
+      if (!next && prev) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+      }
+      return next;
+    });
+  };
 
   // Conversational state for prompting word addition & grammar fixing
   const [conversationalState, setConversationalState] = useState<
@@ -928,6 +942,8 @@ export function useChat({
       return;
     }
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsTyping(true);
 
     try {
@@ -946,6 +962,7 @@ export function useChat({
         targetLanguage,
         nativeLanguage,
         llmConfig: configToUse,
+        signal: controller.signal,
       });
 
       const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
@@ -995,12 +1012,19 @@ export function useChat({
 
       setChatMessages((prev) => [...prev, newAssistantMessage]);
     } catch (err: any) {
+      if (controller.signal.aborted || err.name === "AbortError" || String(err).includes("aborted")) {
+        console.log("Chat generation was aborted by the user.");
+        return;
+      }
       console.error("Chat error:", err);
       handleAiApiError(err, configToUse, (newConfig) => {
         handleSendChatMessage(text, newConfig);
       });
     } finally {
-      setIsTyping(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setIsTypingState(false);
     }
   };
 
