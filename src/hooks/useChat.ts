@@ -60,6 +60,29 @@ export function useChat({
   const [activeModelInfo, setActiveModelInfo] = useState<{ provider: string; model: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const startTypingWithConfig = (overrideConfig?: LLMConfig): LLMConfig => {
+    const cfgToUse = overrideConfig || llmConfig;
+    let prov = cfgToUse.provider;
+    let mod = cfgToUse.model;
+    if (prov === "auto" || mod === "auto") {
+      try {
+        const cand = getNextAutoCandidate(cfgToUse, undefined, true);
+        prov = cand.provider;
+        mod = cand.model;
+      } catch (e) {
+        // fallback
+      }
+    }
+    const activeInfo = { provider: prov, model: mod };
+    setActiveModelInfo(activeInfo);
+    setIsTypingState(true);
+    return {
+      ...cfgToUse,
+      preferredProvider: prov,
+      preferredModel: mod,
+    };
+  };
+
   const setIsTyping = (val: boolean | ((prev: boolean) => boolean), overrideConfig?: LLMConfig) => {
     setIsTypingState((prev) => {
       const next = typeof val === "function" ? val(prev) : val;
@@ -70,19 +93,7 @@ export function useChat({
         }
         setActiveModelInfo(null);
       } else if (next) {
-        const cfg = overrideConfig || llmConfig;
-        let prov = cfg.provider;
-        let mod = cfg.model;
-        if (prov === "auto" || mod === "auto") {
-          try {
-            const cand = getNextAutoCandidate(cfg, undefined, false);
-            prov = cand.provider;
-            mod = cand.model;
-          } catch (e) {
-            // fallback
-          }
-        }
-        setActiveModelInfo({ provider: prov, model: mod });
+        startTypingWithConfig(overrideConfig);
       }
       return next;
     });
@@ -252,14 +263,14 @@ export function useChat({
       // Found Quiz candidates: proceed to generate and start Quiz
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      setIsTyping(true);
+      const configForServer = startTypingWithConfig(configToUse);
 
       try {
         const quizResult = await generateAiQuizQuestionsService({
           words: quizWords,
           targetLanguage,
           nativeLanguage,
-          llmConfig: configToUse,
+          llmConfig: configForServer,
           stats,
           signal: controller.signal,
         });
@@ -326,14 +337,14 @@ export function useChat({
     if (flashcardCandidates.length > 0) {
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      setIsTyping(true);
+      const configForServer = startTypingWithConfig(configToUse);
 
       try {
         const batchResult = await generateBatchFlashcardsService({
           words: flashcardCandidates,
           targetLanguage,
           nativeLanguage,
-          llmConfig: configToUse,
+          llmConfig: configForServer,
           signal: controller.signal,
         });
 
@@ -657,7 +668,7 @@ export function useChat({
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `add-word-status-${Date.now()}`;
     const contextHintStr = hint ? t("chat_with_context_hint", currentAppLang, { hint }) : "";
 
@@ -677,7 +688,7 @@ export function useChat({
         hint: hint,
         targetLanguage,
         nativeLanguage,
-        cfg: configToUse,
+        cfg: configForServer,
         signal: controller.signal,
       });
 
@@ -1046,7 +1057,7 @@ export function useChat({
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
 
     try {
       const payloadMessages = chatMessages.map((m) => ({
@@ -1063,7 +1074,7 @@ export function useChat({
         messages: payloadMessages,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse,
+        llmConfig: configForServer,
         signal: controller.signal,
       });
 
@@ -1156,7 +1167,7 @@ export function useChat({
       },
     ]);
 
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
 
     try {
       const res = await analyzeImageVocabService({
@@ -1164,7 +1175,7 @@ export function useChat({
         customPrompt,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse,
+        llmConfig: configForServer,
       });
 
       const items = res.vocabularyItems || [];
@@ -1513,7 +1524,7 @@ export function useChat({
 
   const handleConversationalGenerateWords = async (topic: string, count: number, overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `gen-words-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
@@ -1534,7 +1545,7 @@ export function useChat({
         targetLanguage,
         nativeLanguage,
         count,
-        cfg: configToUse,
+        cfg: configForServer,
       });
 
       const rawList = extractWordsFromPayload(res);
@@ -1707,7 +1718,7 @@ export function useChat({
     setConversationalState("none");
     const overrideConfig = imageDataUrl ? getVisionModelConfig() : undefined;
     const configToUse = overrideConfig || llmConfig;
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
@@ -1739,7 +1750,7 @@ export function useChat({
         customPrompt,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse,
+        llmConfig: configForServer,
       });
 
       const replies = res.suggestedReplies || [];
@@ -1821,7 +1832,7 @@ export function useChat({
 
   const handleConversationalFixGrammar = async (userText: string, overrideConfig?: LLMConfig) => {
     const configToUse = overrideConfig || llmConfig;
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
@@ -1840,7 +1851,7 @@ export function useChat({
         userText,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse,
+        llmConfig: configForServer,
       });
 
       const fixedSentence = res.fixedSentence || userText;
@@ -1961,14 +1972,14 @@ export function useChat({
       return;
     }
 
-    setIsTyping(true);
+    const configForServer = startTypingWithConfig(configToUse);
 
     try {
       const batchResult = await generateBatchFlashcardsService({
         words: candidateWords,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configToUse,
+        llmConfig: configForServer,
       });
 
       const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];

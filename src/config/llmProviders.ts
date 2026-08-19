@@ -34,38 +34,36 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://api.groq.com/openai/v1",
     requiresKey: false
   },
-  // {
-  //   id: "openrouter",
-  //   name: "OpenRouter",
-  //   tagline: "Unified API gateway for 100+ AI models",
-  //   defaultModel: "poolside/laguna-xs-2.1:free",
-  //   models: [
-  //     "poolside/laguna-xs-2.1:free",
-  //     "nvidia/nemotron-3-super-120b-a12b:free",
-  //     "nvidia/nemotron-3-nano-30b-a3b:free",
-  //     "google/gemma-4-26b-a4b-it:free",
-  //     "openai/gpt-oss-20b:free"
-  //   ],
-  //   defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
-  //   directBaseUrl: "https://openrouter.ai/api/v1",
-  //   requiresKey: false
-  // },
   {
-    id: "gemini",
-    name: "Google Gemini",
-    tagline: "Fast & highly structured intelligence",
-    defaultModel: "gemini-3.6-flash",
+    id: "openrouter",
+    name: "OpenRouter",
+    tagline: "Unified API gateway for 100+ AI models",
+    defaultModel: "google/gemini-3.1-flash-lite",
     models: [
-      "gemini-3.6-flash", 
-      "gemini-3.5-flash", 
-      "gemini-3.5-flash-lite", 
-      "gemini-3.1-flash-lite"
+      "google/gemini-3.1-flash-lite",
+      "google/gemini-3.5-flash-lite",
+      "google/gemini-3.5-flash"
     ],
-    tts_models: ["gemini-3.6-flash", "gemini-3.5-flash"],
-    defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
-    directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
+    directBaseUrl: "https://openrouter.ai/api/v1",
     requiresKey: false
   },
+  // {
+  //   id: "gemini",
+  //   name: "Google Gemini",
+  //   tagline: "Fast & highly structured intelligence",
+  //   defaultModel: "gemini-3.6-flash",
+  //   models: [
+  //     "gemini-3.6-flash", 
+  //     "gemini-3.5-flash", 
+  //     "gemini-3.5-flash-lite", 
+  //     "gemini-3.1-flash-lite"
+  //   ],
+  //   tts_models: ["gemini-3.6-flash", "gemini-3.5-flash"],
+  //   defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
+  //   directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  //   requiresKey: false
+  // },
   {
     id: "ollama",
     name: "Ollama",
@@ -150,10 +148,13 @@ export function getDefaultLLMConfig(): LLMConfig {
 export const RELIABLE_MODELS: string[] = [
   "openai/gpt-oss-120b", 
   "openai/gpt-oss-20b", 
-  "gemini-3.1-flash-lite",
-  "gemini-3.5-flash-lite", 
-  "gemini-3.5-flash", 
-  "gemini-3.6-flash",
+  // "gemini-3.1-flash-lite",
+  // "gemini-3.5-flash-lite", 
+  // "gemini-3.5-flash", 
+  // "gemini-3.6-flash",
+  "google/gemini-3.1-flash-lite",
+  "google/gemini-3.5-flash-lite",
+  "google/gemini-3.5-flash",
   "gemma4:31b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",

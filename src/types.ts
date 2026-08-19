@@ -47,6 +47,8 @@ export interface LLMConfig {
   isLoggedIn: boolean;
   useProxy?: boolean;
   savedProviders?: SavedProvidersMap;
+  preferredProvider?: string;
+  preferredModel?: string;
 }
 
 export interface StrengthHistoryEntry {

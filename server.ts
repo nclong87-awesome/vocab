@@ -22,6 +22,8 @@ interface LLMRequestConfig {
   proxyKey?: string;
   baseUrl?: string;
   savedProviders?: Record<string, { proxyKey?: string; [key: string]: any }>;
+  preferredProvider?: string;
+  preferredModel?: string;
 }
 
 
@@ -526,8 +528,25 @@ async function callLLMAutoCandidates(
   const excludedKeys = new Set<string>(initialExcludedKeys || []);
   let lastError: any = null;
 
+  if (llmConfig?.preferredProvider && llmConfig?.preferredModel) {
+    const prefKey = `${llmConfig.preferredProvider}:${llmConfig.preferredModel}`;
+    if (!isServerModelLocked(llmConfig.preferredProvider, llmConfig.preferredModel) && !excludedKeys.has(prefKey)) {
+      const prefCand = { provider: llmConfig.preferredProvider, model: llmConfig.preferredModel };
+      const existingIdx = candidates.findIndex(c => c.provider === prefCand.provider && c.model === prefCand.model);
+      if (existingIdx !== -1) {
+        candidates.splice(existingIdx, 1);
+      }
+      candidates.unshift(prefCand);
+    }
+  }
+
   for (let attempt = 0; attempt < candidates.length; attempt++) {
-    const cand = getNextServerAutoCandidate(llmConfig, excludedKeys);
+    let cand: { provider: string; model: string };
+    if (attempt === 0 && llmConfig?.preferredProvider && llmConfig?.preferredModel && candidates[0]?.provider === llmConfig.preferredProvider && candidates[0]?.model === llmConfig.preferredModel) {
+      cand = candidates[0];
+    } else {
+      cand = getNextServerAutoCandidate(llmConfig, excludedKeys);
+    }
     const candKey = `${cand.provider}:${cand.model}`;
     excludedKeys.add(candKey);
 
