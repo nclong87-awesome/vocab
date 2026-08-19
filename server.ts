@@ -275,7 +275,8 @@ async function callLLMSingle(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
-  llmConfig?: LLMRequestConfig
+  llmConfig?: LLMRequestConfig,
+  signal?: AbortSignal
 ): Promise<string> {
   const provider = llmConfig?.provider || "gemini";
   const model = sanitizeModel(provider, llmConfig?.model);
@@ -306,7 +307,8 @@ async function callLLMSingle(
           contents: prompt,
           config: {
             systemInstruction,
-            responseMimeType: "application/json"
+            responseMimeType: "application/json",
+            abortSignal: signal
           }
         });
 
@@ -349,7 +351,8 @@ async function callLLMSingle(
       const res = await fetchWithTimeout(targetEndpoint, {
         method: "POST",
         headers,
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
       });
 
       if (!res.ok) {
@@ -415,7 +418,8 @@ async function callLLMSingle(
     const res = await fetchWithTimeout(targetEndpoint, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal
     });
 
     if (!res.ok) {
@@ -478,7 +482,8 @@ async function callLLMSingle(
   let res = await fetchWithTimeout(targetUrl, {
     method: "POST",
     headers,
-    body: JSON.stringify(reqBody)
+    body: JSON.stringify(reqBody),
+    signal
   });
 
   // If request failed with 400 due to response_format or JSON mode incompatibility, retry once without response_format
@@ -490,7 +495,8 @@ async function callLLMSingle(
       res = await fetchWithTimeout(targetUrl, {
         method: "POST",
         headers,
-        body: JSON.stringify(reqBody)
+        body: JSON.stringify(reqBody),
+        signal
       });
     }
   }
@@ -514,7 +520,8 @@ async function callLLMAutoCandidates(
   systemInstruction: string,
   schemaDescription: string,
   llmConfig?: LLMRequestConfig,
-  initialExcludedKeys?: Set<string>
+  initialExcludedKeys?: Set<string>,
+  signal?: AbortSignal
 ): Promise<string> {
   const excludedKeys = new Set<string>(initialExcludedKeys || []);
   let lastError: any = null;
@@ -537,7 +544,7 @@ async function callLLMAutoCandidates(
 
     try {
       console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${SERVER_AUTO_CANDIDATES.length}: Routing request to ${candKey}`);
-      const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig);
+      const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig, signal);
       if (schemaDescription) {
         try {
           cleanAndParseJson(resultText);
@@ -561,16 +568,17 @@ async function callLLM(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
-  llmConfig?: LLMRequestConfig
+  llmConfig?: LLMRequestConfig,
+  signal?: AbortSignal
 ): Promise<string> {
   const provider = llmConfig?.provider || "auto";
 
   if (provider === "auto" || llmConfig?.model === "auto") {
-    return callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig);
+    return callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, signal);
   }
 
   // When a specific provider is configured, call it directly and throw on error without fallbacks
-  return callLLMSingle(prompt, systemInstruction, schemaDescription, llmConfig);
+  return callLLMSingle(prompt, systemInstruction, schemaDescription, llmConfig, signal);
 }
 
 function extractTextFromContent(content: any): string {
@@ -1881,6 +1889,11 @@ ALSO INCLUDE:
 
 // 7. Interactive Chat Assistant endpoint
 app.post("/api/chat", async (req, res) => {
+  const controller = new AbortController();
+  req.on("close", () => {
+    controller.abort();
+  });
+
   try {
     const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig } = req.body;
 
@@ -1955,7 +1968,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
   ]
 }`;
 
-    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig);
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     let parsed: any;
     try {
       parsed = cleanAndParseJson(text);
@@ -2011,6 +2024,10 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
       suggestedActions: finalActions
     });
   } catch (error: any) {
+    if (controller.signal.aborted || error.name === "AbortError" || String(error).includes("aborted")) {
+      console.log("[Server] /api/chat request aborted by client.");
+      return;
+    }
     console.error("Error in AI chat:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
     const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;

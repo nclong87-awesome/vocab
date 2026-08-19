@@ -446,7 +446,8 @@ async function callLLMClientSideSingleCandidate(
             contents: prompt,
             config: {
               systemInstruction,
-              responseMimeType: "application/json"
+              responseMimeType: "application/json",
+              abortSignal: signal
             }
           });
 
