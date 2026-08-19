@@ -48,22 +48,22 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://openrouter.ai/api/v1",
     requiresKey: false
   },
-  // {
-  //   id: "gemini",
-  //   name: "Google Gemini",
-  //   tagline: "Fast & highly structured intelligence",
-  //   defaultModel: "gemini-3.6-flash",
-  //   models: [
-  //     "gemini-3.6-flash", 
-  //     "gemini-3.5-flash", 
-  //     "gemini-3.5-flash-lite", 
-  //     "gemini-3.1-flash-lite"
-  //   ],
-  //   tts_models: ["gemini-3.6-flash", "gemini-3.5-flash"],
-  //   defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
-  //   directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
-  //   requiresKey: false
-  // },
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    tagline: "Fast & highly structured intelligence",
+    defaultModel: "gemini-3.6-flash",
+    models: [
+      "gemini-3.6-flash", 
+      "gemini-3.5-flash", 
+      "gemini-3.5-flash-lite", 
+      "gemini-3.1-flash-lite"
+    ],
+    tts_models: ["gemini-3.6-flash", "gemini-3.5-flash"],
+    defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
+    directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    requiresKey: false
+  },
   {
     id: "ollama",
     name: "Ollama",

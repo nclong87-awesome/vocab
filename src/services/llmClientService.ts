@@ -7,7 +7,8 @@ import {
   getAutoCandidateWithMeta,
   recordModelResponse, 
   recordModelFailure,
-  lockModel
+  lockModel,
+  syncServerLocks
 } from "../utils/autoModeManager";
 import { logApiRequest } from "./requestHistoryService";
 
@@ -2074,6 +2075,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 
     if (res.ok) {
       const data = await res.json();
+      syncServerLocks(data.serverLockedModels);
       const endTime = performance.now();
       const duration = data.responseTimeMs || Math.round(endTime - startTime);
       const prov = data.provider || llmConfig?.provider || "gemini";
@@ -2091,11 +2093,21 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
-    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
-    throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
+    syncServerLocks(errData.serverLockedModels);
+    if (errData.provider && errData.model && res.status !== 401 && res.status !== 403) {
+      lockModel(errData.provider, errData.model);
+    }
+    const parsedErr = parseLlmError(errData, errData.provider || llmConfig?.provider || "gemini");
+    if (errData.model) {
+      parsedErr.userMessage = parsedErr.userMessage.replace(/Google\/Provider|Gemini|LLM provider/i, `${errData.provider}:${errData.model}`);
+    }
+    throw new LLMConnectionError(parsedErr);
   } catch (err: any) {
+    if (err instanceof LLMConnectionError) {
+      throw err;
+    }
     const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
-    throw new Error(parsedErr.userMessage || err?.message || "Failed to send chat message.");
+    throw new LLMConnectionError(parsedErr);
   }
 }
 

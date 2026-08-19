@@ -132,6 +132,8 @@ function parseServerError(err: any, provider: string = "gemini"): {
   errorType: string;
   userMessage: string;
   isRetryable: boolean;
+  provider?: string;
+  model?: string;
 } {
   let originalMessage = err?.message || (typeof err === "string" ? err : JSON.stringify(err || {}));
   
@@ -169,12 +171,17 @@ function parseServerError(err: any, provider: string = "gemini"): {
     }
   } catch {}
 
+  const resProvider = err?.lastAttemptedCandidate?.provider || provider;
+  const resModel = err?.lastAttemptedCandidate?.model;
+
   if (statusCode === 401 || lowerMsg.includes("unauthenticated") || lowerMsg.includes("api_key_invalid") || lowerMsg.includes("invalid api key") || lowerMsg.includes("unregistered callers")) {
     return {
       statusCode: 401,
       errorType: "INVALID_KEY",
       userMessage: `Invalid ${provUpper} API Key (401): The provided API key is invalid or unrecognized. Please check your API key in settings.`,
-      isRetryable: false
+      isRetryable: false,
+      provider: resProvider,
+      model: resModel
     };
   }
 
@@ -183,7 +190,9 @@ function parseServerError(err: any, provider: string = "gemini"): {
       statusCode: 403,
       errorType: "PERMISSION_DENIED",
       userMessage: `Access Forbidden (403): Your ${provUpper} API key lacks access permissions or Gemini is restricted in your region/project.`,
-      isRetryable: false
+      isRetryable: false,
+      provider: resProvider,
+      model: resModel
     };
   }
 
@@ -192,7 +201,9 @@ function parseServerError(err: any, provider: string = "gemini"): {
       statusCode: 429,
       errorType: "RATE_LIMIT",
       userMessage: `Rate Limit Exceeded (429): ${provUpper} API quota or rate limit reached.`,
-      isRetryable: true
+      isRetryable: true,
+      provider: resProvider,
+      model: resModel
     };
   }
 
@@ -201,7 +212,9 @@ function parseServerError(err: any, provider: string = "gemini"): {
       statusCode: 404,
       errorType: "NOT_FOUND",
       userMessage: `Model Not Found (404): The requested ${provUpper} model is unavailable or endpoint path is invalid.`,
-      isRetryable: false
+      isRetryable: false,
+      provider: resProvider,
+      model: resModel
     };
   }
 
@@ -211,7 +224,9 @@ function parseServerError(err: any, provider: string = "gemini"): {
       statusCode: code,
       errorType: "SERVER_ERROR",
       userMessage: `${provUpper} Server Error (${code}): Google/Provider AI servers are temporarily busy or undergoing maintenance.`,
-      isRetryable: true
+      isRetryable: true,
+      provider: resProvider,
+      model: resModel
     };
   }
 
@@ -219,7 +234,9 @@ function parseServerError(err: any, provider: string = "gemini"): {
     statusCode: statusCode || 400,
     errorType: "UNKNOWN",
     userMessage: `${provUpper} Error: ${originalMessage || "Failed to communicate with LLM provider."}`,
-    isRetryable: statusCode >= 500 || statusCode === 429
+    isRetryable: statusCode >= 500 || statusCode === 429,
+    provider: resProvider,
+    model: resModel
   };
 }
 
@@ -230,6 +247,17 @@ function lockServerModel(provider: string, model: string, durationMs: number = 3
   const key = `${provider}:${model}`;
   serverLockedModels.set(key, Date.now() + durationMs);
   console.warn(`[Server Auto Mode] Locked model ${key} for ${Math.round(durationMs / 60000)} minutes`);
+}
+
+function getServerLockedModelsArray(): { key: string; expiresAt: number }[] {
+  const result: { key: string; expiresAt: number }[] = [];
+  const now = Date.now();
+  for (const [key, expiresAt] of serverLockedModels.entries()) {
+    if (expiresAt > now) {
+      result.push({ key, expiresAt });
+    }
+  }
+  return result;
 }
 
 function isServerModelLocked(provider: string, model: string): boolean {
@@ -576,6 +604,7 @@ async function callLLMAutoCandidates(
       if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted")) {
         throw err;
       }
+      err.lastAttemptedCandidate = cand;
       lastError = err;
       console.warn(`[Server Auto Mode] Model ${candKey} failed: ${err?.message || err}. Locking model for 1 hour and switching...`);
       lockServerModel(cand.provider, cand.model, 3600000);
@@ -2088,7 +2117,8 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     res.json({
       ...parsed,
       text: mainText,
-      suggestedActions: finalActions
+      suggestedActions: finalActions,
+      serverLockedModels: getServerLockedModelsArray()
     });
   } catch (error: any) {
     if (controller.signal.aborted || error.name === "AbortError" || String(error).includes("aborted")) {
@@ -2098,7 +2128,14 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     console.error("Error in AI chat:", error);
     const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
     const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
-    res.status(code).json({ error: parsed.userMessage, statusCode: parsed.statusCode, errorType: parsed.errorType });
+    res.status(code).json({
+      error: parsed.userMessage,
+      statusCode: parsed.statusCode,
+      errorType: parsed.errorType,
+      provider: parsed.provider,
+      model: parsed.model,
+      serverLockedModels: getServerLockedModelsArray()
+    });
   }
 });
 

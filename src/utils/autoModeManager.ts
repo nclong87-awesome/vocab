@@ -97,6 +97,50 @@ export function lockModel(
 }
 
 /**
+ * Synchronizes server model locks into client localStorage.
+ */
+export function syncServerLocks(serverLocks?: { key: string; expiresAt: number }[] | string[]): void {
+  if (!serverLocks || !Array.isArray(serverLocks) || serverLocks.length === 0) return;
+  const locked = getLockedModels();
+  let changed = false;
+  const now = Date.now();
+
+  for (const item of serverLocks) {
+    if (typeof item === "string") {
+      const [p, ...mParts] = item.split(":");
+      const m = mParts.join(":");
+      if (p && m) {
+        locked[`${p}:${m}`] = {
+          provider: p,
+          model: m,
+          lockedAt: now,
+          expiresAt: now + ONE_HOUR_MS,
+        };
+        changed = true;
+      }
+    } else if (item && item.key && item.expiresAt > now) {
+      const [p, ...mParts] = item.key.split(":");
+      const m = mParts.join(":");
+      if (p && m) {
+        locked[item.key] = {
+          provider: p,
+          model: m,
+          lockedAt: now,
+          expiresAt: item.expiresAt,
+        };
+        changed = true;
+      }
+    }
+  }
+
+  if (changed && typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(locked));
+    } catch (e) {}
+  }
+}
+
+/**
  * Unlocks a specific model manually.
  */
 export function unlockModel(provider: string, model: string): void {
