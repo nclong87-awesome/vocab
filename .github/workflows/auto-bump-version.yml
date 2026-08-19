@@ -32,7 +32,7 @@ jobs:
       - name: Bump Version
         run: |      
           # Change "minor" → "patch" if you prefer patch bumps
-          npm version patch -m "chore(release): bump version to %s [skip ci]"
+          npm version patch -m "chore(release): bump version to %s"
 
       - name: Push Changes
         run: |
