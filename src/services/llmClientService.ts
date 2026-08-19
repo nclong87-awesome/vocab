@@ -4,10 +4,10 @@ import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
-  getAutoModelCandidates, 
   getAutoCandidateWithMeta,
   recordModelResponse, 
-  recordModelFailure
+  recordModelFailure,
+  lockModel
 } from "../utils/autoModeManager";
 import { logApiRequest } from "./requestHistoryService";
 
@@ -635,95 +635,91 @@ export async function callLLMClientSideWithMeta(
 ): Promise<LLMResponseWithMeta> {
   const provider = llmConfig?.provider || "auto";
 
-  // AUTO MODE: Automatically rotate across all available models & lock failing models for 1 hour
+  // AUTO MODE: Automatically select candidate model & lock failing model for 1 hour
   if (provider === "auto" || llmConfig?.model === "auto") {
-    const candidates = getAutoModelCandidates(llmConfig);
-    const excludedKeys = new Set<string>();
-    let lastError: any = null;
+    const { candidate, tierMeta } = getAutoCandidateWithMeta(llmConfig);
+    const candidateKey = `${candidate.provider}:${candidate.model}`;
 
-    for (let attempt = 0; attempt < candidates.length; attempt++) {
-      const { candidate, tierMeta } = getAutoCandidateWithMeta(llmConfig, excludedKeys);
-      const candidateKey = `${candidate.provider}:${candidate.model}`;
-      excludedKeys.add(candidateKey);
+    const candidateSavedProfile = llmConfig?.savedProviders?.[candidate.provider];
+    const effectiveCandidateConfig: LLMConfig = {
+      provider: candidate.provider,
+      model: candidate.model,
+      apiKey: candidateSavedProfile?.apiKey || (llmConfig?.provider === candidate.provider ? llmConfig.apiKey : ""),
+      baseUrl: candidateSavedProfile?.baseUrl || "",
+      useProxy: candidateSavedProfile?.useProxy !== undefined ? candidateSavedProfile.useProxy : true,
+      isLoggedIn: true,
+      savedProviders: llmConfig?.savedProviders
+    };
 
-      const candidateSavedProfile = llmConfig?.savedProviders?.[candidate.provider];
-      const effectiveCandidateConfig: LLMConfig = {
-        provider: candidate.provider,
-        model: candidate.model,
-        apiKey: candidateSavedProfile?.apiKey || (llmConfig?.provider === candidate.provider ? llmConfig.apiKey : ""),
-        baseUrl: candidateSavedProfile?.baseUrl || "",
-        useProxy: candidateSavedProfile?.useProxy !== undefined ? candidateSavedProfile.useProxy : true,
-        isLoggedIn: true,
-        savedProviders: llmConfig?.savedProviders
-      };
+    const candidateStartTime = Date.now();
+    try {
+      console.log(`[Auto Mode - ${tierMeta.badgeLabel}] Routing request to ${candidateKey}`);
+      let text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig, signal);
+      const candidateDuration = Date.now() - candidateStartTime;
 
-      const candidateStartTime = Date.now();
-      try {
-        console.log(`[Auto Mode - ${tierMeta.badgeLabel}] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candidateKey}`);
-        let text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig, signal);
-        const candidateDuration = Date.now() - candidateStartTime;
-
-        if (schemaDescription) {
+      if (schemaDescription) {
+        try {
+          text = cleanJsonResponse(text);
+          JSON.parse(text);
+        } catch (jsonErr: any) {
           try {
-            text = cleanJsonResponse(text);
-            JSON.parse(text);
-          } catch (jsonErr: any) {
-            try {
-              const repairedObj = cleanAndParseJson(text);
-              text = JSON.stringify(repairedObj);
-            } catch (repairErr: any) {
-              throw new Error(`Invalid JSON format response from ${candidateKey}: ${repairErr.message || jsonErr.message}`);
-            }
+            const repairedObj = cleanAndParseJson(text);
+            text = JSON.stringify(repairedObj);
+          } catch (repairErr: any) {
+            throw new Error(`Invalid JSON format response from ${candidateKey}: ${repairErr.message || jsonErr.message}`);
           }
         }
-
-        recordModelResponse(candidate.provider, candidate.model, candidateDuration);
-
-        // Record successful request/response history log
-        logApiRequest({
-          provider: candidate.provider,
-          model: candidate.model,
-          prompt,
-          systemInstruction,
-          schemaDescription,
-          response: text,
-          responseTimeMs: candidateDuration,
-          status: "success",
-          statusCode: 200
-        }).catch(() => undefined);
-
-        return {
-          text,
-          provider: candidate.provider,
-          model: candidate.model,
-          responseTimeMs: candidateDuration
-        };
-      } catch (err: any) {
-        if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted") || String(err).includes("aborted")) {
-          throw err;
-        }
-        lastError = err;
-        const candidateDuration = Date.now() - candidateStartTime;
-        console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour and switching automatically...`);
-        recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
-
-        // Record failed request/response history log
-        logApiRequest({
-          provider: candidate.provider,
-          model: candidate.model,
-          prompt,
-          systemInstruction,
-          schemaDescription,
-          response: err?.message || String(err),
-          responseTimeMs: candidateDuration,
-          status: "error",
-          statusCode: err?.statusCode || 500,
-          errorMessage: err?.message || String(err)
-        }).catch(() => undefined);
       }
-    }
 
-    throw lastError || new Error("All AI models in Auto Mode failed or were locked out. Please check network connectivity or API configuration.");
+      recordModelResponse(candidate.provider, candidate.model, candidateDuration);
+
+      // Record successful request/response history log
+      logApiRequest({
+        provider: candidate.provider,
+        model: candidate.model,
+        prompt,
+        systemInstruction,
+        schemaDescription,
+        response: text,
+        responseTimeMs: candidateDuration,
+        status: "success",
+        statusCode: 200
+      }).catch(() => undefined);
+
+      return {
+        text,
+        provider: candidate.provider,
+        model: candidate.model,
+        responseTimeMs: candidateDuration
+      };
+    } catch (err: any) {
+      if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted") || String(err).includes("aborted")) {
+        throw err;
+      }
+      const candidateDuration = Date.now() - candidateStartTime;
+      console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour.`);
+      recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
+      lockModel(candidate.provider, candidate.model, 3600000, err?.message || String(err));
+
+      // Record failed request/response history log
+      logApiRequest({
+        provider: candidate.provider,
+        model: candidate.model,
+        prompt,
+        systemInstruction,
+        schemaDescription,
+        response: err?.message || String(err),
+        responseTimeMs: candidateDuration,
+        status: "error",
+        statusCode: err?.statusCode || 500,
+        errorMessage: err?.message || String(err)
+      }).catch(() => undefined);
+
+      err.provider = candidate.provider;
+      err.model = candidate.model;
+      err.isAutoMode = true;
+      throw err;
+    }
   }
 
   const activeProvider = llmConfig?.provider || "gemini";

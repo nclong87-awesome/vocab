@@ -123,6 +123,37 @@ export function clearAllLocks(): void {
   }
 }
 
+const AUTO_ROTATION_STORAGE_KEY = "vocab_auto_mode_rotation_index";
+
+export function getAutoRotationIndex(): number {
+  if (typeof window === "undefined") return autoRotationIndex;
+  try {
+    const val = localStorage.getItem(AUTO_ROTATION_STORAGE_KEY);
+    if (val !== null) {
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed) && parsed >= 0) {
+        autoRotationIndex = parsed;
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return autoRotationIndex;
+}
+
+export function saveAutoRotationIndex(idx: number): void {
+  autoRotationIndex = idx;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(AUTO_ROTATION_STORAGE_KEY, String(idx));
+    } catch (e) {}
+  }
+}
+
+export function advanceAutoRotationIndex(): void {
+  const current = getAutoRotationIndex();
+  saveAutoRotationIndex(current + 1);
+}
+
 /**
  * Resets all model states, including locks, failure logs, error messages, 
  * total calls, success rates, response times, and internal rotation counters.
@@ -132,6 +163,7 @@ export function resetAllModelStates(): void {
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(METRICS_STORAGE_KEY);
+      localStorage.removeItem(AUTO_ROTATION_STORAGE_KEY);
     } catch (e) {
       console.error("Error clearing model storage keys from localStorage:", e);
     }
@@ -756,7 +788,8 @@ let explorationCallCounter = 0;
  */
 export function getNextAutoCandidate(
   llmConfig?: LLMConfig,
-  excludedKeys?: Set<string>
+  excludedKeys?: Set<string>,
+  advance: boolean = true
 ): AutoCandidate {
   const candidates = getAutoModelCandidates(llmConfig);
   const lockedMap = getLockedModels();
@@ -796,72 +829,79 @@ export function getNextAutoCandidate(
       }
     }
 
-    // Sort Tier 1: Untested/Stale probes first to sample new models immediately, then fastest verified models
-    tier1.sort((a, b) => {
-      if (a.isUntestedOrStale && !b.isUntestedOrStale) return -1;
-      if (!a.isUntestedOrStale && b.isUntestedOrStale) return 1;
-      return (a.time ?? 0) - (b.time ?? 0);
-    });
     tier2.sort((a, b) => a.time - b.time);
     tier4.sort((a, b) => a.time - b.time);
 
-    explorationCallCounter++;
+    if (advance) {
+      explorationCallCounter++;
+    }
 
     // 15% Epsilon-Greedy Exploration: Every 6th call, probe a Tier 2 or Tier 4 model if Tier 1 is non-empty
     // to give slower models a chance to re-evaluate latency and get promoted!
-    const isExplorationTurn = explorationCallCounter % 6 === 0;
+    const isExplorationTurn = explorationCallCounter > 0 && explorationCallCounter % 6 === 0;
     if (isExplorationTurn && (tier2.length > 0 || tier4.length > 0)) {
       const probePool = [...tier2.map(t => t.cand), ...tier4.map(t => t.cand)];
-      const idx = autoRotationIndex % probePool.length;
-      autoRotationIndex++;
+      const rotIdx = getAutoRotationIndex();
+      const idx = rotIdx % probePool.length;
+      if (advance) {
+        saveAutoRotationIndex(rotIdx + 1);
+      }
       const probeCandidate = probePool[idx];
       console.log(`[Auto Mode - Epsilon Exploration Probe] Probing Tier 2/4 candidate to re-evaluate response time: ${probeCandidate.provider}:${probeCandidate.model}`);
       return probeCandidate;
     }
 
     // Probe Selection: If there are any untested or stale models in Tier 1, prioritize them cleanly
-    // without index-skipping issues by selecting the candidate with the absolute lowest calls (e.g., 0 calls)
-    // and oldest test time.
+    // and rotate among them (lowest calls first) so every new request or retry picks the next model.
     const untestedOrStale = tier1.filter(t => t.isUntestedOrStale);
     if (untestedOrStale.length > 0) {
-      untestedOrStale.sort((a, b) => {
-        const keyA = `${a.cand.provider}:${a.cand.model}`;
-        const keyB = `${b.cand.provider}:${b.cand.model}`;
-        const metricA = metricsMap[keyA];
-        const metricB = metricsMap[keyB];
-
-        const callsA = metricA?.totalCalls ?? 0;
-        const callsB = metricB?.totalCalls ?? 0;
-        if (callsA !== callsB) {
-          return callsA - callsB;
-        }
-
-        const testA = metricA?.lastTestedAt ?? 0;
-        const testB = metricB?.lastTestedAt ?? 0;
-        return testA - testB;
+      // Find candidate(s) with minimum call count
+      const minCalls = Math.min(...untestedOrStale.map(t => {
+        const key = `${t.cand.provider}:${t.cand.model}`;
+        return metricsMap[key]?.totalCalls ?? 0;
+      }));
+      const minCallCandidates = untestedOrStale.filter(t => {
+        const key = `${t.cand.provider}:${t.cand.model}`;
+        return (metricsMap[key]?.totalCalls ?? 0) === minCalls;
       });
 
-      const selected = untestedOrStale[0].cand;
+      const rotIdx = getAutoRotationIndex();
+      const idx = rotIdx % minCallCandidates.length;
+      const selected = minCallCandidates[idx].cand;
+
+      if (advance) {
+        saveAutoRotationIndex(rotIdx + 1);
+      }
+
       console.log(`[Auto Mode - Probe Selection] Selected untested/stale candidate (calls: ${metricsMap[`${selected.provider}:${selected.model}`]?.totalCalls ?? 0}): ${selected.provider}:${selected.model}`);
       return selected;
     }
 
     // Standard Tier Priority Selection (Tier 1 -> Tier 2 -> Tier 4)
     if (tier1.length > 0) {
-      const idx = autoRotationIndex % tier1.length;
-      autoRotationIndex++;
+      const rotIdx = getAutoRotationIndex();
+      const idx = rotIdx % tier1.length;
+      if (advance) {
+        saveAutoRotationIndex(rotIdx + 1);
+      }
       return tier1[idx].cand;
     }
 
     if (tier2.length > 0) {
-      const idx = autoRotationIndex % tier2.length;
-      autoRotationIndex++;
+      const rotIdx = getAutoRotationIndex();
+      const idx = rotIdx % tier2.length;
+      if (advance) {
+        saveAutoRotationIndex(rotIdx + 1);
+      }
       return tier2[idx].cand;
     }
 
     if (tier4.length > 0) {
-      const idx = autoRotationIndex % tier4.length;
-      autoRotationIndex++;
+      const rotIdx = getAutoRotationIndex();
+      const idx = rotIdx % tier4.length;
+      if (advance) {
+        saveAutoRotationIndex(rotIdx + 1);
+      }
       console.warn(`[Auto Mode - Tier 4 Priority Routing] Tier 1 & 2 exhausted. Using Tier 4 demoted fallback: ${tier4[idx].cand.provider}:${tier4[idx].cand.model}`);
       return tier4[idx].cand;
     }
@@ -870,15 +910,20 @@ export function getNextAutoCandidate(
   // Fallback: Reset locks if all candidates locked or failed
   console.warn("[Auto Mode] All candidate models are locked or failed. Resetting locks to prevent total lock-out.");
   clearAllLocks();
-  autoRotationIndex = (autoRotationIndex + 1) % candidates.length;
-  return candidates[0];
+  const rotIdx = getAutoRotationIndex();
+  const idx = rotIdx % candidates.length;
+  if (advance) {
+    saveAutoRotationIndex(rotIdx + 1);
+  }
+  return candidates[idx];
 }
 
 export function getAutoCandidateWithMeta(
   llmConfig?: LLMConfig,
-  excludedKeys?: Set<string>
+  excludedKeys?: Set<string>,
+  advance: boolean = true
 ): { candidate: AutoCandidate; tier: PerformanceTierNumber; tierMeta: PerformanceTierInfo } {
-  const candidate = getNextAutoCandidate(llmConfig, excludedKeys);
+  const candidate = getNextAutoCandidate(llmConfig, excludedKeys, advance);
   const key = `${candidate.provider}:${candidate.model}`;
   const metricsMap = getModelMetricsMap();
   const metric = metricsMap[key];

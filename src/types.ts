@@ -243,4 +243,12 @@ export interface ChatMessage {
   provider?: string;
   model?: string;
   responseTimeMs?: number;
+  isError?: boolean;
+  errorInfo?: {
+    message: string;
+    provider?: string;
+    model?: string;
+    isTimeout?: boolean;
+    canRetry?: boolean;
+  };
 }

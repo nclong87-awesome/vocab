@@ -364,7 +364,16 @@ export type TranslationKey =
   | "quiz_paired_with"
   | "quiz_add_suggested_word"
   | "quiz_suggested_word_added"
-  | "chat_quiz_suggested_words_header";
+  | "chat_quiz_suggested_words_header"
+  | "chat_error_title"
+  | "chat_error_timeout_title"
+  | "chat_error_auto_retry_countdown"
+  | "chat_error_auto_mode_switch_note"
+  | "chat_error_try_again_now"
+  | "chat_error_cancel_retry"
+  | "chat_error_retry_cancelled"
+  | "chat_error_retry_btn"
+  | "chat_error_retrying_now";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

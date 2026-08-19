@@ -239,35 +239,56 @@ function isServerModelLocked(provider: string, model: string): boolean {
   return false;
 }
 
-const SERVER_AUTO_CANDIDATES = [
-  ...(process.env.GEMINI_API_KEY ? [
-    { provider: "gemini", model: "gemini-3.6-flash" },
-    { provider: "gemini", model: "gemini-3.5-flash" },
-    { provider: "gemini", model: "gemini-3.5-flash-lite" }
-  ] : []),
-  ...PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom" && (!process.env.GEMINI_API_KEY || p.id !== "gemini")).map(p => ({
+function getServerAutoModelCandidates(llmConfig?: LLMRequestConfig): { provider: string; model: string }[] {
+  const candidates: { provider: string; model: string }[] = [];
+  const providersToInclude = PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom");
+
+  if (
+    llmConfig?.savedProviders?.custom?.baseUrl ||
+    (llmConfig?.provider === "custom" && llmConfig.baseUrl)
+  ) {
+    const customMeta = PROVIDER_OPTIONS.find(p => p.id === "custom");
+    if (customMeta) providersToInclude.push(customMeta);
+  }
+
+  const maxModels = Math.max(...providersToInclude.map(p => p.models.length), 0);
+
+  // Interleave models across providers so rotation alternates providers
+  for (let i = 0; i < maxModels; i++) {
+    for (const p of providersToInclude) {
+      if (p.models[i] && p.models[i] !== "auto") {
+        candidates.push({ provider: p.id, model: p.models[i] });
+      }
+    }
+  }
+  if (candidates.length > 0) {
+    return candidates;
+  }
+  return PROVIDER_OPTIONS.filter(p => p.id !== "auto" && p.id !== "custom").map(p => ({
     provider: p.id,
     model: p.defaultModel
-  }))
-];
+  }));
+}
 
 let serverAutoRotationIndex = 0;
 
-function getNextServerAutoCandidate(excludedKeys?: Set<string>): { provider: string; model: string } {
-  for (let i = 0; i < SERVER_AUTO_CANDIDATES.length; i++) {
-    const idx = (serverAutoRotationIndex + i) % SERVER_AUTO_CANDIDATES.length;
-    const cand = SERVER_AUTO_CANDIDATES[idx];
+function getNextServerAutoCandidate(llmConfig?: LLMRequestConfig, excludedKeys?: Set<string>): { provider: string; model: string } {
+  const candidates = getServerAutoModelCandidates(llmConfig);
+  for (let i = 0; i < candidates.length; i++) {
+    const idx = (serverAutoRotationIndex + i) % candidates.length;
+    const cand = candidates[idx];
     const key = `${cand.provider}:${cand.model}`;
 
     if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
-      serverAutoRotationIndex = (idx + 1) % SERVER_AUTO_CANDIDATES.length;
+      serverAutoRotationIndex = (idx + 1) % candidates.length;
       return cand;
     }
   }
 
   serverLockedModels.clear();
-  serverAutoRotationIndex = (serverAutoRotationIndex + 1) % SERVER_AUTO_CANDIDATES.length;
-  return SERVER_AUTO_CANDIDATES[0];
+  const currentIdx = serverAutoRotationIndex % candidates.length;
+  serverAutoRotationIndex = (serverAutoRotationIndex + 1) % candidates.length;
+  return candidates[currentIdx];
 }
 
 // Call LLM for a single provider/model candidate
@@ -493,11 +514,12 @@ async function callLLMAutoCandidates(
   initialExcludedKeys?: Set<string>,
   signal?: AbortSignal
 ): Promise<string> {
+  const candidates = getServerAutoModelCandidates(llmConfig);
   const excludedKeys = new Set<string>(initialExcludedKeys || []);
   let lastError: any = null;
 
-  for (let attempt = 0; attempt < SERVER_AUTO_CANDIDATES.length; attempt++) {
-    const cand = getNextServerAutoCandidate(excludedKeys);
+  for (let attempt = 0; attempt < candidates.length; attempt++) {
+    const cand = getNextServerAutoCandidate(llmConfig, excludedKeys);
     const candKey = `${cand.provider}:${cand.model}`;
     excludedKeys.add(candKey);
 
@@ -513,7 +535,7 @@ async function callLLMAutoCandidates(
     };
 
     try {
-      console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${SERVER_AUTO_CANDIDATES.length}: Routing request to ${candKey}`);
+      console.log(`[Server Auto Mode] Attempt ${attempt + 1}/${candidates.length}: Routing request to ${candKey}`);
       const resultText = await callLLMSingle(prompt, systemInstruction, schemaDescription, candConfig, signal);
       if (schemaDescription) {
         try {

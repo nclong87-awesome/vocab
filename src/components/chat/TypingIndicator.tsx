@@ -14,7 +14,7 @@ export default function TypingIndicator({ llmConfig, onCancel }: TypingIndicator
   let model = llmConfig.model;
   if (provider === "auto") {
     try {
-      const nextCand = getNextAutoCandidate(llmConfig);
+      const nextCand = getNextAutoCandidate(llmConfig, undefined, false);
       provider = nextCand.provider;
       model = nextCand.model;
     } catch (e) {

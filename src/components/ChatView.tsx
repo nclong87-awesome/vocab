@@ -36,6 +36,8 @@ interface ChatViewProps {
   conversationalState?: string;
   toast?: string | null;
   onToast?: (msg: string) => void;
+  onRetryErrorMessage?: (messageId: string) => void;
+  onCancelErrorMessage?: (messageId: string) => void;
 }
 
 function ChatView({
@@ -65,6 +67,8 @@ function ChatView({
   conversationalState = "none",
   toast: externalToast,
   onToast: onExternalToast,
+  onRetryErrorMessage,
+  onCancelErrorMessage,
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
@@ -399,6 +403,8 @@ function ChatView({
         latestMessageRef={latestMessageRef}
         words={words}
         onUpdateWords={onUpdateWords}
+        onRetryErrorMessage={onRetryErrorMessage}
+        onCancelErrorMessage={onCancelErrorMessage}
       />
 
       {/* Quick Actions Component */}

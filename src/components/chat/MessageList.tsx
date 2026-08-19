@@ -32,6 +32,8 @@ interface MessageListProps {
   latestMessageRef: React.RefObject<HTMLDivElement | null>;
   words?: Word[];
   onUpdateWords?: (updatedWords: Word[]) => void;
+  onRetryErrorMessage?: (messageId: string) => void;
+  onCancelErrorMessage?: (messageId: string) => void;
 }
 
 function MessageList({
@@ -63,6 +65,8 @@ function MessageList({
   latestMessageRef,
   words,
   onUpdateWords,
+  onRetryErrorMessage,
+  onCancelErrorMessage,
 }: MessageListProps) {
   return (
     <div 
@@ -103,6 +107,8 @@ function MessageList({
               handleRecordActionUse={handleRecordActionUse}
               words={words}
               onUpdateWords={onUpdateWords}
+              onRetryErrorMessage={onRetryErrorMessage}
+              onCancelErrorMessage={onCancelErrorMessage}
             />
           </Fragment>
         );

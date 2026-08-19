@@ -357,5 +357,14 @@ export const enTranslations: LanguageTranslations = {
     quiz_paired_with: "Paired with {word}",
     quiz_add_suggested_word: "Add to Collection",
     quiz_suggested_word_added: "Added ✓",
-    chat_quiz_suggested_words_header: "💡 **Frequently Paired Words (Collocations):**"
+    chat_quiz_suggested_words_header: "💡 **Frequently Paired Words (Collocations):**",
+    chat_error_title: "AI Response Error",
+    chat_error_timeout_title: "Request Timed Out",
+    chat_error_auto_retry_countdown: "Automatically retrying in {seconds}s...",
+    chat_error_auto_mode_switch_note: "Auto Mode: Will switch to another model automatically",
+    chat_error_try_again_now: "Try again now",
+    chat_error_cancel_retry: "Cancel",
+    chat_error_retry_cancelled: "Auto-retry cancelled",
+    chat_error_retry_btn: "Try again",
+    chat_error_retrying_now: "Retrying now..."
   };

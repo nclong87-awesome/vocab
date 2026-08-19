@@ -107,6 +107,8 @@ export default function App() {
     handleClearChatHistory,
     handleAnalyzeImageVocab,
     handleAddMultipleWords,
+    handleRetryErrorMessage,
+    handleCancelErrorMessage,
   } = useChat({
     words,
     setWords,
@@ -447,6 +449,8 @@ export default function App() {
                     conversationalState={conversationalState}
                     toast={toastMessage}
                     onToast={showToast}
+                    onRetryErrorMessage={handleRetryErrorMessage}
+                    onCancelErrorMessage={handleCancelErrorMessage}
                   />
                 )}
               </motion.div>

@@ -17,6 +17,7 @@ import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
+import { lockModel } from "../utils/autoModeManager";
 import { t } from "../config/i18n";
 
 interface UseChatProps {
@@ -27,7 +28,7 @@ interface UseChatProps {
   targetLanguage: string;
   nativeLanguage: string;
   appLanguage?: string;
-  handleAiApiError: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
+  handleAiApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
   handleFinishQuiz: (score: number, total: number, correctWordIds?: string[], incorrectWordIds?: string[]) => void;
   onShowToast?: (msg: string) => void;
 }
@@ -40,7 +41,6 @@ export function useChat({
   targetLanguage,
   nativeLanguage,
   appLanguage,
-  handleAiApiError,
   handleFinishQuiz,
   onShowToast,
 }: UseChatProps) {
@@ -128,6 +128,80 @@ export function useChat({
       console.error(e);
     }
   }, [chatMessages, targetLanguage, nativeLanguage]);
+
+  const pendingRetriesRef = useRef<Map<string, (newConfig: LLMConfig) => void>>(new Map());
+
+  const triggerChatErrorWithCountdown = (
+    err: any,
+    currentConfig: LLMConfig,
+    retryAction: (newConfig: LLMConfig) => void,
+    prefix: string = "error"
+  ) => {
+    setIsTypingState(false);
+    const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to communicate with AI provider.");
+    const isTimeout = Boolean(
+      err?.isTimeout ||
+      err?.name === "TimeoutError" ||
+      rawMsg.toLowerCase().includes("timeout") ||
+      rawMsg.toLowerCase().includes("timed out")
+    );
+    const failedProvider = err?.provider || currentConfig.provider;
+    const failedModel = err?.model || currentConfig.model;
+
+    if (failedProvider && failedModel && (currentConfig.provider === "auto" || currentConfig.model === "auto")) {
+      lockModel(failedProvider, failedModel, 3600000, rawMsg);
+    }
+
+    const errorMsgId = `${prefix}-${Date.now()}`;
+    pendingRetriesRef.current.set(errorMsgId, retryAction);
+
+    const errorMsg: ChatMessage = {
+      id: errorMsgId,
+      role: "assistant",
+      content: rawMsg,
+      timestamp: new Date().toISOString(),
+      provider: failedProvider,
+      model: failedModel,
+      isError: true,
+      errorInfo: {
+        message: rawMsg,
+        provider: failedProvider,
+        model: failedModel,
+        isTimeout,
+        canRetry: true,
+      },
+    };
+
+    setChatMessages((prev) => [...prev, errorMsg]);
+  };
+
+  const handleRetryErrorMessage = (messageId: string) => {
+    const retryFn = pendingRetriesRef.current.get(messageId);
+    pendingRetriesRef.current.delete(messageId);
+    // Remove the error message from the chat
+    setChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+    if (retryFn) {
+      retryFn(llmConfig);
+    }
+  };
+
+  const handleCancelErrorMessage = (messageId: string) => {
+    pendingRetriesRef.current.delete(messageId);
+    setChatMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === messageId && m.errorInfo) {
+          return {
+            ...m,
+            errorInfo: {
+              ...m.errorInfo,
+              canRetry: false,
+            },
+          };
+        }
+        return m;
+      })
+    );
+  };
 
   // Start the unified Practice flow: checks Quiz candidates first, then Flashcard candidates, or displays no-words message
   const startPractice = async (overrideConfig?: LLMConfig) => {
@@ -224,7 +298,7 @@ export function useChat({
           return;
         }
         console.error("Error starting chat quiz:", e);
-        handleAiApiError(e, configToUse, (newConfig) => startPractice(newConfig));
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig), "quiz-error");
       } finally {
         setIsTyping(false);
       }
@@ -325,7 +399,7 @@ export function useChat({
         setChatMessages([flashcardMsg]);
       } catch (e: any) {
         console.error("Error generating flash card deck:", e);
-        handleAiApiError(e, configToUse, (newConfig) => startPractice(newConfig));
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig), "flashcard-error");
       } finally {
         setIsTyping(false);
       }
@@ -793,9 +867,9 @@ export function useChat({
         return;
       }
       console.error(err);
-      handleAiApiError(err, configToUse, (newConfig) => {
+      triggerChatErrorWithCountdown(err, configToUse, (newConfig) => {
         handleConversationalAddWord(wordText, hint, newConfig);
-      });
+      }, "add-word-error");
     } finally {
       setIsTyping(false);
       setConversationalState("adding_word");
@@ -1034,9 +1108,9 @@ export function useChat({
         return;
       }
       console.error("Chat error:", err);
-      handleAiApiError(err, configToUse, (newConfig) => {
+      triggerChatErrorWithCountdown(err, configToUse, (newConfig) => {
         handleSendChatMessage(text, newConfig);
-      });
+      }, "chat-error");
     } finally {
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
@@ -1144,31 +1218,10 @@ export function useChat({
       });
     } catch (err: any) {
       console.error("Image analysis error:", err);
-      const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to analyze image for vocabulary.");
-      const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-
-      setChatMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `err-img-${Date.now()}`,
-            role: "assistant",
-            content: t("chat_error_generate_vocab_from_image", currentAppLang, { error: rawMsg }),
-            timestamp: new Date().toISOString(),
-            suggestedActions: [
-              {
-                label: t("action_retry_analyze_image", currentAppLang),
-                action: "retry_analyze_image",
-                payload: {
-                  imageDataUrl,
-                  customPrompt,
-                },
-              },
-            ],
-          },
-        ];
-      });
+      setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
+      triggerChatErrorWithCountdown(err, configToUse, () => {
+        handleAnalyzeImageVocab(imageDataUrl, customPrompt);
+      }, "img-vocab-error");
     } finally {
       setIsTyping(false);
     }
@@ -1617,9 +1670,9 @@ export function useChat({
     } catch (err: any) {
       console.error("Failed to generate words from topic:", err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
-      handleAiApiError(err, configToUse, (newConfig) => {
+      triggerChatErrorWithCountdown(err, configToUse, (newConfig) => {
         handleConversationalGenerateWords(topic, count, newConfig);
-      });
+      }, "gen-words-error");
     } finally {
       setIsTyping(false);
     }
@@ -1732,29 +1785,10 @@ export function useChat({
       });
     } catch (err: any) {
       console.error("Suggest Casual Reply Error:", err);
-      const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to suggest casual reply.");
-      setChatMessages((prev) => {
-        const filtered = prev.filter((m) => m.id !== statusMsgId);
-        return [
-          ...filtered,
-          {
-            id: `err-reply-${Date.now()}`,
-            role: "assistant",
-            content: t("chat_error_suggest_reply", currentAppLang, { error: rawMsg }),
-            timestamp: new Date().toISOString(),
-            suggestedActions: [
-              {
-                label: t("action_retry_suggest_reply", currentAppLang),
-                action: "retry_suggest_reply",
-                payload: {
-                  imageDataUrl,
-                  customPrompt,
-                },
-              },
-            ],
-          },
-        ];
-      });
+      setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
+      triggerChatErrorWithCountdown(err, configToUse, () => {
+        handleSuggestCasualReply(imageDataUrl, customPrompt);
+      }, "suggest-reply-error");
     } finally {
       setIsTyping(false);
     }
@@ -1871,9 +1905,9 @@ export function useChat({
     } catch (err: any) {
       console.error("Fix Grammar Error:", err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
-      handleAiApiError(err, configToUse, () => {
+      triggerChatErrorWithCountdown(err, configToUse, () => {
         handleConversationalFixGrammar(userText);
-      });
+      }, "fix-grammar-error");
     } finally {
       setIsTyping(false);
     }
@@ -2004,7 +2038,7 @@ export function useChat({
       setChatMessages([flashcardMsg]);
     } catch (e: any) {
       console.error("Error generating flash card deck:", e);
-      handleAiApiError(e, configToUse, (newConfig) => handleViewFlashcard(newConfig));
+      triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewFlashcard(newConfig), "view-flashcard-error");
     } finally {
       setIsTyping(false);
     }
@@ -2060,5 +2094,7 @@ export function useChat({
     handleConversationalFixGrammar,
     handleViewFlashcard,
     handleClearChatHistory,
+    handleRetryErrorMessage,
+    handleCancelErrorMessage,
   };
 }

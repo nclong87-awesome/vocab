@@ -357,5 +357,14 @@ export const viTranslations: LanguageTranslations = {
     quiz_paired_with: "Đi kèm với {word}",
     quiz_add_suggested_word: "Thêm vào Bộ Từ",
     quiz_suggested_word_added: "Đã thêm ✓",
-    chat_quiz_suggested_words_header: "💡 **Các từ thường xuất hiện cùng (Cụm từ / Collocations):**"
+    chat_quiz_suggested_words_header: "💡 **Các từ thường xuất hiện cùng (Cụm từ / Collocations):**",
+    chat_error_title: "Lỗi Phản Hồi Từ AI",
+    chat_error_timeout_title: "Hết Thời Gian Chờ (Timeout)",
+    chat_error_auto_retry_countdown: "Tự động thử lại sau {seconds}s...",
+    chat_error_auto_mode_switch_note: "Chế độ Auto: Sẽ tự động chuyển sang mô hình AI khác",
+    chat_error_try_again_now: "Thử lại ngay",
+    chat_error_cancel_retry: "Hủy",
+    chat_error_retry_cancelled: "Đã hủy tự động thử lại",
+    chat_error_retry_btn: "Thử lại",
+    chat_error_retrying_now: "Đang thử lại ngay..."
   };

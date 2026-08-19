@@ -7,6 +7,7 @@ import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
+import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { getQuizCandidates, getFlashcardCandidates } from "../../utils/spacedRepetition";
@@ -38,6 +39,8 @@ interface ChatMessageItemProps {
   handleRecordActionUse: (actionId: string) => void;
   words?: Word[];
   onUpdateWords?: (updatedWords: Word[]) => void;
+  onRetryErrorMessage?: (messageId: string) => void;
+  onCancelErrorMessage?: (messageId: string) => void;
 }
 
 function formatActionLabel(act: { label: string; action: string; payload?: any }, currentAppLang: string): string {
@@ -118,7 +121,21 @@ function ChatMessageItem({
   handleRecordActionUse,
   words,
   onUpdateWords,
+  onRetryErrorMessage,
+  onCancelErrorMessage,
 }: ChatMessageItemProps) {
+  if (msg.isError) {
+    return (
+      <ChatErrorMessageCard
+        msg={msg}
+        appLanguage={appLanguage}
+        llmConfig={llmConfig}
+        onRetry={() => onRetryErrorMessage?.(msg.id)}
+        onCancel={() => onCancelErrorMessage?.(msg.id)}
+      />
+    );
+  }
+
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
