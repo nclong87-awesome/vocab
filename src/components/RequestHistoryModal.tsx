@@ -305,11 +305,11 @@ export default function RequestHistoryModal({
           </div>
         </div>
 
-        {/* Main Body: Two-column layout (List + Inspector) on desktop, Master-Detail on mobile */}
+        {/* Main Body: Single/Split Layout (Minimalist List + Expandable Inspector) */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
           
           {/* Requests List Column */}
-          <div className={`w-full ${selectedLog ? "hidden md:flex md:w-5/12 lg:w-4/12" : "flex"} flex-col border-r border-stone-200/80 bg-stone-50/50 overflow-y-auto`}>
+          <div className={`w-full ${selectedLog ? "hidden md:flex md:w-5/12 lg:w-4/12 border-r border-stone-200/80" : "flex"} flex-col bg-stone-50/50 overflow-y-auto`}>
             {filteredLogs.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-3">
@@ -335,8 +335,12 @@ export default function RequestHistoryModal({
                     <button
                       key={log.id}
                       type="button"
-                      onClick={() => setSelectedLog(log)}
-                      className={`w-full text-left p-3 sm:p-3.5 transition-all cursor-pointer flex flex-col gap-1.5 relative ${
+                      onClick={() => setSelectedLog(prev => prev?.id === log.id ? null : log)}
+                      className={`w-full text-left transition-all cursor-pointer flex flex-col justify-center relative ${
+                        selectedLog 
+                          ? "p-2.5 sm:p-3 gap-1.5" 
+                          : "p-3 sm:px-5 sm:py-3.5 gap-1.5 sm:gap-2"
+                      } ${
                         isSelected 
                           ? "bg-amber-50/80 border-l-4 border-l-amber-500 shadow-2xs" 
                           : "hover:bg-white"
@@ -344,7 +348,7 @@ export default function RequestHistoryModal({
                       id={`log-entry-${log.id}`}
                     >
                       {/* Top Row: Status badge, Action, Latency, Time */}
-                      <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
                           {isSuccess ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/90 px-1.5 py-0.5 rounded">
@@ -377,22 +381,23 @@ export default function RequestHistoryModal({
                             {log.responseTimeMs.toLocaleString()} ms
                           </span>
                           <span className="text-[10px] text-stone-600 font-medium">
-                            {formatTime(log.timestamp)}
+                            {selectedLog ? formatTime(log.timestamp) : `${formatDate(log.timestamp)} ${formatTime(log.timestamp)}`}
                           </span>
                         </div>
                       </div>
 
-                      {/* Middle: Provider and Model */}
-                      <div className="flex items-center gap-1.5 text-[11px] text-stone-600">
-                        <span className="font-semibold text-stone-800">{log.provider}</span>
-                        <span className="text-stone-300">•</span>
-                        <span className="font-mono text-[10px] text-stone-500 truncate max-w-[160px]">{log.model}</span>
-                      </div>
-
-                      {/* Bottom: Prompt Snippet */}
-                      <div className="text-xs text-stone-600 line-clamp-2 leading-relaxed bg-white/70 p-1.5 rounded border border-stone-200/60 font-sans">
-                        <span className="font-semibold text-stone-700 text-[10px] uppercase tracking-wide mr-1">REQ:</span>
-                        {log.prompt || "(Empty prompt payload)"}
+                      {/* Bottom Row: Provider and Model */}
+                      <div className="flex items-center justify-between text-[11px] text-stone-600">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className="font-semibold text-stone-800 shrink-0">{log.provider}</span>
+                          <span className="text-stone-300">•</span>
+                          <span className="font-mono text-[10px] text-stone-500 truncate">{log.model}</span>
+                        </div>
+                        {!selectedLog && (
+                          <span className="text-[10px] text-stone-400 font-medium shrink-0 ml-2 hidden sm:inline">
+                            Click to inspect response →
+                          </span>
+                        )}
                       </div>
                     </button>
                   );
@@ -401,9 +406,9 @@ export default function RequestHistoryModal({
             )}
           </div>
 
-          {/* Response & Request Inspector Column */}
-          <div className={`flex-1 ${!selectedLog ? "hidden md:flex" : "flex"} flex-col bg-white overflow-hidden`}>
-            {selectedLog ? (
+          {/* Response & Request Inspector Column (shown when selectedLog is active) */}
+          {selectedLog && (
+            <div className="flex-1 flex flex-col bg-white overflow-hidden animate-in fade-in duration-150">
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 
                 {/* Inspector Header */}
@@ -412,7 +417,7 @@ export default function RequestHistoryModal({
                     <button
                       type="button"
                       onClick={() => setSelectedLog(null)}
-                      className="md:hidden p-1.5 text-stone-600 hover:bg-stone-200 rounded-lg"
+                      className="md:hidden p-1.5 text-stone-600 hover:bg-stone-200 rounded-lg cursor-pointer"
                       title="Back to list"
                     >
                       <ArrowRight className="w-4 h-4 rotate-180" />
@@ -457,6 +462,17 @@ export default function RequestHistoryModal({
                     >
                       {copiedField === "full_json" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span className="hidden sm:inline">{copiedField === "full_json" ? "Copied JSON" : "Copy Log JSON"}</span>
+                    </button>
+
+                    {/* Prominent Close Details Button */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLog(null)}
+                      className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-200/80 rounded-lg transition-colors cursor-pointer"
+                      title="Close details section"
+                      id="close-details-pane-btn"
+                    >
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -674,18 +690,8 @@ export default function RequestHistoryModal({
 
                 </div>
               </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-stone-50/50">
-                <div className="w-14 h-14 rounded-2xl bg-white border border-stone-200 flex items-center justify-center text-stone-400 mb-3 shadow-xs">
-                  <Activity className="w-7 h-7 text-stone-400" />
-                </div>
-                <h3 className="text-sm font-bold text-stone-800">Select a request to inspect</h3>
-                <p className="text-xs text-stone-500 mt-1 max-w-sm">
-                  Click on any request from the list to view its response, prompt, latency, and full execution parameters.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
         </div>
 
