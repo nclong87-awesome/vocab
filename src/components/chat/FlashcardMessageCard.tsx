@@ -184,7 +184,7 @@ function FlashcardMessageCard({
                 ? "bg-amber-400 text-stone-950 shadow-2xs"
                 : "text-stone-300 hover:text-white"
             }`}
-            title="View all 5 cards in grid"
+            title="View all cards in grid"
           >
             <LayoutGrid className="w-3.5 h-3.5" />
             <span>All ({cards.length})</span>

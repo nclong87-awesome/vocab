@@ -297,6 +297,7 @@ export function autoMergeLocalAndRemote(
         strength: mergedStrength,
         learned: mergedLearned,
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
+        nextReviewDate: primary.nextReviewDate || lWord.nextReviewDate || match.nextReviewDate,
         createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt,
         strengthHistory: mergedHistoryList.length > 0 ? mergedHistoryList : undefined
       };

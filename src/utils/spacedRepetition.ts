@@ -1,4 +1,4 @@
-import { Word } from "../types";
+import { Word, StrengthHistoryEntry } from "../types";
 import { recordStrengthHistory, sanitizeAndHealWordHistory } from "./strengthHistoryHelpers";
 
 export interface BaselinePracticeInfo {
@@ -55,13 +55,193 @@ export function getHoursSinceLastReview(word: Word, now: Date = new Date()): num
   return Math.max(0, diffHours);
 }
 
-export interface CandidateWordsOptions {
-  maxCandidates?: number;
-  cooldownHours?: number;
-  candidatePoolSize?: number;
+/**
+ * Adaptive Spaced Repetition Algorithm based on Strength History:
+ * Computes the optimal review interval (in hours) before a word should be reintroduced.
+ *
+ * Factors evaluated from strength history:
+ * 1. Recent Mistake Factor: If the last practice was incorrect, shortens interval to 4-12 hours for urgent remediation.
+ * 2. Consecutive Success Streak: Successive correct reviews expand retention interval exponentially (1d -> 2d -> 4d -> 7d -> 14d -> 30d).
+ * 3. Memory Strength Modulation: Higher bounded memory strength expands the interval (firmly mastered words last longer).
+ * 4. Priority / Starred Modifier: Starred words receive a 25% interval reduction to surface sooner for extra practice.
+ */
+export function calculateNextReviewIntervalHours(
+  word: Word,
+  overrideStrength?: number,
+  overrideReason?: StrengthHistoryEntry["reason"]
+): number {
+  const history = word.strengthHistory || [];
+  const currentStrength = overrideStrength !== undefined ? overrideStrength : (word.strength ?? 0);
+
+  // Filter out passive decay and manual adjustments to focus on active learning events
+  const activeEntries = history.filter(
+    e => e.reason !== "memory_decay" && e.reason !== "manual_adjust"
+  );
+
+  // Determine last practice reason (using override if provided)
+  const lastEntry = activeEntries.length > 0 ? activeEntries[activeEntries.length - 1] : null;
+  const effectiveReason = overrideReason || lastEntry?.reason || (word.learned ? "mastered" : "created");
+
+  // 1. If recent practice was an incorrect quiz answer, provide fast remedial spacing (4 - 12 hours)
+  if (effectiveReason === "quiz_incorrect") {
+    if (currentStrength < 30) return 4;
+    if (currentStrength < 60) return 8;
+    return 12;
+  }
+
+  // 2. Count consecutive successful practice sessions working backwards from history
+  let consecutiveSuccesses = 0;
+  for (let i = activeEntries.length - 1; i >= 0; i--) {
+    const entry = activeEntries[i];
+    if (entry.reason === "quiz_incorrect" || entry.reason === "unmastered") {
+      break;
+    }
+    if (entry.reason === "quiz_correct" || entry.reason === "flashcard_review" || entry.reason === "mastered") {
+      consecutiveSuccesses++;
+    }
+  }
+
+  // If calculating for a new correct practice event right now, count it
+  if (overrideReason === "quiz_correct" || overrideReason === "flashcard_review" || overrideReason === "mastered") {
+    if (lastEntry?.reason === "quiz_incorrect") {
+      consecutiveSuccesses = 1;
+    }
+  }
+
+  // 3. Base interval in hours calculated from retention streak:
+  let baseIntervalHours: number;
+  if (consecutiveSuccesses <= 0) {
+    baseIntervalHours = currentStrength >= 50 ? 18 : 12;
+  } else if (consecutiveSuccesses === 1) {
+    baseIntervalHours = 24; // 1 day
+  } else if (consecutiveSuccesses === 2) {
+    baseIntervalHours = 48; // 2 days
+  } else if (consecutiveSuccesses === 3) {
+    baseIntervalHours = 96; // 4 days
+  } else if (consecutiveSuccesses === 4) {
+    baseIntervalHours = 168; // 7 days (1 week)
+  } else if (consecutiveSuccesses === 5) {
+    baseIntervalHours = 336; // 14 days (2 weeks)
+  } else {
+    // Mature long-term retention: exponential expansion up to 30 days (720 hours)
+    baseIntervalHours = Math.min(720, Math.round(336 * Math.pow(1.5, consecutiveSuccesses - 5)));
+  }
+
+  // 4. Strength Multiplier: (0.6x for 0% strength to 1.3x for 100% strength)
+  const strengthMultiplier = Math.max(0.6, Math.min(1.3, 0.6 + (currentStrength / 100) * 0.7));
+  let calculatedHours = baseIntervalHours * strengthMultiplier;
+
+  // 5. Starred Modifier: If user marked this word with a star, review 25% sooner
+  if (word.starred) {
+    calculatedHours *= 0.75;
+  }
+
+  // Bound interval between 4 hours and 720 hours (30 days)
+  return Math.max(4, Math.min(720, Math.round(calculatedHours)));
 }
 
-export const DEFAULT_COOLDOWN_HOURS = 72; // 3 days (72 hours)
+/**
+ * Calculates the exact ISO date and time when the word is scheduled for its next review.
+ */
+export function calculateNextReviewDate(
+  word: Word,
+  overrideStrength?: number,
+  overrideReason?: StrengthHistoryEntry["reason"],
+  fromDate: Date = new Date()
+): string {
+  const intervalHours = calculateNextReviewIntervalHours(word, overrideStrength, overrideReason);
+  const targetTime = fromDate.getTime() + intervalHours * 60 * 60 * 1000;
+  return new Date(targetTime).toISOString();
+}
+
+/**
+ * Checks whether a word has reached or passed its scheduled next review time.
+ */
+export function isWordEligibleForReview(word: Word, now: Date = new Date()): boolean {
+  // If exact nextReviewDate is present, check against it
+  if (word.nextReviewDate) {
+    const reviewTime = new Date(word.nextReviewDate).getTime();
+    if (!isNaN(reviewTime)) {
+      return now.getTime() >= reviewTime;
+    }
+  }
+
+  // Fallback for words without nextReviewDate:
+  // If never reviewed, it's eligible
+  if (!word.lastReviewed) {
+    return true;
+  }
+
+  // Compute dynamic next review date from history baseline
+  const { lastPracticeDate } = getLastPracticeBaseline(word);
+  const baselineStr = lastPracticeDate || word.lastReviewed;
+  if (!baselineStr) return true;
+
+  const baselineTime = new Date(baselineStr);
+  if (isNaN(baselineTime.getTime())) return true;
+
+  const intervalHours = calculateNextReviewIntervalHours(word);
+  const scheduledTime = baselineTime.getTime() + intervalHours * 60 * 60 * 1000;
+  return now.getTime() >= scheduledTime;
+}
+
+export interface NextReviewInfo {
+  isDue: boolean;
+  nextReviewDate: string;
+  remainingHours: number;
+  remainingDays: number;
+  formattedCountdown: string;
+  intervalHours: number;
+}
+
+/**
+ * Returns human-readable review scheduling details and countdown for a word.
+ */
+export function getNextReviewInfo(word: Word, now: Date = new Date()): NextReviewInfo {
+  let targetIso = word.nextReviewDate;
+  if (!targetIso) {
+    const { lastPracticeDate } = getLastPracticeBaseline(word);
+    const fromDate = lastPracticeDate ? new Date(lastPracticeDate) : new Date();
+    targetIso = calculateNextReviewDate(word, word.strength, undefined, fromDate);
+  }
+
+  const targetDate = new Date(targetIso);
+  const diffMs = targetDate.getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffDays = Math.ceil(diffHours / 24);
+  const isDue = diffMs <= 0;
+
+  let formattedCountdown = "Ready for Review";
+  if (!isDue) {
+    if (diffHours < 1) {
+      const minutes = Math.max(1, Math.round(diffMs / (1000 * 60)));
+      formattedCountdown = `In ${minutes}m`;
+    } else if (diffHours < 24) {
+      formattedCountdown = `In ${Math.round(diffHours)}h`;
+    } else if (diffDays === 1) {
+      formattedCountdown = `In 1 day`;
+    } else if (diffDays < 7) {
+      formattedCountdown = `In ${diffDays} days`;
+    } else {
+      const weeks = Math.round(diffDays / 7);
+      formattedCountdown = weeks <= 1 ? `In 1 week` : `In ${weeks} weeks`;
+    }
+  }
+
+  return {
+    isDue,
+    nextReviewDate: targetIso,
+    remainingHours: Math.max(0, diffHours),
+    remainingDays: Math.max(0, diffDays),
+    formattedCountdown,
+    intervalHours: calculateNextReviewIntervalHours(word)
+  };
+}
+
+export interface CandidateWordsOptions {
+  maxCandidates?: number;
+  candidatePoolSize?: number;
+}
 
 export interface WeightedCandidate {
   word: Word;
@@ -71,11 +251,6 @@ export interface WeightedCandidate {
 
 /**
  * Checks whether a word has ever been learned or studied (prior exposure).
- * A word is considered learned/studied if:
- * - Marked as learned (`word.learned === true`)
- * - Has been reviewed previously (`word.lastReviewed !== null`)
- * - Has memory strength > 0 (`word.strength > 0`)
- * - Has relevant study history entries (e.g. flashcard_review, quiz_correct, quiz_incorrect, mastered, etc.)
  */
 export function isWordLearnedOrStudied(word: Word): boolean {
   if (word.learned) return true;
@@ -118,13 +293,12 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
 }
 
 /**
- * Performs weighted random sampling without replacement from a pool of candidates using the A-Res algorithm (Efraimidis and Spirakis).
+ * Performs weighted random sampling without replacement from a pool of candidates using the A-Res algorithm.
  */
 export function sampleWeightedCandidates(candidates: WeightedCandidate[], count: number): Word[] {
   if (!candidates || candidates.length === 0) return [];
 
   const sampled = candidates.map(item => {
-    // Generate key u^(1/w) where u ~ Uniform(0, 1)
     const u = Math.max(Number.EPSILON, Math.random());
     const key = Math.pow(u, 1 / Math.max(0.1, item.weight));
     return { word: item.word, key };
@@ -135,15 +309,15 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 }
 
 /**
- * Selects candidate words for a new quiz based on recency, memory decay, and cooldown rules.
- * Strictly selects from words that have been learned or studied previously (excluding unlearned words),
- * gathers a candidate pool across non-cooldown priority tiers (starred: 5, memoryDecay: 4, weak: 3, rest: 1),
- * and applies weighted random sampling (A-Res algorithm) to pick candidate words.
+ * Selects candidate words for a new quiz based on dynamic spaced repetition eligibility.
+ * Strictly selects from words that have been learned or studied previously and are due for review (isWordEligibleForReview),
+ * gathers a candidate pool across priority tiers (starred: 5, memoryDecay: 4, weak: 3, rest: 1),
+ * and applies weighted random sampling to pick candidate words.
  */
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
 
-  const { maxCandidates = 10, cooldownHours = DEFAULT_COOLDOWN_HOURS, candidatePoolSize = 30 } = options;
+  const { maxCandidates = 10, candidatePoolSize = 30 } = options;
   const now = new Date();
 
   // 1. Strictly filter for words that have actually been learned or studied before
@@ -152,18 +326,11 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     return [];
   }
 
-  // 2. Filter out words that were reviewed recently (within cooldownHours)
-  const eligibleWords = learnedWords.filter(word => {
-    if (!word.lastReviewed) return true; // Learned but hasn't had a spaced review yet -> eligible
-    const hours = getHoursSinceLastReview(word, now);
-    return hours >= cooldownHours;
-  });
+  // 2. Filter for words whose dynamic nextReviewDate is reached/due
+  const eligibleWords = learnedWords.filter(word => isWordEligibleForReview(word, now));
 
-  // If fewer than 2 eligible words when cooldown > 0, return [] to trigger "No words to practice today" state
-  if (eligibleWords.length < 2 && cooldownHours > 0) {
-    return [];
-  }
-  if (eligibleWords.length === 0) {
+  // If fewer than 2 eligible words, return [] to allow falling back to flashcard study / word addition
+  if (eligibleWords.length < 2) {
     return [];
   }
 
@@ -184,7 +351,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   // Helper to shuffle an array randomly
   const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
 
-  // 4. Gather candidate pool across all non-cooldown tiers
+  // 4. Gather candidate pool across all priority tiers
   const candidatePool: WeightedCandidate[] = [];
   const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "weak" | "rest", weight: number) => {
     const shuffled = shuffle(tierWords);
@@ -309,14 +476,12 @@ export function hasUnresolvedQuizMistake(word: Word): boolean {
 
 /**
  * Determines whether a word is eligible as a candidate for flashcard study:
- * 1. Has not been reviewed recently (within cooldownHours, default 72 hours / 3 days)
- * 2. Meets at least one of the following criteria:
- *    a. Has never been reviewed/practiced before (!word.lastReviewed or no practice baseline)
- *    b. Has an unresolved quiz error (the most recent practice event was 'quiz_incorrect')
- *    c. Is unlearned/unmastered (!word.learned) and has passed cooldown
- *    d. Mastered word that hasn't been practiced/reviewed in over 7 days (diffDays > 7)
+ * 1. Has never been reviewed/practiced before (!word.lastReviewed or no practice baseline) -> ALWAYS eligible immediately.
+ * 2. Has an unresolved quiz error (the most recent practice event was 'quiz_incorrect') -> ALWAYS eligible immediately for remedial study.
+ * 3. Has reached its calculated dynamic review date (isWordEligibleForReview) or passed cooldown.
+ * 4. Mastered word that hasn't been practiced/reviewed in over 7 days (diffDays > 7) or has decayed.
  */
-export function isFlashcardCandidate(word: Word, now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): boolean {
+export function isFlashcardCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
   const isNeverPracticed = !lastPracticeDate && !word.lastReviewed;
 
@@ -330,22 +495,27 @@ export function isFlashcardCandidate(word: Word, now: Date = new Date(), cooldow
     return true;
   }
 
-  // 0. Cooldown check: If reviewed within cooldownHours, exclude from candidates
-  if (cooldownHours > 0) {
+  // Custom cooldown override if explicitly passed (> 0)
+  if (customCooldownHours !== undefined && customCooldownHours > 0) {
     const hoursSinceReview = getHoursSinceLastReview(word, now);
-    if (hoursSinceReview < cooldownHours) {
+    if (hoursSinceReview < customCooldownHours) {
+      return false;
+    }
+  } else {
+    // Dynamic eligibility check based on word's scheduled nextReviewDate
+    if (!isWordEligibleForReview(word, now)) {
       return false;
     }
   }
 
-  // Condition 3: Unlearned / unmastered word that has passed cooldown
+  // Condition 3: Unlearned / unmastered word that is eligible
   if (!word.learned) {
     return true;
   }
 
-  // Condition 4: Mastered word that hasn't been used for flashcard or quiz in over 7 days
+  // Condition 4: Mastered word that hasn't been used for flashcard or quiz in over 7 days or is due
   const daysSinceReview = getDaysSinceLastReview(word, now);
-  if (daysSinceReview > 7) {
+  if (daysSinceReview > 7 || isWordEligibleForReview(word, now)) {
     return true;
   }
 
@@ -353,20 +523,20 @@ export function isFlashcardCandidate(word: Word, now: Date = new Date(), cooldow
 }
 
 /**
- * Selects candidate words for flashcard study (default up to 5) strictly from words meeting
- * the candidate criteria (cooldown passed, never learned, unresolved quiz mistake, or idle > 7 days).
+ * Selects candidate words for flashcard study (default up to 3) strictly from words meeting
+ * the dynamic candidate criteria (scheduled date reached, never learned, unresolved quiz mistake, or idle > 7 days).
  * Returns empty array if no words meet the conditions.
  */
 export function getCandidateWordsForFlashcards(
   words: Word[],
-  count: number = 5,
+  count: number = 3,
   now: Date = new Date(),
-  cooldownHours: number = DEFAULT_COOLDOWN_HOURS
+  customCooldownHours?: number
 ): Word[] {
   if (!words || words.length === 0) return [];
 
-  // Filter ONLY words that meet the candidate criteria (including cooldown)
-  const eligibleWords = words.filter(word => isFlashcardCandidate(word, now, cooldownHours));
+  // Filter ONLY words that meet the candidate criteria
+  const eligibleWords = words.filter(word => isFlashcardCandidate(word, now, customCooldownHours));
 
   if (eligibleWords.length === 0) {
     return [];
@@ -375,7 +545,7 @@ export function getCandidateWordsForFlashcards(
   // Categorize eligible words by priority to give the most impactful words first:
   // 1. Words with unresolved quiz errors (urgent remedial review)
   // 2. Never learned / unreviewed words
-  // 3. Words idle > 7 days
+  // 3. Words idle > 7 days or memory decayed
   const quizErrorWords: Word[] = [];
   const neverLearnedWords: Word[] = [];
   const idleSevenDaysWords: Word[] = [];
@@ -404,36 +574,39 @@ export function getCandidateWordsForFlashcards(
 /**
  * Selects a candidate word for flashcard viewing strictly from eligible words.
  */
-export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): Word | null {
+export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word | null {
   if (!words || words.length === 0) return null;
-  const candidates = getCandidateWordsForFlashcards(words, 1, now, cooldownHours);
+  const candidates = getCandidateWordsForFlashcards(words, 1, now, customCooldownHours);
   return candidates[0] || null;
 }
 
 /**
  * Checks whether a word is an eligible potential candidate for taking a quiz.
  * A word is a quiz candidate if it has prior exposure (learned or studied before)
- * and is not currently in review cooldown (>= cooldownHours since last review, or unreviewed since initial study).
+ * and has reached its scheduled review date according to its strength history.
  */
-export function isQuizCandidate(word: Word, now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): boolean {
+export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
   if (!isWordLearnedOrStudied(word)) return false;
   if (!word.lastReviewed) return true;
-  const hours = getHoursSinceLastReview(word, now);
-  return hours >= cooldownHours;
+  if (customCooldownHours !== undefined && customCooldownHours > 0) {
+    const hours = getHoursSinceLastReview(word, now);
+    return hours >= customCooldownHours;
+  }
+  return isWordEligibleForReview(word, now);
 }
 
 /**
  * Gets all words that are potential candidates for quizzes.
  */
-export function getQuizCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): Word[] {
+export function getQuizCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  return words.filter(word => isQuizCandidate(word, now, cooldownHours));
+  return words.filter(word => isQuizCandidate(word, now, customCooldownHours));
 }
 
 /**
  * Gets all words that are potential candidates for flashcards.
  */
-export function getFlashcardCandidates(words: Word[], now: Date = new Date(), cooldownHours: number = DEFAULT_COOLDOWN_HOURS): Word[] {
+export function getFlashcardCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  return words.filter(word => isFlashcardCandidate(word, now, cooldownHours));
+  return words.filter(word => isFlashcardCandidate(word, now, customCooldownHours));
 }

@@ -10,7 +10,7 @@ import {
   generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { getQuizCandidateWords, getCandidateWordsForFlashcards, DEFAULT_COOLDOWN_HOURS } from "../utils/spacedRepetition";
+import { getQuizCandidateWords, getCandidateWordsForFlashcards } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
@@ -143,7 +143,7 @@ export function useChat({
     }
 
     // Step 1: Look for candidate words for Quiz questions
-    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5, cooldownHours: DEFAULT_COOLDOWN_HOURS });
+    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
     if (quizWords.length >= 2) {
       // Found Quiz candidates: proceed to generate and start Quiz
       setIsTyping(true);
@@ -211,7 +211,7 @@ export function useChat({
     }
 
     // Step 2: If no Quiz candidates found (or fewer than 2), search for candidate words for Flashcards
-    const flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 5);
+    const flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
     if (flashcardCandidates.length > 0) {
       setIsTyping(true);
 

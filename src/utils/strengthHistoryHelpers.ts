@@ -1,4 +1,5 @@
 import { Word, StrengthHistoryEntry } from "../types";
+import { calculateNextReviewDate } from "./spacedRepetition";
 
 /**
  * Gets or synthesizes a clean, chronological strength history for a word.
@@ -95,11 +96,16 @@ export function sanitizeAndHealWordHistory(
     }
   }
 
-  return {
+  const updatedWord: Word = {
     ...word,
     strength: targetStrength,
     learned: targetLearned,
     strengthHistory: cleanHistory
+  };
+
+  return {
+    ...updatedWord,
+    nextReviewDate: word.nextReviewDate || calculateNextReviewDate(updatedWord, targetStrength)
   };
 }
 
@@ -127,12 +133,23 @@ export function recordStrengthHistory(
       note: note || "Added to vocabulary collection"
     };
 
-    return {
+    const newWord: Word = {
       ...word,
       strength: boundedStrength,
       learned: boundedStrength >= 80 ? true : boundedStrength === 0 ? false : word.learned,
       createdAt: word.createdAt || nowIso,
       strengthHistory: [initialEntry]
+    };
+
+    // For brand new words with 0 strength, nextReviewDate is immediately nowIso
+    // If created with preset strength (e.g. marked learned on creation), calculate appropriate interval
+    const computedNextReview = boundedStrength === 0
+      ? nowIso
+      : calculateNextReviewDate(newWord, boundedStrength, reason, new Date());
+
+    return {
+      ...newWord,
+      nextReviewDate: word.nextReviewDate || computedNextReview
     };
   }
 
@@ -149,7 +166,9 @@ export function recordStrengthHistory(
     return {
       ...word,
       strength: boundedStrength,
-      learned: boundedStrength >= 80 ? word.learned : false
+      learned: boundedStrength >= 80 ? word.learned : false,
+      // Keep existing next review date or mark due
+      nextReviewDate: word.nextReviewDate || nowIso
     };
   }
 
@@ -171,13 +190,24 @@ export function recordStrengthHistory(
     ? boundedStrength >= 80
     : (boundedStrength >= 80 ? true : boundedStrength === 0 ? false : word.learned);
 
-  return {
+  const interimWord: Word = {
     ...word,
     strength: boundedStrength,
     learned: newLearnedState,
     // Keep original practice date if reason is memory_decay, otherwise set lastReviewed to now
     lastReviewed: reason === "memory_decay" ? word.lastReviewed : nowIso,
     strengthHistory: updatedHistory
+  };
+
+  // Calculate dynamic next review date:
+  // If memory decay, word is already due for refresh -> preserve or set to now
+  const nextReviewDate = reason === "memory_decay"
+    ? (word.nextReviewDate && new Date(word.nextReviewDate).getTime() < Date.now() ? word.nextReviewDate : nowIso)
+    : calculateNextReviewDate(interimWord, boundedStrength, reason, new Date());
+
+  return {
+    ...interimWord,
+    nextReviewDate
   };
 }
 

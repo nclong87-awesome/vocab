@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, History } from "lucide-react";
+import { Volume2, RefreshCw, History, Timer, CheckCircle2 } from "lucide-react";
 import { Word } from "../../types";
-import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
+import { getDaysSinceLastReview, getNextReviewInfo } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "./StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
@@ -33,6 +33,7 @@ export default function WordAnalyticsCard({
   const strengthLevel = word.strength ?? 0;
   const daysSinceReview = getDaysSinceLastReview(word);
   const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80 && daysSinceReview >= 1);
+  const reviewInfo = getNextReviewInfo(word);
 
   const handleModalWordUpdate = (updated: Word) => {
     setLocalWord(updated);
@@ -62,6 +63,29 @@ export default function WordAnalyticsCard({
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-mono shrink-0" title={`Last reviewed ${daysSinceReview} day(s) ago. Refresher recommended!`}>
                     <RefreshCw className="w-2.5 h-2.5 text-amber-600 animate-spin-slow" />
                     <span>{daysSinceReview > 0 ? `${daysSinceReview}d ago` : "Refresher"}</span>
+                  </span>
+                )}
+                {!isMemoryDecayed && (
+                  <span 
+                    className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full font-mono shrink-0 border cursor-pointer ${
+                      reviewInfo.isDue
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : "bg-stone-50 text-stone-600 border-stone-200"
+                    }`}
+                    onClick={() => setShowHistoryModal(true)}
+                    title={reviewInfo.isDue ? "Eligible for quiz & review now" : `Next review scheduled ${reviewInfo.formattedCountdown}`}
+                  >
+                    {reviewInfo.isDue ? (
+                      <>
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                        <span>Due</span>
+                      </>
+                    ) : (
+                      <>
+                        <Timer className="w-2.5 h-2.5 text-stone-500" />
+                        <span>{reviewInfo.formattedCountdown}</span>
+                      </>
+                    )}
                   </span>
                 )}
               </h4>

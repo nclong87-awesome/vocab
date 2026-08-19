@@ -71,6 +71,7 @@ export interface Word {
   starred: boolean;
   createdAt: string;
   lastReviewed: string | null;
+  nextReviewDate?: string | null; // Exact ISO timestamp when this word becomes eligible for next review/quiz
   strength: number; // 0 to 100
   imageUrl?: string;
   imageKeyword?: string;

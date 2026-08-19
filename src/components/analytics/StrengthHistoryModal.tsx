@@ -7,11 +7,13 @@ import {
   TrendingUp, 
   Calendar, 
   Clock, 
-  Info
+  Info,
+  Timer,
+  CheckCircle2
 } from "lucide-react";
 import { Word } from "../../types";
 import { getEffectiveStrengthHistory } from "../../utils/strengthHistoryHelpers";
-import { getDaysSinceLastReview } from "../../utils/spacedRepetition";
+import { getDaysSinceLastReview, getNextReviewInfo } from "../../utils/spacedRepetition";
 
 interface StrengthHistoryModalProps {
   word: Word;
@@ -40,6 +42,7 @@ export default function StrengthHistoryModal({
   const currentStrength = word.strength ?? 0;
   const daysSincePractice = getDaysSinceLastReview(word);
   const estimatedDecay = daysSincePractice * 10;
+  const reviewInfo = getNextReviewInfo(word);
   
   // Calculate peak and lowest strength from history
   const strengths = historyEntries.map(e => e.strength);
@@ -210,6 +213,40 @@ export default function StrengthHistoryModal({
               <div className="flex items-baseline gap-1">
                 <span className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">{historyEntries.length}</span>
                 <span className="text-[9px] font-semibold text-stone-400">entries</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Next Review Schedule Banner */}
+          <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+            reviewInfo.isDue 
+              ? "bg-emerald-50/70 border-emerald-200/80 text-emerald-950" 
+              : "bg-amber-50/50 border-amber-200/80 text-amber-950"
+          }`}>
+            <div className="flex items-center gap-2 min-w-0">
+              {reviewInfo.isDue ? (
+                <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg shrink-0">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              ) : (
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg shrink-0">
+                  <Timer className="w-4 h-4" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-[11px] uppercase tracking-wide">
+                    {reviewInfo.isDue ? "Eligible for Quiz & Review" : "Next Scheduled Practice"}
+                  </span>
+                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                    reviewInfo.isDue ? "bg-emerald-200/70 text-emerald-900" : "bg-amber-200/70 text-amber-900"
+                  }`}>
+                    {reviewInfo.formattedCountdown}
+                  </span>
+                </div>
+                <p className="text-[10px] text-stone-600 font-mono mt-0.5">
+                  {formatDate(reviewInfo.nextReviewDate)} (Adaptive interval: {reviewInfo.intervalHours >= 24 ? `${Math.round(reviewInfo.intervalHours / 24)}d` : `${reviewInfo.intervalHours}h`})
+                </p>
               </div>
             </div>
           </div>

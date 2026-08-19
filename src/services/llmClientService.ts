@@ -2602,10 +2602,9 @@ FOR EACH WORD:
 3. "partOfSpeech": Part of speech (noun, verb, adjective, adverb, idiom, etc.).
 4. "translation": Natural, accurate translation in ${nativeLanguage}.
 5. "definition": Concise, clear definition in ${targetLanguage}.
-6. "example": EXACTLY 1 natural, realistic example sentence demonstrating practical usage in context.
-7. "exampleTranslation": Translation of the example sentence in ${nativeLanguage}.
-8. "category": Thematic domain/tag (e.g. "Everyday", "Business", "Travel", "Academic", "Emotions").
-9. "suggestedWords": Optional top 1 or 2 most natural collocations or paired expressions (keep it strictly concise, maximum 1-2 items per card).
+6. "example": EXACTLY 1 natural, realistic example sentence in ${targetLanguage} demonstrating practical usage in context (do not include translation for the example).
+7. "category": Thematic domain/tag (e.g. "Everyday", "Business", "Travel", "Academic", "Emotions").
+8. "suggestedWords": Optional top 1 or 2 most natural collocations or paired expressions (keep it strictly concise, maximum 1-2 items per card).
    For each pairing, provide:
    - "word": The collocated expression in ${targetLanguage} (e.g., "heavy rain", "deep breath").
    - "translation": Native translation in ${nativeLanguage}.
@@ -2622,7 +2621,6 @@ Output MUST be strictly valid JSON matching this schema:
     "translation": "string",
     "definition": "string in ${targetLanguage}",
     "example": "string in ${targetLanguage}",
-    "exampleTranslation": "string in ${nativeLanguage}",
     "category": "string",
     "suggestedWords": [
       {
@@ -2641,10 +2639,10 @@ Output MUST be strictly valid JSON matching this schema:
   const prompt = `Generate interactive study flashcards for these ${wordsList.length} vocabulary words:\n${wordsDetails}\n\n` +
     `REMINDERS:\n` +
     `- Return a JSON array containing EXACTLY ${wordsList.length} flashcard objects.\n` +
-    `- For each flashcard, include 1 natural example sentence with translation.\n` +
+    `- For each flashcard, include 1 natural example sentence in ${targetLanguage} without any translation.\n` +
     `- For each flashcard, include at most 1 or 2 top commonly paired words/collocations ("suggestedWords") with their native translation (keep concise).`;
 
-  const schemaDesc = `Array of Flashcard objects with word, pronunciation, partOfSpeech, translation, definition, example, exampleTranslation, category, suggestedWords (concise array of at most 1-2 items with word, translation, hint).`;
+  const schemaDesc = `Array of Flashcard objects with word, pronunciation, partOfSpeech, translation, definition, example, category, suggestedWords (concise array of at most 1-2 items with word, translation, hint).`;
 
   try {
     let rawResultText = "";
