@@ -174,6 +174,40 @@ export default function RequestHistoryModal({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Clear History Button in Header */}
+            {showClearConfirm ? (
+              <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg animate-in fade-in">
+                <span className="text-xs text-rose-800 font-medium hidden md:inline">Clear {logs.length} logs?</span>
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  className="px-2 py-0.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 cursor-pointer transition-colors"
+                >
+                  Yes, Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-1.5 py-0.5 text-stone-600 hover:bg-stone-200 rounded text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              logs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(true)}
+                  className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-stone-600 hover:text-rose-600 hover:bg-rose-50 border border-stone-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Clear history from IndexedDB"
+                  id="clear-logs-button"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-stone-500 hover:text-rose-600" />
+                  <span className="hidden sm:inline">Clear History</span>
+                </button>
+              )
+            )}
+
             <button
               type="button"
               onClick={loadLogs}
@@ -197,7 +231,7 @@ export default function RequestHistoryModal({
         </div>
 
         {/* Toolbar Filter Area */}
-        <div className="px-3 sm:px-6 py-2.5 bg-white border-b border-stone-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
+        <div className="px-3 sm:px-6 py-2.5 bg-white border-b border-stone-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1 min-w-0">
             {/* Search Input */}
             <div className="relative w-full sm:max-w-xs md:max-w-sm">
@@ -271,42 +305,6 @@ export default function RequestHistoryModal({
                 </select>
               )}
             </div>
-          </div>
-
-          {/* Action buttons (Clear History) */}
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-            {showClearConfirm ? (
-              <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg animate-in fade-in">
-                <span className="text-xs text-rose-800 font-medium">Clear all {logs.length} logs?</span>
-                <button
-                  type="button"
-                  onClick={handleClearHistory}
-                  className="px-2 py-0.5 bg-rose-600 text-white rounded text-xs font-bold hover:bg-rose-700 cursor-pointer"
-                >
-                  Yes, Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowClearConfirm(false)}
-                  className="px-1.5 py-0.5 text-stone-600 hover:bg-stone-200 rounded text-xs cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              logs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowClearConfirm(true)}
-                  className="px-2.5 py-1 text-xs font-medium text-stone-600 hover:text-rose-600 hover:bg-rose-50 border border-stone-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Clear history from IndexedDB"
-                  id="clear-logs-button"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear History</span>
-                </button>
-              )
-            )}
           </div>
         </div>
 
