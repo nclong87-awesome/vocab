@@ -631,23 +631,22 @@ async function callLLMClientSideSingleCandidate(
     reqBody.response_format = { type: "json_object" };
   }
 
-  // Bypass / Suppress Reasoning parameters for Groq, OpenRouter, DeepSeek, OpenAI, etc.
+  // Suppress returning reasoning in response payloads for reasoning models while preserving reasoning capability
+  // 1. Groq API: reasoning_format: "hidden" instructs Groq to omit reasoning from returned payload entirely
   if (provider === "groq" || model.toLowerCase().includes("groq")) {
     reqBody.reasoning_format = "hidden";
   }
+
+  // 2. OpenRouter, DeepSeek, 9flare, Ollama: include_reasoning: false suppresses returning reasoning streams
   if (
     provider === "openrouter" || 
-    provider === "groq" || 
-    provider === "openai" || 
     provider === "deepseek" || 
-    provider === "9flare" ||
+    provider === "9flare" || 
     provider === "ollama" ||
     model.toLowerCase().includes("deepseek") || 
-    model.toLowerCase().includes("r1") ||
-    model.toLowerCase().includes("reasoning")
+    model.toLowerCase().includes("r1")
   ) {
     reqBody.include_reasoning = false;
-    reqBody.reasoning_effort = "none";
   }
 
   return callWithRetry(
@@ -660,13 +659,12 @@ async function callLLMClientSideSingleCandidate(
       });
 
       // If request failed with 400 due to response_format, reasoning parameters, or JSON mode incompatibility, retry once without those parameters
-      if (!res.ok && (reqBody.response_format || reqBody.reasoning_format || reqBody.reasoning_effort || reqBody.include_reasoning !== undefined)) {
+      if (!res.ok && (reqBody.response_format || reqBody.reasoning_format || reqBody.include_reasoning !== undefined)) {
         const errClone = res.clone();
         const errText = await errClone.text().catch(() => "");
         if (errText.includes("JSON mode") || errText.includes("response_format") || errText.includes("reasoning") || errText.includes("unrecognized field") || res.status === 400) {
           delete reqBody.response_format;
           delete reqBody.reasoning_format;
-          delete reqBody.reasoning_effort;
           delete reqBody.include_reasoning;
           res = await fetchWithTimeout(targetUrl, {
             method: "POST",
