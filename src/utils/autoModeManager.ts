@@ -1,5 +1,6 @@
 import { LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { getRecentApiLogs } from "../services/requestHistoryService";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
 export const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -402,6 +403,12 @@ export function getAutoModelCandidates(llmConfig?: LLMConfig): AutoCandidate[] {
 
 export type ModelStatusIndicator = 'strong' | 'medium' | 'weak' | 'offline' | 'untested';
 
+export interface RequestOutcomeEntry {
+  success: boolean;
+  durationMs?: number;
+  timestamp: number;
+}
+
 export interface FailureLogEntry {
   id: string;
   timestamp: number;
@@ -414,6 +421,7 @@ export interface ModelMetricsRecord {
   lastResponseTimeMs?: number | null;
   avgResponseTimeMs?: number | null;
   recentResponseTimes?: number[];
+  recentOutcomes?: RequestOutcomeEntry[];
   lastTestedAt?: number | null;
   lastError?: string | null;
   totalCalls?: number;
@@ -492,15 +500,31 @@ export function recordModelResponse(provider: string, model: string, durationMs:
   const prevSuccesses = existing?.totalSuccesses ?? (existing?.lastTestedAt && !existing?.lastError ? 1 : 0);
 
   const validDuration = Math.max(1, Math.round(durationMs));
-  const prevTimes = Array.isArray(existing?.recentResponseTimes)
-    ? existing.recentResponseTimes
-    : (typeof existing?.lastResponseTimeMs === "number" && existing.lastResponseTimeMs > 0 ? [existing.lastResponseTimeMs] : []);
+  let prevOutcomes: RequestOutcomeEntry[] = Array.isArray(existing?.recentOutcomes)
+    ? [...existing.recentOutcomes]
+    : [];
 
-  // Maintain the last 10 successful requests (skip failed requests)
-  const updatedRecentTimes = [...prevTimes, validDuration].slice(-10);
-  const avgTime = Math.round(
-    updatedRecentTimes.reduce((sum, t) => sum + t, 0) / updatedRecentTimes.length
-  );
+  if (prevOutcomes.length === 0 && Array.isArray(existing?.recentResponseTimes) && existing.recentResponseTimes.length > 0) {
+    existing.recentResponseTimes.forEach(t => {
+      prevOutcomes.push({ success: true, durationMs: t, timestamp: existing?.lastTestedAt || Date.now() });
+    });
+  }
+
+  const newOutcome: RequestOutcomeEntry = {
+    success: true,
+    durationMs: validDuration,
+    timestamp: Date.now()
+  };
+
+  const maxHistoryLimit = Math.max(100, PROVIDER_OPTIONS.reduce((acc, p) => p.id === "auto" ? acc : acc + (p.models ? p.models.length : 0), 0) * 15);
+  const updatedRecentOutcomes = [...prevOutcomes, newOutcome].slice(-maxHistoryLimit);
+  const successfulDurations = updatedRecentOutcomes
+    .filter(o => o.success && typeof o.durationMs === "number" && o.durationMs > 0)
+    .map(o => o.durationMs as number);
+
+  const avgTime = successfulDurations.length > 0
+    ? Math.round(successfulDurations.reduce((sum, t) => sum + t, 0) / successfulDurations.length)
+    : null;
 
   metrics[key] = {
     ...existing,
@@ -508,7 +532,8 @@ export function recordModelResponse(provider: string, model: string, durationMs:
     model,
     lastResponseTimeMs: avgTime,
     avgResponseTimeMs: avgTime,
-    recentResponseTimes: updatedRecentTimes,
+    recentResponseTimes: successfulDurations,
+    recentOutcomes: updatedRecentOutcomes,
     lastTestedAt: Date.now(),
     lastError: null,
     totalCalls: prevCalls + 1,
@@ -585,13 +610,29 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     .filter(log => log.timestamp >= threeDaysAgo)
     .slice(0, 50);
 
-  // Preserve existing successful response times; failed requests are skipped
-  const existingTimes = Array.isArray(existing?.recentResponseTimes)
-    ? existing.recentResponseTimes
-    : (typeof existing?.lastResponseTimeMs === "number" && existing.lastResponseTimeMs > 0 ? [existing.lastResponseTimeMs] : []);
+  let prevOutcomes: RequestOutcomeEntry[] = Array.isArray(existing?.recentOutcomes)
+    ? [...existing.recentOutcomes]
+    : [];
 
-  const avgTime = existingTimes.length > 0
-    ? Math.round(existingTimes.reduce((sum, t) => sum + t, 0) / existingTimes.length)
+  if (prevOutcomes.length === 0 && Array.isArray(existing?.recentResponseTimes) && existing.recentResponseTimes.length > 0) {
+    existing.recentResponseTimes.forEach(t => {
+      prevOutcomes.push({ success: true, durationMs: t, timestamp: existing?.lastTestedAt || Date.now() });
+    });
+  }
+
+  const newOutcome: RequestOutcomeEntry = {
+    success: false,
+    timestamp: now
+  };
+
+  const maxHistoryLimit = Math.max(100, PROVIDER_OPTIONS.reduce((acc, p) => p.id === "auto" ? acc : acc + (p.models ? p.models.length : 0), 0) * 15);
+  const updatedRecentOutcomes = [...prevOutcomes, newOutcome].slice(-maxHistoryLimit);
+  const successfulDurations = updatedRecentOutcomes
+    .filter(o => o.success && typeof o.durationMs === "number" && o.durationMs > 0)
+    .map(o => o.durationMs as number);
+
+  const avgTime = successfulDurations.length > 0
+    ? Math.round(successfulDurations.reduce((sum, t) => sum + t, 0) / successfulDurations.length)
     : null;
 
   metrics[key] = {
@@ -600,7 +641,8 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     model,
     lastResponseTimeMs: avgTime,
     avgResponseTimeMs: avgTime,
-    recentResponseTimes: existingTimes,
+    recentResponseTimes: successfulDurations,
+    recentOutcomes: updatedRecentOutcomes,
     lastTestedAt: now,
     lastError: reason,
     totalCalls: prevCalls + 1,
@@ -608,6 +650,82 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     failureLogs: updatedLogs
   };
   saveModelMetricsMap(metrics);
+}
+
+/**
+ * Synchronizes recent LLM request & response logs from IndexedDB into model metrics maps.
+ * Ensures the rolling window (last 10 requests) for speed & success rate are calculated
+ * directly from the actual request history.
+ */
+export async function syncMetricsFromRequestHistory(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const logs = await getRecentApiLogs();
+    if (!logs || logs.length === 0) return;
+
+    const logsByModel: Record<string, typeof logs> = {};
+    for (const log of logs) {
+      if (!log.provider || !log.model || log.provider === "auto" || log.model === "auto") continue;
+      const key = `${log.provider}:${log.model}`;
+      if (!logsByModel[key]) logsByModel[key] = [];
+      logsByModel[key].push(log);
+    }
+
+    const metricsMap = getModelMetricsMap();
+    let updated = false;
+
+    for (const key of Object.keys(logsByModel)) {
+      const modelLogs = logsByModel[key];
+      // Sort oldest to newest
+      modelLogs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      // Utilize ALL logs in history for this model
+      const recentOutcomes: RequestOutcomeEntry[] = modelLogs.map(l => ({
+        success: l.status === "success",
+        durationMs: l.responseTimeMs,
+        timestamp: new Date(l.timestamp).getTime()
+      }));
+
+      const successfulDurations = recentOutcomes
+        .filter(o => o.success && typeof o.durationMs === "number" && o.durationMs > 0)
+        .map(o => o.durationMs as number);
+
+      const avgTime = successfulDurations.length > 0
+        ? Math.round(successfulDurations.reduce((sum, t) => sum + t, 0) / successfulDurations.length)
+        : null;
+
+      const totalCalls = modelLogs.length;
+      const totalSuccesses = modelLogs.filter(l => l.status === "success").length;
+
+      const [p, ...mParts] = key.split(":");
+      const m = mParts.join(":");
+
+      const existing = metricsMap[key];
+      metricsMap[key] = {
+        ...existing,
+        provider: p,
+        model: m,
+        lastResponseTimeMs: avgTime ?? existing?.lastResponseTimeMs ?? null,
+        avgResponseTimeMs: avgTime ?? existing?.avgResponseTimeMs ?? null,
+        recentResponseTimes: successfulDurations,
+        recentOutcomes,
+        lastTestedAt: recentOutcomes.length > 0 ? recentOutcomes[recentOutcomes.length - 1].timestamp : (existing?.lastTestedAt ?? null),
+        lastError: recentOutcomes.length > 0 && !recentOutcomes[recentOutcomes.length - 1].success
+          ? (modelLogs[modelLogs.length - 1].errorMessage || "Request failed")
+          : null,
+        totalCalls: Math.max(totalCalls, existing?.totalCalls ?? 0),
+        totalSuccesses: Math.max(totalSuccesses, existing?.totalSuccesses ?? 0),
+        failureLogs: existing?.failureLogs ?? []
+      };
+      updated = true;
+    }
+
+    if (updated) {
+      saveModelMetricsMap(metricsMap);
+    }
+  } catch (e) {
+    console.error("[Auto Mode] Error syncing metrics from request history:", e);
+  }
 }
 
 export function clearModelFailureLogs(provider: string, model: string): void {
@@ -727,7 +845,10 @@ export interface ModelStatusItem {
   lastResponseTimeMs: number | null;
   avgResponseTimeMs: number | null;
   recentResponseTimes: number[];
+  recentOutcomes: RequestOutcomeEntry[];
   recentSamplesCount: number;
+  recentSuccessesCount: number;
+  recentCallsCount: number;
   lastTestedAt: number | null;
   lastError: string | null;
   status: ModelStatusIndicator;
@@ -836,6 +957,29 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         metric?.lastError
       );
 
+      let recentOutcomes: RequestOutcomeEntry[] = Array.isArray(metric?.recentOutcomes)
+        ? metric.recentOutcomes
+        : [];
+
+      if (recentOutcomes.length === 0) {
+        const recentTimes = Array.isArray(metric?.recentResponseTimes) ? metric.recentResponseTimes : [];
+        if (recentTimes.length > 0) {
+          recentOutcomes = recentTimes.map(t => ({
+            success: true,
+            durationMs: t,
+            timestamp: metric?.lastTestedAt || Date.now()
+          }));
+        }
+      }
+
+      const recentCallsCount = recentOutcomes.length > 0 
+        ? recentOutcomes.length 
+        : totalCalls;
+
+      const recentSuccessesCount = recentOutcomes.length > 0 
+        ? recentOutcomes.filter(o => o.success).length 
+        : totalSuccesses;
+
       const recentResponseTimes: number[] = Array.isArray(metric?.recentResponseTimes)
         ? metric.recentResponseTimes
         : (typeof metric?.lastResponseTimeMs === 'number' && metric.lastResponseTimeMs > 0 ? [metric.lastResponseTimeMs] : []);
@@ -861,7 +1005,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         lastResponseTimeMs: effectiveResponseTimeMs,
         avgResponseTimeMs: effectiveResponseTimeMs,
         recentResponseTimes,
+        recentOutcomes,
         recentSamplesCount: recentResponseTimes.length,
+        recentSuccessesCount,
+        recentCallsCount,
         lastTestedAt,
         lastError: metric?.lastError ?? null,
         status,
@@ -913,6 +1060,29 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         metric?.lastError
       );
 
+      let recentOutcomes: RequestOutcomeEntry[] = Array.isArray(metric?.recentOutcomes)
+        ? metric.recentOutcomes
+        : [];
+
+      if (recentOutcomes.length === 0) {
+        const recentTimes = Array.isArray(metric?.recentResponseTimes) ? metric.recentResponseTimes : [];
+        if (recentTimes.length > 0) {
+          recentOutcomes = recentTimes.map(t => ({
+            success: true,
+            durationMs: t,
+            timestamp: metric?.lastTestedAt || Date.now()
+          }));
+        }
+      }
+
+      const recentCallsCount = recentOutcomes.length > 0 
+        ? recentOutcomes.length 
+        : totalCalls;
+
+      const recentSuccessesCount = recentOutcomes.length > 0 
+        ? recentOutcomes.filter(o => o.success).length 
+        : totalSuccesses;
+
       const recentResponseTimes: number[] = Array.isArray(metric?.recentResponseTimes)
         ? metric.recentResponseTimes
         : (typeof metric?.lastResponseTimeMs === 'number' && metric.lastResponseTimeMs > 0 ? [metric.lastResponseTimeMs] : []);
@@ -937,7 +1107,10 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
         lastResponseTimeMs: effectiveResponseTimeMs,
         avgResponseTimeMs: effectiveResponseTimeMs,
         recentResponseTimes,
+        recentOutcomes,
         recentSamplesCount: recentResponseTimes.length,
+        recentSuccessesCount,
+        recentCallsCount,
         lastTestedAt,
         lastError: metric?.lastError ?? null,
         status,

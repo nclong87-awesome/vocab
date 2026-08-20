@@ -12,10 +12,14 @@ import {
   MessageSquare, 
   FileText, 
   Activity,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import { ApiRequestLog } from "../types";
-import { getRecentApiLogs, clearAllApiLogs } from "../services/requestHistoryService";
+import { getRecentApiLogs, clearAllApiLogs, getMaxApiLogsLimit } from "../services/requestHistoryService";
 
 interface RequestHistoryModalProps {
   isOpen: boolean;
@@ -38,11 +42,17 @@ export default function RequestHistoryModal({
   const [activeTab, setActiveTab] = useState<"response" | "prompt" | "system" | "meta">("response");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const maxLimit = useMemo(() => getMaxApiLogsLimit(), []);
+
   // Load logs on open
   const loadLogs = async () => {
     setIsLoading(true);
     try {
-      const data = await getRecentApiLogs(100);
+      const data = await getRecentApiLogs();
       setLogs(data);
       if (initialSelectedLogId) {
         const target = data.find(item => item.id === initialSelectedLogId);
@@ -64,6 +74,7 @@ export default function RequestHistoryModal({
     } else {
       setSelectedLog(null);
       setShowClearConfirm(false);
+      setCurrentPage(1);
     }
   }, [isOpen, initialSelectedLogId]);
 
@@ -72,6 +83,7 @@ export default function RequestHistoryModal({
     setLogs([]);
     setSelectedLog(null);
     setShowClearConfirm(false);
+    setCurrentPage(1);
   };
 
   const handleCopy = (text: string, fieldName: string) => {
@@ -112,6 +124,29 @@ export default function RequestHistoryModal({
       return promptMatch || respMatch || modelMatch || actionMatch || providerMatch || errMatch;
     });
   }, [logs, statusFilter, selectedProvider, searchQuery]);
+
+  // Reset pagination to page 1 on filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, selectedProvider, pageSize]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  }, [filteredLogs.length, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  const pagedLogs = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredLogs.slice(startIndex, startIndex + pageSize);
+  }, [filteredLogs, currentPage, pageSize]);
+
+  const startItemIndex = filteredLogs.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItemIndex = Math.min(filteredLogs.length, currentPage * pageSize);
 
   if (!isOpen) return null;
 
@@ -164,11 +199,11 @@ export default function RequestHistoryModal({
                   LLM Request & Response History
                 </h2>
                 <span className="bg-stone-200/80 text-stone-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {logs.length}/100
+                  {filteredLogs.length !== logs.length ? `${filteredLogs.length}/${logs.length} filtered` : `${logs.length}/${maxLimit}`}
                 </span>
               </div>
               <p className="text-xs text-stone-500 mt-0.5 truncate">
-                Inspect the last 100 LLM calls with response times, statuses, and full payloads stored in IndexedDB.
+                Inspect stored LLM calls with response times, statuses, and full payloads in IndexedDB.
               </p>
             </div>
           </div>
@@ -312,99 +347,176 @@ export default function RequestHistoryModal({
         <div className="flex-1 flex min-h-0 overflow-hidden">
           
           {/* Requests List Column */}
-          <div className={`w-full ${selectedLog ? "hidden md:flex md:w-5/12 lg:w-4/12 border-r border-stone-200/80" : "flex"} flex-col bg-stone-50/50 overflow-y-auto`}>
-            {filteredLogs.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-3">
-                  <Activity className="w-6 h-6" />
+          <div className={`w-full ${selectedLog ? "hidden md:flex md:w-5/12 lg:w-4/12 border-r border-stone-200/80" : "flex"} flex-col bg-stone-50/50 overflow-hidden`}>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {filteredLogs.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center h-full">
+                  <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-3">
+                    <Activity className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-stone-800">No requests found</h4>
+                  <p className="text-xs text-stone-500 mt-1 max-w-xs">
+                    {logs.length === 0 
+                      ? "Invocations from Chat, Flashcards, AI Quizzes, and Vocabulary lookups will be logged here automatically."
+                      : "No requests match the active filter or search query."}
+                  </p>
                 </div>
-                <h4 className="text-sm font-semibold text-stone-800">No requests found</h4>
-                <p className="text-xs text-stone-500 mt-1 max-w-xs">
-                  {logs.length === 0 
-                    ? "Invocations from Chat, Flashcards, AI Quizzes, and Vocabulary lookups will be logged here automatically."
-                    : "No requests match the active filter or search query."}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-stone-200/70">
-                {filteredLogs.map((log) => {
-                  const isSelected = selectedLog?.id === log.id;
-                  const isSuccess = log.status === "success";
-                  const duration = log.responseTimeMs;
-                  const isFast = duration < 15000;
-                  const isMedium = duration >= 15000 && duration < 25000;
+              ) : (
+                <div className="divide-y divide-stone-200/70">
+                  {pagedLogs.map((log) => {
+                    const isSelected = selectedLog?.id === log.id;
+                    const isSuccess = log.status === "success";
+                    const duration = log.responseTimeMs;
+                    const isFast = duration < 15000;
+                    const isMedium = duration >= 15000 && duration < 25000;
 
-                  return (
-                    <button
-                      key={log.id}
-                      type="button"
-                      onClick={() => setSelectedLog(prev => prev?.id === log.id ? null : log)}
-                      className={`w-full text-left transition-all cursor-pointer flex flex-col justify-center relative ${
-                        selectedLog 
-                          ? "p-2.5 sm:p-3 gap-1.5" 
-                          : "p-3 sm:px-5 sm:py-3.5 gap-1.5 sm:gap-2"
-                      } ${
-                        isSelected 
-                          ? "bg-amber-50/80 border-l-4 border-l-amber-500 shadow-2xs" 
-                          : "hover:bg-white"
-                      }`}
-                      id={`log-entry-${log.id}`}
-                    >
-                      {/* Top Row: Status badge, Action, Latency, Time */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {isSuccess ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/90 px-1.5 py-0.5 rounded">
-                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
-                              <span>200 OK</span>
+                    return (
+                      <button
+                        key={log.id}
+                        type="button"
+                        onClick={() => setSelectedLog(prev => prev?.id === log.id ? null : log)}
+                        className={`w-full text-left transition-all cursor-pointer flex flex-col justify-center relative ${
+                          selectedLog 
+                            ? "p-2.5 sm:p-3 gap-1.5" 
+                            : "p-3 sm:px-5 sm:py-3.5 gap-1.5 sm:gap-2"
+                        } ${
+                          isSelected 
+                            ? "bg-amber-50/80 border-l-4 border-l-amber-500 shadow-2xs" 
+                            : "hover:bg-white"
+                        }`}
+                        id={`log-entry-${log.id}`}
+                      >
+                        {/* Top Row: Status badge, Action, Latency, Time */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {isSuccess ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/90 px-1.5 py-0.5 rounded">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                <span>200 OK</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200/90 px-1.5 py-0.5 rounded">
+                                <XCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                                <span>{log.statusCode || "ERR"}</span>
+                              </span>
+                            )}
+
+                            <span className="text-[11px] font-bold text-stone-900 uppercase tracking-wider truncate bg-stone-100 px-1.5 py-0.5 rounded">
+                              {log.action || "LLM"}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200/90 px-1.5 py-0.5 rounded">
-                              <XCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
-                              <span>{log.statusCode || "ERR"}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span 
+                              className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded border ${
+                                isFast 
+                                  ? "text-emerald-700 bg-emerald-50/60 border-emerald-200/60" 
+                                  : isMedium 
+                                  ? "text-amber-700 bg-amber-50/60 border-amber-200/60" 
+                                  : "text-orange-700 bg-orange-50/60 border-orange-200/60"
+                              }`}
+                              title="Response Time (ms)"
+                            >
+                              {log.responseTimeMs.toLocaleString()} ms
+                            </span>
+                            <span className="text-[10px] text-stone-600 font-medium">
+                              {selectedLog ? formatTime(log.timestamp) : `${formatDate(log.timestamp)} ${formatTime(log.timestamp)}`}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Bottom Row: Provider and Model */}
+                        <div className="flex items-center justify-between text-[11px] text-stone-600">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="font-semibold text-stone-800 shrink-0">{log.provider}</span>
+                            <span className="text-stone-300">•</span>
+                            <span className="font-mono text-[10px] text-stone-500 truncate">{log.model}</span>
+                          </div>
+                          {!selectedLog && (
+                            <span className="text-[10px] text-stone-400 font-medium shrink-0 ml-2 hidden sm:inline">
+                              Click to inspect response →
                             </span>
                           )}
-
-                          <span className="text-[11px] font-bold text-stone-900 uppercase tracking-wider truncate bg-stone-100 px-1.5 py-0.5 rounded">
-                            {log.action || "LLM"}
-                          </span>
                         </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span 
-                            className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded border ${
-                              isFast 
-                                ? "text-emerald-700 bg-emerald-50/60 border-emerald-200/60" 
-                                : isMedium 
-                                ? "text-amber-700 bg-amber-50/60 border-amber-200/60" 
-                                : "text-orange-700 bg-orange-50/60 border-orange-200/60"
-                            }`}
-                            title="Response Time (ms)"
-                          >
-                            {log.responseTimeMs.toLocaleString()} ms
-                          </span>
-                          <span className="text-[10px] text-stone-600 font-medium">
-                            {selectedLog ? formatTime(log.timestamp) : `${formatDate(log.timestamp)} ${formatTime(log.timestamp)}`}
-                          </span>
-                        </div>
-                      </div>
+            {/* Pagination Controls Bar */}
+            {filteredLogs.length > 0 && (
+              <div className="px-3 py-2 bg-white border-t border-stone-200/90 flex flex-wrap items-center justify-between gap-2 shrink-0 text-xs text-stone-600 select-none" id="log-pagination-bar">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-medium text-stone-500">
+                    <span className="font-semibold text-stone-800">{startItemIndex}–{endItemIndex}</span> of <span className="font-semibold text-stone-800">{filteredLogs.length}</span>
+                  </span>
+                </div>
 
-                      {/* Bottom Row: Provider and Model */}
-                      <div className="flex items-center justify-between text-[11px] text-stone-600">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="font-semibold text-stone-800 shrink-0">{log.provider}</span>
-                          <span className="text-stone-300">•</span>
-                          <span className="font-mono text-[10px] text-stone-500 truncate">{log.model}</span>
-                        </div>
-                        {!selectedLog && (
-                          <span className="text-[10px] text-stone-400 font-medium shrink-0 ml-2 hidden sm:inline">
-                            Click to inspect response →
-                          </span>
-                        )}
-                      </div>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  {/* Page Size Selection */}
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="bg-stone-50 border border-stone-200 text-stone-700 text-[11px] font-medium rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                    title="Logs per page"
+                    id="pagination-page-size-select"
+                  >
+                    <option value={10}>10 / pg</option>
+                    <option value={20}>20 / pg</option>
+                    <option value={50}>50 / pg</option>
+                  </select>
+
+                  {/* Navigation Buttons */}
+                  <div className="flex items-center gap-0.5 border border-stone-200/80 rounded-lg p-0.5 bg-stone-50">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="p-1 rounded text-stone-600 hover:text-stone-900 hover:bg-stone-200/70 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      title="First page"
+                      id="pagination-first-btn"
+                    >
+                      <ChevronsLeft className="w-3.5 h-3.5" />
                     </button>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="p-1 rounded text-stone-600 hover:text-stone-900 hover:bg-stone-200/70 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      title="Previous page"
+                      id="pagination-prev-btn"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+
+                    <span className="px-1.5 text-[11px] font-bold text-stone-700 min-w-[2.8rem] text-center">
+                      {currentPage}/{totalPages}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-1 rounded text-stone-600 hover:text-stone-900 hover:bg-stone-200/70 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      title="Next page"
+                      id="pagination-next-btn"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="p-1 rounded text-stone-600 hover:text-stone-900 hover:bg-stone-200/70 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                      title="Last page"
+                      id="pagination-last-btn"
+                    >
+                      <ChevronsRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

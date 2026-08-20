@@ -22,6 +22,7 @@ import {
   getPerformanceTierMeta,
   PerformanceTierNumber,
   unlockModel,
+  syncMetricsFromRequestHistory,
 } from "../utils/autoModeManager";
 
 interface ModelStatusModalProps {
@@ -39,7 +40,8 @@ export default function ModelStatusModal({
   const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const refreshStatuses = () => {
+  const refreshStatuses = async () => {
+    await syncMetricsFromRequestHistory();
     const list = getAllModelStatuses(llmConfig);
     setModelStatuses(list);
   };
@@ -207,7 +209,7 @@ export default function ModelStatusModal({
               <h2 className="text-base font-bold text-stone-900 leading-tight truncate">
                 Model Status
               </h2>
-              <p className="text-xs text-stone-500 truncate">Avg of last 10 requests (skips errors) • Sorted fastest first</p>
+              <p className="text-xs text-stone-500 truncate">Avg speed & success rate derived from request history • Sorted fastest first</p>
             </div>
           </div>
 
@@ -310,7 +312,7 @@ export default function ModelStatusModal({
               const isUntested = item.status === 'untested' || item.lastResponseTimeMs === null || item.totalSuccesses < 1;
               const tierMeta = getPerformanceTierMeta(item.performanceTier, isUntested);
 
-              const successStats = formatSuccessRate(item.totalSuccesses, item.totalCalls);
+              const successStats = formatSuccessRate(item.recentSuccessesCount, item.recentCallsCount);
 
               return (
                 <div
@@ -367,7 +369,7 @@ export default function ModelStatusModal({
                       {/* Average Response Time */}
                       <div 
                         className="flex items-center gap-1.5 text-[11px]" 
-                        title="Average response time calculated based on the last 10 requests (skipping failed requests)"
+                        title="Average response time calculated from request history (skipping failed requests)"
                       >
                         <span className="text-stone-400 flex items-center gap-0.5">
                           <Clock className="w-3 h-3 text-stone-400" />
@@ -379,7 +381,7 @@ export default function ModelStatusModal({
                         {item.recentResponseTimes && item.recentResponseTimes.length > 0 && (
                           <span 
                             className="text-[10px] text-stone-500 font-sans font-medium bg-stone-100 px-1.5 py-0.2 rounded border border-stone-200/80" 
-                            title={`Calculated from ${item.recentResponseTimes.length} successful request(s)`}
+                            title={`Calculated from ${item.recentResponseTimes.length} successful request(s) in history`}
                           >
                             {item.recentResponseTimes.length} {item.recentResponseTimes.length === 1 ? 'req' : 'reqs'}
                           </span>
@@ -387,7 +389,7 @@ export default function ModelStatusModal({
                       </div>
 
                       {/* Success Rate */}
-                      <div className="flex items-center gap-1 text-[11px]">
+                      <div className="flex items-center gap-1 text-[11px]" title={`Request History: ${item.recentSuccessesCount}/${item.recentCallsCount} successes.`}>
                         <span className="text-stone-400 flex items-center gap-0.5">
                           <BarChart2 className="w-3 h-3 text-stone-400" />
                           Success Rate:
@@ -403,8 +405,8 @@ export default function ModelStatusModal({
                         }`}>
                           {successStats.percentStr}
                         </span>
-                        <span className="text-[10px] text-stone-400">
-                          {successStats.countStr}
+                        <span className="text-[10px] text-stone-500">
+                          ({item.recentSuccessesCount}/{item.recentCallsCount})
                         </span>
                       </div>
                     </div>

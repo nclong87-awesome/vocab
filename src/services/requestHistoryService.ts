@@ -1,5 +1,18 @@
 import { ApiRequestLog } from "../types";
 import { saveApiRequestLogToDB, getApiRequestLogsFromDB, clearApiRequestLogsFromDB } from "../db/indexedDB";
+import { PROVIDER_OPTIONS } from "../config/llmProviders";
+
+/**
+ * Calculates the dynamic maximum number of API history entries to retain in IndexedDB.
+ * Minimum is 100 entries, or 15 times the total number of available models across providers.
+ */
+export function getMaxApiLogsLimit(): number {
+  const totalModelsCount = PROVIDER_OPTIONS.reduce((acc, provider) => {
+    if (provider.id === "auto") return acc;
+    return acc + (provider.models ? provider.models.length : 0);
+  }, 0);
+  return Math.max(100, totalModelsCount * 15);
+}
 
 /**
  * Detects the functional action category of an LLM prompt.
@@ -91,8 +104,9 @@ export async function logApiRequest(params: {
   await saveApiRequestLogToDB(entry);
 }
 
-export async function getRecentApiLogs(limit = 100): Promise<ApiRequestLog[]> {
-  return await getApiRequestLogsFromDB(limit);
+export async function getRecentApiLogs(limit?: number): Promise<ApiRequestLog[]> {
+  const maxLimit = typeof limit === "number" ? limit : getMaxApiLogsLimit();
+  return await getApiRequestLogsFromDB(maxLimit);
 }
 
 export async function clearAllApiLogs(): Promise<void> {

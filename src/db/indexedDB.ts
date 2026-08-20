@@ -1,6 +1,7 @@
 import { Word, UserStats, LLMConfig, TTSConfig, ApiRequestLog } from "../types";
 import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { sanitizeLlmConfig } from "../utils/llmHelpers";
+import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 const DB_NAME = "VocabLearnerDB";
 
@@ -770,25 +771,32 @@ export function clearAllWordsAndStatsFromDB(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------- */
-/* API Request & Response Logs (Max 100 entries, IndexedDB local storage)     */
+/* API Request & Response Logs (Dynamic limit: max(100, 15 * totalModels))     */
 /* -------------------------------------------------------------------------- */
 
-const MAX_API_LOGS = 100;
+function getMaxApiLogsLimit(): number {
+  const totalModelsCount = PROVIDER_OPTIONS.reduce((acc, provider) => {
+    if (provider.id === "auto") return acc;
+    return acc + (provider.models ? provider.models.length : 0);
+  }, 0);
+  return Math.max(100, totalModelsCount * 15);
+}
 
 export async function saveApiRequestLogToDB(log: ApiRequestLog): Promise<void> {
   try {
+    const maxLogs = getMaxApiLogsLimit();
     await withStores(["apiLogs"], "readwrite", async (tx) => {
       const store = tx.objectStore(STORES.apiLogs);
       store.put(log);
 
-      // Read all records to trim to last 100 entries
+      // Read all records to trim to max logs limit
       const allLogsReq = store.getAll();
       allLogsReq.onsuccess = () => {
         const allLogs = (allLogsReq.result ?? []) as ApiRequestLog[];
-        if (allLogs.length > MAX_API_LOGS) {
+        if (allLogs.length > maxLogs) {
           // Sort oldest first and delete overflow entries
           allLogs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-          const toDelete = allLogs.slice(0, allLogs.length - MAX_API_LOGS);
+          const toDelete = allLogs.slice(0, allLogs.length - maxLogs);
           for (const item of toDelete) {
             if (item.id) store.delete(item.id);
           }
@@ -804,12 +812,13 @@ export async function saveApiRequestLogToDB(log: ApiRequestLog): Promise<void> {
   }
 }
 
-export async function getApiRequestLogsFromDB(limit = 100): Promise<ApiRequestLog[]> {
+export async function getApiRequestLogsFromDB(limit?: number): Promise<ApiRequestLog[]> {
   try {
+    const maxLimit = typeof limit === "number" ? limit : getMaxApiLogsLimit();
     const logs = await withStores(["apiLogs"], "readonly", (tx) => readAll<ApiRequestLog>(tx, "apiLogs"));
     // Sort newest first
     logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    return logs.slice(0, limit);
+    return logs.slice(0, maxLimit);
   } catch (err) {
     console.warn("Notice: could not load API request logs from IndexedDB:", err);
     return [];
