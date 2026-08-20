@@ -269,6 +269,7 @@ export function clearAllLocks(): void {
 }
 
 const AUTO_ROTATION_STORAGE_KEY = "vocab_auto_mode_rotation_index";
+const EXPLORATION_COUNTER_STORAGE_KEY = "vocab_auto_mode_exploration_counter";
 
 export function getAutoRotationIndex(): number {
   if (typeof window === "undefined") return autoRotationIndex;
@@ -299,6 +300,37 @@ export function advanceAutoRotationIndex(): void {
   saveAutoRotationIndex(current + 1);
 }
 
+export function getExplorationCallCounter(): number {
+  if (typeof window === "undefined") return explorationCallCounter;
+  try {
+    const val = localStorage.getItem(EXPLORATION_COUNTER_STORAGE_KEY);
+    if (val !== null) {
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed) && parsed >= 0) {
+        explorationCallCounter = parsed;
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return explorationCallCounter;
+}
+
+export function saveExplorationCallCounter(val: number): void {
+  explorationCallCounter = val;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(EXPLORATION_COUNTER_STORAGE_KEY, String(val));
+    } catch (e) {}
+  }
+}
+
+export function incrementExplorationCallCounter(): number {
+  const current = getExplorationCallCounter();
+  const next = current + 1;
+  saveExplorationCallCounter(next);
+  return next;
+}
+
 /**
  * Resets all model states, including locks, failure logs, error messages, 
  * total calls, success rates, response times, and internal rotation counters.
@@ -309,6 +341,7 @@ export function resetAllModelStates(): void {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(METRICS_STORAGE_KEY);
       localStorage.removeItem(AUTO_ROTATION_STORAGE_KEY);
+      localStorage.removeItem(EXPLORATION_COUNTER_STORAGE_KEY);
     } catch (e) {
       console.error("Error clearing model storage keys from localStorage:", e);
     }
@@ -994,13 +1027,13 @@ export function getNextAutoCandidate(
     tier2.sort((a, b) => a.time - b.time);
     tier4.sort((a, b) => a.time - b.time);
 
-    if (advance) {
-      explorationCallCounter++;
-    }
+    const currentExplorationCount = advance 
+      ? incrementExplorationCallCounter() 
+      : getExplorationCallCounter();
 
     // Low-frequency Epsilon-Greedy Exploration: Every 12th call, probe a Tier 2 or Tier 4 model if Tier 1 is non-empty
     // to give slower models a chance to re-evaluate latency and get promoted!
-    const isExplorationTurn = explorationCallCounter > 0 && explorationCallCounter % 12 === 0;
+    const isExplorationTurn = currentExplorationCount > 0 && currentExplorationCount % 12 === 0;
     if (isExplorationTurn && (tier2.length > 0 || tier4.length > 0)) {
       const probePool = [...tier2.map(t => t.cand), ...tier4.map(t => t.cand)];
       const rotIdx = getAutoRotationIndex();
@@ -1009,7 +1042,7 @@ export function getNextAutoCandidate(
         saveAutoRotationIndex(rotIdx + 1);
       }
       const probeCandidate = probePool[idx];
-      console.log(`[Auto Mode - Epsilon Exploration Probe] Probing Tier 2/4 candidate to re-evaluate response time: ${probeCandidate.provider}:${probeCandidate.model}`);
+      console.log(`[Auto Mode - Epsilon Exploration Probe] Probing Tier 2/4 candidate to re-evaluate response time (Call #${currentExplorationCount}): ${probeCandidate.provider}:${probeCandidate.model}`);
       return probeCandidate;
     }
 
