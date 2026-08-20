@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
 import {
   Calendar as CalendarIcon,
@@ -11,7 +11,9 @@ import {
   Search,
   BarChart3,
   Flame,
-  History
+  History,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { Word } from "../../types";
 import { getNextReviewInfo } from "../../utils/spacedRepetition";
@@ -52,6 +54,15 @@ export default function PracticeTimeline({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDayOffset, setSelectedDayOffset] = useState<number | null>(null);
   const [inspectingWord, setInspectingWord] = useState<Word | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 18; // 18 items per page is optimal for 3 columns
+
+  // Reset pagination on filters or view toggles
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [horizonFilter, selectedDayOffset, searchQuery, viewMode]);
 
   const now = useMemo(() => new Date(), []);
 
@@ -194,6 +205,14 @@ export default function PracticeTimeline({
       return a.targetDate.getTime() - b.targetDate.getTime();
     });
   }, [processedWords, selectedDayOffset, horizonFilter, searchQuery]);
+
+  // Paginated display words
+  const paginatedDisplayWords = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return displayWords.slice(startIndex, startIndex + pageSize);
+  }, [displayWords, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(displayWords.length / pageSize);
 
   const handleStartPracticeDue = () => {
     const targetWords = metrics.dueNow.length > 0 ? metrics.dueNow.map((w) => w.word) : processedWords.slice(0, 10).map((w) => w.word);
@@ -562,120 +581,189 @@ export default function PracticeTimeline({
 
         {/* Word Timeline Cards Grid */}
         {displayWords.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5" id="timeline-words-grid">
-            {displayWords.map(({ word, reviewInfo, targetDate }) => {
-              const isDue = reviewInfo.isDue;
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5" id="timeline-words-grid">
+              {paginatedDisplayWords.map(({ word, reviewInfo, targetDate }) => {
+                const isDue = reviewInfo.isDue;
 
-              return (
-                <div
-                  key={word.id}
-                  className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all duration-200 ${
-                    isDue
-                      ? "bg-amber-50/20 border-amber-300/80 shadow-3xs hover:border-amber-400"
-                      : "bg-white border-stone-200/80 hover:border-stone-350 shadow-2xs"
-                  } hover:-translate-y-0.5`}
-                >
-                  {/* Top Word & Scheduled Time Pill */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline gap-1.5 flex-wrap">
-                          <h4 className="text-base font-bold text-stone-900 tracking-tight truncate max-w-full">
-                            {word.word}
-                          </h4>
-                          {word.partOfSpeech && (
-                            <span className="text-[9px] font-mono text-stone-400 uppercase">
-                              {word.partOfSpeech}
-                            </span>
+                return (
+                  <div
+                    key={word.id}
+                    className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all duration-200 ${
+                      isDue
+                        ? "bg-amber-50/20 border-amber-300/80 shadow-3xs hover:border-amber-400"
+                        : "bg-white border-stone-200/80 hover:border-stone-350 shadow-2xs"
+                    } hover:-translate-y-0.5`}
+                  >
+                    {/* Top Word & Scheduled Time Pill */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <h4 className="text-base font-bold text-stone-900 tracking-tight truncate max-w-full">
+                              {word.word}
+                            </h4>
+                            {word.partOfSpeech && (
+                              <span className="text-[9px] font-mono text-stone-400 uppercase">
+                                {word.partOfSpeech}
+                              </span>
+                            )}
+                          </div>
+                          {word.translation && (
+                            <p className="text-xs text-stone-700 font-bold line-clamp-1">
+                              {word.translation}
+                            </p>
                           )}
                         </div>
-                        {word.translation && (
-                          <p className="text-xs text-stone-700 font-bold line-clamp-1">
-                            {word.translation}
-                          </p>
-                        )}
+
+                        {/* Schedule Badge */}
+                        <span
+                          className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 border ${
+                            isDue
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                              : "bg-stone-50 text-stone-700 border-stone-200"
+                          }`}
+                          title={`Scheduled: ${formatTargetFull(targetDate)}`}
+                        >
+                          {isDue ? (
+                            <>
+                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                              <span>Due Now</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="w-2.5 h-2.5 text-stone-500" />
+                              <span>{reviewInfo.formattedCountdown}</span>
+                            </>
+                          )}
+                        </span>
                       </div>
 
-                      {/* Schedule Badge */}
-                      <span
-                        className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2 py-0.5 rounded-full shrink-0 border ${
-                          isDue
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                            : "bg-stone-50 text-stone-700 border-stone-200"
-                        }`}
-                        title={`Scheduled: ${formatTargetFull(targetDate)}`}
-                      >
-                        {isDue ? (
-                          <>
-                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                            <span>Due Now</span>
-                          </>
-                        ) : (
-                          <>
-                            <Clock className="w-2.5 h-2.5 text-stone-500" />
-                            <span>{reviewInfo.formattedCountdown}</span>
-                          </>
-                        )}
-                      </span>
-                    </div>
-
-                    {/* Definition snippet */}
-                    {word.definition && (
-                      <p className="text-[11px] text-stone-500 font-serif italic line-clamp-2 leading-relaxed">
-                        "{word.definition}"
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Footer Meta & Controls */}
-                  <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <MemoryStrengthBar
-                        strength={word.strength ?? 0}
-                        onClick={() => setInspectingWord(word)}
-                      />
-                      <span className="text-[9px] font-mono text-stone-400 shrink-0">
-                        {reviewInfo.intervalHours >= 24
-                          ? `${Math.round(reviewInfo.intervalHours / 24)}d interval`
-                          : `${reviewInfo.intervalHours}h interval`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      {onToggleStarWord && (
-                        <button
-                          onClick={() => onToggleStarWord(word.id)}
-                          className={`p-1.5 rounded-lg border border-stone-200 bg-white hover:border-amber-400 transition-all cursor-pointer ${
-                            word.starred ? "text-amber-500 bg-amber-50" : "text-stone-400 hover:text-amber-500"
-                          }`}
-                          title={word.starred ? "Starred" : "Star word"}
-                        >
-                          <Star className={`w-3 h-3 ${word.starred ? "fill-amber-400 text-amber-500" : ""}`} />
-                        </button>
+                      {/* Definition snippet */}
+                      {word.definition && (
+                        <p className="text-[11px] text-stone-500 font-serif italic line-clamp-2 leading-relaxed">
+                          "{word.definition}"
+                        </p>
                       )}
+                    </div>
 
-                      <button
-                        onClick={() => onSpeakWord(word.word, word.id)}
-                        className={`p-1.5 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:border-stone-300 transition-all cursor-pointer ${
-                          speakingWordId === word.id ? "bg-amber-50 text-amber-900 border-amber-300" : ""
-                        }`}
-                        title="Listen Pronunciation"
-                      >
-                        <Volume2 className="w-3 h-3" />
-                      </button>
+                    {/* Footer Meta & Controls */}
+                    <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <MemoryStrengthBar
+                          strength={word.strength ?? 0}
+                          onClick={() => setInspectingWord(word)}
+                        />
+                        <span className="text-[9px] font-mono text-stone-400 shrink-0">
+                          {reviewInfo.intervalHours >= 24
+                            ? `${Math.round(reviewInfo.intervalHours / 24)}d interval`
+                            : `${reviewInfo.intervalHours}h interval`}
+                        </span>
+                      </div>
 
-                      <button
-                        onClick={() => setInspectingWord(word)}
-                        className="p-1.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-all cursor-pointer"
-                        title="Inspect Strength & Timeline History"
-                      >
-                        <History className="w-3 h-3 text-stone-600" />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {onToggleStarWord && (
+                          <button
+                            onClick={() => onToggleStarWord(word.id)}
+                            className={`p-1.5 rounded-lg border border-stone-200 bg-white hover:border-amber-400 transition-all cursor-pointer ${
+                              word.starred ? "text-amber-500 bg-amber-50" : "text-stone-400 hover:text-amber-500"
+                            }`}
+                            title={word.starred ? "Starred" : "Star word"}
+                          >
+                            <Star className={`w-3 h-3 ${word.starred ? "fill-amber-400 text-amber-500" : ""}`} />
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => onSpeakWord(word.word, word.id)}
+                          className={`p-1.5 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:border-stone-300 transition-all cursor-pointer ${
+                            speakingWordId === word.id ? "bg-amber-50 text-amber-900 border-amber-300" : ""
+                          }`}
+                          title="Listen Pronunciation"
+                        >
+                          <Volume2 className="w-3 h-3" />
+                        </button>
+
+                        <button
+                          onClick={() => setInspectingWord(word)}
+                          className="p-1.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-all cursor-pointer"
+                          title="Inspect Strength & Timeline History"
+                        >
+                          <History className="w-3 h-3 text-stone-600" />
+                        </button>
+                      </div>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* Timeline Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-stone-150 mt-6" id="timeline-pagination">
+                <div className="text-xs text-stone-500 font-mono">
+                  Showing <span className="font-semibold text-stone-800">{((currentPage - 1) * pageSize) + 1}</span> to{" "}
+                  <span className="font-semibold text-stone-800">
+                    {Math.min(currentPage * pageSize, displayWords.length)}
+                  </span>{" "}
+                  of <span className="font-semibold text-stone-800">{displayWords.length}</span> words
                 </div>
-              );
-            })}
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50 disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-stone-600 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  {/* Render page numbers */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      Math.abs(page - currentPage) <= 1
+                    ) {
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            currentPage === page
+                              ? "bg-stone-900 text-white shadow-2xs"
+                              : "border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    }
+                    if (
+                      page === 2 ||
+                      page === totalPages - 1
+                    ) {
+                      return (
+                        <span key={page} className="text-xs text-stone-400 px-1 font-mono select-none">
+                          ...
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50 disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-stone-600 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="p-10 text-center bg-stone-50/50 border border-stone-200/60 rounded-xl space-y-2">

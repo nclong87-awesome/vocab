@@ -1,4 +1,4 @@
-import  { useState, useMemo } from "react";
+import  { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   BarChart2, 
@@ -10,7 +10,9 @@ import {
   RefreshCw,
   Calendar,
   Layers,
-  Timer
+  Timer,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { analyzePerformanceService, PerformanceAnalysisResult } from "../services/llmClientService";
@@ -59,6 +61,15 @@ export default function AnalyticsDashboard({
   const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'decayed' | 'all' | 'starred'>('all');
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<'strength-asc' | 'strength-desc' | 'alpha' | 'recent'>('recent');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 18; // Perfect multiple of 3 columns for desktop grid, compact for mobile
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, sortBy]);
 
   // TTS audio state
   const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
@@ -211,6 +222,14 @@ export default function AnalyticsDashboard({
   const overallMasteryPercent = totalWordsCount > 0 
     ? Math.round((masteredWords.length / totalWordsCount) * 100) 
     : 0;
+
+  // Paginated subset of filtered words for display
+  const paginatedWords = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredWords.slice(startIndex, startIndex + pageSize);
+  }, [filteredWords, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredWords.length / pageSize);
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto" id="analytics-dashboard-root">
@@ -506,17 +525,86 @@ export default function AnalyticsDashboard({
 
             {/* Word Cards Grid */}
             {filteredWords.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="filtered-words-grid">
-                {filteredWords.map((word) => (
-                  <WordAnalyticsCard
-                    key={word.id}
-                    word={word}
-                    speakingWordId={speakingWordId}
-                    onSpeakWord={handleSpeakWord}
-                    onToggleStarWord={onToggleStarWord}
-                    onToggleLearnedWord={onToggleLearnedWord}
-                  />
-                ))}
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="filtered-words-grid">
+                  {paginatedWords.map((word) => (
+                    <WordAnalyticsCard
+                      key={word.id}
+                      word={word}
+                      speakingWordId={speakingWordId}
+                      onSpeakWord={handleSpeakWord}
+                      onToggleStarWord={onToggleStarWord}
+                      onToggleLearnedWord={onToggleLearnedWord}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-stone-150 mt-6" id="analytics-pagination">
+                    <div className="text-xs text-stone-500 font-mono">
+                      Showing <span className="font-semibold text-stone-800">{((currentPage - 1) * pageSize) + 1}</span> to{" "}
+                      <span className="font-semibold text-stone-800">
+                        {Math.min(currentPage * pageSize, filteredWords.length)}
+                      </span>{" "}
+                      of <span className="font-semibold text-stone-800">{filteredWords.length}</span> words
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50 disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-stone-600 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      {/* Render page numbers */}
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                        if (
+                          page === 1 ||
+                          page === totalPages ||
+                          Math.abs(page - currentPage) <= 1
+                        ) {
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => setCurrentPage(page)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                currentPage === page
+                                  ? "bg-stone-900 text-white shadow-2xs"
+                                  : "border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50"
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        }
+                        if (
+                          page === 2 ||
+                          page === totalPages - 1
+                        ) {
+                          return (
+                            <span key={page} className="text-xs text-stone-400 px-1 font-mono select-none">
+                              ...
+                        </span>
+                          );
+                        }
+                        return null;
+                      })}
+
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg border border-stone-200 bg-white text-stone-600 hover:text-stone-900 hover:bg-stone-50 disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-stone-600 disabled:cursor-not-allowed transition-all cursor-pointer"
+                        title="Next Page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-12 text-center bg-stone-50/50 border border-stone-200/60 rounded-xl space-y-3">
