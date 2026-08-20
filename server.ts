@@ -2381,16 +2381,20 @@ STRICT GENERATION RULES & RESTRICTIONS:
 4. MANDATORY REQUIREMENTS:
    - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'.
    - Generate EXACTLY THREE (3) companion collocations/words across the entire quiz ('suggestedWords' array with 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
+5. STRICT CORRECT ANSWER MATCHING RULE (CRITICAL):
+   - The correct answer to every question MUST be EXACTLY the target vocabulary word itself (matching the spelling in the input list exactly).
+   - Under no circumstances should the correct answer be a synonym, a definition, or any other word.
+   - For example, if the word being tested is "minutes", the "correctAnswer" property MUST be set to "minutes", and the "options" array MUST contain exactly 4 unique options where one of them is "minutes".
 
 Output MUST be strictly valid JSON matching this schema:
 {
   "questions": [
     {
-      "word": "string (the target word)",
+      "word": "string (the target word being tested)",
       "type": "definition" | "sentence" | "listening" | "picture",
       "question": "string",
       "options": ["string", "string", "string", "string"],
-      "correctAnswer": "string",
+      "correctAnswer": "string (MUST be exactly the target word itself matching the 'word' field)",
       "hint": "string",
       "imageKeyword": "string (1-3 word English search term)"
     }
@@ -2408,9 +2412,10 @@ Output MUST be strictly valid JSON matching this schema:
     const prompt = `Generate 1 quiz question for each of these vocabulary words:\n${JSON.stringify(minimalWordList, null, 2)}\n\n` +
       `CRITICAL INSTRUCTIONS:\n` +
       `1. Return exactly 1 question per word.\n` +
-      `2. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
-      `3. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n` +
-      `4. Include exactly 3 suggested companion words ('suggestedWords' array) total.`;
+      `2. The correct answer (correctAnswer) to each question MUST be EXACTLY the target word being tested. For example, if the word being tested is "minutes", the correctAnswer MUST be "minutes".\n` +
+      `3. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
+      `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n` +
+      `5. Include exactly 3 suggested companion words ('suggestedWords' array) total.`;
 
     const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of EXACTLY 3 items with word, translation, pairedWith, hint).`;
 
@@ -2545,7 +2550,8 @@ Output MUST be strictly valid JSON matching this schema:
         const matchingWord = words.find((w: any) => w.id === q.wordId || (w.word || "").toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length] || {};
         const targetWordText = matchingWord.word || q.word || "";
         const targetWordLower = targetWordText.toLowerCase().trim();
-        const correctAns = q.correctAnswer || targetWordText;
+        // The correct answer MUST be strictly the target vocabulary word itself being tested
+        const correctAns = targetWordText;
         const correctAnsLower = correctAns.toLowerCase().trim();
 
         // 1. Sanitize options rejecting any cross-word reuse from the test batch

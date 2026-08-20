@@ -331,8 +331,8 @@ export default function RequestHistoryModal({
                   const isSelected = selectedLog?.id === log.id;
                   const isSuccess = log.status === "success";
                   const duration = log.responseTimeMs;
-                  const isFast = duration < 3000;
-                  const isMedium = duration >= 3000 && duration < 8000;
+                  const isFast = duration < 15000;
+                  const isMedium = duration >= 15000 && duration < 25000;
 
                   return (
                     <button
