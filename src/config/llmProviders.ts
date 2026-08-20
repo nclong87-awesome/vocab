@@ -42,7 +42,9 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       "google/gemini-3.5-flash-lite",
       "google/gemini-3.1-flash-lite",
-      "google/gemini-3.5-flash"
+      "google/gemini-3.5-flash",
+      "cohere/command-a",
+      "cohere/command-a-03-2025"
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
     directBaseUrl: "https://openrouter.ai/api/v1",
@@ -104,17 +106,17 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     defaultBaseUrl: "https://cloudflare.nclong87.workers.dev",
     directBaseUrl: "https://api.cloudflare.com/client/v4/accounts/12345678/ai/run",
     requiresKey: false
-  },
-  {
-    id: "custom",
-    name: "Custom / Local Endpoint",
-    tagline: "vLLM, LMStudio, or private proxy",
-    defaultModel: "custom",
-    models: ["custom"],
-    defaultBaseUrl: "http://localhost:11434/v1",
-    directBaseUrl: "http://localhost:11434/v1",
-    requiresKey: false
   }
+  // {
+  //   id: "custom",
+  //   name: "Custom / Local Endpoint",
+  //   tagline: "vLLM, LMStudio, or private proxy",
+  //   defaultModel: "custom",
+  //   models: ["custom"],
+  //   defaultBaseUrl: "http://localhost:11434/v1",
+  //   directBaseUrl: "http://localhost:11434/v1",
+  //   requiresKey: false
+  // }
 ];
 
 /**
