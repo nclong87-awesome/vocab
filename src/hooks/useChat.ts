@@ -651,6 +651,19 @@ export function useChat({
     if (existingMatch) {
       const remainingActions = getRemainingWordActions(chatMessages, words, normalizedWordText, currentAppLang);
       const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
+      const wordSpecificActions = [
+        {
+          label: `💡 ${t("action_add_related_words", currentAppLang, { word: existingMatch.word })}`,
+          action: "send_message",
+          payload: { message: `Suggest commonly paired words for "${existingMatch.word}"` },
+        },
+        {
+          label: `❓ ${t("action_ask_question_about", currentAppLang, { word: existingMatch.word })}`,
+          action: "send_message",
+          payload: { message: `Tell me how to use "${existingMatch.word}" in conversation and ask me a practice question.` },
+        },
+      ];
+      const mergedActions = [...wordSpecificActions, ...remainingActions];
       setChatMessages((prev) => [
         ...prev,
         {
@@ -661,7 +674,7 @@ export function useChat({
             details: existingDetails,
           }),
           timestamp: new Date().toISOString(),
-          suggestedActions: remainingActions,
+          suggestedActions: mergedActions,
           audioWord: existingMatch.word,
         },
       ]);

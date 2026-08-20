@@ -180,6 +180,8 @@ export const viTranslations: LanguageTranslations = {
     chat_batch_added_success: "🎉 **Đã thêm thành công {count} từ mới vào bộ sưu tập của bạn!**\n\n- **Đã thêm**: {addedList}{skippedSection}\n\n👇 **Nhập một từ khác bên dưới** để tiếp tục thêm vào bộ sưu tập!",
     chat_batch_added_skipped_section: "\n- *Đã bỏ qua các từ trùng*: {words}",
     chat_word_already_in_collection: "ℹ️ **\"{word}\" đã có trong bộ sưu tập từ vựng của bạn!**\n\n{details}\n\n👇 **Nhập một từ khác bên dưới** để thêm vào bộ sưu tập!",
+    action_add_related_words: "Đề xuất từ liên quan cho \"{word}\"",
+    action_ask_question_about: "Hỏi câu hỏi về \"{word}\"",
     chat_user_selected_add_word: "Tôi muốn thêm: \"{word}\" ({translation})",
     chat_saving_custom_card: "🔍 *Đang lưu thẻ tùy chỉnh cho **\"{word}\"** vào bộ sưu tập của bạn...*",
     chat_fail_add_word_sense: "⚠️ **Không thể thêm nghĩa từ:** {error}. Vui lòng kiểm tra cài đặt và thử lại.",

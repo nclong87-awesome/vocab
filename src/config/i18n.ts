@@ -373,6 +373,8 @@ export type TranslationKey =
   | "chat_error_cancel_retry"
   | "chat_error_retry_cancelled"
   | "chat_error_retry_btn"
+  | "action_add_related_words"
+  | "action_ask_question_about"
   | "chat_error_retrying_now";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
