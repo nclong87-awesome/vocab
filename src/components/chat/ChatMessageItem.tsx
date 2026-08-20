@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { 
   Volume2, ChevronRight, Check, Sparkles, Plus
 } from "lucide-react";
-import { formatModelDisplayName, getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
+import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
@@ -803,19 +803,19 @@ function ChatMessageItem({
 
               {/* AI Response Metadata (Provider, Model, Response Time) */}
               {(msg.provider || msg.model || msg.responseTimeMs !== undefined) && (
-                <div className="mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-1.5 flex-nowrap whitespace-nowrap min-w-0 w-full overflow-hidden">
+                  <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden shrink">
                     {msg.provider && (() => {
                       const style = getProviderBadgeStyle(msg.provider);
                       return (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold ${style.bg} ${style.text} ${style.border}`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold shrink-0 ${style.bg} ${style.text} ${style.border}`}>
                           {style.label}
                         </span>
                       );
                     })()}
                     {msg.model && (
-                      <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200/60" title={msg.model}>
-                        {formatModelDisplayName(msg.model)}
+                      <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200/60 truncate min-w-0 max-w-[130px] sm:max-w-[220px]" title={msg.model}>
+                        {msg.model}
                       </span>
                     )}
                   </div>

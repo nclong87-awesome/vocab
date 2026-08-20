@@ -7,7 +7,7 @@ import {
   LayoutGrid
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
-import { formatModelDisplayName, getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
+import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
 
@@ -426,19 +426,19 @@ function FlashcardMessageCard({
 
       {/* AI Metadata Footer */}
       {(provider || model || responseTimeMs !== undefined) && (
-        <div className="px-4 py-2 bg-stone-50/80 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="px-4 py-2 bg-stone-50/80 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-1.5 flex-nowrap whitespace-nowrap min-w-0 w-full overflow-hidden">
+          <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden shrink">
             {provider && (() => {
               const style = getProviderBadgeStyle(provider);
               return (
-                <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold ${style.bg} ${style.text} ${style.border}`}>
+                <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold shrink-0 ${style.bg} ${style.text} ${style.border}`}>
                   {style.label}
                 </span>
               );
             })()}
             {model && (
-              <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-white px-1.5 py-0.5 rounded border border-stone-200/60" title={model}>
-                {formatModelDisplayName(model)}
+              <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-white px-1.5 py-0.5 rounded border border-stone-200/60 truncate min-w-0 max-w-[130px] sm:max-w-[220px]" title={model}>
+                {model}
               </span>
             )}
           </div>
