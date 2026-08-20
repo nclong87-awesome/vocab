@@ -164,10 +164,10 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       label: t("qa_fix_grammar_label", appLanguage),
       category: "writing",
       categoryLabel: t("qa_cat_writing", appLanguage),
-      icon: <CheckSquare className="w-4 h-4 text-amber-600" />,
+      icon: <CheckSquare className="w-4 h-4 text-rose-600" />,
       title: t("qa_fix_grammar_title", appLanguage),
       description: t("qa_fix_grammar_desc", appLanguage),
-      className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      className: "bg-rose-50 hover:bg-rose-100 text-rose-950 border border-rose-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 4,
       getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();

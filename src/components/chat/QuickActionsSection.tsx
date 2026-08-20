@@ -30,6 +30,18 @@ interface QuickActionsSectionProps {
   words?: Word[];
 }
 
+const ACTION_THEMES: Record<string, { cardHover: string; iconBgHover: string }> = {
+  add_word: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
+  generate_topic: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
+  practice: { cardHover: "hover:bg-stone-50 hover:border-stone-400/60", iconBgHover: "group-hover:bg-stone-200" },
+  fix_grammar: { cardHover: "hover:bg-rose-50/50 hover:border-rose-300/80", iconBgHover: "group-hover:bg-rose-100" },
+  suggest_reply: { cardHover: "hover:bg-amber-50/50 hover:border-amber-300/80", iconBgHover: "group-hover:bg-amber-100" },
+  explain_grammar: { cardHover: "hover:bg-blue-50/50 hover:border-blue-300/80", iconBgHover: "group-hover:bg-blue-100" },
+  common_phrases: { cardHover: "hover:bg-emerald-50/50 hover:border-emerald-300/80", iconBgHover: "group-hover:bg-emerald-100" },
+  translate_contrast: { cardHover: "hover:bg-purple-50/50 hover:border-purple-300/80", iconBgHover: "group-hover:bg-purple-100" },
+  new_chat: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
+};
+
 function QuickActionsSection({
   targetLanguage,
   nativeLanguage,
@@ -268,16 +280,20 @@ function QuickActionsSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto pr-1">
               {filteredActionItems.length > 0 ? (
                 filteredActionItems.map((item) => {
+                  const theme = ACTION_THEMES[item.id] || {
+                    cardHover: "hover:bg-amber-50/50 hover:border-amber-300/80",
+                    iconBgHover: "group-hover:bg-amber-100",
+                  };
                   return (
                     <button
                       key={item.id}
                       type="button"
                       onClick={item.onClick}
-                      className="bg-white hover:bg-amber-50/50 border border-stone-200 hover:border-amber-300/80 p-2.5 rounded-xl text-left transition-all duration-150 hover:shadow-2xs cursor-pointer group flex flex-col justify-between gap-1.5"
+                      className={`bg-white ${theme.cardHover} border border-stone-200 p-2.5 rounded-xl text-left transition-all duration-150 hover:shadow-2xs cursor-pointer group flex flex-col justify-between gap-1.5`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-lg bg-stone-100 group-hover:bg-amber-100 flex items-center justify-center shrink-0 transition-colors">
+                          <div className={`w-7 h-7 rounded-lg bg-stone-100 ${theme.iconBgHover} flex items-center justify-center shrink-0 transition-colors`}>
                             {item.icon}
                           </div>
                           <div>
