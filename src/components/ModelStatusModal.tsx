@@ -21,7 +21,6 @@ import {
   resetAllModelStates,
   getPerformanceTierMeta,
   PerformanceTierNumber,
-  isMetricStale,
   unlockModel,
 } from "../utils/autoModeManager";
 
@@ -308,9 +307,8 @@ export default function ModelStatusModal({
               const isActive = llmConfig.provider === item.provider && llmConfig.model === item.model;
               const rank = index + 1;
               const itemKey = `${item.provider}:${item.model}`;
-              const isStale = isMetricStale(item.lastTestedAt);
-              const isUntestedOrStale = item.status === 'untested' || item.lastResponseTimeMs === null || isStale;
-              const tierMeta = getPerformanceTierMeta(item.performanceTier, isUntestedOrStale);
+              const isUntested = item.status === 'untested' || item.lastResponseTimeMs === null || item.totalSuccesses < 1;
+              const tierMeta = getPerformanceTierMeta(item.performanceTier, isUntested);
 
               const successStats = formatSuccessRate(item.totalSuccesses, item.totalCalls);
 

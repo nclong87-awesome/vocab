@@ -602,7 +602,7 @@ export function resetModelFullState(provider: string, model: string): void {
 
 export type PerformanceTierNumber = 1 | 2 | 3 | 4;
 
-export const METRIC_STALE_MS = 15 * 60 * 1000; // 15 minutes until metrics expire and trigger a re-test probe
+export const METRIC_STALE_MS = 15 * 60 * 1000; // 15 minutes helper for reference
 
 export function isMetricStale(lastTestedAt: number | null): boolean {
   if (!lastTestedAt) return true;
@@ -621,12 +621,12 @@ export interface PerformanceTierInfo {
 export function getModelPerformanceTier(
   status: ModelStatusIndicator, 
   responseTimeMs?: number | null,
-  lastTestedAt?: number | null
+  totalSuccesses?: number
 ): PerformanceTierNumber {
   if (status === 'offline') return 4;
   
-  // Untested models or stale metrics (>15 min) are promoted to Tier 1 as Probes so newly added models & changing models get benchmarked immediately
-  if (status === 'untested' || responseTimeMs === null || responseTimeMs === undefined || isMetricStale(lastTestedAt ?? null)) {
+  // Untested models (0 successful requests or null response time) are placed in Tier 1 as Probes so they get benchmarked immediately
+  if (status === 'untested' || responseTimeMs === null || responseTimeMs === undefined || (totalSuccesses !== undefined && totalSuccesses < 1)) {
     return 1;
   }
   
@@ -637,19 +637,19 @@ export function getModelPerformanceTier(
 
 export function getPerformanceTierMeta(
   tier: PerformanceTierNumber,
-  isUntestedOrStale?: boolean
+  isUntested?: boolean
 ): PerformanceTierInfo {
   switch (tier) {
     case 1:
       return {
         tier: 1,
         name: "Tier 1: High-Speed Priority & New Probes",
-        badgeLabel: isUntestedOrStale ? "Tier 1 (Probe/New)" : "Tier 1 (Fast)",
+        badgeLabel: isUntested ? "Tier 1 (Probe/New)" : "Tier 1 (Fast)",
         shortLabel: "Tier 1: Fast",
-        description: isUntestedOrStale 
-          ? "Untested or stale model boosted to Tier 1 for immediate benchmark sampling."
-          : "Fast response times (0–15s). First priority choice for all queries.",
-        colorClass: isUntestedOrStale 
+        description: isUntested 
+          ? "Untested model prioritized in Tier 1 for benchmark probing. Once it completes 1 successful request, it graduates to regular Tier 1 rotation."
+          : "Fast response times (0–15s). First priority choice rotating evenly across all models.",
+        colorClass: isUntested 
           ? "bg-sky-50 text-sky-800 border-sky-200" 
           : "bg-emerald-50 text-emerald-700 border-emerald-200"
       };
@@ -816,7 +816,7 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
 
       const lastTestedAt = metric?.lastTestedAt ?? null;
       const status = getModelStatusIndicator(isLocked, effectiveResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
-      const performanceTier = getModelPerformanceTier(status, effectiveResponseTimeMs, lastTestedAt);
+      const performanceTier = getModelPerformanceTier(status, effectiveResponseTimeMs, totalSuccesses);
 
       result.push({
         provider: p.id,
@@ -892,7 +892,7 @@ export function getAllModelStatuses(llmConfig?: LLMConfig): ModelStatusItem[] {
 
       const lastTestedAt = metric?.lastTestedAt ?? null;
       const status = getModelStatusIndicator(isLocked, effectiveResponseTimeMs, hasLastError, totalCalls, totalSuccesses);
-      const performanceTier = getModelPerformanceTier(status, effectiveResponseTimeMs, lastTestedAt);
+      const performanceTier = getModelPerformanceTier(status, effectiveResponseTimeMs, totalSuccesses);
 
       result.push({
         provider: pId,
@@ -937,12 +937,14 @@ let explorationCallCounter = 0;
 
 /**
  * Performance-Tiered Priority Candidate Selection:
- * 1. Untested models & stale models (>15m) are automatically placed into Tier 1 (Probe Queue)
- *    so newly added models or changed models get benchmarked immediately.
- * 2. Epsilon-Greedy Exploration Sampling (15% rate):
- *    Every ~6th call, if Tier 2 or Tier 4 candidates exist, one is selected as an exploratory probe
- *    to give slower or demoted models a chance to refresh their response times and get promoted to Tier 1.
- * 3. Priority routing targets Tier 1 first -> Tier 2 -> Tier 4.
+ * 1. Untested (Probe/New) models (0 successful requests) are placed in Tier 1 and preferred first
+ *    so newly added models get sampled immediately.
+ * 2. Once a Probe/New model completes 1 successful request, it is considered tested and immediately
+ *    joins the normal round-robin rotation alongside all other Tier 1 models.
+ * 3. Epsilon-Greedy Exploration Sampling:
+ *    Every 12th call, if Tier 2 or Tier 4 candidates exist, one is selected as an exploratory probe
+ *    to give slower or demoted models a chance to refresh their response times and get promoted.
+ * 4. Priority routing targets Tier 1 first -> Tier 2 -> Tier 4.
  */
 export function getNextAutoCandidate(
   llmConfig?: LLMConfig,
@@ -961,7 +963,8 @@ export function getNextAutoCandidate(
   });
 
   if (available.length > 0) {
-    const tier1: { cand: AutoCandidate; time: number | null; isUntestedOrStale: boolean }[] = [];
+    const tier1Probes: AutoCandidate[] = [];
+    const tier1Tested: { cand: AutoCandidate; time: number }[] = [];
     const tier2: { cand: AutoCandidate; time: number }[] = [];
     const tier4: { cand: AutoCandidate; time: number }[] = [];
 
@@ -969,15 +972,16 @@ export function getNextAutoCandidate(
       const key = `${cand.provider}:${cand.model}`;
       const metric = metricsMap[key];
       const time = metric?.lastResponseTimeMs ?? null;
-      const lastTestedAt = metric?.lastTestedAt ?? null;
-      const stale = isMetricStale(lastTestedAt);
+      const totalCalls = metric?.totalCalls ?? 0;
+      const totalSuccesses = metric?.totalSuccesses ?? 0;
+      const isUntested = time === null || totalSuccesses < 1 || (totalCalls > 0 && totalSuccesses === 0);
 
-      if (time === null || stale) {
-        // Untested or Stale -> Priority Tier 1 Probe!
-        tier1.push({ cand, time, isUntestedOrStale: true });
+      if (isUntested) {
+        // Untested (0 successes) -> Priority Tier 1 Probe Queue
+        tier1Probes.push(cand);
       } else if (time < 15000) {
-        // Fast (0–15s) -> Tier 1
-        tier1.push({ cand, time, isUntestedOrStale: false });
+        // Fast (0–15s) -> Tier 1 Regular Rotation
+        tier1Tested.push({ cand, time });
       } else if (time < 25000) {
         // Medium (15–25s) -> Tier 2
         tier2.push({ cand, time });
@@ -1009,42 +1013,31 @@ export function getNextAutoCandidate(
       return probeCandidate;
     }
 
-    // Probe Selection: If there are any untested or stale models in Tier 1, prioritize them cleanly
-    // and rotate among them (lowest calls first) so every new request or retry picks the next model.
-    const untestedOrStale = tier1.filter(t => t.isUntestedOrStale);
-    if (untestedOrStale.length > 0) {
-      // Find candidate(s) with minimum call count
-      const minCalls = Math.min(...untestedOrStale.map(t => {
-        const key = `${t.cand.provider}:${t.cand.model}`;
-        return metricsMap[key]?.totalCalls ?? 0;
-      }));
-      const minCallCandidates = untestedOrStale.filter(t => {
-        const key = `${t.cand.provider}:${t.cand.model}`;
-        return (metricsMap[key]?.totalCalls ?? 0) === minCalls;
-      });
-
+    // 1. Probe/New Selection: If there are any untested models (0 successful requests),
+    // prioritize them first with fair round-robin rotation so new models get probed immediately without crowding out.
+    // Once a model completes 1 successful request, it graduates and joins the normal Tier 1 rotation.
+    if (tier1Probes.length > 0) {
       const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % minCallCandidates.length;
-      const selected = minCallCandidates[idx].cand;
+      const idx = rotIdx % tier1Probes.length;
+      const selected = tier1Probes[idx];
 
       if (advance) {
         saveAutoRotationIndex(rotIdx + 1);
       }
 
-      console.log(`[Auto Mode - Probe Selection] Selected untested/stale candidate (calls: ${metricsMap[`${selected.provider}:${selected.model}`]?.totalCalls ?? 0}): ${selected.provider}:${selected.model}`);
+      console.log(`[Auto Mode - Probe/New Selection] Probing untested candidate (0 successes): ${selected.provider}:${selected.model}`);
       return selected;
     }
 
-    // Standard Tier Priority Selection (Tier 1 -> Tier 2 -> Tier 4)
-    // For tested Tier 1 models, sort by response time so the fastest model is prioritized first
-    const testedTier1 = tier1.filter(t => !t.isUntestedOrStale).sort((a, b) => (a.time ?? 99999) - (b.time ?? 99999));
-    if (testedTier1.length > 0) {
+    // 2. Standard Tier 1 Round-Robin Rotation:
+    // All tested Tier 1 models rotate equally with equal probability across queries.
+    if (tier1Tested.length > 0) {
       const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % testedTier1.length;
+      const idx = rotIdx % tier1Tested.length;
       if (advance) {
         saveAutoRotationIndex(rotIdx + 1);
       }
-      return testedTier1[idx].cand;
+      return tier1Tested[idx].cand;
     }
 
     if (tier2.length > 0) {
@@ -1095,10 +1088,9 @@ export function getAutoCandidateWithMeta(
     ? null
     : (metric?.lastResponseTimeMs ?? null);
   const status = getModelStatusIndicator(isLocked, effectiveTime, hasLastError, totalCalls, totalSuccesses);
-  const isStale = isMetricStale(metric?.lastTestedAt ?? null);
-  const isUntestedOrStale = status === 'untested' || effectiveTime === null || isStale;
-  const tier = getModelPerformanceTier(status, effectiveTime, metric?.lastTestedAt);
-  const tierMeta = getPerformanceTierMeta(tier, isUntestedOrStale);
+  const isUntested = status === 'untested' || effectiveTime === null || totalSuccesses < 1;
+  const tier = getModelPerformanceTier(status, effectiveTime, totalSuccesses);
+  const tierMeta = getPerformanceTierMeta(tier, isUntested);
 
   return { candidate, tier, tierMeta };
 }
