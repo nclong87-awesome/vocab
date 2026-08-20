@@ -631,6 +631,25 @@ async function callLLMClientSideSingleCandidate(
     reqBody.response_format = { type: "json_object" };
   }
 
+  // Bypass / Suppress Reasoning parameters for Groq, OpenRouter, DeepSeek, OpenAI, etc.
+  if (provider === "groq" || model.toLowerCase().includes("groq")) {
+    reqBody.reasoning_format = "hidden";
+  }
+  if (
+    provider === "openrouter" || 
+    provider === "groq" || 
+    provider === "openai" || 
+    provider === "deepseek" || 
+    provider === "9flare" ||
+    provider === "ollama" ||
+    model.toLowerCase().includes("deepseek") || 
+    model.toLowerCase().includes("r1") ||
+    model.toLowerCase().includes("reasoning")
+  ) {
+    reqBody.include_reasoning = false;
+    reqBody.reasoning_effort = "none";
+  }
+
   return callWithRetry(
     async () => {
       let res = await fetchWithTimeout(targetUrl, {
@@ -640,12 +659,15 @@ async function callLLMClientSideSingleCandidate(
         signal
       });
 
-      // If request failed with 400 due to response_format or JSON mode incompatibility, retry once without response_format
-      if (!res.ok && reqBody.response_format) {
+      // If request failed with 400 due to response_format, reasoning parameters, or JSON mode incompatibility, retry once without those parameters
+      if (!res.ok && (reqBody.response_format || reqBody.reasoning_format || reqBody.reasoning_effort || reqBody.include_reasoning !== undefined)) {
         const errClone = res.clone();
         const errText = await errClone.text().catch(() => "");
-        if (errText.includes("JSON mode") || errText.includes("response_format") || res.status === 400) {
+        if (errText.includes("JSON mode") || errText.includes("response_format") || errText.includes("reasoning") || errText.includes("unrecognized field") || res.status === 400) {
           delete reqBody.response_format;
+          delete reqBody.reasoning_format;
+          delete reqBody.reasoning_effort;
+          delete reqBody.include_reasoning;
           res = await fetchWithTimeout(targetUrl, {
             method: "POST",
             headers,
@@ -873,16 +895,34 @@ function extractTextFromChoiceClient(choice: any): string {
     const msg = choice.message;
     const txt = extractTextFromContentClient(msg.content) || extractTextFromContentClient(msg.text);
     if (txt) return txt;
-    if (msg.reasoning_content && !msg.content) {
-      return extractTextFromContentClient(msg.reasoning_content);
+
+    // Support reasoning or reasoning_content field (Groq, DeepSeek, OpenRouter)
+    const reasoningRaw = msg.reasoning || msg.reasoning_content;
+    if (reasoningRaw && !msg.content) {
+      const reasoningTxt = extractTextFromContentClient(reasoningRaw);
+      if (reasoningTxt) {
+        // Attempt to extract embedded JSON code block inside reasoning
+        const jsonMatch = reasoningTxt.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (jsonMatch && jsonMatch[1].trim()) {
+          return jsonMatch[1].trim();
+        }
+      }
     }
   }
   if (choice.delta) {
     const delta = choice.delta;
     const txt = extractTextFromContentClient(delta.content) || extractTextFromContentClient(delta.text);
     if (txt) return txt;
-    if (delta.reasoning_content && delta.content === undefined) {
-      return extractTextFromContentClient(delta.reasoning_content);
+
+    const reasoningRaw = delta.reasoning || delta.reasoning_content;
+    if (reasoningRaw && delta.content === undefined) {
+      const reasoningTxt = extractTextFromContentClient(reasoningRaw);
+      if (reasoningTxt) {
+        const jsonMatch = reasoningTxt.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (jsonMatch && jsonMatch[1].trim()) {
+          return jsonMatch[1].trim();
+        }
+      }
     }
   }
   if (choice.text) {
@@ -934,8 +974,22 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
       if (content) {
         return cleanJsonResponse(content);
       }
+
+      // Detect if choices exist but content was empty / only contained reasoning thoughts without output
+      if (data.choices?.[0]) {
+        const msg = data.choices[0].message || data.choices[0].delta || {};
+        const reasoningText = msg.reasoning || msg.reasoning_content || "";
+        if (reasoningText) {
+          throw new Error("Empty content from model (model generated reasoning thoughts but no final output content).");
+        }
+        throw new Error("Empty content received in model choices response.");
+      }
     }
-  } catch {
+  } catch (jsonErr: any) {
+    // If we threw an explicit empty content error above, rethrow it
+    if (jsonErr.message && jsonErr.message.includes("Empty content")) {
+      throw jsonErr;
+    }
     // Not a single valid JSON object; proceed to parse as SSE / chunked event stream
   }
 
@@ -1022,7 +1076,19 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
     return cleanJsonResponse(accumulatedText);
   }
 
-  // 3. Fallback to cleanJsonResponse on rawText
+  // Prevent returning raw JSON API wrapper objects as assistant content
+  try {
+    const parsedObj = JSON.parse(trimmedText);
+    if (parsedObj && typeof parsedObj === "object" && (parsedObj.choices || parsedObj.id || parsedObj.object || parsedObj.error)) {
+      throw new Error("Empty or unparseable payload from API provider response wrapper.");
+    }
+  } catch (err: any) {
+    if (err.message && err.message.includes("Empty or unparseable payload")) {
+      throw err;
+    }
+  }
+
+  // 3. Fallback to cleanJsonResponse on rawText for plain text responses
   return cleanJsonResponse(rawText);
 }
 
