@@ -1192,6 +1192,8 @@ export function useChat({
       },
     ]);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const configForServer = startTypingWithConfig(configToUse);
 
     try {
@@ -1201,6 +1203,7 @@ export function useChat({
         targetLanguage,
         nativeLanguage,
         llmConfig: configForServer,
+        signal: controller.signal,
       });
 
       if (res && res.provider && res.model) {
@@ -1268,13 +1271,21 @@ export function useChat({
         ];
       });
     } catch (err: any) {
+      if (controller.signal.aborted || err?.name === "AbortError" || String(err).includes("aborted")) {
+        console.log("Image analysis was aborted by the user.");
+        setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
+        return;
+      }
       console.error("Image analysis error:", err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
       triggerChatErrorWithCountdown(err, configToUse, () => {
         handleAnalyzeImageVocab(imageDataUrl, customPrompt);
       }, "img-vocab-error");
     } finally {
-      setIsTyping(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setIsTypingState(false);
     }
   };
 
@@ -1761,6 +1772,8 @@ export function useChat({
     setConversationalState("none");
     const overrideConfig = imageDataUrl ? getVisionModelConfig() : undefined;
     const configToUse = overrideConfig || llmConfig;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
@@ -1794,6 +1807,7 @@ export function useChat({
         targetLanguage,
         nativeLanguage,
         llmConfig: configForServer,
+        signal: controller.signal,
       });
 
       if (res && res.provider && res.model) {
@@ -1853,13 +1867,21 @@ export function useChat({
         ];
       });
     } catch (err: any) {
+      if (controller.signal.aborted || err?.name === "AbortError" || String(err).includes("aborted")) {
+        console.log("Casual reply suggestion was aborted by the user.");
+        setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
+        return;
+      }
       console.error("Suggest Casual Reply Error:", err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
       triggerChatErrorWithCountdown(err, configToUse, () => {
         handleSuggestCasualReply(imageDataUrl, customPrompt);
       }, "suggest-reply-error");
     } finally {
-      setIsTyping(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setIsTypingState(false);
     }
   };
 
