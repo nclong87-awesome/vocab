@@ -1,4 +1,4 @@
-import { Word, StrengthHistoryEntry } from "../types";
+import { Word, StrengthHistoryReason, StrengthHistoryTuple } from "../types";
 import { recordStrengthHistory, sanitizeAndHealWordHistory } from "./strengthHistoryHelpers";
 
 export interface BaselinePracticeInfo {
@@ -10,20 +10,21 @@ export interface BaselinePracticeInfo {
  * Gets the baseline strength and timestamp from the last non-decay practice/review event.
  */
 export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
-  const history = word.strengthHistory || [];
+  const history: StrengthHistoryTuple[] = (word.strengthHistory || []).filter(
+    (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+  );
   // Filter out memory_decay, created, and manual_adjust entries to find real practice events
   const practiceEntries = history.filter(
-    entry => entry.reason !== "memory_decay" && entry.reason !== "created" && entry.reason !== "manual_adjust"
+    t => t[2] !== "memory_decay" && t[2] !== "created" && t[2] !== "manual_adjust"
   );
 
   if (practiceEntries.length > 0) {
-    const sorted = [...practiceEntries].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    const sorted = [...practiceEntries].sort((a, b) => a[0] - b[0]);
     const lastPractice = sorted[sorted.length - 1];
+    const ms = lastPractice[0] > 1e11 ? lastPractice[0] : lastPractice[0] * 1000;
     return {
-      baselineStrength: lastPractice.strength,
-      lastPracticeDate: lastPractice.timestamp
+      baselineStrength: lastPractice[1],
+      lastPracticeDate: new Date(ms).toISOString()
     };
   }
 
@@ -68,19 +69,21 @@ export function getHoursSinceLastReview(word: Word, now: Date = new Date()): num
 export function calculateNextReviewIntervalHours(
   word: Word,
   overrideStrength?: number,
-  overrideReason?: StrengthHistoryEntry["reason"]
+  overrideReason?: StrengthHistoryReason
 ): number {
-  const history = word.strengthHistory || [];
+  const history: StrengthHistoryTuple[] = (word.strengthHistory || []).filter(
+    (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+  );
   const currentStrength = overrideStrength !== undefined ? overrideStrength : (word.strength ?? 0);
 
   // Filter out passive decay and manual adjustments to focus on active learning events
   const activeEntries = history.filter(
-    e => e.reason !== "memory_decay" && e.reason !== "manual_adjust"
+    t => t[2] !== "memory_decay" && t[2] !== "manual_adjust"
   );
 
   // Determine last practice reason (using override if provided)
   const lastEntry = activeEntries.length > 0 ? activeEntries[activeEntries.length - 1] : null;
-  const effectiveReason = overrideReason || lastEntry?.reason || (word.learned ? "mastered" : "created");
+  const effectiveReason = overrideReason || lastEntry?.[2] || (word.learned ? "mastered" : "created");
 
   // 1. If recent practice was an incorrect quiz answer, provide fast remedial spacing (4 - 12 hours)
   if (effectiveReason === "quiz_incorrect") {
@@ -92,18 +95,19 @@ export function calculateNextReviewIntervalHours(
   // 2. Count consecutive successful practice sessions working backwards from history
   let consecutiveSuccesses = 0;
   for (let i = activeEntries.length - 1; i >= 0; i--) {
-    const entry = activeEntries[i];
-    if (entry.reason === "quiz_incorrect" || entry.reason === "unmastered") {
+    const tuple = activeEntries[i];
+    const reason = tuple[2];
+    if (reason === "quiz_incorrect" || reason === "unmastered") {
       break;
     }
-    if (entry.reason === "quiz_correct" || entry.reason === "flashcard_review" || entry.reason === "mastered") {
+    if (reason === "quiz_correct" || reason === "flashcard_review" || reason === "mastered") {
       consecutiveSuccesses++;
     }
   }
 
   // If calculating for a new correct practice event right now, count it
   if (overrideReason === "quiz_correct" || overrideReason === "flashcard_review" || overrideReason === "mastered") {
-    if (lastEntry?.reason === "quiz_incorrect") {
+    if (lastEntry?.[2] === "quiz_incorrect") {
       consecutiveSuccesses = 1;
     }
   }
@@ -146,7 +150,7 @@ export function calculateNextReviewIntervalHours(
 export function calculateNextReviewDate(
   word: Word,
   overrideStrength?: number,
-  overrideReason?: StrengthHistoryEntry["reason"],
+  overrideReason?: StrengthHistoryReason,
   fromDate: Date = new Date()
 ): string {
   const intervalHours = calculateNextReviewIntervalHours(word, overrideStrength, overrideReason);
@@ -258,7 +262,7 @@ export function isWordLearnedOrStudied(word: Word): boolean {
   if ((word.strength ?? 0) > 0) return true;
   if (word.strengthHistory && word.strengthHistory.length > 0) {
     const hasStudyHistory = word.strengthHistory.some(
-      entry => entry.reason !== "created" && entry.reason !== "manual_adjust"
+      t => Array.isArray(t) && t[2] !== "created" && t[2] !== "manual_adjust"
     );
     if (hasStudyHistory) return true;
   }
@@ -467,11 +471,13 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
  * Checks if a word has an unresolved quiz mistake (i.e. its most recent practice/review was a quiz error).
  */
 export function hasUnresolvedQuizMistake(word: Word): boolean {
-  const history = word.strengthHistory || [];
-  const practiceEntries = history.filter(entry => entry.reason !== "memory_decay");
+  const history: StrengthHistoryTuple[] = (word.strengthHistory || []).filter(
+    (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+  );
+  const practiceEntries = history.filter(t => t[2] !== "memory_decay");
   if (practiceEntries.length === 0) return false;
   const lastPractice = practiceEntries[practiceEntries.length - 1];
-  return lastPractice?.reason === "quiz_incorrect";
+  return lastPractice?.[2] === "quiz_incorrect";
 }
 
 /**

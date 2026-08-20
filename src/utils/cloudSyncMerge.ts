@@ -1,5 +1,5 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
-import { Word, UserStats, StrengthHistoryEntry } from "../types";
+import { Word, UserStats, StrengthHistoryTuple } from "../types";
 import { recalculateWordsMemoryDecay } from "./spacedRepetition";
 
 export interface DeletedWordRecord {
@@ -224,60 +224,61 @@ export function autoMergeLocalAndRemote(
       const lEffectiveStrength = lWord.strength ?? (lWord.learned ? 100 : 0);
       const rEffectiveStrength = match.strength ?? (match.learned ? 100 : 0);
 
-      // Merge and deduplicate strengthHistory arrays
-      const localHistory = lWord.strengthHistory || [];
-      const remoteHistory = match.strengthHistory || [];
+      // Merge and deduplicate strengthHistory tuple arrays
+      const localHistory: StrengthHistoryTuple[] = (lWord.strengthHistory || []).filter(
+        (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+      );
+      const remoteHistory: StrengthHistoryTuple[] = (match.strengthHistory || []).filter(
+        (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+      );
 
-      const historyMap = new Map<string, StrengthHistoryEntry>();
-      for (const entry of [...localHistory, ...remoteHistory]) {
-        if (entry) {
-          const key = entry.id || `${entry.timestamp || ""}-${entry.reason || ""}-${entry.strength ?? 0}`;
+      const historyMap = new Map<string, StrengthHistoryTuple>();
+      for (const tuple of [...localHistory, ...remoteHistory]) {
+        if (tuple) {
+          const key = `${tuple[0]}-${tuple[2]}`;
           const existing = historyMap.get(key);
           if (!existing) {
-            historyMap.set(key, entry);
-          } else {
-            const existingTime = parseTime(existing.timestamp);
-            const entryTime = parseTime(entry.timestamp);
-            if (entryTime > existingTime || (entryTime === existingTime && (entry.strength ?? 0) > (existing.strength ?? 0))) {
-              historyMap.set(key, entry);
-            }
+            historyMap.set(key, tuple);
+          } else if (tuple[1] > existing[1]) {
+            historyMap.set(key, tuple);
           }
         }
       }
 
-      const rawMergedHistory = Array.from(historyMap.values()).sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
+      const rawMergedHistory = Array.from(historyMap.values()).sort((a, b) => a[0] - b[0]);
 
       // Deduplicate adjacent memory_decay entries with identical strength
-      const mergedHistoryList: StrengthHistoryEntry[] = [];
-      for (const entry of rawMergedHistory) {
+      const mergedHistoryList: StrengthHistoryTuple[] = [];
+      for (const tuple of rawMergedHistory) {
         const last = mergedHistoryList[mergedHistoryList.length - 1];
         if (
           last &&
-          entry.reason === "memory_decay" &&
-          last.reason === "memory_decay" &&
-          entry.strength === last.strength
+          tuple[2] === "memory_decay" &&
+          last[2] === "memory_decay" &&
+          tuple[1] === last[1]
         ) {
           continue;
         }
-        mergedHistoryList.push(entry);
+        mergedHistoryList.push(tuple);
       }
+
+      // Cap merged history to the most recent 30 tuples
+      const cappedHistoryList = mergedHistoryList.slice(-30);
 
       // Determine strength and learned status:
       let mergedStrength = Math.max(lEffectiveStrength, rEffectiveStrength);
       let mergedLearned = Boolean(lWord.learned || match.learned || mergedStrength >= 80);
 
-      if (mergedHistoryList.length > 0) {
-        const latestEntry = mergedHistoryList[mergedHistoryList.length - 1];
-        if (latestEntry.reason === "memory_decay") {
-          mergedStrength = latestEntry.strength;
+      if (cappedHistoryList.length > 0) {
+        const latestEntry = cappedHistoryList[cappedHistoryList.length - 1];
+        if (latestEntry[2] === "memory_decay") {
+          mergedStrength = latestEntry[1];
           mergedLearned = mergedStrength >= 80;
-        } else if (latestEntry.reason === "mastered") {
-          mergedStrength = Math.max(80, latestEntry.strength);
+        } else if (latestEntry[2] === "mastered") {
+          mergedStrength = Math.max(80, latestEntry[1]);
           mergedLearned = true;
         } else {
-          mergedStrength = latestEntry.strength;
+          mergedStrength = latestEntry[1];
           mergedLearned = mergedStrength >= 80 ? true : Boolean(lWord.learned || match.learned);
         }
       } else {
@@ -299,7 +300,7 @@ export function autoMergeLocalAndRemote(
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
         nextReviewDate: primary.nextReviewDate || lWord.nextReviewDate || match.nextReviewDate,
         createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt,
-        strengthHistory: mergedHistoryList.length > 0 ? mergedHistoryList : undefined
+        strengthHistory: cappedHistoryList.length > 0 ? cappedHistoryList : undefined
       };
 
       // Detect differences

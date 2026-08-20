@@ -51,12 +51,36 @@ export interface LLMConfig {
   preferredModel?: string;
 }
 
+export type StrengthHistoryReason = 
+  | 'created' 
+  | 'quiz_correct' 
+  | 'quiz_incorrect' 
+  | 'mastered' 
+  | 'unmastered' 
+  | 'memory_decay' 
+  | 'manual_adjust' 
+  | 'flashcard_review';
+
+/**
+ * Compact tuple representation for persistent storage and cloud sync:
+ * [timestampSec (Unix timestamp in seconds), strength (0-100), reason]
+ * Example: [1724131200, 50, "quiz_correct"]
+ */
+export type StrengthHistoryTuple = [
+  timestampSec: number,
+  strength: number,
+  reason: StrengthHistoryReason
+];
+
+/**
+ * Rich UI object representation computed on-the-fly from tuples.
+ */
 export interface StrengthHistoryEntry {
   id: string;
   timestamp: string;
   strength: number;
   delta?: number;
-  reason: 'created' | 'quiz_correct' | 'quiz_incorrect' | 'mastered' | 'unmastered' | 'memory_decay' | 'manual_adjust' | 'flashcard_review';
+  reason: StrengthHistoryReason;
   note?: string;
 }
 
@@ -80,7 +104,7 @@ export interface Word {
   category?: string;
   context?: string;
   suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string })[];
-  strengthHistory?: StrengthHistoryEntry[];
+  strengthHistory?: StrengthHistoryTuple[];
 }
 
 export interface WordSense {
