@@ -179,7 +179,7 @@ export const frTranslations: LanguageTranslations = {
     label_commonly_used_with: "Apparaît fréquemment avec",
     chat_batch_added_success: "🎉 **{count} nouveau(x) mot(s) ajouté(s) avec succès à votre collection !**\n\n- **Ajouté(s)** : {addedList}{skippedSection}\n\n👇 **Saisissez un autre mot ci-dessous** pour continuer à enrichir votre collection !",
     chat_batch_added_skipped_section: "\n- *Doublons ignorés* : {words}",
-    chat_word_already_in_collection: "ℹ️ **\"{word}\" est déjà présent dans votre collection de vocabulaire !**\n\n👇 **Saisissez un autre mot ci-dessous** pour l'ajouter à votre collection !",
+    chat_word_already_in_collection: "ℹ️ **\"{word}\" est déjà présent dans votre collection de vocabulaire !**\n\n{details}\n\n👇 **Saisissez un autre mot ci-dessous** pour l'ajouter à votre collection !",
     chat_user_selected_add_word: "Je veux ajouter : \"{word}\" ({translation})",
     chat_saving_custom_card: "🔍 *Enregistrement de la carte personnalisée pour **\"{word}\"** dans votre collection...*",
     chat_fail_add_word_sense: "⚠️ **Erreur lors de l'ajout du sens du mot :** {error}. Veuillez vérifier vos paramètres et réessayer.",

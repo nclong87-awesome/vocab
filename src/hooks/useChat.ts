@@ -15,9 +15,10 @@ import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestio
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { getRotatedVisionModel } from "../config/llmProviders";
-import { extractOrGenerateTopicActions, getRemainingWordActions } from "../utils/actionExtractor";
+import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
-import { lockModel, getNextAutoCandidate } from "../utils/autoModeManager";
+import { lockModel } from "../utils/autoModeManager";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 
 interface UseChatProps {
@@ -60,26 +61,23 @@ export function useChat({
   const [activeModelInfo, setActiveModelInfo] = useState<{ provider: string; model: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Subscribe to LLM request start events so activeModelInfo is updated before worker execution
+  useEffect(() => {
+    const unsubscribe = subscribeLlmRequestStart((data) => {
+      setActiveModelInfo({ provider: data.provider, model: data.model });
+    });
+    return () => unsubscribe();
+  }, []);
+
   const startTypingWithConfig = (overrideConfig?: LLMConfig): LLMConfig => {
     const cfgToUse = overrideConfig || llmConfig;
-    let prov = cfgToUse.provider;
-    let mod = cfgToUse.model;
-    if (prov === "auto" || mod === "auto") {
-      try {
-        const cand = getNextAutoCandidate(cfgToUse, undefined, true);
-        prov = cand.provider;
-        mod = cand.model;
-      } catch (e) {
-        // fallback
-      }
-    }
-    const activeInfo = { provider: prov, model: mod };
+    const activeInfo = notifyLlmRequestStartFromConfig(cfgToUse);
     setActiveModelInfo(activeInfo);
     setIsTypingState(true);
     return {
       ...cfgToUse,
-      preferredProvider: prov,
-      preferredModel: mod,
+      preferredProvider: activeInfo.provider,
+      preferredModel: activeInfo.model,
     };
   };
 
@@ -652,14 +650,19 @@ export function useChat({
     const existingMatch = words.find((w) => w.word.trim().toLowerCase() === normalizedWordText);
     if (existingMatch) {
       const remainingActions = getRemainingWordActions(chatMessages, words, normalizedWordText, currentAppLang);
+      const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
       setChatMessages((prev) => [
         ...prev,
         {
           id: `sys-exists-${Date.now()}`,
           role: "assistant",
-          content: t("chat_word_already_in_collection", currentAppLang, { word: existingMatch.word }),
+          content: t("chat_word_already_in_collection", currentAppLang, {
+            word: existingMatch.word,
+            details: existingDetails,
+          }),
           timestamp: new Date().toISOString(),
           suggestedActions: remainingActions,
+          audioWord: existingMatch.word,
         },
       ]);
       setConversationalState("adding_word");
@@ -803,6 +806,7 @@ export function useChat({
         const finalMatch = words.find((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
         if (finalMatch) {
           const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, currentAppLang);
+          const existingDetails = formatExistingWordDetails(finalMatch, currentAppLang);
           setChatMessages((prev) => {
             const filtered = prev.filter((m) => m.id !== statusMsgId);
             return [
@@ -810,9 +814,13 @@ export function useChat({
               {
                 id: `sys-exists-${Date.now()}`,
                 role: "assistant",
-                content: t("chat_word_already_in_collection", currentAppLang, { word: finalMatch.word }),
+                content: t("chat_word_already_in_collection", currentAppLang, {
+                  word: finalMatch.word,
+                  details: existingDetails,
+                }),
                 timestamp: new Date().toISOString(),
                 suggestedActions: remainingActions,
+                audioWord: finalMatch.word,
                 provider: data.provider,
                 model: data.model,
                 responseTimeMs: data.responseTimeMs,
@@ -1299,13 +1307,22 @@ export function useChat({
     });
 
     if (newWordsToAdd.length === 0) {
+      const skippedMatches = skippedNames
+        .map((name) => words.find((w) => w.word.trim().toLowerCase() === name.toLowerCase()))
+        .filter((w): w is Word => Boolean(w));
+
+      const skippedDetails = skippedMatches
+        .map((w) => formatExistingWordDetails(w, currentAppLang))
+        .join("\n\n");
+
       setChatMessages((prev) => [
         ...prev,
         {
           id: `sys-batch-skipped-${Date.now()}`,
           role: "assistant",
-          content: t("chat_batch_all_skipped", currentAppLang, { words: skippedNames.join(", ") }),
+          content: `${t("chat_batch_all_skipped", currentAppLang, { words: skippedNames.join(", ") })}${skippedDetails ? `\n\n${skippedDetails}` : ""}`,
           timestamp: new Date().toISOString(),
+          audioWord: skippedMatches.length === 1 ? skippedMatches[0].word : undefined,
         },
       ]);
       return;
@@ -1403,14 +1420,19 @@ export function useChat({
     const existingMatch = words.find((w) => w.word.trim().toLowerCase() === targetWord.toLowerCase());
     if (existingMatch) {
       const remainingActions = getRemainingWordActions(chatMessages, words, targetWord, currentAppLang);
+      const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
       setChatMessages((prev) => [
         ...prev,
         {
           id: `sys-exists-${Date.now()}`,
           role: "assistant",
-          content: t("chat_word_already_in_collection", currentAppLang, { word: existingMatch.word }),
+          content: t("chat_word_already_in_collection", currentAppLang, {
+            word: existingMatch.word,
+            details: existingDetails,
+          }),
           timestamp: new Date().toISOString(),
           suggestedActions: remainingActions,
+          audioWord: existingMatch.word,
         },
       ]);
       setPendingWordSenses(null);

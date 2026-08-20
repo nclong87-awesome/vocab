@@ -1,7 +1,7 @@
 import React, { Fragment } from "react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import ChatMessageItem from "./ChatMessageItem";
-import TypingIndicator from "./TypingIndicator";
+import LlmProgressIndicator from "./LlmProgressIndicator";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -116,9 +116,9 @@ function MessageList({
         );
       })}
 
-      {/* Typing Indicator */}
+      {/* Progress Indicator */}
       {isTyping && (
-        <TypingIndicator llmConfig={llmConfig} activeModelInfo={activeModelInfo} onCancel={onCancelTyping} />
+        <LlmProgressIndicator llmConfig={llmConfig} activeModelInfo={activeModelInfo} onCancel={onCancelTyping} />
       )}
       <div ref={messagesEndRef} />
     </div>

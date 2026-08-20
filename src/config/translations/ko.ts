@@ -179,7 +179,7 @@ export const koTranslations: LanguageTranslations = {
     label_commonly_used_with: "자주 함께 사용되는 단어",
     chat_batch_added_success: "🎉 **성공적으로 {count}개의 새 단어를 단어장에 추가했습니다!**\n\n- **추가된 단어**: {addedList}{skippedSection}\n\n👇 **아래에 다른 단어를 입력**하여 계속 추가해 보세요!",
     chat_batch_added_skipped_section: "\n- *중복 제외(건너뜀)*: {words}",
-    chat_word_already_in_collection: "ℹ️ **\"{word}\"은(는) 이미 단어장에 추가되어 있습니다!**\n\n👇 **아래에 다른 단어를 입력**하여 추가해 보세요!",
+    chat_word_already_in_collection: "ℹ️ **\"{word}\"은(는) 이미 단어장에 추가되어 있습니다!**\n\n{details}\n\n👇 **아래에 다른 단어를 입력**하여 추가해 보세요!",
     chat_user_selected_add_word: "추가하고 싶은 단어: \"{word}\" ({translation})",
     chat_saving_custom_card: "🔍 *단어장에 **\"{word}\"** 맞춤 카드를 저장하는 중...*",
     chat_fail_add_word_sense: "⚠️ **단어 추가 실패**: {error}. 설정을 확인하고 다시 시도해 주세요.",

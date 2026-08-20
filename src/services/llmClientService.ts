@@ -11,6 +11,7 @@ import {
   syncServerLocks
 } from "../utils/autoModeManager";
 import { logApiRequest } from "./requestHistoryService";
+import { publishLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 
 import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
@@ -641,6 +642,9 @@ export async function callLLMClientSideWithMeta(
     const { candidate, tierMeta } = getAutoCandidateWithMeta(llmConfig);
     const candidateKey = `${candidate.provider}:${candidate.model}`;
 
+    // Publish event BEFORE calling AI worker
+    publishLlmRequestStart({ provider: candidate.provider, model: candidate.model, timestamp: Date.now() });
+
     const candidateSavedProfile = llmConfig?.savedProviders?.[candidate.provider];
     const effectiveCandidateConfig: LLMConfig = {
       provider: candidate.provider,
@@ -725,6 +729,10 @@ export async function callLLMClientSideWithMeta(
 
   const activeProvider = llmConfig?.provider || "gemini";
   const activeModel = sanitizeModel(activeProvider, llmConfig?.model);
+
+  // Publish event BEFORE calling AI worker
+  publishLlmRequestStart({ provider: activeProvider, model: activeModel, timestamp: Date.now() });
+
   const singleStartTime = Date.now();
   try {
     const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig, signal);
@@ -1078,6 +1086,7 @@ export async function autofillWordService(params: {
 }): Promise<any> {
   const { word, hint, targetLanguage, nativeLanguage, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
+  notifyLlmRequestStartFromConfig(llmConfig);
 
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
@@ -1203,6 +1212,7 @@ export async function checkWordDefinitionsService(params: {
 }): Promise<any> {
   const { word, hint, targetLanguage, nativeLanguage, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
+  notifyLlmRequestStartFromConfig(llmConfig);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
 
@@ -1361,6 +1371,7 @@ export async function generateRandomWordsService(params: {
 }): Promise<{ words: any[]; provider?: string; model?: string; responseTimeMs?: number }> {
   const { topic, targetLanguage, nativeLanguage, count = 5, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
+  notifyLlmRequestStartFromConfig(llmConfig);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
   const startTime = performance.now();
@@ -1474,6 +1485,7 @@ export interface FixGrammarResult {
 
 export async function fixGrammarService(params: FixGrammarRequest): Promise<FixGrammarResult> {
   const { userText, targetLanguage, nativeLanguage, llmConfig, signal } = params;
+  notifyLlmRequestStartFromConfig(llmConfig);
   const userTarget = targetLanguage || "English";
   const userNative = nativeLanguage || "Vietnamese";
   const startTime = performance.now();
@@ -1798,6 +1810,7 @@ export async function analyzePerformanceService(params: PerformanceAnalysisReque
     llmConfig: cfg 
   } = params;
   const llmConfig = getOverrideConfig(cfg);
+  notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
   const masteredSampleStr = (masteredWords || []).slice(0, 15).map((w: any) => `${w.word} (${w.translation || w.definition})`).join(", ") || "None yet";
@@ -1983,6 +1996,7 @@ export interface ChatMessageResult {
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
   const { messages, targetLanguage, nativeLanguage, llmConfig, signal } = params;
+  notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
   const chatHistoryStr = messages
@@ -2137,6 +2151,7 @@ export async function generateAiQuizQuestionsService(
   params: QuizGenerationRequest
 ): Promise<QuizGenerationResult> {
   const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal } = params;
+  notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
   if (!words || words.length === 0) {
@@ -2449,6 +2464,7 @@ export async function analyzeImageVocabService(params: {
 }> {
   const startTime = performance.now();
   let { imageDataUrl, targetLanguage, nativeLanguage, llmConfig, signal } = params;
+  notifyLlmRequestStartFromConfig(llmConfig);
 
   // Resize client-side before sending to server or worker if image is large
   if (typeof window !== "undefined" && imageDataUrl && imageDataUrl.startsWith("data:image")) {
@@ -2669,6 +2685,7 @@ export async function generateBatchFlashcardsService(
   params: FlashcardsBatchGenerationRequest
 ): Promise<GeneratedBatchFlashcardsResult> {
   const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal } = params;
+  notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
   const wordsList = Array.isArray(words) ? words : [];
@@ -2959,6 +2976,7 @@ export interface SuggestReplyResult {
 
 export async function suggestCasualReplyService(params: SuggestReplyRequest): Promise<SuggestReplyResult> {
   const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig, signal } = params;
+  notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
   const userTarget = targetLanguage || "English";

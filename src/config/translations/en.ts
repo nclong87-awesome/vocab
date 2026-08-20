@@ -179,7 +179,7 @@ export const enTranslations: LanguageTranslations = {
     label_commonly_used_with: "Frequently appears with",
     chat_batch_added_success: "🎉 **Successfully added {count} new word(s) to your collection!**\n\n- **Added**: {addedList}{skippedSection}\n\n👇 **Type another word below** to keep adding to your collection!",
     chat_batch_added_skipped_section: "\n- *Skipped duplicates*: {words}",
-    chat_word_already_in_collection: "ℹ️ **\"{word}\" is already in your vocabulary collection!**\n\n👇 **Type another word below** to add it to your collection!",
+    chat_word_already_in_collection: "ℹ️ **\"{word}\" is already in your vocabulary collection!**\n\n{details}\n\n👇 **Type another word below** to add it to your collection!",
     chat_user_selected_add_word: "I want to add: \"{word}\" ({translation})",
     chat_saving_custom_card: "🔍 *Saving custom card for **\"{word}\"** to your collection...*",
     chat_fail_add_word_sense: "⚠️ **Failed to add word sense:** {error}. Please check your settings and try again.",

@@ -179,7 +179,7 @@ export const deTranslations: LanguageTranslations = {
     label_commonly_used_with: "Häufig verwendet mit",
     chat_batch_added_success: "🎉 **Erfolgreich {count} neue(s) Wort/Wörter zu Ihrer Sammlung hinzugefügt!**\n\n- **Hinzugefügt**: {addedList}{skippedSection}\n\n👇 **Geben Sie unten ein weiteres Wort ein**, um Ihre Sammlung weiter zu füllen!",
     chat_batch_added_skipped_section: "\n- *Übersprungene Duplikate*: {words}",
-    chat_word_already_in_collection: "ℹ️ **\"{word}\" ist bereits in Ihrer Vokabelsammlung vorhanden!**\n\n👇 **Geben Sie unten ein weiteres Wort ein**, um es Ihrer Sammlung hinzuzufügen!",
+    chat_word_already_in_collection: "ℹ️ **\"{word}\" ist bereits in Ihrer Vokabelsammlung vorhanden!**\n\n{details}\n\n👇 **Geben Sie unten ein weiteres Wort ein**, um es Ihrer Sammlung hinzuzufügen!",
     chat_user_selected_add_word: "Ich möchte hinzufügen: \"{word}\" ({translation})",
     chat_saving_custom_card: "🔍 *Speichere benutzerdefinierte Karte für **\"{word}\"** in Ihrer Sammlung...*",
     chat_fail_add_word_sense: "⚠️ **Fehler beim Hinzufügen der Wortbedeutung:** {error}. Bitte überprüfen Sie Ihre Einstellungen und versuchen Sie es erneut.",

@@ -179,7 +179,7 @@ export const zhTranslations: LanguageTranslations = {
     label_commonly_used_with: "常搭配使用的词汇",
     chat_batch_added_success: "🎉 **已成功将 {count} 个新词汇添加至你的词汇本！**\n\n- **已添加**: {addedList}{skippedSection}\n\n👇 **在下方输入另一个单词** 以继续添加词汇！",
     chat_batch_added_skipped_section: "\n- *已跳过重复词汇*: {words}",
-    chat_word_already_in_collection: "ℹ️ **“{word}”已在你的词汇本中！**\n\n👇 **在下方输入另一个单词** 以添加新词汇！",
+    chat_word_already_in_collection: "ℹ️ **“{word}”已在你的词汇本中！**\n\n{details}\n\n👇 **在下方输入另一个单词** 以添加新词汇！",
     chat_user_selected_add_word: "我想添加：“{word}”（{translation}）",
     chat_saving_custom_card: "🔍 *正在为您将自定义卡片 **“{word}”** 保存至词汇本...*",
     chat_fail_add_word_sense: "⚠️ **无法添加单词释义:** {error}。请检查您的设置并重试。",

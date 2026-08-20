@@ -3,20 +3,38 @@ import { Clock, X } from "lucide-react";
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses, getNextAutoCandidate } from "../../utils/autoModeManager";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
+import { subscribeLlmRequestStart } from "../../utils/llmEvents";
 
-interface TypingIndicatorProps {
+interface LlmProgressIndicatorProps {
   llmConfig: LLMConfig;
   onCancel?: () => void;
   activeModelInfo?: { provider: string; model: string } | null;
 }
 
-export default function TypingIndicator({ llmConfig, onCancel, activeModelInfo }: TypingIndicatorProps) {
+export default function LlmProgressIndicator({ llmConfig, onCancel, activeModelInfo }: LlmProgressIndicatorProps) {
+  const [liveModelInfo, setLiveModelInfo] = useState<{ provider: string; model: string } | null>(
+    activeModelInfo || null
+  );
+
+  useEffect(() => {
+    if (activeModelInfo) {
+      setLiveModelInfo(activeModelInfo);
+    }
+  }, [activeModelInfo]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeLlmRequestStart((data) => {
+      setLiveModelInfo({ provider: data.provider, model: data.model });
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Resolve active provider and model
-  let provider = activeModelInfo?.provider || llmConfig.provider;
-  let model = activeModelInfo?.model || llmConfig.model;
+  let provider = liveModelInfo?.provider || activeModelInfo?.provider || llmConfig.provider;
+  let model = liveModelInfo?.model || activeModelInfo?.model || llmConfig.model;
   const isAutoMode = llmConfig.provider === "auto" || llmConfig.model === "auto";
 
-  if (!activeModelInfo && (provider === "auto" || model === "auto")) {
+  if ((!provider || provider === "auto" || model === "auto") && !liveModelInfo && !activeModelInfo) {
     try {
       const nextCand = getNextAutoCandidate(llmConfig, undefined, false);
       provider = nextCand.provider;

@@ -179,7 +179,7 @@ export const esTranslations: LanguageTranslations = {
     label_commonly_used_with: "Aparece con frecuencia con",
     chat_batch_added_success: "🎉 **¡Se han añadido correctamente {count} nueva(s) palabra(s) a tu colección!**\n\n- **Añadido**: {addedList}{skippedSection}\n\n👇 **Escribe otra palabra abajo** para seguir alimentando tu colección.",
     chat_batch_added_skipped_section: "\n- *Duplicados omitidos*: {words}",
-    chat_word_already_in_collection: "ℹ️ **¡\"{word}\" ya está en tu colección de vocabulario!**\n\n👇 **Escribe otra palabra abajo** para añadirla a tu colección.",
+    chat_word_already_in_collection: "ℹ️ **¡\"{word}\" ya está en tu colección de vocabulario!**\n\n{details}\n\n👇 **Escribe otra palabra abajo** para añadirla a tu colección.",
     chat_user_selected_add_word: "Quiero añadir: \"{word}\" ({translation})",
     chat_saving_custom_card: "🔍 *Guardando tarjeta personalizada para **\"{word}\"** en tu colección...*",
     chat_fail_add_word_sense: "⚠️ **Error al añadir la acepción de la palabra:** {error}. Comprueba tu configuración e inténtalo de nuevo.",

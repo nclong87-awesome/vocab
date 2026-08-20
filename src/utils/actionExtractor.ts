@@ -1,5 +1,36 @@
 import { t } from "../config/i18n";
 
+export function formatExistingWordDetails(existingWord: any, appLang: string = "English"): string {
+  if (!existingWord) return "";
+  const pronunciationStr =
+    existingWord.pronunciation && existingWord.pronunciation !== "/.../"
+      ? ` \`${existingWord.pronunciation}\``
+      : "";
+  const posStr = existingWord.partOfSpeech ? ` *(${existingWord.partOfSpeech})*` : "";
+  const header = `### **${existingWord.word}**${pronunciationStr}${posStr}`;
+
+  const transLabel = t("label_translation", appLang);
+  const defLabel = t("label_definition", appLang);
+  const exLabel = t("label_example", appLang);
+  const exTransLabel = t("label_example_translation", appLang);
+
+  const lines = [header];
+  if (existingWord.translation) {
+    lines.push(`- **${transLabel}**: "${existingWord.translation}"`);
+  }
+  if (existingWord.definition) {
+    lines.push(`- **${defLabel}**: *${existingWord.definition}*`);
+  }
+  if (existingWord.example) {
+    lines.push(`- **${exLabel}**: "${existingWord.example}"`);
+  }
+  if (existingWord.exampleTranslation) {
+    lines.push(`- **${exTransLabel}**: "${existingWord.exampleTranslation}"`);
+  }
+
+  return lines.join("\n");
+}
+
 export function getRemainingWordActions(
   messages: any[],
   currentWords: any[],

@@ -179,7 +179,7 @@ export const jaTranslations: LanguageTranslations = {
     label_commonly_used_with: "よく一緒に使われる語句",
     chat_batch_added_success: "🎉 **単語帳に {count} 個の新しい単語を追加しました！**\n\n- **追加済み**: {addedList}{skippedSection}\n\n👇 **他の単語を下のチャットに入力**して追加を続けましょう！",
     chat_batch_added_skipped_section: "\n- *スキップされた重複*: {words}",
-    chat_word_already_in_collection: "ℹ️ **「{word}」はすでに単語帳に追加されています！**\n\n👇 **他の単語を下のチャットに入力**して追加してください！",
+    chat_word_already_in_collection: "ℹ️ **「{word}」はすでに単語帳に追加されています！**\n\n{details}\n\n👇 **他の単語を下のチャットに入力**して追加してください！",
     chat_user_selected_add_word: "追加したい単語: 「{word}」({translation})",
     chat_saving_custom_card: "🔍 *「{word}」のカスタムカードを単語帳に保存しています...*",
     chat_fail_add_word_sense: "⚠️ **単語の追加に失敗しました:** {error}。設定を確認してからもう一度お試しください。",
