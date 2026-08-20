@@ -1,11 +1,15 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { 
   BookOpen, 
   Search, 
   Grid, 
   List, 
   Globe2,
-  ArrowUpDown
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -179,8 +183,134 @@ function CollectionManager({
     return list.map(item => item.word);
   }, [words, searchQuery, sortBy]);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(20);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+
+  // Reset pagination to page 1 whenever search query, sort mode, or items per page changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy, itemsPerPage]);
+
+  const totalFiltered = filteredWords.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const validPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startIndex = totalFiltered === 0 ? 0 : (validPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalFiltered);
+
+  const paginatedWords = useMemo(() => {
+    return filteredWords.slice(startIndex, endIndex);
+  }, [filteredWords, startIndex, endIndex]);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    const boundedPage = Math.min(Math.max(1, newPage), totalPages);
+    setCurrentPage(boundedPage);
+    if (topScrollRef.current) {
+      topScrollRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [totalPages]);
+
+  const renderPaginationBar = useCallback(() => {
+    if (totalFiltered === 0) return null;
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-stone-50 p-3 border border-stone-200 text-xs my-1">
+        {/* Summary Info */}
+        <div className="flex items-center gap-2 text-stone-600 font-medium text-xs">
+          <span>
+            {t("col_page_showing", appLanguage, {
+              start: (startIndex + 1).toString(),
+              end: endIndex.toString(),
+              total: totalFiltered.toString(),
+            })}
+          </span>
+          {totalFiltered < words.length && (
+            <span className="text-stone-400 font-mono text-[11px]">
+              ({words.length} total)
+            </span>
+          )}
+        </div>
+
+        {/* Right Controls: Items Per Page & Page Navigation */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Items Per Page Select */}
+          <div className="flex items-center gap-1.5 bg-white border border-stone-200 px-2 py-1 text-xs">
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+              {t("col_per_page", appLanguage)}
+            </span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => setItemsPerPage(Number(e.target.value))}
+              className="font-bold text-stone-900 bg-transparent outline-none cursor-pointer"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+
+          {/* Page Nav Buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handlePageChange(1)}
+              disabled={validPage <= 1}
+              title={t("col_first_page", appLanguage)}
+              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handlePageChange(validPage - 1)}
+              disabled={validPage <= 1}
+              title={t("col_prev_page", appLanguage)}
+              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Direct Page Select Dropdown */}
+            <div className="flex items-center bg-white border border-stone-200 px-2 py-1">
+              <select
+                value={validPage}
+                onChange={(e) => handlePageChange(Number(e.target.value))}
+                className="text-xs font-bold text-stone-900 bg-transparent outline-none cursor-pointer"
+              >
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <option key={p} value={p}>
+                    {p} / {totalPages}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => handlePageChange(validPage + 1)}
+              disabled={validPage >= totalPages}
+              title={t("col_next_page", appLanguage)}
+              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handlePageChange(totalPages)}
+              disabled={validPage >= totalPages}
+              title={t("col_last_page", appLanguage)}
+              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+            >
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }, [totalFiltered, startIndex, endIndex, appLanguage, words.length, itemsPerPage, validPage, totalPages, handlePageChange]);
+
   return (
     <div className="space-y-8" id="collection-manager-container">
+      <div ref={topScrollRef} />
       <div className="space-y-4">
         <div className="bg-white border border-stone-200 p-4 space-y-6 shadow-2xs">
             {/* Active List Title & Info */}
@@ -260,44 +390,50 @@ function CollectionManager({
               </div>
             </div>
 
-            {/* Words Display Grid/List */}
+            {/* Words Display Grid/List with Pagination */}
             {filteredWords.length > 0 ? (
-              viewMode === "grid" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="words-grid-container">
-                  {filteredWords.map((word) => (
-                    <WordCard
-                      key={word.id}
-                      word={word}
-                      speakWord={speakWord}
-                      handleRegenerateWord={handleRegenerateWord}
-                      regeneratingWordId={regeneratingWordId}
-                      regeneratedSuccessWordId={regeneratedSuccessWordId}
-                      onToggleStar={onToggleStar}
-                      onToggleLearned={onToggleLearned}
-                      onDeleteWord={onDeleteWord}
-                      brokenImageIds={brokenImageIds}
-                      handleImageError={handleImageError}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3" id="words-list-container">
-                  {filteredWords.map((word) => (
-                    <WordRow
-                      key={word.id}
-                      word={word}
-                      speakWord={speakWord}
-                      handleRegenerateWord={handleRegenerateWord}
-                      regeneratingWordId={regeneratingWordId}
-                      onToggleStar={onToggleStar}
-                      onToggleLearned={onToggleLearned}
-                      onDeleteWord={onDeleteWord}
-                      brokenImageIds={brokenImageIds}
-                      handleImageError={handleImageError}
-                    />
-                  ))}
-                </div>
-              )
+              <div className="space-y-4">
+                {renderPaginationBar()}
+
+                {viewMode === "grid" ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="words-grid-container">
+                    {paginatedWords.map((word) => (
+                      <WordCard
+                        key={word.id}
+                        word={word}
+                        speakWord={speakWord}
+                        handleRegenerateWord={handleRegenerateWord}
+                        regeneratingWordId={regeneratingWordId}
+                        regeneratedSuccessWordId={regeneratedSuccessWordId}
+                        onToggleStar={onToggleStar}
+                        onToggleLearned={onToggleLearned}
+                        onDeleteWord={onDeleteWord}
+                        brokenImageIds={brokenImageIds}
+                        handleImageError={handleImageError}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3" id="words-list-container">
+                    {paginatedWords.map((word) => (
+                      <WordRow
+                        key={word.id}
+                        word={word}
+                        speakWord={speakWord}
+                        handleRegenerateWord={handleRegenerateWord}
+                        regeneratingWordId={regeneratingWordId}
+                        onToggleStar={onToggleStar}
+                        onToggleLearned={onToggleLearned}
+                        onDeleteWord={onDeleteWord}
+                        brokenImageIds={brokenImageIds}
+                        handleImageError={handleImageError}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {totalPages > 1 && renderPaginationBar()}
+              </div>
             ) : (
               <div className="p-12 text-center bg-stone-50 border border-stone-200 space-y-3">
                 <BookOpen className="w-8 h-8 text-stone-400 mx-auto" />

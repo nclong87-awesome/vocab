@@ -1369,7 +1369,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
 
   if (isStaticHost()) {
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
-    const parsed = JSON.parse(resWithMeta.text);
+    const parsed = cleanAndParseJson(resWithMeta.text);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
@@ -1582,11 +1582,11 @@ CRITICAL INSTRUCTIONS:
       "reason": "string (short reason)"
     }
   ]
-}`;
+};`;
 
   if (isStaticHost()) {
     const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
-    const parsed = JSON.parse(resWithMeta.text);
+    const parsed = cleanAndParseJson(resWithMeta.text);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
       recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);

@@ -13,6 +13,35 @@ function escapeControlCharsInStrings(str: string): string {
 }
 
 /**
+ * Normalizes invalid or illegal backslash escape sequences in JSON text.
+ * In JSON standard (RFC 8259), the only valid escape characters after a backslash are:
+ * ", \, /, b, f, n, r, t, or uXXXX.
+ * LLMs often output markdown-escaped lists (\1., \2., \*, \., \-, \(, etc.) or literal slashes without escaping.
+ */
+function fixIllegalEscapeSequences(str: string): string {
+  // Replace illegal escape sequences inside string literals:
+  // e.g. \1 -> 1, \2 -> 2, \* -> *, \. -> ., \( -> (, \] -> ]
+  // We match backslash followed by any character that is NOT ", \, /, b, f, n, r, t, or u
+  return str.replace(/\\([^"\\/bfnrtu])/gi, (_match, char) => {
+    // If it's a digit (like \1, \2) or markdown character (\*, \-, \+, \., \_), unescape it
+    return char;
+  });
+}
+
+/**
+ * Fixes mistakenly escaped boundary quotes where the LLM accidentally escaped the closing quote
+ * e.g. `\"*\", "vocabularyCandidates":` -> `\"*\", "vocabularyCandidates":` where trailing `\"` before `,` should be `"`
+ */
+function fixMistakenlyEscapedBoundaryQuotes(str: string): string {
+  let result = str;
+  // Match patterns like `\"*, "key":` or `\"*,  \n  "` where `\"` was placed right before a comma or property key
+  result = result.replace(/\\"\s*,\s*(["}\]])/g, '", $1');
+  result = result.replace(/\\"\s*\n\s*,\s*(["}\]])/g, '"\n, $1');
+  result = result.replace(/\\"\s*:\s*/g, '": ');
+  return result;
+}
+
+/**
  * Attempts to auto-close truncated JSON string (missing closing quotes, brackets, braces)
  */
 function fixTruncatedJson(str: string): string {
@@ -102,6 +131,62 @@ function fixMissingCommas(str: string): string {
 }
 
 /**
+ * Fallback regex extractor for grammar/polish response structures when strict JSON syntax fails
+ */
+export function extractGrammarPolishFallback(rawText: string): any | null {
+  try {
+    if (!rawText || !rawText.includes("fixedSentence") && !rawText.includes("vocabularyCandidates")) {
+      return null;
+    }
+
+    const fixedSentenceMatch = rawText.match(/"fixedSentence"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const fixedSentence = fixedSentenceMatch ? fixedSentenceMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n") : "";
+
+    // Extract explanation: anything between "explanation": " and "vocabularyCandidates" or next key
+    let explanation = "";
+    const explanationMatch = rawText.match(/"explanation"\s*:\s*"([\s\S]*?)(?:(?:"\s*,\s*"vocabularyCandidates")|(?:"\s*,\s*"[a-zA-Z]+"\s*:)|(?:",?\s*\}))/);
+    if (explanationMatch) {
+      explanation = explanationMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\([1-9]|\*)/g, "$1");
+    }
+
+    // Extract vocabulary candidates array if present
+    const vocabList: any[] = [];
+    const vocabBlockMatch = rawText.match(/"vocabularyCandidates"\s*:\s*(\[\s*[\s\S]*?\s*\])/);
+    if (vocabBlockMatch) {
+      try {
+        const cleanedVocab = cleanJsonResponse(vocabBlockMatch[1]);
+        const parsed = JSON.parse(cleanedVocab);
+        if (Array.isArray(parsed)) {
+          vocabList.push(...parsed);
+        }
+      } catch {
+        // Individual item regex extraction
+        const itemMatches = [...vocabBlockMatch[1].matchAll(/\{\s*"word"\s*:\s*"([^"]+)"\s*,\s*"definition"\s*:\s*"([^"]+)"\s*,\s*"translation"\s*:\s*"([^"]+)"(?:\s*,\s*"reason"\s*:\s*"([^"]+)")?\s*\}/g)];
+        for (const m of itemMatches) {
+          vocabList.push({
+            word: m[1],
+            definition: m[2],
+            translation: m[3],
+            reason: m[4] || ""
+          });
+        }
+      }
+    }
+
+    if (fixedSentence || explanation || vocabList.length > 0) {
+      return {
+        fixedSentence: fixedSentence || "Polished sentence",
+        explanation: explanation || "Grammar and phrasing breakdown",
+        vocabularyCandidates: vocabList
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
  * Cleans and repairs a raw text response from an LLM into valid JSON string format.
  */
 export function cleanJsonResponse(rawText: string): string {
@@ -165,16 +250,22 @@ export function cleanJsonResponse(rawText: string): string {
     // Continue
   }
 
-  // 6. Escape control characters inside string literals
+  // 6. Fix illegal escape sequences (e.g. \1., \2., \*, \.)
+  text = fixIllegalEscapeSequences(text);
+
+  // 7. Fix mistakenly escaped boundary quotes (e.g. \"*\", "key":)
+  text = fixMistakenlyEscapedBoundaryQuotes(text);
+
+  // 8. Escape control characters inside string literals
   text = escapeControlCharsInStrings(text);
 
-  // 7. Strip single line or multiline JS/JSON comments
+  // 9. Strip single line or multiline JS/JSON comments
   text = text.replace(/\/\*[\s\S]*?\*\//g, "");
 
-  // 8. Fix missing commas and trailing commas
+  // 10. Fix missing commas and trailing commas
   text = fixMissingCommas(text);
 
-  // 9. Check if valid now
+  // 11. Check if valid now
   try {
     JSON.parse(text);
     return text;
@@ -182,7 +273,7 @@ export function cleanJsonResponse(rawText: string): string {
     // Continue
   }
 
-  // 10. Attempt jsonrepair on current text
+  // 12. Attempt jsonrepair on current text
   try {
     const repaired = jsonrepair(text);
     JSON.parse(repaired);
@@ -191,7 +282,7 @@ export function cleanJsonResponse(rawText: string): string {
     // Continue
   }
 
-  // 11. Attempt auto-closing truncated JSON
+  // 13. Attempt auto-closing truncated JSON
   try {
     const truncatedFixed = fixTruncatedJson(text);
     const repairedTruncated = jsonrepair(truncatedFixed);
@@ -201,9 +292,10 @@ export function cleanJsonResponse(rawText: string): string {
     // Continue
   }
 
-  // 12. Attempt jsonrepair directly on raw original input
+  // 14. Attempt jsonrepair directly on raw original input with escape fixes
   try {
-    const repairedRaw = jsonrepair(rawText);
+    const cleanedRaw = fixMistakenlyEscapedBoundaryQuotes(fixIllegalEscapeSequences(rawText));
+    const repairedRaw = jsonrepair(cleanedRaw);
     JSON.parse(repairedRaw);
     return repairedRaw;
   } catch {
@@ -216,7 +308,7 @@ export function cleanJsonResponse(rawText: string): string {
 
 /**
  * Cleans, repairs, and safely parses a raw LLM text response into a JavaScript object or array.
- * If parsing fails after all repairs, returns fallbackDefault or throws a descriptive error if no fallback is provided.
+ * If parsing fails after all repairs, checks schema fallbacks or returns fallbackDefault.
  */
 export function cleanAndParseJson<T = any>(rawText: string, fallbackDefault?: T): T {
   const cleaned = cleanJsonResponse(rawText);
@@ -228,6 +320,12 @@ export function cleanAndParseJson<T = any>(rawText: string, fallbackDefault?: T)
       const repaired = jsonrepair(cleaned);
       return JSON.parse(repaired) as T;
     } catch {
+      // Check if this is a grammar/polish payload that can be salvaged via regex extraction
+      const grammarFallback = extractGrammarPolishFallback(rawText) || extractGrammarPolishFallback(cleaned);
+      if (grammarFallback) {
+        return grammarFallback as T;
+      }
+
       if (fallbackDefault !== undefined) {
         console.warn("[cleanAndParseJson] Failed to parse JSON even after repair. Using fallback default.", err);
         return fallbackDefault;
