@@ -46,6 +46,7 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
 
   const checkInProgressRef = useRef<boolean>(false);
   const isSyncingRef = useRef<boolean>(false);
+  const visibilityTimeoutRef = useRef<number | null>(null);
 
   // Perform quiet background sync check without triggering toast messages
   const performQuietBackgroundCheck = useCallback(async (token: string, gistId: string, force = false) => {
@@ -147,11 +148,18 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
     };
   }, []);
 
-  // Listen to tab focus (visibility change) for throttled background recheck (e.g. if 5+ minutes passed)
+  // Listen to tab focus (visibility change) for throttled background recheck (minimum 5-minute interval).
+  // Uses a 30-second delay timeout when switching back to the browser tab to avoid sending fetch Gist requests
+  // if the user switches back and then refreshes or switches away right after.
   useEffect(() => {
     const handleVisibilityChange = () => {
+      // Always cancel any pending visibility check timeout when visibility changes
+      if (visibilityTimeoutRef.current !== null) {
+        window.clearTimeout(visibilityTimeoutRef.current);
+        visibilityTimeoutRef.current = null;
+      }
+
       if (document.visibilityState === "visible") {
-        const token = localStorage.getItem("github_gist_token") || "";
         const gistId = localStorage.getItem("github_gist_id") || "";
         if (!gistId) return;
 
@@ -159,19 +167,38 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
         const fiveMinutes = 5 * 60 * 1000;
 
         if (Date.now() - lastCheck > fiveMinutes) {
-          performQuietBackgroundCheck(token, gistId);
+          // Delay background re-check by 30 seconds to prevent unnecessary API fetches if tab is briefly viewed or refreshed
+          visibilityTimeoutRef.current = window.setTimeout(() => {
+            visibilityTimeoutRef.current = null;
+            if (document.visibilityState === "visible") {
+              const currentToken = localStorage.getItem("github_gist_token") || "";
+              const currentGistId = localStorage.getItem("github_gist_id") || "";
+              const currentLastCheck = Number(localStorage.getItem("last_gist_sync_check") || "0");
+              if (currentGistId && (Date.now() - currentLastCheck > fiveMinutes)) {
+                performQuietBackgroundCheck(currentToken, currentGistId);
+              }
+            }
+          }, 30 * 1000);
         }
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
+      if (visibilityTimeoutRef.current !== null) {
+        window.clearTimeout(visibilityTimeoutRef.current);
+        visibilityTimeoutRef.current = null;
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [performQuietBackgroundCheck]);
 
   // Quick Sync Button Handler
   const handleTriggerSync = async () => {
+    if (visibilityTimeoutRef.current !== null) {
+      window.clearTimeout(visibilityTimeoutRef.current);
+      visibilityTimeoutRef.current = null;
+    }
     const token = localStorage.getItem("github_gist_token") || "";
     const gistId = localStorage.getItem("github_gist_id") || "";
 
