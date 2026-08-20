@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - "package-lock.json"
+    paths:
+      - "package.json"
+      - "src/**"
+      - "public/**"
+      - ".gihub/workflow/**"
   workflow_dispatch:
 
 permissions:
