@@ -657,7 +657,7 @@ export async function callLLMClientSideWithMeta(
 ): Promise<LLMResponseWithMeta> {
   const provider = llmConfig?.provider || "auto";
 
-  // AUTO MODE: Automatically select candidate model & lock failing model for 1 hour
+  // AUTO MODE: Automatically select candidate model & lock failing model dynamically
   if (provider === "auto" || llmConfig?.model === "auto") {
     const { candidate, tierMeta } = getAutoCandidateWithMeta(llmConfig);
     const candidateKey = `${candidate.provider}:${candidate.model}`;
@@ -722,7 +722,7 @@ export async function callLLMClientSideWithMeta(
         throw err;
       }
       const candidateDuration = Date.now() - candidateStartTime;
-      console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking for 1 hour.`);
+      console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking dynamically.`);
       recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
       lockModel(candidate.provider, candidate.model, 3600000, err?.message || String(err));
 

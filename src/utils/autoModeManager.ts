@@ -2,7 +2,9 @@ import { LLMConfig, LLMProvider } from "../types";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
-const ONE_HOUR_MS = 60 * 60 * 1000;
+export const ONE_HOUR_MS = 60 * 60 * 1000;
+export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+export const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
 export interface LockedModelInfo {
   provider: string;
@@ -66,7 +68,8 @@ export function isModelLocked(provider: string, model: string): boolean {
 
 /**
  * Calculates an optimal lock duration (in ms) based on a model's metrics history,
- * failure rates, and response times.
+ * failure rates, recency-weighted accumulation over the last 3 days, and response times.
+ * Bounds: Minimum 1 hour, Maximum 2 days (48 hours).
  */
 export function calculateOptimalLockDuration(
   provider: string,
@@ -77,32 +80,49 @@ export function calculateOptimalLockDuration(
   const metrics = getModelMetricsMap();
   const metric = metrics[key];
 
-  // Base fallback if no metrics yet
+  // Base fallback if no metrics yet: 1 hour minimum
   if (!metric) {
-    return 3 * 60 * 1000; // 3 minutes (temporary hiccup default)
+    return ONE_HOUR_MS;
   }
 
   const now = Date.now();
   const totalCalls = metric.totalCalls ?? 0;
   const totalSuccesses = metric.totalSuccesses ?? 0;
 
-  // 1. Calculate base duration based on recent failure frequency in the last 1 hour
-  const oneHourAgo = now - 60 * 60 * 1000;
-  const recentFailures = (metric.failureLogs || []).filter(log => log.timestamp >= oneHourAgo);
+  // 1. Calculate accumulated base duration from failure frequency over the last 3 days (72 hours)
+  const threeDaysAgo = now - THREE_DAYS_MS;
+  const recentFailures = (metric.failureLogs || []).filter(log => log.timestamp >= threeDaysAgo);
   
-  // Count the failure that is currently happening
+  // Flag indicating whether this calculation is triggered by an active/immediate failure
   const isCurrentlyFailing = errorReason !== undefined;
-  const recentFailureCount = recentFailures.length + (isCurrentlyFailing ? 1 : 0);
 
-  let baseDurationMs = 180000; // Default to 3 minutes
-  if (recentFailureCount <= 1) {
-    baseDurationMs = 3 * 60 * 1000; // 3 minutes (temporary hiccup)
-  } else if (recentFailureCount === 2) {
-    baseDurationMs = 10 * 60 * 1000; // 10 minutes
-  } else if (recentFailureCount === 3) {
-    baseDurationMs = 30 * 60 * 1000; // 30 minutes
-  } else {
-    baseDurationMs = 60 * 60 * 1000; // 60 minutes
+  let accumulatedBaseDurationMs = 0;
+
+  // If currently failing, add base 1-hour unit for the immediate failure (age = 0, weight = 1.0)
+  if (isCurrentlyFailing) {
+    accumulatedBaseDurationMs += ONE_HOUR_MS;
+  }
+
+  // Accumulate recency-weighted lockout for each separate historical failure in the 3-day window.
+  // Recent failures (e.g. 10m ago or 1h ago) contribute strongly (~1h), while older failures
+  // from 1-3 days ago decay gracefully down to a small fraction.
+  for (const log of recentFailures) {
+    const ageMs = Math.max(0, now - log.timestamp);
+    // If this failure log corresponds to the current immediate failure, avoid double-counting
+    if (isCurrentlyFailing && ageMs < 2000) {
+      continue;
+    }
+    if (ageMs <= THREE_DAYS_MS) {
+      const normalizedAge = Math.min(1, ageMs / THREE_DAYS_MS);
+      // Smooth decay curve from 1.0 (now) down to 0.08 (3 days ago)
+      const recencyWeight = Math.max(0.08, Math.pow(1 - normalizedAge, 1.4));
+      accumulatedBaseDurationMs += ONE_HOUR_MS * recencyWeight;
+    }
+  }
+
+  // Fallback safety if no failures were accumulated
+  if (accumulatedBaseDurationMs <= 0) {
+    accumulatedBaseDurationMs = ONE_HOUR_MS;
   }
 
   // 2. Response Time Multiplier
@@ -128,12 +148,12 @@ export function calculateOptimalLockDuration(
     }
   }
 
-  // Apply multipliers
-  const finalDurationMs = baseDurationMs * responseTimeMultiplier * reliabilityMultiplier;
+  // Apply multipliers to accumulated base
+  const finalDurationMs = accumulatedBaseDurationMs * responseTimeMultiplier * reliabilityMultiplier;
 
-  // 4. Clamping boundaries: 1 minute minimum, 2 hours maximum
-  const MIN_LOCK_MS = 60 * 1000; // 1 minute
-  const MAX_LOCK_MS = 120 * 60 * 1000; // 2 hours
+  // 4. Clamping boundaries: 1 hour minimum, 2 days (48 hours) maximum
+  const MIN_LOCK_MS = ONE_HOUR_MS; // 1 hour (3,600,000 ms)
+  const MAX_LOCK_MS = TWO_DAYS_MS; // 2 days (172,800,000 ms)
 
   return Math.max(MIN_LOCK_MS, Math.min(MAX_LOCK_MS, Math.round(finalDurationMs)));
 }
@@ -152,9 +172,9 @@ export function lockModel(
   const key = `${provider}:${model}`;
   const now = Date.now();
   
-  // If the standard duration (ONE_HOUR_MS) or no duration is passed, upgrade to smart calculation
+  // If the standard duration (ONE_HOUR_MS), 3600000 ms, or no duration is passed, upgrade to smart calculation
   let resolvedDurationMs = durationMs;
-  if (resolvedDurationMs === ONE_HOUR_MS) {
+  if (resolvedDurationMs === ONE_HOUR_MS || resolvedDurationMs === 3600000 || !durationMs) {
     resolvedDurationMs = calculateOptimalLockDuration(provider, model, errorMsg);
   }
   
@@ -173,7 +193,8 @@ export function lockModel(
     }
   }
 
-  console.warn(`[Auto Mode] Locked model ${key} dynamically for ${Math.round(resolvedDurationMs / 60000)} minutes until ${new Date(now + resolvedDurationMs).toLocaleTimeString()} (Error: ${errorMsg || "None"})`);
+  const durationHours = (resolvedDurationMs / ONE_HOUR_MS).toFixed(1);
+  console.warn(`[Auto Mode] Locked model ${key} dynamically for ${durationHours}h (${Math.round(resolvedDurationMs / 60000)} mins) until ${new Date(now + resolvedDurationMs).toLocaleString()} (Error: ${errorMsg || "None"})`);
 }
 
 /**
@@ -525,8 +546,11 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     reason
   };
 
-  // Keep only up to 10 deduplicated failure log entries (newest first)
-  const updatedLogs = deduplicateFailureLogs([newLogEntry, ...existingLogs]).slice(0, 10);
+  // Keep deduplicated failure logs from the last 3 days (up to 50 entries)
+  const threeDaysAgo = now - THREE_DAYS_MS;
+  const updatedLogs = deduplicateFailureLogs([newLogEntry, ...existingLogs])
+    .filter(log => log.timestamp >= threeDaysAgo)
+    .slice(0, 50);
 
   // Preserve existing successful response times; failed requests are skipped
   const existingTimes = Array.isArray(existing?.recentResponseTimes)
@@ -740,8 +764,10 @@ function extractModelStats(
     }
   }
 
-  if (failureLogs.length > 10) {
-    failureLogs = failureLogs.slice(0, 10);
+  const threeDaysAgo = Date.now() - THREE_DAYS_MS;
+  failureLogs = failureLogs.filter(log => log.timestamp >= threeDaysAgo);
+  if (failureLogs.length > 50) {
+    failureLogs = failureLogs.slice(0, 50);
   }
 
   return { totalCalls, totalSuccesses, failureLogs };

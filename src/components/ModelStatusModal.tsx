@@ -127,12 +127,47 @@ export default function ModelStatusModal({
   const formatUnlockTime = (expiresAt?: number) => {
     if (!expiresAt) return "Soon";
     try {
+      const now = Date.now();
+      const diffMs = expiresAt - now;
+      if (diffMs <= 0) return "Expiring now";
+
+      const diffMinutes = Math.ceil(diffMs / (60 * 1000));
+      const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+      const remainingMins = diffMinutes % 60;
+      const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+
+      let relativeStr = "";
+      if (diffDays >= 1) {
+        const remHours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+        relativeStr = remHours > 0 ? `${diffDays}d ${remHours}h` : `${diffDays}d`;
+      } else if (diffHours >= 1) {
+        relativeStr = remainingMins > 0 ? `${diffHours}h ${remainingMins}m` : `${diffHours}h`;
+      } else {
+        relativeStr = `${diffMinutes}m`;
+      }
+
       const d = new Date(expiresAt);
-      return d.toLocaleTimeString(undefined, {
+      const isToday = new Date().toDateString() === d.toDateString();
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const isTomorrow = tomorrow.toDateString() === d.toDateString();
+
+      const timeStr = d.toLocaleTimeString(undefined, {
         hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit"
+        minute: "2-digit"
       });
+
+      if (isToday) {
+        return `Today at ${timeStr} (in ${relativeStr})`;
+      } else if (isTomorrow) {
+        return `Tomorrow at ${timeStr} (in ${relativeStr})`;
+      } else {
+        const dateStr = d.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric"
+        });
+        return `${dateStr}, ${timeStr} (in ${relativeStr})`;
+      }
     } catch {
       return "Soon";
     }
