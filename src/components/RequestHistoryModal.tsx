@@ -558,7 +558,12 @@ export default function RequestHistoryModal({
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleCopy(selectedLog.response, "response")}
+                          onClick={() => {
+                            const raw = selectedLog.rawResponse !== undefined
+                              ? selectedLog.rawResponse
+                              : (selectedLog.status === "error" && selectedLog.response === selectedLog.errorMessage ? "" : selectedLog.response);
+                            handleCopy(raw || selectedLog.response, "response");
+                          }}
                           className="text-stone-400 hover:text-white flex items-center gap-1 text-[11px] font-sans font-medium px-2 py-1 rounded bg-stone-800 hover:bg-stone-700 transition-colors cursor-pointer"
                         >
                           {copiedField === "response" ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -576,9 +581,21 @@ export default function RequestHistoryModal({
                         </div>
                       )}
 
-                      <pre className="whitespace-pre-wrap break-all leading-relaxed bg-stone-950 p-3.5 rounded-xl border border-stone-800 text-stone-200 overflow-x-auto text-[11px] select-text">
-                        {formatPayload(selectedLog.response) || "(Empty response payload)"}
-                      </pre>
+                      <div className="space-y-1.5">
+                        {selectedLog.status === "error" && (
+                          <div className="text-[11px] font-sans font-medium text-stone-400">
+                            Raw Response:
+                          </div>
+                        )}
+                        <pre className="whitespace-pre-wrap break-all leading-relaxed bg-stone-950 p-3.5 rounded-xl border border-stone-800 text-stone-200 overflow-x-auto text-[11px] select-text">
+                          {(() => {
+                            const rawContent = selectedLog.rawResponse !== undefined
+                              ? selectedLog.rawResponse
+                              : (selectedLog.status === "error" && selectedLog.response === selectedLog.errorMessage ? "" : selectedLog.response);
+                            return formatPayload(rawContent) || (selectedLog.status === "error" ? "(No raw response body returned from server/model)" : "(Empty response payload)");
+                          })()}
+                        </pre>
+                      </div>
                     </div>
                   )}
 

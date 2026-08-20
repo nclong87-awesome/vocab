@@ -240,6 +240,7 @@ export interface ApiRequestLog {
   systemInstruction?: string;
   schemaDescription?: string;
   response: string;
+  rawResponse?: string;
   responseTimeMs: number;
   status: 'success' | 'error';
   statusCode?: number;

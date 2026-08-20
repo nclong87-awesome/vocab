@@ -60,6 +60,7 @@ export async function logApiRequest(params: {
   systemInstruction?: string;
   schemaDescription?: string;
   response: string;
+  rawResponse?: string;
   responseTimeMs: number;
   status: 'success' | 'error';
   statusCode?: number;
@@ -80,6 +81,7 @@ export async function logApiRequest(params: {
     systemInstruction: params.systemInstruction,
     schemaDescription: params.schemaDescription,
     response: params.response || "",
+    rawResponse: params.rawResponse !== undefined ? params.rawResponse : (params.status === "error" ? undefined : params.response),
     responseTimeMs: Math.max(1, Math.round(params.responseTimeMs || 0)),
     status: params.status,
     statusCode: params.statusCode ?? (params.status === "success" ? 200 : 500),

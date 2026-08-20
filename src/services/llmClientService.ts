@@ -77,6 +77,7 @@ export interface ParsedLlmError {
   originalMessage: string;
   isRetryable: boolean;
   provider: string;
+  rawResponse?: string;
 }
 
 export class LLMConnectionError extends Error {
@@ -85,6 +86,7 @@ export class LLMConnectionError extends Error {
   userMessage: string;
   isRetryable: boolean;
   provider: string;
+  rawResponse?: string;
 
   constructor(parsed: ParsedLlmError) {
     super(parsed.userMessage);
@@ -94,6 +96,7 @@ export class LLMConnectionError extends Error {
     this.userMessage = parsed.userMessage;
     this.isRetryable = parsed.isRetryable;
     this.provider = parsed.provider;
+    this.rawResponse = parsed.rawResponse;
   }
 }
 
@@ -122,6 +125,11 @@ export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined 
   with status codes, retry flags, and user-friendly messages.
  */
 export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmError {
+  const rawResponse =
+    err?.rawResponse ||
+    (typeof err?.response === "string" ? err.response : undefined) ||
+    (typeof err?.data === "string" ? err.data : undefined);
+
   let originalMessage =
     err?.userMessage ||
     err?.message ||
@@ -204,7 +212,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `Invalid ${provUpper} API Key (401): The provided API key is invalid or unrecognized. Please check your API key in LLM Settings.`,
       originalMessage,
       isRetryable: false,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -225,7 +234,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `Access Forbidden (403): Your ${provUpper} API key lacks access permissions or Gemini is restricted in your region/project.`,
       originalMessage,
       isRetryable: false,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -244,7 +254,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `Location Not Supported (400): Gemini API is restricted in your user/proxy location. In your Cloudflare Worker, make sure to delete client IP/country headers (x-forwarded-for, cf-connecting-ip, x-real-ip, cf-ipcountry) before proxying to Google.`,
       originalMessage,
       isRetryable: false,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -263,7 +274,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `Rate Limit Exceeded (429): ${provUpper} API quota or rate limit reached.`,
       originalMessage,
       isRetryable: true,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -281,7 +293,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `Model Not Found (404): The requested ${provUpper} model is unavailable or endpoint path is invalid.`,
       originalMessage,
       isRetryable: false,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -302,7 +315,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `${provUpper} Server Error (${code}): Google/Provider AI servers are temporarily busy or undergoing maintenance.`,
       originalMessage,
       isRetryable: true,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -325,7 +339,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
         : `Network Connection Error: Unable to reach ${provUpper} API servers from the browser. Please verify your internet connection.`,
       originalMessage,
       isRetryable: !isTimeout,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -337,7 +352,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
       userMessage: `Invalid Response Error: Received empty or unparseable payload from ${provUpper}.`,
       originalMessage,
       isRetryable: true,
-      provider
+      provider,
+      rawResponse
     };
   }
 
@@ -348,7 +364,8 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     userMessage: `${provUpper} Connection Error: ${originalMessage || "Failed to communicate with LLM model."}`,
     originalMessage,
     isRetryable: statusCode >= 500 || statusCode === 429,
-    provider
+    provider,
+    rawResponse
   };
 }
 
@@ -382,6 +399,9 @@ export async function callWithRetry<T>(
         throw err;
       }
       const parsed = parseLlmError(err, provider);
+      if (err?.rawResponse && !parsed.rawResponse) {
+        parsed.rawResponse = err.rawResponse;
+      }
       lastParsedError = parsed;
 
       // Do NOT retry non-retryable errors (e.g. 401 Invalid Key, 403 Forbidden)
@@ -478,7 +498,10 @@ async function callLLMClientSideSingleCandidate(
 
         if (!res.ok) {
           const errText = await res.text().catch(() => res.statusText);
-          throw new Error(`Gemini API Error (${res.status}): ${errText}`);
+          const err: any = new Error(`Gemini API Error (${res.status}): ${errText}`);
+          err.rawResponse = errText;
+          err.statusCode = res.status;
+          throw err;
         }
 
         const data = await res.json();
@@ -543,7 +566,10 @@ async function callLLMClientSideSingleCandidate(
 
         if (!res.ok) {
           const errText = await res.text().catch(() => res.statusText);
-          throw new Error(`Cloudflare AI Error (${res.status}): ${errText}`);
+          const err: any = new Error(`Cloudflare AI Error (${res.status}): ${errText}`);
+          err.rawResponse = errText;
+          err.statusCode = res.status;
+          throw err;
         }
 
         return await parseOpenAiStyleResponse(res);
@@ -631,7 +657,10 @@ async function callLLMClientSideSingleCandidate(
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
+        const err: any = new Error(`${provider.toUpperCase()} API Error (${res.status}): ${errText}`);
+        err.rawResponse = errText;
+        err.statusCode = res.status;
+        throw err;
       }
 
       return await parseOpenAiStyleResponse(res);
@@ -706,6 +735,7 @@ export async function callLLMClientSideWithMeta(
         systemInstruction,
         schemaDescription,
         response: text,
+        rawResponse: text,
         responseTimeMs: candidateDuration,
         status: "success",
         statusCode: 200
@@ -726,6 +756,8 @@ export async function callLLMClientSideWithMeta(
       recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
       lockModel(candidate.provider, candidate.model, 3600000, err?.message || String(err));
 
+      const rawResp = err?.rawResponse || (typeof err?.response === 'string' ? err.response : "") || "";
+
       // Record failed request/response history log
       logApiRequest({
         provider: candidate.provider,
@@ -733,11 +765,12 @@ export async function callLLMClientSideWithMeta(
         prompt,
         systemInstruction,
         schemaDescription,
-        response: err?.message || String(err),
+        response: rawResp || err?.userMessage || err?.message || String(err),
+        rawResponse: rawResp || undefined,
         responseTimeMs: candidateDuration,
         status: "error",
         statusCode: err?.statusCode || 500,
-        errorMessage: err?.message || String(err)
+        errorMessage: err?.userMessage || err?.message || String(err)
       }).catch(() => undefined);
 
       err.provider = candidate.provider;
@@ -767,6 +800,7 @@ export async function callLLMClientSideWithMeta(
       systemInstruction,
       schemaDescription,
       response: text,
+      rawResponse: text,
       responseTimeMs: singleDuration,
       status: "success",
       statusCode: 200
@@ -782,6 +816,8 @@ export async function callLLMClientSideWithMeta(
     const singleDuration = Date.now() - singleStartTime;
     recordModelFailure(activeProvider, activeModel, err?.message || String(err), singleDuration);
 
+    const rawResp = err?.rawResponse || (typeof err?.response === 'string' ? err.response : "") || "";
+
     // Record failed single request/response history log
     logApiRequest({
       provider: activeProvider,
@@ -789,11 +825,12 @@ export async function callLLMClientSideWithMeta(
       prompt,
       systemInstruction,
       schemaDescription,
-      response: err?.message || String(err),
+      response: rawResp || err?.userMessage || err?.message || String(err),
+      rawResponse: rawResp || undefined,
       responseTimeMs: singleDuration,
       status: "error",
       statusCode: err?.statusCode || 500,
-      errorMessage: err?.message || String(err)
+      errorMessage: err?.userMessage || err?.message || String(err)
     }).catch(() => undefined);
 
     throw err;
@@ -2557,13 +2594,15 @@ export async function analyzeImageVocabService(params: {
         };
       }
       const errorJson = await res.json().catch(() => null);
+      const rawErrText = errorJson ? JSON.stringify(errorJson) : "";
       const errMsg = errorJson?.error || `Server API analyze-image-vocab failed with status ${res.status}`;
       logApiRequest({
         provider,
         model,
         prompt: userText,
         systemInstruction: systemPrompt,
-        response: errMsg,
+        response: rawErrText || errMsg,
+        rawResponse: rawErrText || undefined,
         responseTimeMs: Math.round(performance.now() - startTime),
         status: "error",
         statusCode: res.status,
@@ -2640,12 +2679,14 @@ export async function analyzeImageVocabService(params: {
   } else {
     const errText = await workerRes.text().catch(() => workerRes.statusText);
     serverOrWorkerError = new Error(`Image Analysis Worker Error (${workerRes.status}): ${errText}`);
+    (serverOrWorkerError as any).rawResponse = errText;
     logApiRequest({
       provider,
       model,
       prompt: userText,
       systemInstruction: systemPrompt,
-      response: serverOrWorkerError.message,
+      response: errText || serverOrWorkerError.message,
+      rawResponse: errText || undefined,
       responseTimeMs: Math.round(performance.now() - startTime),
       status: "error",
       statusCode: workerRes.status,
