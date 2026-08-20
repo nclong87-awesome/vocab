@@ -657,11 +657,6 @@ export function useChat({
           action: "send_message",
           payload: { message: `Suggest commonly paired words for "${existingMatch.word}"` },
         },
-        {
-          label: `❓ ${t("action_ask_question_about", currentAppLang, { word: existingMatch.word })}`,
-          action: "send_message",
-          payload: { message: `Tell me how to use "${existingMatch.word}" in conversation and ask me a practice question.` },
-        },
       ];
       const mergedActions = [...wordSpecificActions, ...remainingActions];
       setChatMessages((prev) => [
@@ -1032,8 +1027,19 @@ export function useChat({
         return;
       }
 
-      await handleConversationalAddWord(text.trim(), undefined, configToUse);
-      return;
+      // Check if this input is a question, sentence, or conversational query
+      const isQuestion = text.includes("?");
+      const wordCount = text.trim().split(/\s+/).length;
+      const startsWithQuestionWord = /^(what|how|why|who|where|can|could|is|are|do|does|tell|explain|give|show|please|translate|explain|suggest|ask|write|make|create|help)\b/i.test(text.trim());
+      const hasConversationalTopic = /\b(sentence|example|meaning|definition|use|usage|pronounce|pronunciation|practice|paired|related|difference|compare|question|query|conversation)\b/i.test(text);
+
+      if (isQuestion || wordCount >= 5 || startsWithQuestionWord || hasConversationalTopic) {
+        setConversationalState("none");
+        // Fall through to general chat
+      } else {
+        await handleConversationalAddWord(text.trim(), undefined, configToUse);
+        return;
+      }
     }
 
     if (conversationalState === "generating_topic_subject") {

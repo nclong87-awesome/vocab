@@ -8,7 +8,8 @@ import {
   recordModelResponse, 
   recordModelFailure,
   lockModel,
-  syncServerLocks
+  syncServerLocks,
+  getAllModelStatuses
 } from "../utils/autoModeManager";
 import { logApiRequest } from "./requestHistoryService";
 import { publishLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
@@ -17,6 +18,19 @@ import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from ".
 import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
 export { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload };
 
+export function getFastestModelForProvider(provider: string, llmConfig?: LLMConfig): string | null {
+  try {
+    const statuses = getAllModelStatuses(llmConfig);
+    const healthy = statuses.filter(s => s.provider === provider && s.status !== 'offline');
+    if (healthy.length > 0) {
+      return healthy[0].model;
+    }
+  } catch (e) {
+    // Ignore error and fall back
+  }
+  return null;
+}
+
 // Sanitize model names for provider
 export function sanitizeModel(provider: string, model?: string): string {
   if (provider === "auto") return "auto";
@@ -24,6 +38,7 @@ export function sanitizeModel(provider: string, model?: string): string {
   if (providerMeta) {
     if (
       model &&
+      model !== "auto" &&
       (
         providerMeta.models.includes(model) ||
         Boolean(providerMeta.visionModels?.includes(model)) ||
@@ -31,6 +46,11 @@ export function sanitizeModel(provider: string, model?: string): string {
       )
     ) {
       return model;
+    }
+    // Pick the fastest model based on status data!
+    const fastestModel = getFastestModelForProvider(provider);
+    if (fastestModel) {
+      return fastestModel;
     }
     return providerMeta.defaultModel;
   }

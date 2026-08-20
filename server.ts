@@ -122,7 +122,27 @@ function sanitizeModel(provider: string, model?: string): string {
   if (provider === "auto") {
     return "auto";
   }
-  return model || PROVIDER_OPTIONS.find(p => p.id === provider)?.defaultModel || "auto";
+  const providerMeta = PROVIDER_OPTIONS.find(p => p.id === provider);
+  if (providerMeta) {
+    if (
+      model &&
+      model !== "auto" &&
+      (
+        providerMeta.models.includes(model) ||
+        Boolean(providerMeta.visionModels?.includes(model)) ||
+        Boolean(providerMeta.tts_models?.includes(model))
+      )
+    ) {
+      return model;
+    }
+    // If the model is not specified or is "auto", select the first unlocked/available model for this provider!
+    const unlockedModel = providerMeta.models.find(m => !isServerModelLocked(provider, m));
+    if (unlockedModel) {
+      return unlockedModel;
+    }
+    return providerMeta.defaultModel;
+  }
+  return model || "auto";
 }
 
 
