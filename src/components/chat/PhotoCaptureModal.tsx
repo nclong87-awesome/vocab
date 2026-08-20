@@ -281,6 +281,7 @@ function PhotoCaptureModal({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const focusInputRef = useRef<HTMLInputElement | null>(null);
 
   // Touch Pinch gesture tracking
   const touchStartDistRef = useRef<number | null>(null);
@@ -436,6 +437,16 @@ function PhotoCaptureModal({
       setIsCropping(false);
     }
   }, [isOpen]);
+
+  // Auto-focus on the focus note textfield when entering preview mode
+  useEffect(() => {
+    if (isOpen && mode === "preview" && !isCropping) {
+      const timer = setTimeout(() => {
+        focusInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, mode, isCropping]);
 
   // Take photo from live stream matching exact viewfinder aspect ratio & zoom crop
   const handleSnapPhoto = async () => {
@@ -1172,6 +1183,7 @@ function PhotoCaptureModal({
                     {/* Optional Focus Note Input */}
                     <div className="w-full max-w-sm">
                       <input
+                        ref={focusInputRef}
                         type="text"
                         value={focusNote}
                         onChange={(e) => setFocusNote(e.target.value)}
