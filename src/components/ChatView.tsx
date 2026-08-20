@@ -109,7 +109,7 @@ function ChatView({
     }, 50);
   }, []);
 
-  const processImageFile = useCallback((file: File, _defaultName?: string) => {
+  const processImageFile = useCallback((file: File, defaultName?: string) => {
     if (!file.type.startsWith("image/")) {
       showToast("⚠️ Please select or paste a valid image file (PNG, JPG, WEBP)");
       return;
@@ -118,28 +118,18 @@ function ChatView({
     reader.onload = async () => {
       if (typeof reader.result === "string") {
         const rawDataUrl = reader.result;
-        const promptNote = inputText.trim() || undefined;
+        const name = file.name || defaultName || "Pasted Image";
         try {
           const optimizedDataUrl = await resizeImageDataUrl(rawDataUrl, 1600, 0.85);
-          if (conversationalState === "suggesting_reply") {
-            onSuggestCasualReply?.(optimizedDataUrl, promptNote || "");
-          } else {
-            onAnalyzeImageVocab?.(optimizedDataUrl, promptNote);
-          }
+          setSelectedImage({ dataUrl: optimizedDataUrl, name });
         } catch (err) {
-          if (conversationalState === "suggesting_reply") {
-            onSuggestCasualReply?.(rawDataUrl, promptNote || "");
-          } else {
-            onAnalyzeImageVocab?.(rawDataUrl, promptNote);
-          }
+          setSelectedImage({ dataUrl: rawDataUrl, name });
         }
-        setInputText("");
-        setSelectedImage(null);
         scrollToBottom("smooth");
       }
     };
     reader.readAsDataURL(file);
-  }, [showToast, conversationalState, inputText, onSuggestCasualReply, onAnalyzeImageVocab, scrollToBottom]);
+  }, [showToast, scrollToBottom]);
 
   const handleImageFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,9 +164,11 @@ function ChatView({
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
+    let hasImage = false;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.type.startsWith("image/")) {
+        hasImage = true;
         e.preventDefault();
         const file = item.getAsFile();
         if (file) {
@@ -185,16 +177,39 @@ function ChatView({
         break;
       }
     }
-  }, [processImageFile]);
+
+    if (hasImage) {
+      const text = e.clipboardData.getData("text");
+      if (text) {
+        const input = inputRef.current;
+        if (input) {
+          const start = input.selectionStart ?? 0;
+          const end = input.selectionEnd ?? 0;
+          setInputText(prev => prev.substring(0, start) + text + prev.substring(end));
+          setTimeout(() => {
+            input.focus();
+            input.setSelectionRange(start + text.length, start + text.length);
+          }, 0);
+        } else {
+          setInputText(prev => {
+            const trimPrev = prev.trim();
+            return trimPrev ? `${trimPrev} ${text.trim()}` : text.trim();
+          });
+        }
+      }
+    }
+  }, [processImageFile, setInputText]);
 
   // Listen for global window paste events when chat is active
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
+      let hasImage = false;
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.type.startsWith("image/")) {
+          hasImage = true;
           const file = item.getAsFile();
           if (file) {
             e.preventDefault();
@@ -203,13 +218,34 @@ function ChatView({
           break;
         }
       }
+
+      if (hasImage) {
+        const text = e.clipboardData.getData("text");
+        if (text) {
+          const input = inputRef.current;
+          if (input) {
+            const start = input.selectionStart ?? 0;
+            const end = input.selectionEnd ?? 0;
+            setInputText(prev => prev.substring(0, start) + text + prev.substring(end));
+            setTimeout(() => {
+              input.focus();
+              input.setSelectionRange(start + text.length, start + text.length);
+            }, 0);
+          } else {
+            setInputText(prev => {
+              const trimPrev = prev.trim();
+              return trimPrev ? `${trimPrev} ${text.trim()}` : text.trim();
+            });
+          }
+        }
+      }
     };
 
     window.addEventListener("paste", handleGlobalPaste);
     return () => {
       window.removeEventListener("paste", handleGlobalPaste);
     };
-  }, [processImageFile]);
+  }, [processImageFile, setInputText]);
 
   // Quick Actions Last Used Timestamps (persisted in localStorage)
   const [actionLastUsed, setActionLastUsed] = useState<Record<string, number>>(() => {
