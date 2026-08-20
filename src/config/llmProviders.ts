@@ -56,6 +56,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     models: [
       "gemini-3.5-flash-lite",
       "gemini-3.1-flash-lite",
+      "gemini-3.7-flash",
       "gemini-3.6-flash", 
       "gemini-3.5-flash"
     ],
@@ -137,6 +138,7 @@ export const RELIABLE_MODELS: string[] = [
   "openai/gpt-oss-20b", 
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
+  "gemini-3.6-flash",
   "gpt-oss:20b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",

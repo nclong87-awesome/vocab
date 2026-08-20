@@ -65,24 +65,104 @@ export function isModelLocked(provider: string, model: string): boolean {
 }
 
 /**
- * Locks a model for durationMs (defaults to 1 hour = 3,600,000 ms).
+ * Calculates an optimal lock duration (in ms) based on a model's metrics history,
+ * failure rates, and response times.
+ */
+export function calculateOptimalLockDuration(
+  provider: string,
+  model: string,
+  errorReason?: string
+): number {
+  const key = `${provider}:${model}`;
+  const metrics = getModelMetricsMap();
+  const metric = metrics[key];
+
+  // Base fallback if no metrics yet
+  if (!metric) {
+    return 3 * 60 * 1000; // 3 minutes (temporary hiccup default)
+  }
+
+  const now = Date.now();
+  const totalCalls = metric.totalCalls ?? 0;
+  const totalSuccesses = metric.totalSuccesses ?? 0;
+
+  // 1. Calculate base duration based on recent failure frequency in the last 1 hour
+  const oneHourAgo = now - 60 * 60 * 1000;
+  const recentFailures = (metric.failureLogs || []).filter(log => log.timestamp >= oneHourAgo);
+  
+  // Count the failure that is currently happening
+  const isCurrentlyFailing = errorReason !== undefined;
+  const recentFailureCount = recentFailures.length + (isCurrentlyFailing ? 1 : 0);
+
+  let baseDurationMs = 180000; // Default to 3 minutes
+  if (recentFailureCount <= 1) {
+    baseDurationMs = 3 * 60 * 1000; // 3 minutes (temporary hiccup)
+  } else if (recentFailureCount === 2) {
+    baseDurationMs = 10 * 60 * 1000; // 10 minutes
+  } else if (recentFailureCount === 3) {
+    baseDurationMs = 30 * 60 * 1000; // 30 minutes
+  } else {
+    baseDurationMs = 60 * 60 * 1000; // 60 minutes
+  }
+
+  // 2. Response Time Multiplier
+  // Models with consistently high response times are locked out for longer
+  let responseTimeMultiplier = 1.0;
+  const avgResponseTimeMs = metric.avgResponseTimeMs ?? metric.lastResponseTimeMs ?? 0;
+  if (avgResponseTimeMs > 15000) {
+    // Scales from 1.0 up to 3.0 at 45 seconds or more
+    responseTimeMultiplier = Math.min(3.0, avgResponseTimeMs / 15000);
+  }
+
+  // 3. Historical Reliability Factor
+  // Models with high success rates get discounts; consistently failing models get penalties.
+  let reliabilityMultiplier = 1.0;
+  if (totalCalls >= 3) {
+    const successRate = totalSuccesses / totalCalls;
+    if (successRate >= 0.9) {
+      reliabilityMultiplier = 0.5; // Halve lock duration for highly reliable models
+    } else if (successRate < 0.5) {
+      reliabilityMultiplier = 2.0; // Double lock duration for highly unreliable models
+    } else if (successRate < 0.75) {
+      reliabilityMultiplier = 1.5; // 1.5x penalty for moderately unreliable models
+    }
+  }
+
+  // Apply multipliers
+  const finalDurationMs = baseDurationMs * responseTimeMultiplier * reliabilityMultiplier;
+
+  // 4. Clamping boundaries: 1 minute minimum, 2 hours maximum
+  const MIN_LOCK_MS = 60 * 1000; // 1 minute
+  const MAX_LOCK_MS = 120 * 60 * 1000; // 2 hours
+
+  return Math.max(MIN_LOCK_MS, Math.min(MAX_LOCK_MS, Math.round(finalDurationMs)));
+}
+
+/**
+ * Locks a model for durationMs (defaults to 1 hour = 3,600,000 ms, which triggers dynamic optimal calculation).
  */
 export function lockModel(
   provider: string, 
   model: string, 
   durationMs: number = ONE_HOUR_MS,
-  _errorMsg?: string
+  errorMsg?: string
 ): void {
   if (provider === "auto" || model === "auto") return;
   const locked = getLockedModels();
   const key = `${provider}:${model}`;
   const now = Date.now();
   
+  // If the standard duration (ONE_HOUR_MS) or no duration is passed, upgrade to smart calculation
+  let resolvedDurationMs = durationMs;
+  if (resolvedDurationMs === ONE_HOUR_MS) {
+    resolvedDurationMs = calculateOptimalLockDuration(provider, model, errorMsg);
+  }
+  
   locked[key] = {
     provider,
     model,
     lockedAt: now,
-    expiresAt: now + durationMs
+    expiresAt: now + resolvedDurationMs
   };
 
   if (typeof window !== "undefined") {
@@ -93,7 +173,7 @@ export function lockModel(
     }
   }
 
-  console.warn(`[Auto Mode] Locked model ${key} for ${Math.round(durationMs / 60000)} minutes until ${new Date(now + durationMs).toLocaleTimeString()}`);
+  console.warn(`[Auto Mode] Locked model ${key} dynamically for ${Math.round(resolvedDurationMs / 60000)} minutes until ${new Date(now + resolvedDurationMs).toLocaleTimeString()} (Error: ${errorMsg || "None"})`);
 }
 
 /**
