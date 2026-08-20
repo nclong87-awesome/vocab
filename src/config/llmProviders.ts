@@ -138,7 +138,6 @@ export const RELIABLE_MODELS: string[] = [
   "google/gemini-3.1-flash-lite",
   "google/gemini-3.5-flash",
   "cohere/command-a",
-  "cohere/command-a-03-2025",
   "openai/gpt-oss-120b", 
   "openai/gpt-oss-20b", 
   "gemini-3.5-flash-lite",
