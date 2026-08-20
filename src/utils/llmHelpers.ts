@@ -261,16 +261,130 @@ export function removeProviderProfile(
  */
 export function getProviderDisplayName(provider?: string): string {
   if (!provider) return "Selected AI";
-  const meta = PROVIDER_OPTIONS.find(p => p.id === provider);
-  if (meta) return meta.name;
-  if (provider === "gemini") return "Google Gemini";
-  if (provider === "openai") return "OpenAI";
-  if (provider === "groq") return "Groq";
-  if (provider === "openrouter") return "OpenRouter";
-  if (provider === "ollama") return "Ollama";
-  if (provider === "9flare") return "9Flare";
-  if (provider === "custom") return "Custom Endpoint";
-  return provider;
+  const p = provider.toLowerCase();
+  if (p === "gemini" || p === "google") return "Google Gemini";
+  if (p === "openrouter") return "OpenRouter";
+  if (p === "groq") return "Groq";
+  if (p === "cloudflare") return "Cloudflare AI";
+  if (p === "9flare") return "9Flare";
+  if (p === "ollama") return "Ollama";
+  if (p === "auto") return "Auto Mode";
+  if (p === "custom") return "Custom Endpoint";
+  const meta = PROVIDER_OPTIONS.find(opt => opt.id === provider);
+  if (meta) return meta.name.replace(/\s*\(Default\)/i, "").trim();
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+/**
+ * Returns consistent styling badges for providers
+ */
+export function getProviderBadgeStyle(provider?: string): { bg: string; text: string; border: string; label: string } {
+  const p = (provider || "").toLowerCase();
+  const label = getProviderDisplayName(provider);
+
+  switch (p) {
+    case "openrouter":
+      return { bg: "bg-indigo-50", text: "text-indigo-800 font-semibold", border: "border-indigo-200/80", label };
+    case "groq":
+      return { bg: "bg-amber-50", text: "text-amber-900 font-bold", border: "border-amber-200/90", label };
+    case "gemini":
+    case "google":
+      return { bg: "bg-sky-50", text: "text-sky-900 font-bold", border: "border-sky-200/90", label };
+    case "cloudflare":
+      return { bg: "bg-orange-50", text: "text-orange-900 font-semibold", border: "border-orange-200/80", label };
+    case "9flare":
+      return { bg: "bg-emerald-50", text: "text-emerald-900 font-bold", border: "border-emerald-200/90", label };
+    case "ollama":
+      return { bg: "bg-teal-50", text: "text-teal-900 font-semibold", border: "border-teal-200/80", label };
+    case "auto":
+      return { bg: "bg-purple-50", text: "text-purple-900 font-bold", border: "border-purple-200/90", label };
+    default:
+      return { bg: "bg-stone-100", text: "text-stone-700 font-semibold", border: "border-stone-200", label };
+  }
+}
+
+/**
+ * Clean & format raw model strings into clean human-readable model names
+ */
+export function formatModelDisplayName(modelName?: string): string {
+  if (!modelName) return "AI Model";
+  const raw = modelName.trim();
+
+  if (raw === "auto") return "Auto Model";
+  if (raw === "custom") return "Custom Model";
+
+  // Strip prefix paths
+  let cleaned = raw
+    .replace(/^google\//i, "")
+    .replace(/^openai\//i, "")
+    .replace(/^pro\//i, "")
+    .replace(/^qwen\//i, "")
+    .replace(/^@cf\/[^\/]+\//i, "")
+    .replace(/^@cf\//i, "");
+
+  const lower = cleaned.toLowerCase();
+  if (lower.includes("gemini-3.6-flash")) return "Gemini 3.6 Flash";
+  if (lower.includes("gemini-3.5-flash-lite")) return "Gemini 3.5 Flash Lite";
+  if (lower.includes("gemini-3.5-flash")) return "Gemini 3.5 Flash";
+  if (lower.includes("gemini-3.1-flash-lite")) return "Gemini 3.1 Flash Lite";
+  if (lower.includes("gpt-oss-120b")) return "GPT OSS 120B";
+  if (lower.includes("gpt-oss-20b")) return "GPT OSS 20B";
+  if (lower.includes("gpt-oss-safeguard-20b")) return "GPT OSS Safeguard 20B";
+  if (lower.includes("qwen3.6-27b")) return "Qwen 3.6 27B";
+  if (lower.includes("claude-haiku-4-5")) return "Claude Haiku 4.5";
+  if (lower.includes("gpt-5.6-luna")) return "GPT 5.6 Luna";
+  if (lower.includes("gemma-sea-lion-v4-27b-it")) return "Sea Lion v4 27B";
+  if (lower.includes("gemma4:31b")) return "Gemma 4 (31B)";
+  if (lower.includes("gpt-oss:20b")) return "GPT OSS 20B";
+  if (lower.includes("nemotron-3-nano:30b-cloud")) return "Nemotron 3 Nano (30B)";
+
+  return cleaned
+    .split(/[-_:]+/)
+    .map((word) => {
+      if (!word) return "";
+      const wLower = word.toLowerCase();
+      if (wLower === "gpt") return "GPT";
+      if (wLower === "oss") return "OSS";
+      if (wLower === "it") return "IT";
+      if (wLower === "ai") return "AI";
+      if (wLower === "llm") return "LLM";
+      if (/^\d+[a-z]$/i.test(word)) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
+ * Formats AI response time in seconds with appropriate icon and badge style
+ */
+export function formatResponseTime(ms?: number): { text: string; icon: string; style: string; badgeText: string } {
+  if (ms === undefined || ms === null) {
+    return { text: "--", icon: "⏱️", style: "text-stone-400 bg-stone-50 border-stone-200", badgeText: "N/A" };
+  }
+  const seconds = (ms / 1000).toFixed(2);
+  if (ms < 2000) {
+    return {
+      text: `${seconds}s`,
+      icon: "⚡",
+      style: "text-emerald-700 bg-emerald-50/90 border-emerald-200/90 font-bold",
+      badgeText: "Fast"
+    };
+  }
+  if (ms < 5000) {
+    return {
+      text: `${seconds}s`,
+      icon: "⚡",
+      style: "text-stone-700 bg-stone-100/90 border-stone-200/80 font-medium",
+      badgeText: "Normal"
+    };
+  }
+  return {
+    text: `${seconds}s`,
+    icon: "⏱️",
+    style: "text-amber-800 bg-amber-50/90 border-amber-200/80 font-medium",
+    badgeText: "Steady"
+  };
 }
 
 /**

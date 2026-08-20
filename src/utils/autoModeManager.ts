@@ -526,9 +526,9 @@ export function getModelPerformanceTier(
     return 1;
   }
   
-  if (status === 'strong' || responseTimeMs < 15000) return 1;
-  if (status === 'medium' || responseTimeMs < 25000) return 2;
-  return 4; // 'weak' / slow models (>= 25s)
+  if (status === 'strong' || responseTimeMs < 10000) return 1;
+  if (status === 'medium' || responseTimeMs < 20000) return 2;
+  return 4; // 'weak' / slow models (>= 20s)
 }
 
 export function getPerformanceTierMeta(
@@ -544,7 +544,7 @@ export function getPerformanceTierMeta(
         shortLabel: "Tier 1: Fast",
         description: isUntestedOrStale 
           ? "Untested or stale model boosted to Tier 1 for immediate benchmark sampling."
-          : "Fast response times (0–14s). First priority choice for all queries.",
+          : "Fast response times (0–10s). First priority choice for all queries.",
         colorClass: isUntestedOrStale 
           ? "bg-sky-50 text-sky-800 border-sky-200" 
           : "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -555,7 +555,7 @@ export function getPerformanceTierMeta(
         name: "Tier 2: Medium Performance",
         badgeLabel: "Tier 2 (Medium)",
         shortLabel: "Tier 2: Medium",
-        description: "Medium response times (15–24s). Automatically re-probed periodically for promotion to Tier 1.",
+        description: "Medium response times (10–20s). Automatically re-probed periodically for promotion to Tier 1.",
         colorClass: "bg-amber-50 text-amber-700 border-amber-200"
       };
     case 3:
@@ -574,7 +574,7 @@ export function getPerformanceTierMeta(
         name: "Tier 4: Demoted Fallback",
         badgeLabel: "Tier 4 (Slow Fallback)",
         shortLabel: "Tier 4: Slow",
-        description: "Slow response (25s or more). Demoted as emergency backups, but periodically re-evaluated to detect performance recovery.",
+        description: "Slow response (20s or more). Demoted as emergency backups, but periodically re-evaluated to detect performance recovery.",
         colorClass: "bg-orange-50 text-orange-800 border-orange-200"
       };
   }
@@ -609,8 +609,8 @@ export function getModelStatusIndicator(
 ): ModelStatusIndicator {
   if (isLocked) return 'offline';
   if (responseTimeMs === null || responseTimeMs === undefined) return 'untested';
-  if (responseTimeMs < 15000) return 'strong';
-  if (responseTimeMs < 25000) return 'medium';
+  if (responseTimeMs < 10000) return 'strong';
+  if (responseTimeMs < 20000) return 'medium';
   return 'weak';
 }
 
@@ -869,14 +869,14 @@ export function getNextAutoCandidate(
       if (time === null || stale) {
         // Untested or Stale -> Priority Tier 1 Probe!
         tier1.push({ cand, time, isUntestedOrStale: true });
-      } else if (time < 15000) {
-        // Fast (0–14s) -> Tier 1
+      } else if (time < 10000) {
+        // Fast (0–10s) -> Tier 1
         tier1.push({ cand, time, isUntestedOrStale: false });
-      } else if (time < 25000) {
-        // Medium (15–24s) -> Tier 2
+      } else if (time < 20000) {
+        // Medium (10–20s) -> Tier 2
         tier2.push({ cand, time });
       } else {
-        // Slow (25s or more) -> Tier 4 (Demoted)
+        // Slow (20s or more) -> Tier 4 (Demoted)
         tier4.push({ cand, time });
       }
     }
@@ -888,9 +888,9 @@ export function getNextAutoCandidate(
       explorationCallCounter++;
     }
 
-    // 15% Epsilon-Greedy Exploration: Every 6th call, probe a Tier 2 or Tier 4 model if Tier 1 is non-empty
+    // Low-frequency Epsilon-Greedy Exploration: Every 12th call, probe a Tier 2 or Tier 4 model if Tier 1 is non-empty
     // to give slower models a chance to re-evaluate latency and get promoted!
-    const isExplorationTurn = explorationCallCounter > 0 && explorationCallCounter % 6 === 0;
+    const isExplorationTurn = explorationCallCounter > 0 && explorationCallCounter % 12 === 0;
     if (isExplorationTurn && (tier2.length > 0 || tier4.length > 0)) {
       const probePool = [...tier2.map(t => t.cand), ...tier4.map(t => t.cand)];
       const rotIdx = getAutoRotationIndex();
@@ -930,13 +930,15 @@ export function getNextAutoCandidate(
     }
 
     // Standard Tier Priority Selection (Tier 1 -> Tier 2 -> Tier 4)
-    if (tier1.length > 0) {
+    // For tested Tier 1 models, sort by response time so the fastest model is prioritized first
+    const testedTier1 = tier1.filter(t => !t.isUntestedOrStale).sort((a, b) => (a.time ?? 99999) - (b.time ?? 99999));
+    if (testedTier1.length > 0) {
       const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % tier1.length;
+      const idx = rotIdx % testedTier1.length;
       if (advance) {
         saveAutoRotationIndex(rotIdx + 1);
       }
-      return tier1[idx].cand;
+      return testedTier1[idx].cand;
     }
 
     if (tier2.length > 0) {

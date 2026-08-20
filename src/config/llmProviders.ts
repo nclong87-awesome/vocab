@@ -38,10 +38,10 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "openrouter",
     name: "OpenRouter",
     tagline: "Unified API gateway for 100+ AI models",
-    defaultModel: "google/gemini-3.1-flash-lite",
+    defaultModel: "google/gemini-3.5-flash-lite",
     models: [
-      "google/gemini-3.1-flash-lite",
       "google/gemini-3.5-flash-lite",
+      "google/gemini-3.1-flash-lite",
       "google/gemini-3.5-flash"
     ],
     defaultBaseUrl: "https://openrouter.nclong87.workers.dev/api/v1",
@@ -52,14 +52,14 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "gemini",
     name: "Google Gemini",
     tagline: "Fast & highly structured intelligence",
-    defaultModel: "gemini-3.6-flash",
+    defaultModel: "gemini-3.5-flash-lite",
     models: [
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
       "gemini-3.6-flash", 
-      "gemini-3.5-flash", 
-      "gemini-3.5-flash-lite", 
-      "gemini-3.1-flash-lite"
+      "gemini-3.5-flash"
     ],
-    tts_models: ["gemini-3.6-flash", "gemini-3.5-flash"],
+    tts_models: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
     defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
     directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
     requiresKey: false
@@ -68,10 +68,10 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     id: "ollama",
     name: "Ollama",
     tagline: "Ollama Cloud API (https://ollama.com/v1)",
-    defaultModel: "gemma4:31b",
+    defaultModel: "gpt-oss:20b",
     models: [
-      "gemma4:31b",
       "gpt-oss:20b",
+      "gemma4:31b",
       "nemotron-3-nano:30b-cloud"
     ],
     defaultBaseUrl: "https://ollama.nclong87.workers.dev/v1",
@@ -84,11 +84,8 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "High performance API gateway",
     defaultModel: "pro/claude-haiku-4-5",
     models: [
-      // "pro/minimax-m2.5", 
       "pro/claude-haiku-4-5", 
       "pro/gpt-5.6-luna",
-      // "pro/gpt-5-mini",
-      // "pro/glm-5"
     ],
     visionModels: ["pro/gpt-5.6-luna"],
     defaultBaseUrl: "https://9flare.nclong87.workers.dev/api/v1",
@@ -101,24 +98,12 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "Serverless inference at the edge",
     defaultModel: "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
     models: [
-      "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-      // "@cf/ibm-granite/granite-4.0-h-micro"
+      "@cf/aisingapore/gemma-sea-lion-v4-27b-it"
     ],
     defaultBaseUrl: "https://cloudflare.nclong87.workers.dev",
     directBaseUrl: "https://api.cloudflare.com/client/v4/accounts/12345678/ai/run",
     requiresKey: false
   },
-  // {
-  //   id: "openai",
-  //   name: "OpenAI",
-  //   tagline: "GPT series models",
-  //   defaultModel: "gpt-5.6-luna",
-  //   models: ["gpt-5.6-luna"],
-  //   visionModels: ["gpt-5.6-luna"],
-  //   defaultBaseUrl: "https://openai.nclong87.workers.dev/v1",
-  //   directBaseUrl: "https://api.openai.com/v1",
-  //   requiresKey: false
-  // },
   {
     id: "custom",
     name: "Custom / Local Endpoint",
@@ -146,16 +131,13 @@ export function getDefaultLLMConfig(): LLMConfig {
 }
 
 export const RELIABLE_MODELS: string[] = [
+  "google/gemini-3.5-flash-lite",
+  "google/gemini-3.1-flash-lite",
   "openai/gpt-oss-120b", 
   "openai/gpt-oss-20b", 
-  // "gemini-3.1-flash-lite",
-  // "gemini-3.5-flash-lite", 
-  // "gemini-3.5-flash", 
-  // "gemini-3.6-flash",
-  "google/gemini-3.1-flash-lite",
-  "google/gemini-3.5-flash-lite",
-  "google/gemini-3.5-flash",
-  "gemma4:31b",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gpt-oss:20b",
   "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
   "@cf/aisingapore/gemma-sea-lion-v4-27b-it"

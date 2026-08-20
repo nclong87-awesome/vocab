@@ -3,11 +3,11 @@ import {
   Volume2, 
   ChevronLeft, 
   ChevronRight, 
-  Clock, 
   Layers, 
   LayoutGrid
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
+import { formatModelDisplayName, getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
 
@@ -426,25 +426,34 @@ function FlashcardMessageCard({
 
       {/* AI Metadata Footer */}
       {(provider || model || responseTimeMs !== undefined) && (
-        <div className="px-4 py-2 bg-stone-50/80 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-400 font-medium select-none">
+        <div className="px-4 py-2 bg-stone-50/80 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {provider && (
-              <span className="capitalize font-semibold text-stone-600 bg-stone-200/70 px-1.5 py-0.5 rounded text-[10px]">
-                {provider}
-              </span>
-            )}
+            {provider && (() => {
+              const style = getProviderBadgeStyle(provider);
+              return (
+                <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold ${style.bg} ${style.text} ${style.border}`}>
+                  {style.label}
+                </span>
+              );
+            })()}
             {model && (
-              <span className="font-mono text-[10px] text-stone-500">
-                {model}
+              <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-white px-1.5 py-0.5 rounded border border-stone-200/60" title={model}>
+                {formatModelDisplayName(model)}
               </span>
             )}
           </div>
-          {responseTimeMs !== undefined && (
-            <div className="flex items-center gap-1 text-stone-400 shrink-0 text-[10px] font-mono" title="AI Response Time">
-              <Clock className="w-3 h-3 text-stone-400" />
-              <span>{(responseTimeMs / 1000).toFixed(2)}s</span>
-            </div>
-          )}
+          {responseTimeMs !== undefined && (() => {
+            const rt = formatResponseTime(responseTimeMs);
+            return (
+              <div 
+                className={`flex items-center gap-1 shrink-0 text-[10.5px] px-2 py-0.5 rounded-md border shadow-2xs font-mono ${rt.style}`}
+                title={`AI Response Time: ${responseTimeMs}ms (${rt.badgeText})`}
+              >
+                <span>{rt.icon}</span>
+                <span>{rt.text}</span>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

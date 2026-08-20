@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Clock, Plus
+  Volume2, ChevronRight, Check, Sparkles, Plus
 } from "lucide-react";
+import { formatModelDisplayName, getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
@@ -802,25 +803,34 @@ function ChatMessageItem({
 
               {/* AI Response Metadata (Provider, Model, Response Time) */}
               {(msg.provider || msg.model || msg.responseTimeMs !== undefined) && (
-                <div className="mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-400 font-medium select-none">
+                <div className="mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {msg.provider && (
-                      <span className="capitalize font-semibold text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded text-[10.5px]">
-                        {msg.provider}
-                      </span>
-                    )}
+                    {msg.provider && (() => {
+                      const style = getProviderBadgeStyle(msg.provider);
+                      return (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold ${style.bg} ${style.text} ${style.border}`}>
+                          {style.label}
+                        </span>
+                      );
+                    })()}
                     {msg.model && (
-                      <span className="font-mono text-[10.5px] text-stone-500">
-                        {msg.model}
+                      <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200/60" title={msg.model}>
+                        {formatModelDisplayName(msg.model)}
                       </span>
                     )}
                   </div>
-                  {msg.responseTimeMs !== undefined && (
-                    <div className="flex items-center gap-1 text-stone-400 shrink-0 text-[11px] font-mono" title="AI Response Time">
-                      <Clock className="w-3 h-3 text-stone-400" />
-                      <span>{(msg.responseTimeMs / 1000).toFixed(2)}s</span>
-                    </div>
-                  )}
+                  {msg.responseTimeMs !== undefined && (() => {
+                    const rt = formatResponseTime(msg.responseTimeMs);
+                    return (
+                      <div 
+                        className={`flex items-center gap-1 shrink-0 text-[10.5px] px-2 py-0.5 rounded-md border shadow-2xs font-mono ${rt.style}`}
+                        title={`AI Response Time: ${msg.responseTimeMs}ms (${rt.badgeText})`}
+                      >
+                        <span>{rt.icon}</span>
+                        <span>{rt.text}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
               {/* Candidate Words Ready Banner (Shown when starting a new chat) */}
