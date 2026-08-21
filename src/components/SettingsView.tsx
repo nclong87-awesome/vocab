@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Volume2, 
   VolumeX, 
-  
   Sparkles, 
   Cpu, 
   Check, 
@@ -1031,39 +1030,48 @@ export default function SettingsView({
         </div>
       </div>
 
-      {/* Section 5: Quiz Audio Preference */}
+      {/* Section 5: Audio Preferences */}
       <div className="bg-white border border-stone-200 p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-            <Volume2 className="w-4 h-4 text-stone-800" />
-            Quiz Session Audio
-          </h3>
-          <p className="text-xs text-stone-500 mt-1">
-            Automatically pronounce questions when transitioning between quiz items
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            const updated = { ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz };
-            setConfig(updated);
-            if (!updated.autoPlayAudioInQuiz) {
-              stopSpeech();
-            }
-            onSaveTTSConfig(updated);
-          }}
-          className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
-            config.autoPlayAudioInQuiz 
-              ? "bg-stone-900 border-stone-900 text-white" 
-              : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {config.autoPlayAudioInQuiz ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
-            <span>Auto-Play Quiz Voice: {config.autoPlayAudioInQuiz ? "Enabled" : "Disabled"}</span>
+        {/* Chat & Practice Audio */}
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-stone-800" />
+              Chat & Practice Audio
+            </h3>
+            <p className="text-xs text-stone-500 mt-1">
+              Automatically pronounce questions, flashcards, words added, and messages in chat and practice sessions
+            </p>
           </div>
-        </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const currentVal = config.autoPlayAudioInChat ?? config.autoPlayAudioInQuiz ?? true;
+              const updated = { 
+                ...config, 
+                autoPlayAudioInChat: !currentVal,
+                autoPlayAudioInQuiz: !currentVal,
+                autoPlayAudioOnWordAdded: !currentVal
+              };
+              setConfig(updated);
+              if (currentVal) {
+                stopSpeech();
+              }
+              onSaveTTSConfig(updated);
+            }}
+            className={`w-full p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
+              (config.autoPlayAudioInChat ?? config.autoPlayAudioInQuiz ?? true)
+                ? "bg-stone-900 border-stone-900 text-white" 
+                : "bg-white border-stone-200 text-stone-600 hover:border-stone-400"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {(config.autoPlayAudioInChat ?? config.autoPlayAudioInQuiz ?? true) ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4" />}
+              <span>Auto-Play Audio in Chat: {(config.autoPlayAudioInChat ?? config.autoPlayAudioInQuiz ?? true) ? "Enabled" : "Disabled"}</span>
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* Section 3: Text-to-Speech (TTS) Engine Selection */}

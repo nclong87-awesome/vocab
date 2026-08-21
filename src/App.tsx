@@ -115,6 +115,7 @@ export default function App() {
     setWords,
     stats,
     llmConfig,
+    ttsConfig,
     targetLanguage,
     nativeLanguage,
     appLanguage,

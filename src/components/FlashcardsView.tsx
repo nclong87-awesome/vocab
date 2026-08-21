@@ -102,7 +102,7 @@ export default function FlashcardsView({
       const nextIdx = currentIndex + 1;
       setCurrentIndex(nextIdx);
       const nextWord = sortedWords[nextIdx];
-      if (nextWord && nextWord.word && (ttsConfig?.autoPlayAudioInQuiz ?? true)) {
+      if (nextWord && nextWord.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
         speakWord(nextWord.word);
       }
     }

@@ -293,7 +293,9 @@ function ChatView({
       const nextQuestionText = lastMsg.nextQuestionSpeechText?.trim();
       const fallbackText = lastMsg.audioWord || quizSpeechText;
 
-      if (lastMsg.role === "assistant" && (fallbackText || nextQuestionText) && (ttsConfig.autoPlayAudioInQuiz ?? true)) {
+      const autoPlayInChat = ttsConfig.autoPlayAudioInChat ?? ttsConfig.autoPlayAudioInQuiz ?? true;
+
+      if (lastMsg.role === "assistant" && (fallbackText || nextQuestionText) && autoPlayInChat) {
         const audioTimer = setTimeout(() => {
           const langCode = getLanguageCode(targetLanguage);
 
@@ -323,7 +325,7 @@ function ChatView({
           clearTimeout(audioTimer);
           stopSpeech();
         };
-      } else if (ttsConfig.autoPlayAudioInQuiz === false) {
+      } else if (!autoPlayInChat) {
         stopSpeech();
       }
     } else {

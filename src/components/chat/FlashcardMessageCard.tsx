@@ -144,7 +144,7 @@ function FlashcardMessageCard({
     const nextIndex = Math.min(cards.length - 1, currentIndex + 1);
     setCurrentIndex(nextIndex);
     const nextCard = cards[nextIndex];
-    if (nextCard && nextCard.word && (ttsConfig?.autoPlayAudioInQuiz ?? true)) {
+    if (nextCard && nextCard.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
       handleSpeak(nextCard.word);
     }
     setTimeout(scrollToCardTop, 30);

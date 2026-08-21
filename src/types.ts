@@ -9,7 +9,9 @@ export interface TTSConfig {
   voice: string;
   apiKey?: string;
   customEndpoint?: string;
-  autoPlayAudioInQuiz: boolean;
+  autoPlayAudioInChat: boolean;
+  autoPlayAudioInQuiz?: boolean;
+  autoPlayAudioOnWordAdded?: boolean;
 }
 
 export type LLMProvider = 'ollama' | 'openai' | 'groq' | 'openrouter' | 'gemini' | '9flare' | 'cloudflare' | 'custom' | (string & {});

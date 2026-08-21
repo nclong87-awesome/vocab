@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChatMessage, Word, WordSense, LLMConfig, UserStats, QuizQuestion, FlashcardItem, QuizSuggestedWord } from "../types";
+import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, FlashcardItem, QuizSuggestedWord } from "../types";
 import {
   sendChatMessageService,
   checkWordDefinitionsService,
@@ -20,12 +20,14 @@ import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
+import { speakText as speakTextService } from "../utils/ttsService";
 
 interface UseChatProps {
   words: Word[];
   setWords: React.Dispatch<React.SetStateAction<Word[]>>;
   stats: UserStats;
   llmConfig: LLMConfig;
+  ttsConfig?: TTSConfig;
   targetLanguage: string;
   nativeLanguage: string;
   appLanguage?: string;
@@ -39,6 +41,7 @@ export function useChat({
   setWords,
   stats,
   llmConfig,
+  ttsConfig,
   targetLanguage,
   nativeLanguage,
   appLanguage,
@@ -1369,6 +1372,17 @@ export function useChat({
     if (newWordsToAdd.length === 1) {
       const addedWord = newWordsToAdd[0];
       onShowToast?.(t("toast_added_word", currentAppLang, { word: addedWord.word }));
+
+      // Auto-play audio if autoPlayAudioInChat setting is enabled
+      const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioOnWordAdded ?? true;
+      if (ttsConfig && isAutoPlayEnabled && addedWord.word) {
+        setTimeout(() => {
+          const textToSpeak = addedWord.definition && addedWord.definition.trim()
+            ? `${addedWord.word}. ${addedWord.definition}`
+            : (addedWord.translation && addedWord.translation.trim() ? `${addedWord.word}. ${addedWord.translation}` : addedWord.word);
+          speakTextService(textToSpeak, ttsConfig, llmConfig, targetLanguage || "English");
+        }, 150);
+      }
 
       const rawSuggested = Array.isArray(addedWord.suggestedWords) ? addedWord.suggestedWords : [];
       const collocatedStrings: string[] = [];

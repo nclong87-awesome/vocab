@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Word, UserStats } from "../types";
+import { Word, UserStats, TTSConfig, LLMConfig } from "../types";
 import { calculateNewStreak } from "../utils";
 import { 
   saveWordToDB, 
@@ -8,6 +8,7 @@ import {
   saveStatsToDB 
 } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
+import { speakText as speakTextService } from "../utils/ttsService";
 
 export function useVocabulary() {
   const [words, setWords] = useState<Word[]>([]);
@@ -60,7 +61,10 @@ export function useVocabulary() {
     wordData: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
       createdAt?: string;
       lastReviewed?: string | null;
-    }
+    },
+    ttsConfig?: TTSConfig,
+    llmConfig?: LLMConfig,
+    targetLanguage?: string
   ) => {
     const normalizedTarget = wordData.word.trim().toLowerCase();
     setWords(prev => {
@@ -84,6 +88,18 @@ export function useVocabulary() {
       );
       const updated = [newWord, ...prev];
       saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add word save error:", e));
+
+      // Auto-play audio if autoPlayAudioInChat setting is enabled
+      const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioOnWordAdded ?? true;
+      if (ttsConfig && isAutoPlayEnabled && newWord.word) {
+        setTimeout(() => {
+          const textToSpeak = newWord.definition && newWord.definition.trim()
+            ? `${newWord.word}. ${newWord.definition}`
+            : (newWord.translation && newWord.translation.trim() ? `${newWord.word}. ${newWord.translation}` : newWord.word);
+          speakTextService(textToSpeak, ttsConfig, llmConfig, targetLanguage || "English");
+        }, 150);
+      }
+
       return updated;
     });
   }, []);

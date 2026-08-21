@@ -6,7 +6,9 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   pitch: 1.0,
   model: "gemini-3.6-flash",
   voice: "",
+  autoPlayAudioInChat: true,
   autoPlayAudioInQuiz: true,
+  autoPlayAudioOnWordAdded: true,
 };
 
 export function getLanguageCode(langName?: string): string {
