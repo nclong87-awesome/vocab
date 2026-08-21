@@ -496,6 +496,7 @@ function ChatView({
         isTyping={isTyping}
         conversationalState={conversationalState}
         targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
         showToast={showToast}
         handleSubmit={handleSubmit}
         handleImageFileChange={handleImageFileChange}

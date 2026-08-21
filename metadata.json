@@ -1,6 +1,6 @@
 {
   "name": "Vocabulary Learner",
   "description": "A clean, modern vocabulary builder that generates personalized words, definitions, translations, examples, and interactive quizzes using Gemini.",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,5 +1,7 @@
-import React from "react";
-import { Camera, Send, X } from "lucide-react";
+import React, { useState, useRef, useCallback } from "react";
+import { Camera, Mic, MicOff, Send, X } from "lucide-react";
+import { useSpeechToText } from "../../hooks/useSpeechToText";
+import { getLanguageCode } from "../../utils/ttsService";
 
 interface ChatInputFormProps {
   inputText: string;
@@ -11,6 +13,7 @@ interface ChatInputFormProps {
   isTyping: boolean;
   conversationalState: string;
   targetLanguage: string;
+  nativeLanguage?: string;
   showToast: (msg: string) => void;
   handleSubmit: (e: React.FormEvent) => void;
   handleImageFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -26,13 +29,109 @@ function ChatInputForm({
   setIsPhotoModalOpen,
   isTyping,
   conversationalState,
+  targetLanguage,
+  nativeLanguage,
+  showToast,
   handleSubmit,
   handleImageFileChange,
   fileInputRef,
   inputRef,
 }: ChatInputFormProps) {
+  const baseTextRef = useRef("");
+  const [speechLangMode, setSpeechLangMode] = useState<"target" | "native">("target");
+
+  const currentSpeechLang = speechLangMode === "target" ? targetLanguage : (nativeLanguage || "English");
+
+  const handleTranscript = useCallback((transcript: string, isFinal: boolean) => {
+    const base = baseTextRef.current.trim();
+    const updated = base ? `${base} ${transcript.trim()}` : transcript.trim();
+    setInputText(updated);
+    if (isFinal) {
+      baseTextRef.current = updated;
+    }
+  }, [setInputText]);
+
+  const handleSpeechError = useCallback((errMsg: string) => {
+    showToast(errMsg);
+  }, [showToast]);
+
+  const {
+    isSupported,
+    isListening,
+    startListening,
+    stopListening,
+  } = useSpeechToText({
+    targetLanguage: currentSpeechLang,
+    onTranscript: handleTranscript,
+    onError: handleSpeechError,
+  });
+
+  const handleMicClick = useCallback(() => {
+    if (!isSupported) {
+      showToast("⚠️ Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.");
+      return;
+    }
+
+    if (isListening) {
+      stopListening();
+    } else {
+      baseTextRef.current = inputText;
+      // Request mic permission and start recognition upon this explicit user click
+      startListening(getLanguageCode(currentSpeechLang));
+    }
+  }, [isSupported, isListening, inputText, currentSpeechLang, startListening, stopListening, showToast]);
+
+  const onFormSubmit = useCallback((e: React.FormEvent) => {
+    if (isListening) {
+      stopListening();
+    }
+    handleSubmit(e);
+  }, [isListening, stopListening, handleSubmit]);
+
   return (
-    <form onSubmit={handleSubmit} className="p-3 bg-white border-t border-stone-200 shrink-0">
+    <form onSubmit={onFormSubmit} className="p-3 bg-white border-t border-stone-200 shrink-0">
+      {/* Live Voice Recording Status Bar */}
+      {isListening && (
+        <div className="mb-2.5 p-2 px-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs animate-fadeIn">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+            </span>
+            <span className="text-xs font-semibold text-rose-900 truncate">
+              Listening in <strong className="font-bold">{currentSpeechLang}</strong>... Speak now
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {nativeLanguage && nativeLanguage.toLowerCase() !== targetLanguage.toLowerCase() && (
+              <button
+                type="button"
+                onClick={() => {
+                  const newMode = speechLangMode === "target" ? "native" : "target";
+                  setSpeechLangMode(newMode);
+                  const nextLang = newMode === "target" ? targetLanguage : nativeLanguage;
+                  stopListening();
+                  setTimeout(() => {
+                    startListening(getLanguageCode(nextLang));
+                  }, 120);
+                }}
+                className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-rose-700 hover:bg-rose-100 cursor-pointer transition-colors"
+                title={`Switch speech language to ${speechLangMode === "target" ? nativeLanguage : targetLanguage}`}
+              >
+                Switch to {speechLangMode === "target" ? nativeLanguage : targetLanguage}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={stopListening}
+              className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white cursor-pointer transition-colors shadow-2xs"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Attached image preview banner */}
       {selectedImage && (
         <div className="mb-2.5 p-2 bg-amber-50/90 border border-amber-200/80 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
@@ -60,7 +159,13 @@ function ChatInputForm({
         </div>
       )}
 
-      <div className="flex gap-2 items-center">
+      <div
+        className={`flex items-center gap-1 sm:gap-2 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-full border transition-all shadow-2xs ${
+          isListening
+            ? "bg-rose-50/70 border-rose-300 ring-2 ring-rose-200"
+            : "bg-stone-50 hover:bg-stone-100/70 focus-within:bg-white border-stone-200 focus-within:border-stone-400 focus-within:ring-2 focus-within:ring-stone-400/20"
+        }`}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -69,20 +174,8 @@ function ChatInputForm({
           className="hidden"
           id="chat-file-input"
         />
-        <button
-          type="button"
-          onClick={() => setIsPhotoModalOpen(true)}
-          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs ${
-            selectedImage
-              ? "bg-amber-400 text-stone-950 shadow-xs scale-102 border border-amber-500/30"
-              : "bg-stone-100 hover:bg-stone-200/80 text-stone-700 hover:scale-105"
-          }`}
-          title="Take a picture, upload photo, or paste image to extract vocabulary with AI Vision"
-          id="chat-upload-photo-btn"
-        >
-          <Camera className="w-5 h-5" />
-        </button>
 
+        {/* Embedded Chat Text Input (Left & Center) */}
         <input
           ref={inputRef}
           type="text"
@@ -90,27 +183,72 @@ function ChatInputForm({
           onChange={(e) => setInputText(e.target.value)}
           disabled={isTyping}
           placeholder={
-            conversationalState === "confirming_add_word"
+            isListening
+              ? `Listening in ${currentSpeechLang}... (speak now)`
+              : conversationalState === "confirming_add_word"
               ? "Type 'confirm' to add word, or 'cancel'..."
               : conversationalState === "adding_word"
               ? "Type another word to add, or ask a question..."
               : selectedImage
-              ? "Add an optional focus note (e.g. 'Focus on food items') or press Enter to analyze..."
-              : `Chat or paste an image (Ctrl+V) / pick photo to extract vocabulary...`
+              ? "Add an optional focus note (e.g. 'Focus on food items')..."
+              : `Ask anything or practice vocabulary...`
           }
-          className="flex-1 bg-stone-50 hover:bg-stone-100/50 focus:bg-white text-stone-900 border border-stone-200 focus:border-stone-400 focus:ring-0 rounded-xl px-4 py-3 text-sm sm:text-base transition-colors placeholder:text-stone-400 font-medium"
+          className="flex-1 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 px-3 py-1.5 text-sm sm:text-base text-stone-900 placeholder:text-stone-400 font-medium min-w-0"
           id="chat-text-input"
         />
+
+        {/* Embedded Camera / Photo Button (Right, next to Mic) */}
+        <button
+          type="button"
+          onClick={() => setIsPhotoModalOpen(true)}
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+            selectedImage
+              ? "bg-amber-400 text-stone-950 shadow-xs scale-105"
+              : "text-stone-500 hover:text-stone-900 hover:bg-stone-200/70 active:scale-95"
+          }`}
+          title="Take a picture, upload photo, or paste image to extract vocabulary"
+          id="chat-upload-photo-btn"
+        >
+          <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+        </button>
+
+        {/* Embedded Speech-to-Text Mic Button (Right, next to Camera) */}
+        <button
+          type="button"
+          onClick={handleMicClick}
+          disabled={isTyping}
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+            isListening
+              ? "bg-rose-600 hover:bg-rose-700 text-white ring-2 ring-rose-300 scale-105 animate-pulse shadow-2xs"
+              : "text-stone-500 hover:text-stone-900 hover:bg-stone-200/70 active:scale-95"
+          }`}
+          title={
+            isListening
+              ? "Listening... Click to finish speaking"
+              : `Voice input (Web Speech-to-Text in ${currentSpeechLang})`
+          }
+          id="chat-voice-input-btn"
+        >
+          {isListening ? (
+            <MicOff className="w-4 h-4 sm:w-5 sm:h-5" />
+          ) : (
+            <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
+          )}
+        </button>
+
+        {/* Embedded Send Button (Right) */}
         <button
           type="submit"
           disabled={(!inputText.trim() && !selectedImage) || isTyping}
-          className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-sm shrink-0 ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all shrink-0 ${
             (inputText.trim() || selectedImage) && !isTyping
-              ? "bg-stone-900 hover:bg-stone-800 text-white cursor-pointer hover:scale-102"
-              : "bg-stone-100 text-stone-400 cursor-not-allowed"
+              ? "bg-stone-900 hover:bg-stone-800 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-xs"
+              : "text-stone-300 cursor-not-allowed opacity-40"
           }`}
+          title="Send message"
+          id="chat-send-btn"
         >
-          <Send className="w-5 h-5" />
+          <Send className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
         </button>
       </div>
     </form>
@@ -118,3 +256,4 @@ function ChatInputForm({
 }
 
 export default React.memo(ChatInputForm);
+
