@@ -15,6 +15,7 @@ import {
   getCandidateWordsForFlashcards,
   getQuizCandidates,
   getFlashcardCandidates,
+  isWordLearnedOrStudied,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
@@ -288,6 +289,7 @@ export function useChat({
     if (practiceMode === "auto") {
       const flashcardCount = flashcardCandidates.length;
       const quizCount = dueQuizCandidates.length;
+      const newUnstudiedCount = flashcardCandidates.filter((w) => !isWordLearnedOrStudied(w)).length;
 
       const actions: { label: string; action: string }[] = [];
 
@@ -312,10 +314,17 @@ export function useChat({
         });
       }
 
+      const breakdownText =
+        newUnstudiedCount > 0 && quizCount > 0
+          ? ` (**${newUnstudiedCount} new**, **${quizCount} review**)`
+          : newUnstudiedCount > 0
+          ? ` (**${newUnstudiedCount} new**)`
+          : ` (**${quizCount} review**)`;
+
       const choiceMsg: ChatMessage = {
         id: `practice-mode-choice-${Date.now()}`,
         role: "assistant",
-        content: `### 🎯 Practice Session Overview\n\nYou have **${flashcardCount} word(s)** ready for flashcard review and **${quizCount} word(s)** due for quiz review today.\n\nHow would you like to practice?`,
+        content: `### 🎯 Practice Session Overview\n\nYou have **${flashcardCount} word(s)** ready for practice${breakdownText}.\n\nHow would you like to practice?`,
         timestamp: new Date().toISOString(),
         suggestedActions: actions,
       };
@@ -323,7 +332,7 @@ export function useChat({
       return;
     }
 
-    const unstudiedWords = activeWords.filter(w => !w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0));
+    const unstudiedWords = activeWords.filter(w => !isWordLearnedOrStudied(w));
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
 
     // Determine if we should launch Quiz mode

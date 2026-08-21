@@ -484,51 +484,32 @@ export function hasUnresolvedQuizMistake(word: Word): boolean {
 }
 
 /**
+ * Checks whether a word is brand new and has never been studied/practiced.
+ */
+export function isNewUnstudiedWord(word: Word): boolean {
+  return !isWordLearnedOrStudied(word);
+}
+
+/**
  * Determines whether a word is eligible as a candidate for flashcard study:
- * 1. Has never been reviewed/practiced before (!word.lastReviewed or no practice baseline) -> ALWAYS eligible immediately.
- * 2. Has an unresolved quiz error (the most recent practice event was 'quiz_incorrect') -> ALWAYS eligible immediately for remedial study.
- * 3. Has reached its calculated dynamic review date (isWordEligibleForReview) or passed cooldown.
- * 4. Mastered word that hasn't been practiced/reviewed in over 7 days (diffDays > 7) or has decayed.
+ * 1. Unstudied / new words (!isWordLearnedOrStudied) -> ALWAYS eligible immediately.
+ * 2. Words with prior study -> eligible when their scheduled review date is reached (isWordEligibleForReview)
+ *    or when custom cooldown hours (if specified) have elapsed.
  */
 export function isFlashcardCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
-  const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const isNeverPracticed = !lastPracticeDate && !word.lastReviewed;
-
-  // Condition 1: Never reviewed / never practiced before (brand new word) -> ALWAYS eligible immediately!
-  if (isNeverPracticed) {
+  // 1. Never studied / brand new words are immediately eligible for initial flashcard introduction
+  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
     return true;
   }
 
-  // Condition 2: Has an unresolved quiz mistake (most recent practice was a quiz error)
-  if (hasUnresolvedQuizMistake(word)) {
-    return true;
-  }
-
-  // Custom cooldown override if explicitly passed (> 0)
+  // 2. Custom cooldown override if explicitly passed (> 0)
   if (customCooldownHours !== undefined && customCooldownHours > 0) {
     const hoursSinceReview = getHoursSinceLastReview(word, now);
-    if (hoursSinceReview < customCooldownHours) {
-      return false;
-    }
-  } else {
-    // Dynamic eligibility check based on word's scheduled nextReviewDate
-    if (!isWordEligibleForReview(word, now)) {
-      return false;
-    }
+    return hoursSinceReview >= customCooldownHours;
   }
 
-  // Condition 3: Unlearned / unmastered word that is eligible
-  if (!word.learned) {
-    return true;
-  }
-
-  // Condition 4: Mastered word that hasn't been used for flashcard or quiz in over 7 days or is due
-  const daysSinceReview = getDaysSinceLastReview(word, now);
-  if (daysSinceReview > 7 || isWordEligibleForReview(word, now)) {
-    return true;
-  }
-
-  return false;
+  // 3. Dynamic eligibility check based on word's scheduled nextReviewDate
+  return isWordEligibleForReview(word, now);
 }
 
 /**
@@ -554,18 +535,18 @@ export function getCandidateWordsForFlashcards(
   // Categorize eligible words by priority to give the most impactful words first:
   // 1. Words with unresolved quiz errors (urgent remedial review)
   // 2. Never learned / unreviewed words
-  // 3. Words idle > 7 days or memory decayed
+  // 3. Due spaced repetition reviews
   const quizErrorWords: Word[] = [];
   const neverLearnedWords: Word[] = [];
-  const idleSevenDaysWords: Word[] = [];
+  const srsDueWords: Word[] = [];
 
   for (const word of eligibleWords) {
     if (hasUnresolvedQuizMistake(word)) {
       quizErrorWords.push(word);
-    } else if (!word.learned || !word.lastReviewed) {
+    } else if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
       neverLearnedWords.push(word);
     } else {
-      idleSevenDaysWords.push(word);
+      srsDueWords.push(word);
     }
   }
 
@@ -574,7 +555,7 @@ export function getCandidateWordsForFlashcards(
   const prioritized = [
     ...shuffle(quizErrorWords),
     ...shuffle(neverLearnedWords),
-    ...shuffle(idleSevenDaysWords),
+    ...shuffle(srsDueWords),
   ];
 
   return prioritized.slice(0, count);
@@ -595,8 +576,10 @@ export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date
  * and has reached its scheduled review date according to its strength history.
  */
 export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
-  if (!isWordLearnedOrStudied(word)) return false;
-  if (!word.lastReviewed) return true;
+  // Quiz requires prior study/exposure
+  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+    return false;
+  }
   if (customCooldownHours !== undefined && customCooldownHours > 0) {
     const hours = getHoursSinceLastReview(word, now);
     return hours >= customCooldownHours;

@@ -17,7 +17,7 @@ import {
   Filter
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
-import { isWordEligibleForReview } from "../utils/spacedRepetition";
+import { isWordEligibleForReview, isWordLearnedOrStudied } from "../utils/spacedRepetition";
 import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { t } from "../config/i18n";
 
@@ -60,7 +60,7 @@ export default function FlashcardsView({
 
     for (const w of words) {
       if (w.starred) starredCount++;
-      if (!w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0)) newCount++;
+      if (!isWordLearnedOrStudied(w)) newCount++;
       else if (isWordEligibleForReview(w, now)) dueCount++;
     }
 
@@ -74,9 +74,9 @@ export default function FlashcardsView({
     let subset = [...words];
 
     if (filterCategory === "new") {
-      subset = subset.filter(w => !w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0));
+      subset = subset.filter(w => !isWordLearnedOrStudied(w));
     } else if (filterCategory === "due") {
-      subset = subset.filter(w => isWordEligibleForReview(w, now));
+      subset = subset.filter(w => isWordLearnedOrStudied(w) && isWordEligibleForReview(w, now));
     } else if (filterCategory === "starred") {
       subset = subset.filter(w => w.starred);
     }

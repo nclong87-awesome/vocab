@@ -5,18 +5,16 @@ import {
   Clock,
   Timer,
   CheckCircle2,
-  Play,
   Volume2,
   Star,
   Search,
   BarChart3,
-  Flame,
   History,
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
 import { Word } from "../../types";
-import { getNextReviewInfo } from "../../utils/spacedRepetition";
+import { getNextReviewInfo, isWordLearnedOrStudied } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "./StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
@@ -46,8 +44,7 @@ export default function PracticeTimeline({
   speakingWordId,
   onSpeakWord,
   onToggleStarWord,
-  onUpdateWord,
-  onStartPractice
+  onUpdateWord
 }: PracticeTimelineProps) {
   const [viewMode, setViewMode] = useState<TimelineViewMode>("calendar");
   const [horizonFilter, setHorizonFilter] = useState<HorizonFilter>("all");
@@ -59,28 +56,36 @@ export default function PracticeTimeline({
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 18; // 18 items per page is optimal for 3 columns
 
+  // Live timer reference to keep counts accurate without page reloads
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    setNow(new Date());
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [words]);
+
   // Reset pagination on filters or view toggles
   useEffect(() => {
     setCurrentPage(1);
   }, [horizonFilter, selectedDayOffset, searchQuery, viewMode]);
 
-  const now = useMemo(() => new Date(), []);
-
   // Process all words with scheduling info
   const processedWords = useMemo<WordWithReview[]>(() => {
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
     return words.map((word) => {
       const reviewInfo = getNextReviewInfo(word, now);
       const targetDate = new Date(reviewInfo.nextReviewDate);
 
-      // Calculate calendar day offset from today (0 = today or past due, 1 = tomorrow, etc.)
+      // Calculate calendar day offset from today (0 = today / due now, 1 = tomorrow / next 24h, etc.)
       let daysFromNow = 0;
       if (reviewInfo.isDue) {
         daysFromNow = 0;
       } else {
-        const startOfTarget = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()).getTime();
-        daysFromNow = Math.max(0, Math.round((startOfTarget - startOfToday) / (1000 * 60 * 60 * 24)));
+        const diffMs = targetDate.getTime() - now.getTime();
+        const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+        daysFromNow = diffDays;
       }
 
       // Time slot
@@ -111,8 +116,8 @@ export default function PracticeTimeline({
   // Key Aggregated Metrics
   const metrics = useMemo(() => {
     const dueNow = processedWords.filter((w) => w.reviewInfo.isDue);
-    const newUnstudied = processedWords.filter((w) => !w.word.lastReviewed || (!w.word.learned && (w.word.strength ?? 0) === 0));
-    const dueSpaced = processedWords.filter((w) => w.word.lastReviewed && w.reviewInfo.isDue);
+    const newUnstudied = dueNow.filter((w) => !isWordLearnedOrStudied(w.word));
+    const dueSpaced = dueNow.filter((w) => isWordLearnedOrStudied(w.word));
     const dueToday = processedWords.filter((w) => w.daysFromNow === 0);
     const dueTomorrow = processedWords.filter((w) => w.daysFromNow === 1);
     const dueThisWeek = processedWords.filter((w) => w.daysFromNow >= 0 && w.daysFromNow <= 7);
@@ -218,13 +223,6 @@ export default function PracticeTimeline({
 
   const totalPages = Math.ceil(displayWords.length / pageSize);
 
-  const handleStartPracticeDue = () => {
-    const targetWords = metrics.dueNow.length > 0 ? metrics.dueNow.map((w) => w.word) : processedWords.slice(0, 10).map((w) => w.word);
-    if (onStartPractice && targetWords.length > 0) {
-      onStartPractice(targetWords);
-    }
-  };
-
   const formatTargetFull = (date: Date) => {
     return date.toLocaleDateString("en-US", {
       month: "short",
@@ -237,96 +235,6 @@ export default function PracticeTimeline({
 
   return (
     <div className="space-y-6" id="practice-timeline-container">
-      {/* Overview Cards & Practice Action Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
-        {/* Due Now Action Card */}
-        <div className="md:col-span-2 bg-stone-900 text-white p-5 rounded-2xl flex flex-col justify-between shadow-sm relative overflow-hidden">
-          <div className="space-y-2 z-10">
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 bg-amber-400 text-stone-950 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md">
-                <Flame className="w-3 h-3 text-stone-950" />
-                <span>Immediate Practice</span>
-              </span>
-              <span className="text-xs font-mono text-amber-400 font-bold">
-                {metrics.dueNow.length} {metrics.dueNow.length === 1 ? "word" : "words"} ready
-              </span>
-            </div>
-
-            <h3 className="text-xl font-bold tracking-tight text-stone-100">
-              {metrics.dueNow.length > 0
-                ? `${metrics.dueNow.length} Words Eligible for Practice`
-                : "All Vocabulary Current"}
-            </h3>
-            <p className="text-xs text-stone-300 font-serif italic max-w-md leading-relaxed">
-              {metrics.dueNow.length > 0
-                ? `Includes ${metrics.newUnstudied.length} new unstudied word(s) and ${metrics.dueSpaced.length} spaced repetition review(s) ready.`
-                : "Great job! All your words are spaced out ahead. You can still do an early practice refresher anytime."}
-            </p>
-          </div>
-
-          <div className="pt-4 mt-2 border-t border-stone-800 flex items-center justify-between gap-3 z-10">
-            <div className="text-[11px] text-stone-400 font-mono">
-              Avg. Interval: <strong className="text-white">{metrics.avgIntervalDays} days</strong>
-            </div>
-
-            {onStartPractice && (
-              <button
-                onClick={handleStartPracticeDue}
-                className="px-4 py-2 bg-amber-400 hover:bg-amber-300 active:scale-95 text-stone-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                id="start-timeline-practice-btn"
-              >
-                <Play className="w-3.5 h-3.5 fill-stone-950" />
-                <span>{metrics.dueNow.length > 0 ? "Practice Due Words" : "Practice Flashcards"}</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Next 24 Hours */}
-        <button
-          onClick={() => {
-            setHorizonFilter("today");
-            setSelectedDayOffset(null);
-          }}
-          className={`p-4 border text-left transition-all rounded-2xl space-y-2 cursor-pointer ${
-            horizonFilter === "today"
-              ? "bg-amber-50/50 border-amber-400 ring-2 ring-amber-400/20 shadow-xs"
-              : "bg-white border-stone-200/80 hover:border-amber-300 shadow-3xs"
-          }`}
-        >
-          <div className="flex justify-between items-center text-stone-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Due Today</span>
-            <Clock className="w-3.5 h-3.5 text-amber-600" />
-          </div>
-          <div className="text-2xl font-bold text-stone-900 tracking-tight">{metrics.dueToday.length}</div>
-          <p className="text-[11px] text-stone-500 font-serif italic">
-            Scheduled within the next 24 hours
-          </p>
-        </button>
-
-        {/* Due This Week */}
-        <button
-          onClick={() => {
-            setHorizonFilter("week");
-            setSelectedDayOffset(null);
-          }}
-          className={`p-4 border text-left transition-all rounded-2xl space-y-2 cursor-pointer ${
-            horizonFilter === "week"
-              ? "bg-indigo-50/50 border-indigo-400 ring-2 ring-indigo-400/20 shadow-xs"
-              : "bg-white border-stone-200/80 hover:border-indigo-300 shadow-3xs"
-          }`}
-        >
-          <div className="flex justify-between items-center text-stone-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-800">Next 7 Days</span>
-            <CalendarIcon className="w-3.5 h-3.5 text-indigo-600" />
-          </div>
-          <div className="text-2xl font-bold text-stone-900 tracking-tight">{metrics.dueThisWeek.length}</div>
-          <p className="text-[11px] text-stone-500 font-serif italic">
-            Scheduled for review this week
-          </p>
-        </button>
-      </div>
-
       {/* Main Timeline Card Container */}
       <div className="bg-white border border-stone-200/80 p-5 sm:p-6 space-y-6 rounded-2xl shadow-3xs">
         {/* Header with View Toggle & Filters */}
