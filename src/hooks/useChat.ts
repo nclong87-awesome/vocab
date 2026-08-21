@@ -1733,11 +1733,30 @@ export function useChat({
 
     try {
       const existingWordSet = new Set(words.map((w) => w.word.trim().toLowerCase()));
+      const targetTopicClean = topic.toLowerCase().trim();
+      const existingCategoryWords = Array.from(
+        new Set(
+          words
+            .filter((w) => {
+              if (!w.category) return false;
+              const catClean = w.category.toLowerCase().trim();
+              return (
+                catClean === targetTopicClean ||
+                catClean.includes(targetTopicClean) ||
+                targetTopicClean.includes(catClean)
+              );
+            })
+            .map((w) => w.word.trim())
+            .filter((w) => w.length > 0)
+        )
+      );
+
       const res = await generateRandomWordsService({
         topic: topic,
         targetLanguage,
         nativeLanguage,
         count,
+        existingWords: existingCategoryWords,
         cfg: configForServer,
       });
 

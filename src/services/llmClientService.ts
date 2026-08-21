@@ -1487,10 +1487,11 @@ export async function generateRandomWordsService(params: {
   targetLanguage?: string;
   nativeLanguage?: string;
   count?: number;
+  existingWords?: string[];
   cfg?: LLMConfig;
   signal?: AbortSignal;
 }): Promise<{ words: any[]; provider?: string; model?: string; responseTimeMs?: number }> {
-  const { topic, targetLanguage, nativeLanguage, count = 5, cfg, signal } = params;
+  const { topic, targetLanguage, nativeLanguage, count = 5, existingWords, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
   notifyLlmRequestStartFromConfig(llmConfig);
   const userNative = nativeLanguage || "Vietnamese";
@@ -1499,7 +1500,7 @@ export async function generateRandomWordsService(params: {
 
   const prompt = `Generate ${count} practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the topic "${topic || "Vocabulary"}".
 The user's native language is "${userNative}".
-
+${Array.isArray(existingWords) && existingWords.length > 0 ? `\nCRITICAL DO-NOT-DUPLICATE DIRECTIVE:\nThe user ALREADY has the following words in their collection for the "${topic}" category:\n${JSON.stringify(existingWords)}\nDO NOT generate or include any of these existing words! Generate ${count} NEW, DISTINCT words for this category that are NOT in the list above.\n` : ""}
 CRITICAL INSTRUCTIONS:
 - Every word generated SHOULD BE unique and practical for a language learner.
 - "word": The target vocabulary word or expression STRICTLY in the target language (${userTarget}), e.g. "hello".
@@ -1549,7 +1550,7 @@ CRITICAL INSTRUCTIONS:
     const res = await fetchWithTimeout("/api/generate-random-words", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, llmConfig }),
+      body: JSON.stringify({ topic, targetLanguage: userTarget, nativeLanguage: userNative, count, existingWords, llmConfig }),
       signal
     });
 

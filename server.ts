@@ -1348,14 +1348,14 @@ app.post("/api/generate-random-words", async (req, res) => {
   });
 
   try {
-    const { topic, targetLanguage, nativeLanguage, count = 5, llmConfig } = req.body;
+    const { topic, targetLanguage, nativeLanguage, count = 5, existingWords, llmConfig } = req.body;
 
     const userNative = nativeLanguage || "English";
     const userTarget = targetLanguage || "Spanish";
 
     const prompt = `Generate ${count} practical vocabulary words or expressions in target language "${userTarget}" relevant to or expanding on the topic "${topic || "Vocabulary"}".
 The user's native language is "${userNative}".
-
+${Array.isArray(existingWords) && existingWords.length > 0 ? `\nCRITICAL DO-NOT-DUPLICATE DIRECTIVE:\nThe user ALREADY has the following words in their collection for the "${topic}" category:\n${JSON.stringify(existingWords)}\nDO NOT generate or include any of these existing words! Generate ${count} NEW, DISTINCT words for this category that are NOT in the list above.\n` : ""}
 CRITICAL INSTRUCTIONS:
 - Every word generated SHOULD BE unique and practical for a language learner.
 - "word": The target vocabulary word or expression STRICTLY in the target language (${userTarget}), e.g. "hello".
