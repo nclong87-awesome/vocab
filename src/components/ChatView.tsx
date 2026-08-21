@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Upload } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider } from "../types";
-import { speakText, getLanguageCode } from "../utils/ttsService";
+import { speakText, stopSpeech, getLanguageCode } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
 import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 import MessageList from "./chat/MessageList";
@@ -319,12 +319,24 @@ function ChatView({
             speakText(fallbackText, ttsConfig, llmConfig, langCode);
           }
         }, 350);
-        return () => clearTimeout(audioTimer);
+        return () => {
+          clearTimeout(audioTimer);
+          stopSpeech();
+        };
+      } else if (ttsConfig.autoPlayAudioInQuiz === false) {
+        stopSpeech();
       }
     } else {
       lastMessageIdRef.current = null;
     }
   }, [messages, ttsConfig, llmConfig, targetLanguage, scrollToTopOfLatestMessage]);
+
+  // Stop speech when ChatView unmounts
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
 
   // Auto focus textbox on mount
   useEffect(() => {

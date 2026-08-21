@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { 
   Volume2, 
   ChevronLeft, 
@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
-import { speakText, getLanguageCode } from "../../utils/ttsService";
+import { speakText, stopSpeech, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
 
 interface FlashcardMessageCardProps {
@@ -124,18 +124,27 @@ function FlashcardMessageCard({
     }
   };
 
+  // Stop any playing audio when card unmounts
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
+
   const handlePrevious = () => {
     if (currentIndex <= 0) return;
+    stopSpeech();
     setCurrentIndex((prev) => Math.max(0, prev - 1));
     setTimeout(scrollToCardTop, 30);
   };
 
   const handleNext = () => {
     if (currentIndex >= cards.length - 1) return;
+    stopSpeech();
     const nextIndex = Math.min(cards.length - 1, currentIndex + 1);
     setCurrentIndex(nextIndex);
     const nextCard = cards[nextIndex];
-    if (nextCard && nextCard.word) {
+    if (nextCard && nextCard.word && (ttsConfig?.autoPlayAudioInQuiz ?? true)) {
       handleSpeak(nextCard.word);
     }
     setTimeout(scrollToCardTop, 30);

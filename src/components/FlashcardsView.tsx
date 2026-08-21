@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Volume2, 
@@ -14,7 +14,7 @@ import {
   Layers
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
-import { speakText as speakTextService, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
+import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { t } from "../config/i18n";
 
 interface FlashcardsViewProps {
@@ -88,13 +88,21 @@ export default function FlashcardsView({
     );
   }
 
+  // Stop speech when unmounting
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
+
   const handleNext = () => {
     setIsFlipped(false);
+    stopSpeech();
     if (currentIndex < sortedWords.length - 1) {
       const nextIdx = currentIndex + 1;
       setCurrentIndex(nextIdx);
       const nextWord = sortedWords[nextIdx];
-      if (nextWord && nextWord.word) {
+      if (nextWord && nextWord.word && (ttsConfig?.autoPlayAudioInQuiz ?? true)) {
         speakWord(nextWord.word);
       }
     }
@@ -102,6 +110,7 @@ export default function FlashcardsView({
 
   const handlePrev = () => {
     setIsFlipped(false);
+    stopSpeech();
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
     }

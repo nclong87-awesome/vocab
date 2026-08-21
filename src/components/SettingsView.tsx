@@ -75,6 +75,10 @@ export default function SettingsView({
   onSelectLanguages
 }: SettingsViewProps) {
   const [config, setConfig] = useState<TTSConfig>(ttsConfig);
+
+  useEffect(() => {
+    setConfig(ttsConfig);
+  }, [ttsConfig]);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testText, setTestText] = useState("");
   const [isTesting, setIsTesting] = useState(false);
@@ -1041,7 +1045,14 @@ export default function SettingsView({
 
         <button
           type="button"
-          onClick={() => setConfig({ ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz })}
+          onClick={() => {
+            const updated = { ...config, autoPlayAudioInQuiz: !config.autoPlayAudioInQuiz };
+            setConfig(updated);
+            if (!updated.autoPlayAudioInQuiz) {
+              stopSpeech();
+            }
+            onSaveTTSConfig(updated);
+          }}
           className={`p-3 border text-xs font-semibold flex items-center justify-between cursor-pointer transition-all ${
             config.autoPlayAudioInQuiz 
               ? "bg-stone-900 border-stone-900 text-white" 
