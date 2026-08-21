@@ -1098,9 +1098,6 @@ app.post("/api/test-llm", async (req, res) => {
 // 4. Auto-fill a single word or deduce word from natural language description
 app.post("/api/autofill-word", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { word, hint, targetLanguage, nativeLanguage, llmConfig } = req.body;
@@ -1174,11 +1171,11 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
     const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/autofill-word] Request aborted by client");
       return;
     }
@@ -1192,9 +1189,6 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 // 4.1. Check multiple definitions or deduce vocabulary word from natural language request
 app.post("/api/check-word-definitions", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { word, hint, targetLanguage, nativeLanguage, llmConfig } = req.body;
@@ -1299,7 +1293,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
     let result = cleanAndParseJson(text);
     const parsedProvider = result?.provider || llmConfig?.provider || "gemini";
     const parsedModel = result?.model || sanitizeModel(parsedProvider, llmConfig?.model);
@@ -1329,7 +1323,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       serverLockedModels: getServerLockedModelsArray()
     });
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/check-word-definitions] Request aborted by client");
       return;
     }
@@ -1343,9 +1337,6 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
 // 4.5. Generate random words for collection
 app.post("/api/generate-random-words", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { topic, targetLanguage, nativeLanguage, count = 5, existingWords, llmConfig } = req.body;
@@ -1386,7 +1377,7 @@ CRITICAL INSTRUCTIONS:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
     const result = cleanAndParseJson(text);
     const words = extractWordsFromPayload(result);
     const parsedProvider = result?.provider || llmConfig?.provider || "gemini";
@@ -1402,7 +1393,7 @@ CRITICAL INSTRUCTIONS:
       ...(typeof result === "object" && !Array.isArray(result) ? result : {})
     });
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/generate-random-words] Request aborted by client");
       return;
     }
@@ -1416,9 +1407,6 @@ CRITICAL INSTRUCTIONS:
 // 4.8. Fix Grammar & Polish Sentence
 app.post("/api/fix-grammar", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { userText, targetLanguage, nativeLanguage, llmConfig } = req.body;
@@ -1468,11 +1456,11 @@ CRITICAL INSTRUCTIONS:
 }`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
     const result = cleanAndParseJson(text);
     res.json(result);
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/fix-grammar] Request aborted by client");
       return;
     }
@@ -1954,9 +1942,6 @@ function normalizePerformanceAnalysis(raw: any): any {
 // 6. Analyze Performance with AI endpoint
 app.post("/api/analyze-performance", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { 
@@ -2089,9 +2074,6 @@ ALSO INCLUDE:
 // 7. Interactive Chat Assistant endpoint
 app.post("/api/chat", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig } = req.body;
@@ -2258,9 +2240,6 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 // Flashcard Generation endpoint (supports batch of 3 words or single word)
 app.post(["/api/generate-flashcards", "/api/generate-flashcard"], async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { words, word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
@@ -2322,7 +2301,7 @@ Output MUST be strictly valid JSON matching this schema:
     const schemaDesc = `Array of Flashcard objects with word, pronunciation, partOfSpeech, translation, definition, example, category, suggestedWords (concise array of at most 1-2 items with word, translation, hint).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
     const cleaned = cleanJsonResponse(text);
     const parsed = cleanAndParseJson(cleaned);
 
@@ -2387,7 +2366,7 @@ Output MUST be strictly valid JSON matching this schema:
       ...(normalizedCards[0] || {})
     });
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/generate-flashcards] Request aborted by client");
       return;
     }
@@ -2401,9 +2380,6 @@ Output MUST be strictly valid JSON matching this schema:
 // 8. Quiz Question Generation endpoint
 app.post("/api/generate-quiz", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig } = req.body;
@@ -2484,7 +2460,7 @@ Output MUST be strictly valid JSON matching this schema:
     const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of EXACTLY 3 items with word, translation, pairedWith, hint).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
     const cleaned = cleanJsonResponse(text);
     const result = cleanAndParseJson(cleaned);
 
@@ -2662,7 +2638,7 @@ Output MUST be strictly valid JSON matching this schema:
 
       await Promise.all(
         questionsArray.map(async (q: any) => {
-          if (controller.signal.aborted || req.destroyed) return;
+          if (controller.signal.aborted) return;
           if (q.type === "picture" || q.imageKeyword || q.imageUrl) {
             const keywordText = q.imageKeyword || q.word;
             q.imageKeyword = keywordText;
@@ -2677,7 +2653,7 @@ Output MUST be strictly valid JSON matching this schema:
       );
     }
 
-    if (controller.signal.aborted || req.destroyed) return;
+    if (controller.signal.aborted) return;
 
     res.json({
       questions: questionsArray,
@@ -2686,7 +2662,7 @@ Output MUST be strictly valid JSON matching this schema:
       responseTimeMs
     });
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/generate-quiz] Request aborted by client");
       return;
     }
@@ -2700,9 +2676,6 @@ Output MUST be strictly valid JSON matching this schema:
 // 9.5. Suggest Casual Reply
 app.post("/api/suggest-casual-reply", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
 
   try {
     const { imageDataUrl, systemPrompt, userText, provider, model } = req.body;
@@ -2758,7 +2731,7 @@ app.post("/api/suggest-casual-reply", async (req, res) => {
       // no image, just use the prompt directly with the LLM
       const configToUse = req.body.llmConfig || { provider, model };
       const text = await callLLM(userText, systemPrompt, "", configToUse, controller.signal);
-      if (controller.signal.aborted || req.destroyed) return;
+      if (controller.signal.aborted) return;
       const cleaned = cleanJsonResponse(text);
       const parsed = cleanAndParseJson(cleaned);
       const parsedProvider = parsed?.provider || configToUse.provider || "gemini";
@@ -2773,7 +2746,7 @@ app.post("/api/suggest-casual-reply", async (req, res) => {
     }
       
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/suggest-casual-reply] Request aborted by client");
       return;
     }
@@ -2787,10 +2760,6 @@ app.post("/api/suggest-casual-reply", async (req, res) => {
 // 10. Multimodal Image Vocabulary Analysis endpoint with Worker + Gemini Fallback
 app.post("/api/analyze-image-vocab", async (req, res) => {
   const controller = new AbortController();
-  req.on("close", () => {
-    controller.abort();
-  });
-
   try {
     const { imageDataUrl, systemPrompt, userText, provider, model } = req.body;
 
@@ -2845,7 +2814,7 @@ app.post("/api/analyze-image-vocab", async (req, res) => {
     throw new Error(`Image analysis worker failed with status ${workerRes.status}: ${await workerRes.text()}`);
     
   } catch (error: any) {
-    if (controller.signal.aborted || req.destroyed || error?.name === "AbortError") {
+    if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/analyze-image-vocab] Request aborted by client");
       return;
     }
