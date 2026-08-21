@@ -14,12 +14,14 @@ import {
   Layers,
   Sparkles,
   Clock,
-  Filter
+  Filter,
+  History
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
 import { isWordEligibleForReview, isWordLearnedOrStudied } from "../utils/spacedRepetition";
 import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { t } from "../config/i18n";
+import StrengthHistoryModal from "./analytics/StrengthHistoryModal";
 
 interface FlashcardsViewProps {
   words: Word[];
@@ -43,13 +45,15 @@ export default function FlashcardsView({
   ttsConfig = DEFAULT_TTS_CONFIG,
   llmConfig,
   targetLanguage = "English",
-  appLanguage = "Vietnamese"
+  appLanguage = "Vietnamese",
+  onUpdateWords
 }: FlashcardsViewProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [filterCategory, setFilterCategory] = useState<"all" | "new" | "due" | "starred">("all");
+  const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
 
   const filterCounts = useMemo(() => {
     if (!words) return { all: 0, new: 0, due: 0, starred: 0 };
@@ -313,6 +317,16 @@ export default function FlashcardsView({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            setSelectedHistoryWord(currentWord);
+                          }}
+                          className="p-2 border border-stone-200 text-stone-400 hover:text-amber-700 hover:border-amber-400 hover:bg-amber-50/50 transition-colors cursor-pointer"
+                          title="View Strength History"
+                        >
+                          <History className="w-4 h-4 text-amber-600" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onToggleStar(currentWord.id);
                           }}
                           className={`p-2 border transition-colors cursor-pointer ${
@@ -492,6 +506,16 @@ export default function FlashcardsView({
                 <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3 pt-2 sm:pt-0">
                   <div className="flex gap-1.5">
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedHistoryWord(w);
+                      }}
+                      className="p-1.5 border border-stone-200 hover:border-amber-400 hover:bg-amber-50/50 text-stone-400 hover:text-amber-700 transition-colors cursor-pointer"
+                      title="View Strength History"
+                    >
+                      <History className="w-4 h-4 text-amber-600" />
+                    </button>
+                    <button
                       onClick={() => speakWord(w.word)}
                       className="p-1.5 border border-stone-200 hover:border-stone-900 text-stone-400 hover:text-stone-900 transition-colors cursor-pointer"
                       title="Speak"
@@ -533,6 +557,23 @@ export default function FlashcardsView({
           </div>
         </div>
       )}
+
+      {/* Strength History Modal */}
+      <AnimatePresence>
+        {selectedHistoryWord && (
+          <StrengthHistoryModal
+            word={selectedHistoryWord}
+            onClose={() => setSelectedHistoryWord(null)}
+            onUpdateWord={(updated) => {
+              setSelectedHistoryWord(updated);
+              if (onUpdateWords) {
+                const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
+                onUpdateWords(nextWords);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

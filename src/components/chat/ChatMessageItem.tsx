@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
+import { AnimatePresence } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Plus
+  Volume2, ChevronRight, Check, Sparkles, Plus, History
 } from "lucide-react";
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
@@ -12,6 +13,7 @@ import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
+import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 
 interface ChatMessageItemProps {
   msg: ChatMessage;
@@ -139,6 +141,7 @@ function ChatMessageItem({
 
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
@@ -150,6 +153,22 @@ function ChatMessageItem({
     if (isAlreadyInWords) return;
     onAddWord(wordText, hint);
   };
+
+  const handleModalWordUpdate = (updated: Word) => {
+    setSelectedHistoryWord(updated);
+    if (onUpdateWords && words) {
+      const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
+      onUpdateWords(nextWords);
+    }
+  };
+
+  const quizAction = msg.suggestedActions?.find((a) => a.action === "quiz_answer");
+  const quizWordId = quizAction?.payload?.wordId;
+  const targetQuizWord = useMemo(() => {
+    return (words || []).find(
+      (w) => (quizWordId && w.id === quizWordId) || (msg.audioWord && w.word.toLowerCase() === msg.audioWord.toLowerCase())
+    );
+  }, [words, quizWordId, msg.audioWord]);
 
   const isQuizActive = useMemo(() => {
     return messages.some(
@@ -639,14 +658,32 @@ function ChatMessageItem({
                                   </p>
                                 )}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => speakText(sw.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                                className="p-1.5 bg-white hover:bg-stone-200 text-stone-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
-                                title={`Pronounce "${sw.word}"`}
-                              >
-                                <Volume2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {isAlreadyInWords && (() => {
+                                  const matched = words?.find((w) => w.word.trim().toLowerCase() === sw.word.trim().toLowerCase());
+                                  if (matched) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedHistoryWord(matched)}
+                                        className="p-1.5 bg-white hover:bg-amber-50 hover:border-amber-300 text-amber-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                                        title={`View Strength History for "${sw.word}"`}
+                                      >
+                                        <History className="w-3.5 h-3.5 text-amber-600" />
+                                      </button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                                <button
+                                  type="button"
+                                  onClick={() => speakText(sw.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                                  className="p-1.5 bg-white hover:bg-stone-200 text-stone-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                                  title={`Pronounce "${sw.word}"`}
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             {sw.pairedWith && (
@@ -769,6 +806,39 @@ function ChatMessageItem({
                 </div>
               )}
 
+              {/* Target Word strength banner for Quiz questions */}
+              {quizAction && targetQuizWord && (
+                <div className="my-2.5 p-2 px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
+                      Target Word:
+                    </span>
+                    <span className="text-xs font-bold text-stone-900 font-serif">
+                      {targetQuizWord.word}
+                    </span>
+                    {targetQuizWord.partOfSpeech && (
+                      <span className="text-[9px] font-bold uppercase bg-amber-200/70 text-amber-950 px-1.5 py-0.2 rounded font-mono">
+                        {targetQuizWord.partOfSpeech}
+                      </span>
+                    )}
+                    {targetQuizWord.strength !== undefined && (
+                      <span className="text-[10px] font-mono font-bold bg-white text-stone-700 px-1.5 py-0.2 rounded border border-amber-200/70">
+                        {targetQuizWord.strength}% strength
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHistoryWord(targetQuizWord)}
+                    className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105 shrink-0"
+                    title={`View Strength History for "${targetQuizWord.word}"`}
+                  >
+                    <History className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="hidden sm:inline">Strength History</span>
+                  </button>
+                </div>
+              )}
+
               {/* Audio clip player card for listening questions */}
               {msg.audioWord && (
                 <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 sm:p-3.5 my-2.5 flex items-center justify-between gap-3 shadow-2xs">
@@ -791,14 +861,26 @@ function ChatMessageItem({
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                    className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    Play Clip
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {targetQuizWord && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHistoryWord(targetQuizWord)}
+                        className="p-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-700 font-bold text-xs rounded-lg border border-amber-200/70 transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs hover:scale-105"
+                        title={`View Strength History for "${targetQuizWord.word}"`}
+                      >
+                        <History className="w-3.5 h-3.5 text-amber-600" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                      className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                      Play Clip
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -967,6 +1049,17 @@ function ChatMessageItem({
           </div>
         )}
       </div>
+
+      {/* Strength History Modal */}
+      <AnimatePresence>
+        {selectedHistoryWord && (
+          <StrengthHistoryModal
+            word={selectedHistoryWord}
+            onClose={() => setSelectedHistoryWord(null)}
+            onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

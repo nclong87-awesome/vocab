@@ -1,15 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { AnimatePresence } from "motion/react";
 import { 
   Volume2, 
   ChevronLeft, 
   ChevronRight, 
   Layers, 
-  LayoutGrid
+  LayoutGrid,
+  History
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { speakText, stopSpeech, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
+import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 
 interface FlashcardMessageCardProps {
   data: FlashcardData;
@@ -56,14 +59,50 @@ function FlashcardMessageCard({
   llmConfig,
   provider,
   model,
-  responseTimeMs
+  responseTimeMs,
+  words,
+  onUpdateWords
 }: FlashcardMessageCardProps) {
   const [speakingText, setSpeakingText] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"deck" | "grid">("deck");
+  const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
+
+  const getWordObjectForCard = (card: FlashcardItem): Word => {
+    const matched = (words || []).find(
+      (w) => (card.wordId && w.id === card.wordId) || w.word.toLowerCase() === card.word.toLowerCase()
+    );
+    if (matched) return matched;
+    return {
+      id: card.wordId || `temp-${card.word}`,
+      word: card.word,
+      translation: card.translation || "",
+      definition: card.definition || "",
+      partOfSpeech: card.partOfSpeech || "noun",
+      pronunciation: card.pronunciation || "",
+      example: card.example || "",
+      exampleTranslation: card.exampleTranslation || "",
+      category: card.category || "General",
+      context: card.context || "",
+      starred: false,
+      learned: false,
+      createdAt: new Date().toISOString(),
+      lastReviewed: null,
+      strength: 0,
+      strengthHistory: []
+    };
+  };
+
+  const handleModalWordUpdate = (updated: Word) => {
+    setSelectedHistoryWord(updated);
+    if (onUpdateWords && words) {
+      const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
+      onUpdateWords(nextWords);
+    }
+  };
 
   // Normalize data to always produce an array of up to 5 FlashcardItems
   const cards: FlashcardItem[] = useMemo(() => {
@@ -232,19 +271,29 @@ function FlashcardMessageCard({
                 )}
               </div>
 
-              {/* Speaker button */}
-              <button
-                type="button"
-                onClick={(e) => handleSpeak(currentCard.word, e)}
-                className={`p-3 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0 ${
-                  speakingText === currentCard.word
-                    ? "bg-amber-400 text-stone-950 scale-105 ring-2 ring-amber-400/50 animate-pulse"
-                    : "bg-stone-900 hover:bg-stone-800 text-white hover:scale-105"
-                }`}
-                title={`Listen to "${currentCard.word}" pronunciation`}
-              >
-                <Volume2 className="w-5 h-5" />
-              </button>
+              {/* Action buttons: History & Speaker */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedHistoryWord(getWordObjectForCard(currentCard))}
+                  className="p-3 rounded-xl border border-stone-200/80 bg-white hover:bg-amber-50 hover:border-amber-400 text-amber-700 hover:text-amber-950 transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0 hover:scale-105"
+                  title={`View Strength History for "${currentCard.word}"`}
+                >
+                  <History className="w-5 h-5 text-amber-600" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSpeak(currentCard.word, e)}
+                  className={`p-3 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0 ${
+                    speakingText === currentCard.word
+                      ? "bg-amber-400 text-stone-950 scale-105 ring-2 ring-amber-400/50 animate-pulse"
+                      : "bg-stone-900 hover:bg-stone-800 text-white hover:scale-105"
+                  }`}
+                  title={`Listen to "${currentCard.word}" pronunciation`}
+                >
+                  <Volume2 className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Translation & Definition */}
@@ -381,14 +430,24 @@ function FlashcardMessageCard({
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => handleSpeak(card.word, e)}
-                      className="p-1.5 bg-stone-900 text-amber-400 hover:bg-stone-800 rounded-lg shrink-0 cursor-pointer shadow-2xs"
-                      title={`Listen to ${card.word}`}
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHistoryWord(getWordObjectForCard(card))}
+                        className="p-1.5 bg-white border border-stone-200 text-amber-700 hover:text-amber-950 hover:bg-amber-50 hover:border-amber-400 rounded-lg shrink-0 cursor-pointer shadow-2xs transition-transform hover:scale-105"
+                        title={`View Strength History for "${card.word}"`}
+                      >
+                        <History className="w-3.5 h-3.5 text-amber-600" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleSpeak(card.word, e)}
+                        className="p-1.5 bg-stone-900 text-amber-400 hover:bg-stone-800 rounded-lg shrink-0 cursor-pointer shadow-2xs"
+                        title={`Listen to ${card.word}`}
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Translation & Definition */}
@@ -465,6 +524,17 @@ function FlashcardMessageCard({
           })()}
         </div>
       )}
+
+      {/* Strength History Modal */}
+      <AnimatePresence>
+        {selectedHistoryWord && (
+          <StrengthHistoryModal
+            word={selectedHistoryWord}
+            onClose={() => setSelectedHistoryWord(null)}
+            onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
