@@ -630,6 +630,7 @@ export function useChat({
         nextQuestionSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
         imageUrl: nextQ.imageUrl,
         imageKeyword: nextQ.imageKeyword,
+        answeredQuizWordId: wordId,
         suggestedActions: nextQ.options?.map((opt) => ({
           label: opt,
           action: "quiz_answer",
@@ -716,11 +717,13 @@ export function useChat({
         quizSpeechText: isCorrect
           ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
           : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
+        answeredQuizWordId: wordId,
         quizFinishedData: {
           score: newScore,
           total: totalQs,
           accuracy: Math.round((newScore / totalQs) * 100),
           suggestedWords: top3SuggestedWords,
+          testedWordIds: [...newCorrectIds, ...newIncorrectIds],
         },
         suggestedActions: [
           ...wordAddActions,

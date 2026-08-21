@@ -162,13 +162,10 @@ function ChatMessageItem({
     }
   };
 
-  const quizAction = msg.suggestedActions?.find((a) => a.action === "quiz_answer");
-  const quizWordId = quizAction?.payload?.wordId;
-  const targetQuizWord = useMemo(() => {
-    return (words || []).find(
-      (w) => (quizWordId && w.id === quizWordId) || (msg.audioWord && w.word.toLowerCase() === msg.audioWord.toLowerCase())
-    );
-  }, [words, quizWordId, msg.audioWord]);
+  const answeredWord = useMemo(() => {
+    if (!msg.answeredQuizWordId) return null;
+    return (words || []).find((w) => w.id === msg.answeredQuizWordId);
+  }, [words, msg.answeredQuizWordId]);
 
   const isQuizActive = useMemo(() => {
     return messages.some(
@@ -608,6 +605,39 @@ function ChatMessageItem({
                 appLanguage={currentAppLang}
               />
 
+              {/* Word Strength History banner shown AFTER user answers the quiz question */}
+              {answeredWord && (
+                <div className="my-2.5 p-2 px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
+                      Word Reviewed:
+                    </span>
+                    <span className="text-xs font-bold text-stone-900 font-serif">
+                      {answeredWord.word}
+                    </span>
+                    {answeredWord.partOfSpeech && (
+                      <span className="text-[9px] font-bold uppercase bg-amber-200/70 text-amber-950 px-1.5 py-0.2 rounded font-mono">
+                        {answeredWord.partOfSpeech}
+                      </span>
+                    )}
+                    {answeredWord.strength !== undefined && (
+                      <span className="text-[10px] font-mono font-bold bg-white text-stone-700 px-1.5 py-0.2 rounded border border-amber-200/70">
+                        {answeredWord.strength}% strength
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHistoryWord(answeredWord)}
+                    className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105 shrink-0"
+                    title={`View Strength History for "${answeredWord.word}"`}
+                  >
+                    <History className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="hidden sm:inline">Strength History</span>
+                  </button>
+                </div>
+              )}
+
               {/* Frequently Paired Words (Collocations) Card on Quiz Finish */}
               {msg.quizFinishedData?.suggestedWords && msg.quizFinishedData.suggestedWords.length > 0 && (
                 <div className="mt-4 pt-3.5 border-t border-stone-200/80 space-y-3">
@@ -806,39 +836,6 @@ function ChatMessageItem({
                 </div>
               )}
 
-              {/* Target Word strength banner for Quiz questions */}
-              {quizAction && targetQuizWord && (
-                <div className="my-2.5 p-2 px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
-                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
-                      Target Word:
-                    </span>
-                    <span className="text-xs font-bold text-stone-900 font-serif">
-                      {targetQuizWord.word}
-                    </span>
-                    {targetQuizWord.partOfSpeech && (
-                      <span className="text-[9px] font-bold uppercase bg-amber-200/70 text-amber-950 px-1.5 py-0.2 rounded font-mono">
-                        {targetQuizWord.partOfSpeech}
-                      </span>
-                    )}
-                    {targetQuizWord.strength !== undefined && (
-                      <span className="text-[10px] font-mono font-bold bg-white text-stone-700 px-1.5 py-0.2 rounded border border-amber-200/70">
-                        {targetQuizWord.strength}% strength
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedHistoryWord(targetQuizWord)}
-                    className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105 shrink-0"
-                    title={`View Strength History for "${targetQuizWord.word}"`}
-                  >
-                    <History className="w-3.5 h-3.5 text-amber-600" />
-                    <span className="hidden sm:inline">Strength History</span>
-                  </button>
-                </div>
-              )}
-
               {/* Audio clip player card for listening questions */}
               {msg.audioWord && (
                 <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 sm:p-3.5 my-2.5 flex items-center justify-between gap-3 shadow-2xs">
@@ -862,16 +859,6 @@ function ChatMessageItem({
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {targetQuizWord && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedHistoryWord(targetQuizWord)}
-                        className="p-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-700 font-bold text-xs rounded-lg border border-amber-200/70 transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs hover:scale-105"
-                        title={`View Strength History for "${targetQuizWord.word}"`}
-                      >
-                        <History className="w-3.5 h-3.5 text-amber-600" />
-                      </button>
-                    )}
                     <button
                       type="button"
                       onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}

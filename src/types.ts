@@ -139,6 +139,7 @@ export interface QuizFinishedData {
   total: number;
   accuracy: number;
   suggestedWords?: QuizSuggestedWord[];
+  testedWordIds?: string[];
 }
 
 export interface QuizQuestion {
@@ -263,6 +264,7 @@ export interface ChatMessage {
   fixedSentence?: string;
   flashcardData?: FlashcardData;
   quizFinishedData?: QuizFinishedData;
+  answeredQuizWordId?: string;
   suggestedReplies?: {
     reply: string;
     translation: string;

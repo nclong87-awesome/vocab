@@ -81,7 +81,7 @@ export function QuizImage({ imageKeyword, alt, word, className = "" }: QuizImage
         <div className="w-full min-h-[220px] flex flex-col items-center justify-center bg-stone-100 text-stone-400 p-6 text-center">
           <HelpCircle className="w-8 h-8 text-stone-400 mb-2" />
           <span className="text-xs font-bold font-mono text-stone-700 uppercase">
-            Visual Clue: {word || "Quiz Question"}
+            Visual Clue
           </span>
           <span className="text-[11px] text-stone-500 font-serif italic mt-1">Image clue preview unavailable</span>
         </div>
