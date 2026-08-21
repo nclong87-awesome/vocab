@@ -576,6 +576,32 @@ export function useChat({
     const newCorrectIds = isCorrect ? [...activeQuiz.correctIds, wordId] : activeQuiz.correctIds;
     const newIncorrectIds = !isCorrect ? [...activeQuiz.incorrectIds, wordId] : activeQuiz.incorrectIds;
 
+    // Immediately update target word practice data, lastReviewed timestamp and strength history upon answer
+    setWords((prevWords) => {
+      const updatedWords = prevWords.map((w) => {
+        const originalId = w.id;
+        const virtualId = `today-${w.id}`;
+        const targetQWord = currentQ.word.toLowerCase().trim();
+        const matchesWord =
+          w.id === wordId ||
+          originalId === wordId ||
+          virtualId === wordId ||
+          (targetWordObj && w.id === targetWordObj.id) ||
+          w.word.toLowerCase().trim() === targetQWord;
+
+        if (matchesWord) {
+          const delta = isCorrect ? 20 : -20;
+          const newStrength = isCorrect ? Math.min(100, w.strength + delta) : Math.max(0, w.strength + delta);
+          const reason = isCorrect ? "quiz_correct" : "quiz_incorrect";
+          const note = isCorrect ? "Practiced in Quiz (Correct)" : "Practiced in Quiz (Incorrect)";
+          return recordStrengthHistory(w, newStrength, reason, note);
+        }
+        return w;
+      });
+      saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB quiz single word update error:", e));
+      return updatedWords;
+    });
+
     let feedback = "";
     if (isCorrect) {
       feedback = t("chat_quiz_feedback_correct_msg", currentAppLang, {
@@ -645,7 +671,7 @@ export function useChat({
       const totalQs = activeQuiz.questions.length;
       setActiveQuiz(null);
 
-      handleFinishQuiz(newScore, totalQs, newCorrectIds, newIncorrectIds);
+      handleFinishQuiz(newScore, totalQs);
 
       // Aggregate 1 to 3 suggestions for words that frequently appear alongside the words used in the quiz
       const allSuggestedWords: QuizSuggestedWord[] = [];

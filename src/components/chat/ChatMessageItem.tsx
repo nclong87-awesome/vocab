@@ -167,6 +167,30 @@ function ChatMessageItem({
     return (words || []).find((w) => w.id === msg.answeredQuizWordId);
   }, [words, msg.answeredQuizWordId]);
 
+  const safeMsgContent = typeof msg.content === "string" ? msg.content : (msg.content ? String(msg.content) : "");
+
+  const displayContent = useMemo(() => {
+    if (!msg.fixedSentence || !safeMsgContent) return safeMsgContent;
+
+    // Clean up any leading markdown header or blockquote for polished sentence so it's not rendered twice
+    let cleaned = safeMsgContent;
+    cleaned = cleaned.replace(/^###\s*✨\s*(?:Polished Sentence|Câu Đã Trau Chuốt):\s*\n*(?:>\s*.*?\n*)+/i, "");
+    return cleaned.trim();
+  }, [safeMsgContent, msg.fixedSentence]);
+
+  const { feedbackPart, nextQuestionPart } = useMemo(() => {
+    if (!answeredWord || !displayContent) {
+      return { feedbackPart: displayContent, nextQuestionPart: null };
+    }
+    const match = displayContent.match(/\n+\s*---\s*\n+/);
+    if (match && match.index !== undefined) {
+      const feedbackPart = displayContent.substring(0, match.index).trim();
+      const nextQuestionPart = displayContent.substring(match.index + match[0].length).trim();
+      return { feedbackPart, nextQuestionPart };
+    }
+    return { feedbackPart: displayContent, nextQuestionPart: null };
+  }, [displayContent, answeredWord]);
+
   const isQuizActive = useMemo(() => {
     return messages.some(
       (m) =>
@@ -190,17 +214,6 @@ function ChatMessageItem({
     setTimeout(() => setCopiedKey(null), 2000);
     showToast(toastMessage);
   };
-
-  const safeMsgContent = typeof msg.content === "string" ? msg.content : (msg.content ? String(msg.content) : "");
-
-  const displayContent = useMemo(() => {
-    if (!msg.fixedSentence || !safeMsgContent) return safeMsgContent;
-
-    // Clean up any leading markdown header or blockquote for polished sentence so it's not rendered twice
-    let cleaned = safeMsgContent;
-    cleaned = cleaned.replace(/^###\s*✨\s*(?:Polished Sentence|Câu Đã Trau Chuốt):\s*\n*(?:>\s*.*?\n*)+/i, "");
-    return cleaned.trim();
-  }, [safeMsgContent, msg.fixedSentence]);
 
   const parsedQuizOptions = useMemo(() => {
     const opts: { label: string; action: string; payload: any }[] = [];
@@ -599,13 +612,13 @@ function ChatMessageItem({
               )}
 
               <FormattedMessage
-                text={displayContent}
-                suggestedActions={unfilteredActions}
+                text={feedbackPart}
+                suggestedActions={nextQuestionPart ? undefined : unfilteredActions}
                 onActionClick={handleActionClick}
                 appLanguage={currentAppLang}
               />
 
-              {/* Word Strength History banner shown AFTER user answers the quiz question */}
+              {/* Word Strength History banner shown AFTER user answers the quiz question (placed between feedback and next question) */}
               {answeredWord && (
                 <div className="my-2.5 p-2 px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                   <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -636,6 +649,18 @@ function ChatMessageItem({
                     <span className="hidden sm:inline">Strength History</span>
                   </button>
                 </div>
+              )}
+
+              {nextQuestionPart && (
+                <>
+                  <div className="my-3 border-t border-stone-200/80" />
+                  <FormattedMessage
+                    text={nextQuestionPart}
+                    suggestedActions={unfilteredActions}
+                    onActionClick={handleActionClick}
+                    appLanguage={currentAppLang}
+                  />
+                </>
               )}
 
               {/* Frequently Paired Words (Collocations) Card on Quiz Finish */}
