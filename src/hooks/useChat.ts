@@ -232,7 +232,10 @@ export function useChat({
   };
 
   // Start the unified Practice flow: checks Quiz candidates first, then Flashcard candidates, or displays no-words message
-  const startPractice = async (overrideConfig?: LLMConfig) => {
+  const startPractice = async (
+    overrideConfig?: LLMConfig,
+    practiceMode: "auto" | "flashcards_new" | "quiz_only" | "balanced" = "auto"
+  ) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
     setConversationalState("none");
@@ -258,9 +261,40 @@ export function useChat({
       return;
     }
 
-    // Step 1: Look for candidate words for Quiz questions
+    const unstudiedWords = activeWords.filter(w => !w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0));
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
-    if (quizWords.length >= 2) {
+
+    // Mode 'auto': If user has BOTH new unstudied words AND due quiz reviews, present a balanced practice session prompt with choices
+    if (practiceMode === "auto" && unstudiedWords.length > 0 && quizWords.length >= 2) {
+      const choiceMsg: ChatMessage = {
+        id: `practice-mode-choice-${Date.now()}`,
+        role: "assistant",
+        content: `### 🎯 Practice Session Overview\n\nYou have **${unstudiedWords.length} new unstudied word(s)** waiting for flashcard review and **${quizWords.length} word(s) due** for quiz review.\n\nHow would you like to practice today?`,
+        timestamp: new Date().toISOString(),
+        suggestedActions: [
+          {
+            label: `🎴 Study New Words First (${unstudiedWords.length} new)`,
+            action: "start_practice_flashcards_new",
+          },
+          {
+            label: `🏆 Review Due Words Quiz (${quizWords.length} due)`,
+            action: "start_practice_quiz_only",
+          },
+          {
+            label: `⚡ Smart Balanced Session (Flashcards + Quiz)`,
+            action: "start_practice_balanced",
+          },
+        ],
+      };
+      setChatMessages([choiceMsg]);
+      return;
+    }
+
+    // Determine if we should launch Quiz mode
+    const shouldRunQuiz = (practiceMode === "quiz_only" || (practiceMode === "auto" && unstudiedWords.length === 0)) && quizWords.length >= 2;
+
+    // Step 1: Look for candidate words for Quiz questions
+    if (shouldRunQuiz) {
       // Found Quiz candidates: proceed to generate and start Quiz
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -333,8 +367,13 @@ export function useChat({
       return;
     }
 
-    // Step 2: If no Quiz candidates found (or fewer than 2), search for candidate words for Flashcards
-    const flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
+    // Step 2: Search for candidate words for Flashcards (prioritizing new words when flashcards_new or balanced mode is chosen)
+    let flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
+    if (practiceMode === "flashcards_new" || practiceMode === "balanced" || unstudiedWords.length > 0) {
+      if (unstudiedWords.length > 0) {
+        flashcardCandidates = unstudiedWords.slice(0, 3);
+      }
+    }
     if (flashcardCandidates.length > 0) {
       const controller = new AbortController();
       abortControllerRef.current = controller;

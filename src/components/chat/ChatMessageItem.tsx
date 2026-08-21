@@ -26,7 +26,7 @@ interface ChatMessageItemProps {
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
-  startPractice: () => void;
+  startPractice: (overrideConfig?: any, mode?: "auto" | "flashcards_new" | "quiz_only" | "balanced") => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
@@ -458,6 +458,15 @@ function ChatMessageItem({
     } else if (act.action === "start_practice") {
       handleRecordActionUse("start_practice");
       startPractice();
+    } else if (act.action === "start_practice_flashcards_new") {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "flashcards_new");
+    } else if (act.action === "start_practice_quiz_only") {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "quiz_only");
+    } else if (act.action === "start_practice_balanced") {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "balanced");
     } else if (act.action === "view_flashcard") {
       handleRecordActionUse("view_flashcard");
       onViewFlashcard?.();

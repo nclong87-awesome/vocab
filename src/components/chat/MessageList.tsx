@@ -17,7 +17,7 @@ interface MessageListProps {
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
-  startPractice: () => void;
+  startPractice: (overrideConfig?: any, mode?: "auto" | "flashcards_new" | "quiz_only" | "balanced") => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;

@@ -11,9 +11,13 @@ import {
   HelpCircle,
   Trophy,
   List,
-  Layers
+  Layers,
+  Sparkles,
+  Clock,
+  Filter
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
+import { isWordEligibleForReview } from "../utils/spacedRepetition";
 import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { t } from "../config/i18n";
 
@@ -45,10 +49,39 @@ export default function FlashcardsView({
   const [isFlipped, setIsFlipped] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [filterCategory, setFilterCategory] = useState<"all" | "new" | "due" | "starred">("all");
+
+  const filterCounts = useMemo(() => {
+    if (!words) return { all: 0, new: 0, due: 0, starred: 0 };
+    const now = new Date();
+    let newCount = 0;
+    let dueCount = 0;
+    let starredCount = 0;
+
+    for (const w of words) {
+      if (w.starred) starredCount++;
+      if (!w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0)) newCount++;
+      else if (isWordEligibleForReview(w, now)) dueCount++;
+    }
+
+    return { all: words.length, new: newCount, due: dueCount, starred: starredCount };
+  }, [words]);
 
   const sortedWords = useMemo(() => {
     if (!words || words.length === 0) return [];
-    const list = words.map((w, originalIndex) => ({ word: w, originalIndex }));
+
+    const now = new Date();
+    let subset = [...words];
+
+    if (filterCategory === "new") {
+      subset = subset.filter(w => !w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0));
+    } else if (filterCategory === "due") {
+      subset = subset.filter(w => isWordEligibleForReview(w, now));
+    } else if (filterCategory === "starred") {
+      subset = subset.filter(w => w.starred);
+    }
+
+    const list = subset.map((w, originalIndex) => ({ word: w, originalIndex }));
     const getWordTimestamp = (w: Word, originalIndex: number): number => {
       if (w.createdAt) {
         const t = new Date(w.createdAt).getTime();
@@ -68,7 +101,14 @@ export default function FlashcardsView({
       return b.originalIndex - a.originalIndex;
     });
     return list.map(item => item.word);
-  }, [words]);
+  }, [words, filterCategory]);
+
+  const handleSelectFilter = (category: "all" | "new" | "due" | "starred") => {
+    setFilterCategory(category);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+  };
+
   const currentWord = sortedWords[currentIndex];
 
   if (!sortedWords || sortedWords.length === 0) {
@@ -178,6 +218,55 @@ export default function FlashcardsView({
             <List className="w-3.5 h-3.5" /> {t("flashcards_list_mode", appLanguage)}
           </button>
         </div>
+      </div>
+
+      {/* Category Filter Pills (All, New/Unstudied, Due Review, Starred) */}
+      <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-stone-100" id="flashcard-filter-tabs">
+        <button
+          onClick={() => handleSelectFilter("all")}
+          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            filterCategory === "all"
+              ? "bg-stone-900 text-white shadow-xs"
+              : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" /> All Words ({filterCounts.all})
+        </button>
+
+        <button
+          onClick={() => handleSelectFilter("new")}
+          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            filterCategory === "new"
+              ? "bg-amber-500 text-stone-950 shadow-xs"
+              : "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200"
+          }`}
+          title="Filter for newly added words that have not been studied yet"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-700 fill-amber-300" /> New / Unstudied ({filterCounts.new})
+        </button>
+
+        <button
+          onClick={() => handleSelectFilter("due")}
+          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            filterCategory === "due"
+              ? "bg-stone-900 text-white shadow-xs"
+              : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
+          }`}
+          title="Filter for words scheduled for spaced repetition review"
+        >
+          <Clock className="w-3.5 h-3.5 text-stone-500" /> Due Review ({filterCounts.due})
+        </button>
+
+        <button
+          onClick={() => handleSelectFilter("starred")}
+          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            filterCategory === "starred"
+              ? "bg-stone-900 text-white shadow-xs"
+              : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
+          }`}
+        >
+          <Star className="w-3.5 h-3.5 fill-current text-amber-400" /> Starred ({filterCounts.starred})
+        </button>
       </div>
 
       {viewMode === "card" ? (
