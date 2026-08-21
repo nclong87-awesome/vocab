@@ -11,7 +11,7 @@ import FlashcardMessageCard from "./FlashcardMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
-import { getQuizCandidates, getFlashcardCandidates } from "../../utils/spacedRepetition";
+import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
 
 interface ChatMessageItemProps {
   msg: ChatMessage;
@@ -161,20 +161,12 @@ function ChatMessageItem({
 
   const isWelcomeMsg = !isUser && msg.id.startsWith("welcome-msg") && !isQuizActive;
 
-  const quizCandidates = useMemo(() => {
+  const practiceCandidates = useMemo(() => {
     if (!isWelcomeMsg || !words || words.length === 0) return [];
-    return getQuizCandidates(words);
+    return getAllPracticeCandidates(words);
   }, [isWelcomeMsg, words]);
 
-  const flashcardCandidates = useMemo(() => {
-    if (!isWelcomeMsg || !words || words.length === 0) return [];
-    return getFlashcardCandidates(words);
-  }, [isWelcomeMsg, words]);
-
-  const hasQuizCandidates = quizCandidates.length >= 2 || (quizCandidates.length > 0 && flashcardCandidates.length === 0);
-  const hasFlashcardCandidates = !hasQuizCandidates && flashcardCandidates.length > 0;
-  const candidateCount = hasQuizCandidates ? quizCandidates.length : (hasFlashcardCandidates ? flashcardCandidates.length : 0);
-  const candidateType = hasQuizCandidates ? "quiz" : (hasFlashcardCandidates ? "flashcard" : null);
+  const candidateCount = practiceCandidates.length;
 
   const handleCopy = (textToCopy: string, key: string, toastMessage: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -843,25 +835,19 @@ function ChatMessageItem({
                 </div>
               )}
               {/* Candidate Words Ready Banner (Shown when starting a new chat) */}
-              {isWelcomeMsg && candidateType && candidateCount > 0 && (
+              {isWelcomeMsg && candidateCount > 0 && (
                 <div className="mt-4 pt-3.5 border-t border-stone-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-stone-50/90 -mx-4 -mb-4 p-4 rounded-b-2xl">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm shadow-2xs ${
-                      candidateType === "quiz" ? "bg-amber-100 text-amber-900 border border-amber-200/60" : "bg-blue-100 text-blue-900 border border-blue-200/60"
-                    }`}>
-                      {candidateType === "quiz" ? "🧠" : "🎴"}
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm shadow-2xs bg-amber-100 text-amber-900 border border-amber-200/60">
+                      🧠
                     </div>
                     <div className="min-w-0">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider block font-mono ${
-                        candidateType === "quiz" ? "text-amber-900" : "text-blue-900"
-                      }`}>
-                        {t(candidateType === "quiz" ? "chat_quiz_candidates_header" : "chat_flashcard_candidates_header", currentAppLang)}
+                      <span className="text-[10px] font-bold uppercase tracking-wider block font-mono text-amber-900">
+                        {t("chat_quiz_candidates_header", currentAppLang)}
                       </span>
                       <p className="text-xs font-semibold text-stone-800 truncate">
                         {t(
-                          candidateType === "quiz"
-                            ? (candidateCount === 1 ? "chat_word_ready_quiz" : "chat_words_ready_quiz")
-                            : (candidateCount === 1 ? "chat_word_ready_flashcard" : "chat_words_ready_flashcard"),
+                          candidateCount === 1 ? "chat_word_ready_practice" : "chat_words_ready_practice",
                           currentAppLang,
                           { count: String(candidateCount) }
                         )}
@@ -872,19 +858,13 @@ function ChatMessageItem({
                   <button
                     type="button"
                     onClick={() => {
-                      if (candidateType === "quiz") {
-                        handleRecordActionUse("start_practice");
-                        startPractice();
-                      } else {
-                        handleRecordActionUse("view_flashcard");
-                        if (onViewFlashcard) onViewFlashcard();
-                        else startPractice();
-                      }
+                      handleRecordActionUse("start_practice");
+                      startPractice();
                     }}
                     className="w-full sm:w-auto px-3.5 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-102 active:scale-98"
                   >
                     <span>
-                      {t(candidateType === "quiz" ? "chat_practice_now_btn" : "chat_review_flashcards_btn", currentAppLang)}
+                      {t("chat_practice_now_btn", currentAppLang)}
                     </span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>

@@ -111,6 +111,8 @@ export default function PracticeTimeline({
   // Key Aggregated Metrics
   const metrics = useMemo(() => {
     const dueNow = processedWords.filter((w) => w.reviewInfo.isDue);
+    const newUnstudied = processedWords.filter((w) => !w.word.lastReviewed || (!w.word.learned && (w.word.strength ?? 0) === 0));
+    const dueSpaced = processedWords.filter((w) => w.word.lastReviewed && w.reviewInfo.isDue);
     const dueToday = processedWords.filter((w) => w.daysFromNow === 0);
     const dueTomorrow = processedWords.filter((w) => w.daysFromNow === 1);
     const dueThisWeek = processedWords.filter((w) => w.daysFromNow >= 0 && w.daysFromNow <= 7);
@@ -122,6 +124,8 @@ export default function PracticeTimeline({
 
     return {
       dueNow,
+      newUnstudied,
+      dueSpaced,
       dueToday,
       dueTomorrow,
       dueThisWeek,
@@ -250,12 +254,12 @@ export default function PracticeTimeline({
 
             <h3 className="text-xl font-bold tracking-tight text-stone-100">
               {metrics.dueNow.length > 0
-                ? `${metrics.dueNow.length} Words Eligible for Review`
+                ? `${metrics.dueNow.length} Words Eligible for Practice`
                 : "All Vocabulary Current"}
             </h3>
             <p className="text-xs text-stone-300 font-serif italic max-w-md leading-relaxed">
               {metrics.dueNow.length > 0
-                ? "These words have reached their spaced repetition review milestone. Practicing now reinforces long-term memory."
+                ? `Includes ${metrics.newUnstudied.length} new unstudied word(s) and ${metrics.dueSpaced.length} spaced repetition review(s) ready.`
                 : "Great job! All your words are spaced out ahead. You can still do an early practice refresher anytime."}
             </p>
           </div>

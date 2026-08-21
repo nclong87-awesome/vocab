@@ -4,7 +4,6 @@ import { Search, X, LayoutGrid } from "lucide-react";
 import { LLMConfig, LLMProvider, Word } from "../../types";
 import { getQuickActionItems } from "./quickActionsConfig";
 import { t } from "../../config/i18n";
-import { getQuizCandidates, getFlashcardCandidates } from "../../utils/spacedRepetition";
 
 interface QuickActionsSectionProps {
   targetLanguage: string;
@@ -63,22 +62,12 @@ function QuickActionsSection({
   focusInput,
   setIsPhotoModalOpen,
   setSelectedImage,
-  words,
+  words: _words,
 }: QuickActionsSectionProps) {
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat">("all");
   const [actionSearchQuery, setActionSearchQuery] = useState("");
   const dockScrollRef = useRef<HTMLDivElement>(null);
-
-  const quizCandidatesCount = useMemo(() => {
-    if (!words || words.length === 0) return 0;
-    return getQuizCandidates(words).length;
-  }, [words]);
-
-  const flashcardCandidatesCount = useMemo(() => {
-    if (!words || words.length === 0) return 0;
-    return getFlashcardCandidates(words).length;
-  }, [words]);
 
   const propsRef = useRef({
     targetLanguage,
@@ -343,13 +332,6 @@ function QuickActionsSection({
               >
                 {item.icon}
                 <span>{item.label}</span>
-                {item.id === "practice" && (quizCandidatesCount > 0 || flashcardCandidatesCount > 0) && (
-                  <span className={`ml-1 text-[10px] font-bold font-mono px-1.5 py-0.2 rounded-full shadow-2xs ${
-                    quizCandidatesCount > 0 ? "bg-amber-400 text-stone-950" : "bg-blue-400 text-stone-950"
-                  }`}>
-                    {quizCandidatesCount > 0 ? quizCandidatesCount : flashcardCandidatesCount}
-                  </span>
-                )}
               </button>
             );
           })}

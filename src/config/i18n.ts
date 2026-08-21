@@ -244,6 +244,8 @@ export type TranslationKey =
   | "chat_word_ready_quiz"
   | "chat_words_ready_flashcard"
   | "chat_word_ready_flashcard"
+  | "chat_words_ready_practice"
+  | "chat_word_ready_practice"
   | "chat_practice_now_btn"
   | "chat_review_flashcards_btn"
   | "chat_quiz_intro"

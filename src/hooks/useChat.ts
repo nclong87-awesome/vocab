@@ -10,7 +10,12 @@ import {
   generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { getQuizCandidateWords, getCandidateWordsForFlashcards } from "../utils/spacedRepetition";
+import {
+  getQuizCandidateWords,
+  getCandidateWordsForFlashcards,
+  getQuizCandidates,
+  getFlashcardCandidates,
+} from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
@@ -261,40 +266,72 @@ export function useChat({
       return;
     }
 
-    const unstudiedWords = activeWords.filter(w => !w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0));
-    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
+    const flashcardCandidates = getFlashcardCandidates(activeWords);
+    const dueQuizCandidates = getQuizCandidates(activeWords);
 
-    // Mode 'auto': If user has BOTH new unstudied words AND due quiz reviews, present a balanced practice session prompt with choices
-    if (practiceMode === "auto" && unstudiedWords.length > 0 && quizWords.length >= 2) {
+    if (flashcardCandidates.length === 0 && dueQuizCandidates.length === 0) {
+      const noCandidateMsg: ChatMessage = {
+        id: `practice-no-candidates-${Date.now()}`,
+        role: "assistant",
+        content: t("chat_quiz_no_candidates_warning", currentAppLang),
+        timestamp: new Date().toISOString(),
+        suggestedActions: [
+          { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+        ],
+      };
+      setChatMessages([noCandidateMsg]);
+      return;
+    }
+
+    // When practiceMode is 'auto', present practice session starter overview with details & choice
+    if (practiceMode === "auto") {
+      const flashcardCount = flashcardCandidates.length;
+      const quizCount = dueQuizCandidates.length;
+
+      const actions: { label: string; action: string }[] = [];
+
+      if (flashcardCount > 0) {
+        actions.push({
+          label: `🎴 Study Flashcards (${flashcardCount} ${flashcardCount === 1 ? "word" : "words"})`,
+          action: "start_practice_flashcards_new",
+        });
+      }
+
+      if (quizCount > 0) {
+        actions.push({
+          label: `🏆 Quiz Review (${quizCount} ${quizCount === 1 ? "word" : "words"})`,
+          action: "start_practice_quiz_only",
+        });
+      }
+
+      if (flashcardCount > 0 && quizCount >= 2) {
+        actions.push({
+          label: `⚡ Smart Balanced Session (Flashcards + Quiz)`,
+          action: "start_practice_balanced",
+        });
+      }
+
       const choiceMsg: ChatMessage = {
         id: `practice-mode-choice-${Date.now()}`,
         role: "assistant",
-        content: `### 🎯 Practice Session Overview\n\nYou have **${unstudiedWords.length} new unstudied word(s)** waiting for flashcard review and **${quizWords.length} word(s) due** for quiz review.\n\nHow would you like to practice today?`,
+        content: `### 🎯 Practice Session Overview\n\nYou have **${flashcardCount} word(s)** ready for flashcard review and **${quizCount} word(s)** due for quiz review today.\n\nHow would you like to practice?`,
         timestamp: new Date().toISOString(),
-        suggestedActions: [
-          {
-            label: `🎴 Study New Words First (${unstudiedWords.length} new)`,
-            action: "start_practice_flashcards_new",
-          },
-          {
-            label: `🏆 Review Due Words Quiz (${quizWords.length} due)`,
-            action: "start_practice_quiz_only",
-          },
-          {
-            label: `⚡ Smart Balanced Session (Flashcards + Quiz)`,
-            action: "start_practice_balanced",
-          },
-        ],
+        suggestedActions: actions,
       };
       setChatMessages([choiceMsg]);
       return;
     }
 
+    const unstudiedWords = activeWords.filter(w => !w.lastReviewed || (!w.learned && (w.strength ?? 0) === 0));
+    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
+
     // Determine if we should launch Quiz mode
-    const shouldRunQuiz = (practiceMode === "quiz_only" || (practiceMode === "auto" && unstudiedWords.length === 0)) && quizWords.length >= 2;
+    const shouldRunQuiz = (practiceMode === "quiz_only" || practiceMode === "balanced") && (quizWords.length >= 1 || dueQuizCandidates.length >= 1);
 
     // Step 1: Look for candidate words for Quiz questions
     if (shouldRunQuiz) {
+      const effectiveQuizWords = quizWords.length >= 1 ? quizWords : (dueQuizCandidates.length >= 1 ? dueQuizCandidates.slice(0, 5) : activeWords.slice(0, 5));
       // Found Quiz candidates: proceed to generate and start Quiz
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -302,7 +339,7 @@ export function useChat({
 
       try {
         const quizResult = await generateAiQuizQuestionsService({
-          words: quizWords,
+          words: effectiveQuizWords,
           targetLanguage,
           nativeLanguage,
           llmConfig: configForServer,
@@ -360,7 +397,7 @@ export function useChat({
           return;
         }
         console.error("Error starting chat quiz:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig), "quiz-error");
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "quiz-error");
       } finally {
         setIsTyping(false);
       }
@@ -368,20 +405,25 @@ export function useChat({
     }
 
     // Step 2: Search for candidate words for Flashcards (prioritizing new words when flashcards_new or balanced mode is chosen)
-    let flashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
+    let batchFlashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
     if (practiceMode === "flashcards_new" || practiceMode === "balanced" || unstudiedWords.length > 0) {
       if (unstudiedWords.length > 0) {
-        flashcardCandidates = unstudiedWords.slice(0, 3);
+        batchFlashcardCandidates = unstudiedWords.slice(0, 3);
+      } else if (flashcardCandidates.length > 0) {
+        batchFlashcardCandidates = flashcardCandidates.slice(0, 3);
       }
     }
-    if (flashcardCandidates.length > 0) {
+    if (batchFlashcardCandidates.length === 0 && activeWords.length > 0) {
+      batchFlashcardCandidates = activeWords.slice(0, 3);
+    }
+    if (batchFlashcardCandidates.length > 0) {
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const configForServer = startTypingWithConfig(configToUse);
 
       try {
         const batchResult = await generateBatchFlashcardsService({
-          words: flashcardCandidates,
+          words: batchFlashcardCandidates,
           targetLanguage,
           nativeLanguage,
           llmConfig: configForServer,
@@ -391,7 +433,7 @@ export function useChat({
         const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
 
         // Update strength and review history for all studied words
-        const candidateIds = new Set(flashcardCandidates.map((w) => w.id));
+        const candidateIds = new Set(batchFlashcardCandidates.map((w) => w.id));
         setWords((prevWords) => {
           const updatedWords = prevWords.map((w) => {
             if (candidateIds.has(w.id)) {
@@ -466,7 +508,7 @@ export function useChat({
         setChatMessages([flashcardMsg]);
       } catch (e: any) {
         console.error("Error generating flash card deck:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig), "flashcard-error");
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "flashcard-error");
       } finally {
         setIsTyping(false);
       }

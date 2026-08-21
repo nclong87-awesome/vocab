@@ -241,6 +241,8 @@ export const viTranslations: LanguageTranslations = {
     chat_word_ready_quiz: "{count} từ sẵn sàng ôn tập Quiz",
     chat_words_ready_flashcard: "{count} từ sẵn sàng ôn thẻ Flashcard",
     chat_word_ready_flashcard: "{count} từ sẵn sàng ôn thẻ Flashcard",
+    chat_words_ready_practice: "{count} từ sẵn sàng luyện tập",
+    chat_word_ready_practice: "{count} từ sẵn sàng luyện tập",
     chat_practice_now_btn: "Luyện tập ngay",
     chat_review_flashcards_btn: "Ôn Flashcards",
     chat_quiz_intro: "🎬 **Bắt đầu bài kiểm tra tương tác hôm nay!**\n\nTôi đã tạo **{count}** câu hỏi rèn luyện từ vựng cho bạn.\n\n---\n\n### Câu 1 / {count}:\n**{question}**",

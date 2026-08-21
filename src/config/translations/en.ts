@@ -241,6 +241,8 @@ export const enTranslations: LanguageTranslations = {
     chat_word_ready_quiz: "{count} word ready for Quiz practice",
     chat_words_ready_flashcard: "{count} words ready for Flashcard review",
     chat_word_ready_flashcard: "{count} word ready for Flashcard review",
+    chat_words_ready_practice: "{count} words ready for practice",
+    chat_word_ready_practice: "{count} word ready for practice",
     chat_practice_now_btn: "Practice Now",
     chat_review_flashcards_btn: "Review Flashcards",
     chat_quiz_intro: "🎬 **Let's start today's interactive quiz!**\n\nI generated **{count}** questions adhering to target language rules and distractor logic.\n\n---\n\n### Question 1 of {count}:\n**{question}**",

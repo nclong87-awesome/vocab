@@ -162,18 +162,17 @@ export function calculateNextReviewDate(
  * Checks whether a word has reached or passed its scheduled next review time.
  */
 export function isWordEligibleForReview(word: Word, now: Date = new Date()): boolean {
-  // If exact nextReviewDate is present, check against it
+  // If never reviewed, it is immediately eligible for initial review/practice
+  if (!word.lastReviewed) {
+    return true;
+  }
+
+  // If exact nextReviewDate is present and word has been reviewed, check against it
   if (word.nextReviewDate) {
     const reviewTime = new Date(word.nextReviewDate).getTime();
     if (!isNaN(reviewTime)) {
       return now.getTime() >= reviewTime;
     }
-  }
-
-  // Fallback for words without nextReviewDate:
-  // If never reviewed, it's eligible
-  if (!word.lastReviewed) {
-    return true;
   }
 
   // Compute dynamic next review date from history baseline
@@ -203,7 +202,11 @@ export interface NextReviewInfo {
  */
 export function getNextReviewInfo(word: Word, now: Date = new Date()): NextReviewInfo {
   let targetIso = word.nextReviewDate;
-  if (!targetIso) {
+
+  // Unreviewed words are immediately due for initial study
+  if (!word.lastReviewed) {
+    targetIso = new Date(now.getTime() - 1000).toISOString();
+  } else if (!targetIso) {
     const { lastPracticeDate } = getLastPracticeBaseline(word);
     const fromDate = lastPracticeDate ? new Date(lastPracticeDate) : new Date();
     targetIso = calculateNextReviewDate(word, word.strength, undefined, fromDate);
@@ -213,7 +216,7 @@ export function getNextReviewInfo(word: Word, now: Date = new Date()): NextRevie
   const diffMs = targetDate.getTime() - now.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
   const diffDays = Math.ceil(diffHours / 24);
-  const isDue = diffMs <= 0;
+  const isDue = !word.lastReviewed || diffMs <= 0;
 
   let formattedCountdown = "Ready for Review";
   if (!isDue) {
@@ -615,4 +618,24 @@ export function getQuizCandidates(words: Word[], now: Date = new Date(), customC
 export function getFlashcardCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
   return words.filter(word => isFlashcardCandidate(word, now, customCooldownHours));
+}
+
+/**
+ * Gets all unique words that are ready for practice (both Quiz review + Flashcard study).
+ */
+export function getAllPracticeCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
+  if (!words || words.length === 0) return [];
+  const practiceMap = new Map<string, Word>();
+
+  const quizList = getQuizCandidates(words, now, customCooldownHours);
+  for (const w of quizList) {
+    practiceMap.set(w.id || w.word, w);
+  }
+
+  const flashcardList = getFlashcardCandidates(words, now, customCooldownHours);
+  for (const w of flashcardList) {
+    practiceMap.set(w.id || w.word, w);
+  }
+
+  return Array.from(practiceMap.values());
 }
