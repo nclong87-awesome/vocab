@@ -1,50 +1,171 @@
 import { useEffect, useRef, useId } from "react";
 
-interface ModalStackEntry {
+interface ModalEntry {
   id: string;
   onClose: () => void;
+  closedByPopstate: boolean;
 }
 
-// Global modal stack tracking all currently open modals
-const modalStack: ModalStackEntry[] = [];
+class ModalHistoryManager {
+  private static instance: ModalHistoryManager | null = null;
+  private stack: ModalEntry[] = [];
+  private programmaticPopsPending = 0;
+  private isListenerAttached = false;
+  private reconcileScheduled = false;
 
-// Flag to indicate if a popstate event was triggered by programmatic history.back()
-let isProgrammaticPop = false;
+  private constructor() {
+    this.initBaseState();
+    this.attachGlobalListener();
+  }
 
-// Global popstate handler initialized once
-let isGlobalListenerAttached = false;
+  public static getInstance(): ModalHistoryManager {
+    if (!ModalHistoryManager.instance) {
+      ModalHistoryManager.instance = new ModalHistoryManager();
+    }
+    return ModalHistoryManager.instance;
+  }
 
-function ensureGlobalPopStateListener() {
-  if (isGlobalListenerAttached) return;
-  isGlobalListenerAttached = true;
+  private getBrowserDepth(): number {
+    if (typeof window === "undefined") return 0;
+    const depth = window.history.state?.__modalDepth;
+    return typeof depth === "number" && !isNaN(depth) ? depth : 0;
+  }
 
-  window.addEventListener("popstate", (_event) => {
-    // If popstate was triggered by our own programmatic history.back() when user clicked an 'X' button, ignore it
-    if (isProgrammaticPop) {
-      isProgrammaticPop = false;
+  private initBaseState() {
+    if (typeof window === "undefined") return;
+    try {
+      const current = window.history.state;
+      // If no depth is set, or if depth was set by a previous session/reload with no open modals, reset to 0
+      if (!current || typeof current.__modalDepth !== "number" || current.__modalDepth > 0) {
+        window.history.replaceState({ ...current, __modalDepth: 0 }, "");
+      }
+    } catch (e) {
+      console.warn("[ModalHistoryManager] Failed to init base state:", e);
+    }
+  }
+
+  private attachGlobalListener() {
+    if (typeof window === "undefined" || this.isListenerAttached) return;
+    this.isListenerAttached = true;
+
+    window.addEventListener("popstate", (_event: PopStateEvent) => {
+      // 1. If this popstate was triggered by programmatic history.back() during UI-driven close, ignore it
+      if (this.programmaticPopsPending > 0) {
+        this.programmaticPopsPending--;
+        return;
+      }
+
+      // 2. Real user hardware / browser Back button pressed
+      if (this.stack.length > 0) {
+        // Pop top modal from the stack
+        const topModal = this.stack.pop();
+        if (topModal) {
+          topModal.closedByPopstate = true;
+          try {
+            topModal.onClose();
+          } catch (e) {
+            console.error("[ModalHistoryManager] Error in onClose handler:", e);
+          }
+        }
+      }
+    });
+  }
+
+  public register(id: string, onClose: () => void) {
+    // If already registered, update the onClose callback reference
+    const existing = this.stack.find((m) => m.id === id);
+    if (existing) {
+      existing.onClose = onClose;
       return;
     }
 
-    // User pressed browser / device back button
-    if (modalStack.length > 0) {
-      const topModal = modalStack.pop();
-      if (topModal && topModal.onClose) {
+    // Add to stack
+    this.stack.push({
+      id,
+      onClose,
+      closedByPopstate: false,
+    });
+
+    this.scheduleReconciliation();
+  }
+
+  public unregister(id: string) {
+    const index = this.stack.findIndex((m) => m.id === id);
+    if (index === -1) return;
+
+    const [modal] = this.stack.splice(index, 1);
+
+    // If it was closed by popstate, browser history was already stepped back by the browser.
+    // No need to call history.back().
+    if (modal.closedByPopstate) {
+      return;
+    }
+
+    // Modal was closed via UI action (e.g. 'X' button, backdrop, Done/Cancel button)
+    this.scheduleReconciliation();
+  }
+
+  private scheduleReconciliation() {
+    if (this.reconcileScheduled) return;
+    this.reconcileScheduled = true;
+
+    // Use microtask queue so that when one modal closes and another opens in the same render batch,
+    // they resolve together without unnecessary back/push history churn.
+    queueMicrotask(() => {
+      this.reconcileScheduled = false;
+      this.reconcile();
+    });
+  }
+
+  private reconcile() {
+    if (typeof window === "undefined") return;
+
+    const targetDepth = this.stack.length;
+    const currentDepth = this.getBrowserDepth();
+
+    if (currentDepth < targetDepth) {
+      // Need to push states until currentDepth matches targetDepth
+      const countToPush = targetDepth - currentDepth;
+      for (let i = 0; i < countToPush; i++) {
+        const nextDepth = currentDepth + i + 1;
+        const matchingModal = this.stack[nextDepth - 1];
         try {
-          topModal.onClose();
+          window.history.pushState(
+            {
+              __modalDepth: nextDepth,
+              __modalId: matchingModal ? matchingModal.id : `modal-${nextDepth}`,
+            },
+            ""
+          );
         } catch (e) {
-          console.error("Error executing modal onClose handler:", e);
+          console.warn("[ModalHistoryManager] pushState failed:", e);
+        }
+      }
+    } else if (currentDepth > targetDepth) {
+      // Need to pop states until currentDepth matches targetDepth
+      const countToPop = currentDepth - targetDepth;
+      for (let i = 0; i < countToPop; i++) {
+        // SAFETY GUARD: Never pop if current depth is already 0 (prevents navigating out of app)
+        if (this.getBrowserDepth() <= 0) break;
+
+        this.programmaticPopsPending++;
+        try {
+          window.history.back();
+        } catch (e) {
+          this.programmaticPopsPending = Math.max(0, this.programmaticPopsPending - 1);
+          console.warn("[ModalHistoryManager] history.back failed:", e);
         }
       }
     }
-  });
+  }
 }
 
 /**
- * Custom hook to handle device / browser back-button (popstate) navigation for closing modal dialogs.
+ * Custom hook to handle back-button navigation for modals, dialogs, drawers, and overlay popups.
  * 
- * - When `isOpen` is true: Pushes a history entry and adds the modal to the active stack.
- * - When user presses Back button: Closes the top-most modal on the stack without leaving the page.
- * - When user clicks 'X', backdrop, or closes modal via UI: Reverts the history entry cleanly.
+ * @param isOpen Whether the modal is currently open and active
+ * @param onClose Callback to close the modal when user presses hardware/browser Back button
+ * @param customId Optional unique string identifier for the modal
  */
 export function useModalBackNavigation(
   isOpen: boolean,
@@ -57,50 +178,23 @@ export function useModalBackNavigation(
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    ensureGlobalPopStateListener();
-
     if (!isOpen || !onCloseRef.current) {
       return;
     }
 
-    // Check if this modal is already on top of the stack
-    const existingIndex = modalStack.findIndex((item) => item.id === modalId);
-    if (existingIndex >= 0) {
-      modalStack[existingIndex].onClose = () => {
-        if (onCloseRef.current) onCloseRef.current();
-      };
-      return;
-    }
-
-    // Push a new history entry for this modal
-    try {
-      window.history.pushState({ modalOpenId: modalId }, "");
-    } catch (e) {
-      console.warn("Failed to push history state for modal:", e);
-    }
-
-    // Add to modal stack
-    modalStack.push({
-      id: modalId,
-      onClose: () => {
-        if (onCloseRef.current) onCloseRef.current();
+    const manager = ModalHistoryManager.getInstance();
+    
+    // Stable wrapper that always invokes the latest onClose callback
+    const handleClose = () => {
+      if (onCloseRef.current) {
+        onCloseRef.current();
       }
-    });
+    };
+
+    manager.register(modalId, handleClose);
 
     return () => {
-      // Cleanup when modal closes or unmounts
-      const index = modalStack.findIndex((item) => item.id === modalId);
-      if (index >= 0) {
-        // Modal is still in stack, meaning it was closed via UI (e.g. 'X' button or backdrop), NOT via popstate
-        modalStack.splice(index, 1);
-        try {
-          isProgrammaticPop = true;
-          window.history.back();
-        } catch (e) {
-          isProgrammaticPop = false;
-          console.warn("Failed to step back history on modal close:", e);
-        }
-      }
+      manager.unregister(modalId);
     };
   }, [isOpen, modalId]);
 }
