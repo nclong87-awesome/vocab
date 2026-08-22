@@ -159,7 +159,11 @@ function FlashcardMessageCard({
 
   const scrollToCardTop = () => {
     if (cardContainerRef.current) {
-      cardContainerRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      try {
+        cardContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {
+        cardContainerRef.current.scrollIntoView();
+      }
     }
   };
 

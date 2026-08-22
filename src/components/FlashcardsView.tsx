@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Volume2, 
@@ -54,6 +54,17 @@ export default function FlashcardsView({
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [filterCategory, setFilterCategory] = useState<"all" | "new" | "due" | "starred">("all");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const cardContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToCardTop = () => {
+    if (cardContainerRef.current) {
+      try {
+        cardContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {
+        cardContainerRef.current.scrollIntoView();
+      }
+    }
+  };
 
   const filterCounts = useMemo(() => {
     if (!words) return { all: 0, new: 0, due: 0, starred: 0 };
@@ -149,6 +160,7 @@ export default function FlashcardsView({
       if (nextWord && nextWord.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
         speakWord(nextWord.word);
       }
+      setTimeout(scrollToCardTop, 30);
     }
   };
 
@@ -157,6 +169,7 @@ export default function FlashcardsView({
     stopSpeech();
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
+      setTimeout(scrollToCardTop, 30);
     }
   };
 
@@ -290,7 +303,7 @@ export default function FlashcardsView({
           </div>
 
           {/* Flashcard Animation */}
-          <div className="relative min-h-[400px] sm:min-h-[440px] w-full preserve-3d" id="flashcard-container">
+          <div ref={cardContainerRef} className="relative min-h-[400px] sm:min-h-[440px] w-full preserve-3d scroll-mt-4" id="flashcard-container">
             <AnimatePresence mode="wait">
               {currentWord && (
                 <motion.div
