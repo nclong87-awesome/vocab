@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Volume2 } from "lucide-react";
 
 // Inline custom markdown-like parser for formatting AI messages
 export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] | string {
@@ -96,14 +96,93 @@ interface FormattedMessageProps {
   suggestedActions?: { label: string; action: string; payload?: any }[];
   onActionClick?: (action: { label: string; action: string; payload?: any }) => void;
   appLanguage?: string;
+  onPlayAudio?: (text: string) => void;
+  targetWord?: string;
 }
 
-function FormattedMessage({ text, suggestedActions, onActionClick, appLanguage }: FormattedMessageProps) {
+function FormattedMessage({
+  text,
+  suggestedActions,
+  onActionClick,
+  appLanguage,
+  onPlayAudio,
+  targetWord,
+}: FormattedMessageProps) {
   const safeText = typeof text === "string" ? text : (text ? String(text) : "");
 
   const renderedContent = React.useMemo(() => {
     const lines = safeText.split("\n");
+
+    // Scan for potential target words in this message block
+    let globalDetectedWord = targetWord || "";
+    if (!globalDetectedWord) {
+      // 1. Look for explicit *Word*: ... or *Từ*: ... lines
+      for (const l of lines) {
+        const wMatch = l.match(/^\s*\*(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)\*:\s*(?:\*\*)?([^*(\n\r]+)/i);
+        if (wMatch) {
+          globalDetectedWord = wMatch[1].replace(/\*\*/g, "").trim();
+          break;
+        }
+      }
+    }
+    if (!globalDetectedWord) {
+      // 2. Look for answer pattern: e.g. is "experiment" or is **"experiment"** or Correct answer: "experiment"
+      const ansMatch = safeText.match(/(?:is\s+|answer:\s*|đúng:\s*)(?:\*\*)?["“]([^"”]+)["”]/i);
+      if (ansMatch) {
+        globalDetectedWord = ansMatch[1].trim();
+      }
+    }
+    if (!globalDetectedWord) {
+      // 3. Look for header pattern: ### **word** `/ipa/`
+      for (const l of lines) {
+        const hMatch = l.match(/^\s*###\s*(?:\d+\.\s*)?\*\*([^*]+)\*\*/i);
+        if (hMatch) {
+          globalDetectedWord = hMatch[1].trim();
+          break;
+        }
+      }
+    }
+
+    let currentSectionWord = globalDetectedWord;
+
     return lines.map((line, i) => {
+      // Check if line specifies a new word context
+      const wMatch = line.match(/^\s*\*(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)\*:\s*(?:\*\*)?([^*(\n\r]+)/i);
+      if (wMatch) {
+        currentSectionWord = wMatch[1].replace(/\*\*/g, "").trim();
+      }
+
+      const hMatch = line.match(/^\s*###\s*(?:\d+\.\s*)?\*\*([^*]+)\*\*/i);
+      if (hMatch) {
+        currentSectionWord = hMatch[1].trim();
+      }
+
+      // Check if this line is a Pronunciation line (e.g. *Pronunciation*: `/.../` or *Phát âm*: `/.../` etc.)
+      const isPronunciationLine =
+        /^\s*\*(?:Pronunciation|Phát âm|Prononciation|Aussprache|Pronunciación|Pronuncia|Pronúncia|발음|発音|发音)\*:/i.test(line) ||
+        /^\s*(?:\*|\-)?\s*(?:Pronunciation|Phát âm|Prononciation|Aussprache|Pronunciación|Pronuncia|Pronúncia|발음|発音|发音)\s*:\s*`/i.test(line) ||
+        (/^\s*(?:\*|\-)?\s*(?:Pronunciation|Phát âm|Prononciation|Aussprache|Pronunciación|Pronuncia|Pronúncia|발음|発音|发音)\s*:/i.test(line) && /\/[^\/]+\//.test(line));
+
+      if (isPronunciationLine) {
+        const wordToPlay = currentSectionWord || globalDetectedWord || targetWord;
+        return (
+          <div key={i} className="flex items-center gap-1.5 text-stone-800 my-0.5 flex-wrap">
+            <span className="align-middle">{parseInlineMarkdown(line)}</span>
+            {onPlayAudio && wordToPlay && (
+              <button
+                type="button"
+                onClick={() => onPlayAudio(wordToPlay)}
+                className="p-1 sm:p-1.5 rounded-md bg-stone-100 hover:bg-amber-100 hover:border-amber-400 text-stone-700 hover:text-amber-950 border border-stone-200/80 transition-all cursor-pointer shadow-3xs inline-flex items-center justify-center shrink-0 active:scale-95"
+                title={`Play audio for "${wordToPlay}"`}
+                aria-label={`Play audio for "${wordToPlay}"`}
+              >
+                <Volume2 className="w-3.5 h-3.5 text-amber-700" />
+              </button>
+            )}
+          </div>
+        );
+      }
+
       // Handle Bullet Points
       if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
         const content = line.trim().substring(2);
@@ -167,10 +246,27 @@ function FormattedMessage({ text, suggestedActions, onActionClick, appLanguage }
 
       // Handle Headers
       if (line.trim().startsWith("### ")) {
+        const headerContent = line.trim().substring(4);
+        const hasIpaOrPronunciation = /`\/[^\/]+\/`/.test(headerContent) || /\/[a-zA-Zˈˌːɪɛæɑɔʊəʌpbtdkɡfvθðszʃʒhmnŋlrjw]+?\//.test(headerContent);
+        const headerWord = hMatch ? hMatch[1].trim() : (currentSectionWord || globalDetectedWord);
+
         return (
-          <h4 key={i} className="text-base font-bold text-stone-900 pt-2 pb-1">
-            {parseInlineMarkdown(line.trim().substring(4))}
-          </h4>
+          <div key={i} className="flex items-center gap-2 pt-2 pb-1 flex-wrap">
+            <h4 className="text-base font-bold text-stone-900">
+              {parseInlineMarkdown(headerContent)}
+            </h4>
+            {hasIpaOrPronunciation && onPlayAudio && headerWord && (
+              <button
+                type="button"
+                onClick={() => onPlayAudio(headerWord)}
+                className="p-1 rounded-md bg-stone-100 hover:bg-amber-100 hover:border-amber-400 text-stone-700 hover:text-amber-950 border border-stone-200/80 transition-all cursor-pointer shadow-3xs inline-flex items-center justify-center shrink-0 active:scale-95"
+                title={`Play audio for "${headerWord}"`}
+                aria-label={`Play audio for "${headerWord}"`}
+              >
+                <Volume2 className="w-3.5 h-3.5 text-amber-700" />
+              </button>
+            )}
+          </div>
         );
       }
       if (line.trim().startsWith("## ")) {
@@ -188,7 +284,7 @@ function FormattedMessage({ text, suggestedActions, onActionClick, appLanguage }
 
       return <p key={i} className="text-stone-800">{parseInlineMarkdown(line)}</p>;
     });
-  }, [safeText, suggestedActions, onActionClick, appLanguage]);
+  }, [safeText, suggestedActions, onActionClick, appLanguage, onPlayAudio, targetWord]);
 
   return (
     <div className="space-y-1.5 text-sm sm:text-base leading-relaxed break-words">

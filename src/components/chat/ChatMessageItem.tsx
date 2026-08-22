@@ -616,6 +616,8 @@ function ChatMessageItem({
                 suggestedActions={nextQuestionPart ? undefined : unfilteredActions}
                 onActionClick={handleActionClick}
                 appLanguage={currentAppLang}
+                onPlayAudio={(textToPlay) => speakText(textToPlay, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                targetWord={answeredWord?.word}
               />
 
               {/* Word Strength History banner shown AFTER user answers the quiz question (placed between feedback and next question) */}
@@ -639,15 +641,26 @@ function ChatMessageItem({
                       </span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedHistoryWord(answeredWord)}
-                    className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105 shrink-0"
-                    title={`View Strength History for "${answeredWord.word}"`}
-                  >
-                    <History className="w-3.5 h-3.5 text-amber-600" />
-                    <span className="hidden sm:inline">Strength History</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => speakText(answeredWord.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                      className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
+                      title={`Play audio for "${answeredWord.word}"`}
+                    >
+                      <Volume2 className="w-3.5 h-3.5 text-amber-700" />
+                      <span className="hidden sm:inline">Audio</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedHistoryWord(answeredWord)}
+                      className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
+                      title={`View Strength History for "${answeredWord.word}"`}
+                    >
+                      <History className="w-3.5 h-3.5 text-amber-600" />
+                      <span className="hidden sm:inline">Strength History</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -659,6 +672,8 @@ function ChatMessageItem({
                     suggestedActions={unfilteredActions}
                     onActionClick={handleActionClick}
                     appLanguage={currentAppLang}
+                    onPlayAudio={(textToPlay) => speakText(textToPlay, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                    targetWord={answeredWord?.word}
                   />
                 </>
               )}
