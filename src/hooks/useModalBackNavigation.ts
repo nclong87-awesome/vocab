@@ -1,55 +1,104 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useId } from "react";
+
+interface ModalStackEntry {
+  id: string;
+  onClose: () => void;
+}
+
+// Global modal stack tracking all currently open modals
+const modalStack: ModalStackEntry[] = [];
+
+// Flag to indicate if a popstate event was triggered by programmatic history.back()
+let isProgrammaticPop = false;
+
+// Global popstate handler initialized once
+let isGlobalListenerAttached = false;
+
+function ensureGlobalPopStateListener() {
+  if (isGlobalListenerAttached) return;
+  isGlobalListenerAttached = true;
+
+  window.addEventListener("popstate", (_event) => {
+    // If popstate was triggered by our own programmatic history.back() when user clicked an 'X' button, ignore it
+    if (isProgrammaticPop) {
+      isProgrammaticPop = false;
+      return;
+    }
+
+    // User pressed browser / device back button
+    if (modalStack.length > 0) {
+      const topModal = modalStack.pop();
+      if (topModal && topModal.onClose) {
+        try {
+          topModal.onClose();
+        } catch (e) {
+          console.error("Error executing modal onClose handler:", e);
+        }
+      }
+    }
+  });
+}
 
 /**
- * Custom hook to handle back-button (popstate) navigation for closing modals.
- *
- * When `isOpen` becomes true:
- * 1. Pushes a dummy state into history (`window.history.pushState({ modalOpen: true }, "")`)
- * 2. Listens for `popstate` event. When triggered (user clicks browser/device Back button),
- *    invokes `onClose()`.
- * 3. On modal close or unmount (e.g. via 'X' button or backdrop click), automatically reverts the history entry.
+ * Custom hook to handle device / browser back-button (popstate) navigation for closing modal dialogs.
+ * 
+ * - When `isOpen` is true: Pushes a history entry and adds the modal to the active stack.
+ * - When user presses Back button: Closes the top-most modal on the stack without leaving the page.
+ * - When user clicks 'X', backdrop, or closes modal via UI: Reverts the history entry cleanly.
  */
 export function useModalBackNavigation(
   isOpen: boolean,
   onClose?: () => void,
-  modalId?: string
+  customId?: string
 ) {
+  const autoId = useId();
+  const modalId = customId || autoId;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const pushedStateRef = useRef(false);
-
   useEffect(() => {
-    if (!isOpen) {
-      pushedStateRef.current = false;
+    ensureGlobalPopStateListener();
+
+    if (!isOpen || !onCloseRef.current) {
       return;
     }
 
-    // Push state when modal opens
-    pushedStateRef.current = true;
-    const stateId = modalId || `modal-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    window.history.pushState({ modalOpen: true, stateId }, "");
+    // Check if this modal is already on top of the stack
+    const existingIndex = modalStack.findIndex((item) => item.id === modalId);
+    if (existingIndex >= 0) {
+      modalStack[existingIndex].onClose = () => {
+        if (onCloseRef.current) onCloseRef.current();
+      };
+      return;
+    }
 
-    const handlePopState = (_event: PopStateEvent) => {
-      // Back button was pressed by user
-      pushedStateRef.current = false;
-      if (onCloseRef.current) {
-        onCloseRef.current();
+    // Push a new history entry for this modal
+    try {
+      window.history.pushState({ modalOpenId: modalId }, "");
+    } catch (e) {
+      console.warn("Failed to push history state for modal:", e);
+    }
+
+    // Add to modal stack
+    modalStack.push({
+      id: modalId,
+      onClose: () => {
+        if (onCloseRef.current) onCloseRef.current();
       }
-    };
-
-    window.addEventListener("popstate", handlePopState);
+    });
 
     return () => {
-      window.removeEventListener("popstate", handlePopState);
-      // If modal is unmounted or closed programmatically (e.g. by clicking 'X' or backdrop)
-      // rather than via back button, step back in history to clean up the dummy entry.
-      if (pushedStateRef.current) {
-        pushedStateRef.current = false;
+      // Cleanup when modal closes or unmounts
+      const index = modalStack.findIndex((item) => item.id === modalId);
+      if (index >= 0) {
+        // Modal is still in stack, meaning it was closed via UI (e.g. 'X' button or backdrop), NOT via popstate
+        modalStack.splice(index, 1);
         try {
+          isProgrammaticPop = true;
           window.history.back();
         } catch (e) {
-          console.warn("Failed to revert history state on modal close", e);
+          isProgrammaticPop = false;
+          console.warn("Failed to step back history on modal close:", e);
         }
       }
     };

@@ -14,6 +14,7 @@ import {
 import { Word } from "../../types";
 import { getEffectiveStrengthHistory } from "../../utils/strengthHistoryHelpers";
 import { getDaysSinceLastReview, getNextReviewInfo } from "../../utils/spacedRepetition";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface StrengthHistoryModalProps {
   word: Word;
@@ -25,6 +26,8 @@ export default function StrengthHistoryModal({
   word,
   onClose
 }: StrengthHistoryModalProps) {
+  useModalBackNavigation(true, onClose);
+
   const [hoveredEntryId, setHoveredEntryId] = useState<string | null>(null);
 
   // Close modal on Escape key press

@@ -14,6 +14,7 @@ import {
   Lock,
 } from "lucide-react";
 import { LLMConfig } from "../types";
+import { useModalBackNavigation } from "../hooks/useModalBackNavigation";
 import { 
   getAllModelStatuses, 
   ModelStatusItem, 
@@ -36,6 +37,8 @@ export default function ModelStatusModal({
   onClose,
   llmConfig
 }: ModelStatusModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   const [modelStatuses, setModelStatuses] = useState<ModelStatusItem[]>([]);
   const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
