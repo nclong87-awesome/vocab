@@ -6,6 +6,7 @@ import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getProviderDisplayName } from "../../utils/llmHelpers";
 import { isModelLocked } from "../../utils/autoModeManager";
 import { getStoredAccessCode } from "../../utils";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface AiErrorFallbackModalProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ export default function AiErrorFallbackModal({
   llmConfig,
   onConfirmSwitchAndRetry
 }: AiErrorFallbackModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   // Filter out current failed provider and providers where all models are locked
   const alternativeProviders = PROVIDER_OPTIONS.filter(p => {
     if (p.id === currentProvider) return false;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { 
   Cloud, 
   X, 
@@ -20,6 +21,8 @@ export default function CloudSyncConfigModal({
   onSaveAndSync,
   onOpenSettings
 }: CloudSyncConfigModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   const [token, setToken] = useState(() => localStorage.getItem("github_gist_token") || "");
   const [gistId, setGistId] = useState(() => localStorage.getItem("github_gist_id") || "");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface MobileSideDrawerProps {
   isOpen: boolean;
@@ -15,44 +16,7 @@ export default function MobileSideDrawer({
   title,
   children
 }: MobileSideDrawerProps) {
-  const hasPushedStateRef = useRef(false);
-  const onCloseRef = useRef(onClose);
-
-  // Keep onCloseRef updated with the latest onClose function reference
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  // Handle browser back button to close the drawer
-  useEffect(() => {
-    if (isOpen) {
-      try {
-        window.history.pushState({ drawerOpen: true }, "");
-        hasPushedStateRef.current = true;
-      } catch (e) {
-        console.warn("History pushState is not supported or permitted in this environment:", e);
-      }
-
-      const handlePopState = () => {
-        hasPushedStateRef.current = false;
-        onCloseRef.current();
-      };
-
-      window.addEventListener("popstate", handlePopState);
-
-      return () => {
-        window.removeEventListener("popstate", handlePopState);
-        if (hasPushedStateRef.current) {
-          hasPushedStateRef.current = false;
-          try {
-            window.history.back();
-          } catch (e) {
-            console.warn("History back is not supported or permitted in this environment:", e);
-          }
-        }
-      };
-    }
-  }, [isOpen]);
+  useModalBackNavigation(isOpen, onClose);
 
   return (
     <AnimatePresence>

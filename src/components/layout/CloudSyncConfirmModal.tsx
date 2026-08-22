@@ -13,6 +13,7 @@ import {
   Trash2
 } from "lucide-react";
 import { MergeResult } from "../../utils/cloudSyncMerge";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface CloudSyncConfirmModalProps {
   isOpen: boolean;
@@ -35,6 +36,8 @@ export default function CloudSyncConfirmModal({
   onOverwriteLocalFromCloud,
   onCancel
 }: CloudSyncConfirmModalProps) {
+  useModalBackNavigation(isOpen, onCancel);
+
   if (!isOpen || !localData || !remoteData) return null;
 
   const localWordsCount = localData.stores?.words?.length || 0;

@@ -18,6 +18,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { SUPPORTED_LANGUAGES, getLanguageFlag } from "../config/languages";
+import { useModalBackNavigation } from "../hooks/useModalBackNavigation";
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -45,6 +46,8 @@ export default function OnboardingModal({
   onClose,
   canDismiss = false
 }: OnboardingModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form State

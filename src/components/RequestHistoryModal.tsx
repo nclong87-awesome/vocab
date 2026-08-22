@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useModalBackNavigation } from "../hooks/useModalBackNavigation";
 import { 
   X, 
   Search, 
@@ -32,6 +33,8 @@ export default function RequestHistoryModal({
   onClose,
   initialSelectedLogId
 }: RequestHistoryModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   const [logs, setLogs] = useState<ApiRequestLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

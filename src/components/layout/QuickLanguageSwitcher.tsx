@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Globe, ChevronDown, Check, ArrowRight, Languages, Search, X, Info } from "lucide-react";
 import { SUPPORTED_LANGUAGES, getLanguageFlag } from "../../config/languages";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface QuickLanguageSwitcherProps {
   targetLanguage: string;
@@ -24,6 +25,8 @@ export default function QuickLanguageSwitcher({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useModalBackNavigation(isOpen, () => setIsOpen(false));
 
   useEffect(() => {
     setCurrentTarget(targetLanguage);

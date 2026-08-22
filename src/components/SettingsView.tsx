@@ -42,6 +42,7 @@ import {
   resetIndexedDBDatabase 
 } from "../db/indexedDB";
 import { syncToGist, syncFromGist } from "../services/githubGistService";
+import { useModalBackNavigation } from "../hooks/useModalBackNavigation";
 import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
 import RequestHistoryModal from "./RequestHistoryModal";
 
@@ -101,6 +102,7 @@ export default function SettingsView({
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
   const [isRequestHistoryModalOpen, setIsRequestHistoryModalOpen] = useState(false);
   
+  useModalBackNavigation(showVoicePackGuideModal, () => setShowVoicePackGuideModal(false));
 
   useEffect(() => {
     setSelectedTargetLang(targetLanguage);
@@ -527,6 +529,8 @@ export default function SettingsView({
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [resetMode, setResetMode] = useState<"defaults" | "empty">("defaults");
   const [isResetting, setIsResetting] = useState(false);
+
+  useModalBackNavigation(showResetConfirmModal, () => setShowResetConfirmModal(false));
 
   // Reset database execution
   const handleConfirmReset = async () => {

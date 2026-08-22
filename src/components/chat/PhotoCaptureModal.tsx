@@ -20,6 +20,7 @@ import {
   RotateCcw
 } from "lucide-react";
 import { resizeImageDataUrl } from "../../utils/llmHelpers";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface PhotoCaptureModalProps {
   isOpen: boolean;
@@ -36,6 +37,8 @@ function PhotoCaptureModal({
   onImageSubmit,
   onToast,
 }: PhotoCaptureModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   const [mode, setMode] = useState<"choose" | "camera" | "preview">("choose");
   const [capturedImage, setCapturedImage] = useState<{ dataUrl: string; name: string } | null>(null);
   const [focusNote, setFocusNote] = useState<string>("");

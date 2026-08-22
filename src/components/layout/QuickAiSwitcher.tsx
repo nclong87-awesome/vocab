@@ -16,6 +16,7 @@ import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { getSavedProvidersMap } from "../../utils/llmHelpers";
 import { isModelLocked, clearAllLocks, resetAllModelStates } from "../../utils/autoModeManager";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import ModelStatusModal from "../ModelStatusModal";
 import RequestHistoryModal from "../RequestHistoryModal";
 
@@ -50,6 +51,8 @@ export default function QuickAiSwitcher({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isModelStatusModalOpen, setIsModelStatusModalOpen] = useState(false);
   const [isRequestHistoryModalOpen, setIsRequestHistoryModalOpen] = useState(false);
+
+  useModalBackNavigation(isOpen, () => setIsOpen(false));
 
   const activeProviderMeta = PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider) || PROVIDER_OPTIONS[0];
   const savedMap = getSavedProvidersMap(llmConfig);

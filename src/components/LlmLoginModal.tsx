@@ -26,6 +26,7 @@ import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID } from "../config/llmProviders";
 import { getSavedProvidersMap } from "../utils/llmHelpers";
 import { testLlmConnection } from "../services/llmClientService";
 import { getStoredAccessCode, setStoredAccessCode } from "../utils";
+import { useModalBackNavigation } from "../hooks/useModalBackNavigation";
 
 import { SUPPORTED_LANGUAGES, LanguageOption } from "../config/languages";
 
@@ -54,6 +55,8 @@ export default function LlmLoginModal({
   canDismiss = false,
   defaultStep = 1
 }: LlmLoginModalProps) {
+  useModalBackNavigation(isOpen, onClose);
+
   const [step, setStep] = useState<number>(defaultStep);
 
   // Email state
