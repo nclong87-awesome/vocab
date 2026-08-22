@@ -238,6 +238,8 @@ export const deTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Quiz abgeschlossen!**\n\nSie haben **{score} von {total}** Fragen richtig beantwortet ({accuracy}%).\n\nIch habe Ihre Statistiken aktualisiert und die Gedächtnisstärke der Wörter angepasst! Alles bereit.\n\nWas möchten Sie als Nächstes lernen?",
     chat_practice_start_today_action: "🎯 Heutiges Training starten",
     action_next_practice: "🎯 Nächste Übungseinheit",
+    action_next_flashcard: "🃏 Nächste Karteikarte",
+    action_next_quiz: "🏆 Nächstes Quiz",
     chat_quiz_common_phrases_action: "🗣️ Häufige Ausdrücke & Redewendungen",
     chat_lookup_status: "🔍 *Konsultiere Wörterbuch, übersetze und generiere Definition für **„{word}“**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **Keine gültige Definition für „{word}“ gefunden**{contextHintStr}.\n\nDieser Eintrag wurde **nicht** zu Ihrer Sammlung hinzugefügt.\n\n👇 **Geben Sie unten ein anderes Wort ein**, um es erneut zu versuchen!",

@@ -238,6 +238,8 @@ export const esTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **¡Cuestionario completado!**\n\nHas acertado **{score} de {total}** ({accuracy}%).\n\n¡He actualizado tus estadísticas y ajustado los niveles de retención de las palabras! Todo listo.\n\n¿Qué te gustaría aprender a continuación?",
     chat_practice_start_today_action: "🎯 Iniciar práctica de hoy",
     action_next_practice: "🎯 Siguiente sesión de práctica",
+    action_next_flashcard: "🃏 Siguiente Tarjeta Flash",
+    action_next_quiz: "🏆 Siguiente Cuestionario",
     chat_quiz_common_phrases_action: "🗣️ Frases comunes y modismos",
     chat_lookup_status: "🔍 *Consultando diccionario, traduciendo y generando definición para **\"{word}\"**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **No se ha encontrado ninguna definición válida para \"{word}\"**{contextHintStr}.\n\nEsta entrada **no** se ha añadido a tu colección.\n\n👇 **Escribe otra palabra abajo** para volver a intentarlo.",

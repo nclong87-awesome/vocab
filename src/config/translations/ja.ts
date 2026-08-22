@@ -238,6 +238,8 @@ export const jaTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **クイズ完了！**\n\nスコアは **{total} 問中 {score} 問正解** ({accuracy}%) でした。\n\n統計情報を更新し、単語の記憶定着度を調整しました！お疲れ様でした。\n\n次は何を学びますか？",
     chat_practice_start_today_action: "🎯 本日の練習を開始",
     action_next_practice: "🎯 次の練習セッション",
+    action_next_flashcard: "🃏 次のフラッシュカード",
+    action_next_quiz: "🏆 次のクイズ",
     chat_quiz_common_phrases_action: "🗣️ 定番フレーズ＆慣用句",
     chat_lookup_status: "🔍 *「{word}」の辞書照会、翻訳、定義の生成を行っています{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **「{word}」に対する有効な定義が見つかりませんでした**{contextHintStr}。\n\nこの単語は単語帳に追加されませんでした。\n\n👇 **他の単語を下のチャットに入力**してもう一度お試しください！",

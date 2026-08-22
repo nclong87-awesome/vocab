@@ -510,7 +510,7 @@ export function useChat({
           responseTimeMs: batchResult.responseTimeMs,
           suggestedActions: [
             ...top3SuggestedActions,
-            { label: t("action_next_practice", currentAppLang), action: "start_practice" },
+            { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" },
           ],
         };
 
@@ -753,7 +753,7 @@ export function useChat({
         },
         suggestedActions: [
           ...wordAddActions,
-          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
+          { label: t("action_next_quiz", currentAppLang), action: "start_practice_quiz_only" },
           { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
         ],
       };
@@ -2284,7 +2284,7 @@ export function useChat({
         responseTimeMs: batchResult.responseTimeMs,
         suggestedActions: [
           ...top3SuggestedActions,
-          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" }
+          { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" }
         ],
       };
 

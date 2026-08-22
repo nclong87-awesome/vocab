@@ -238,6 +238,8 @@ export const frTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Quiz terminé !**\n\nVous avez obtenu **{score} sur {total}** ({accuracy}%).\n\nJ'ai mis à jour vos statistiques et ajusté les niveaux de rétention des mots ! Tout est prêt.\n\nQu'aimeriez-vous apprendre ensuite ?",
     chat_practice_start_today_action: "🎯 Commencer l'entraînement du jour",
     action_next_practice: "🎯 Prochaine session d'entraînement",
+    action_next_flashcard: "🃏 Prochaine Carte Flash",
+    action_next_quiz: "🏆 Prochain Quiz",
     chat_quiz_common_phrases_action: "🗣️ Expressions courantes & Idiomes",
     chat_lookup_status: "🔍 *Consultation du dictionnaire, traduction et génération de la définition pour **\"{word}\"**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **Aucune définition valide trouvée pour \"{word}\"**{contextHintStr}.\n\nCette entrée n'a **pas** été ajoutée à votre collection.\n\n👇 **Saisissez un autre mot ci-dessous** pour réessayer !",

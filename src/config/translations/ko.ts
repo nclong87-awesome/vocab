@@ -238,6 +238,8 @@ export const koTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **퀴즈 완료!**\n\n성적은 **{total}문제 중 {score}문제 정답** ({accuracy}%)입니다.\n\n통계 정보를 업데이트하고 단어의 기억 정착도를 조정했습니다! 모두 완료되었습니다.\n\n다음엔 무엇을 학습하시겠습니까?",
     chat_practice_start_today_action: "🎯 오늘 연습 시작하기",
     action_next_practice: "🎯 다음 연습 세션",
+    action_next_flashcard: "🃏 다음 플래시카드",
+    action_next_quiz: "🏆 다음 퀴즈",
     chat_quiz_common_phrases_action: "🗣️ 필수 표현 및 관용구",
     chat_lookup_status: "🔍 *사전을 조회하고, 번역하고, **\"{word}\"**의 정의를 생성하는 중{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **\"{word}\"에 대한 올바른 뜻을 찾지 못했습니다**{contextHintStr}.\n\n이 단어는 단어장에 추가되지 않았습니다.\n\n👇 **아래에 다른 단어를 입력**하여 다시 시도해 보세요!",

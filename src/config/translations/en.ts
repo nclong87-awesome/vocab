@@ -255,6 +255,8 @@ export const enTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Quiz Completed!**\n\nYou scored **{score} out of {total}** ({accuracy}%).\n\nI have updated your statistics and adjusted word learning strength values! All set.\n\nWhat would you like to learn next?",
     chat_practice_start_today_action: "🎯 Start Practice",
     action_next_practice: "🎯 Next Practice Session",
+    action_next_flashcard: "🃏 Next Flashcard",
+    action_next_quiz: "🏆 Next Quiz",
     chat_quiz_common_phrases_action: "🗣️ Common Phrases & Idioms",
     chat_lookup_status: "🔍 *Consulting dictionary, translating, and generating definition for **\"{word}\"**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **No valid definition found for \"{word}\"**{contextHintStr}.\n\nThis entry was **not** added to your collection.\n\n👇 **Type another word below** to try again!",

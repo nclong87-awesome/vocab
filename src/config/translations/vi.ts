@@ -255,6 +255,8 @@ export const viTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Hoàn thành bài kiểm tra!**\n\nBạn đạt **{score} / {total}** ({accuracy}%).\n\nTôi đã cập nhật thống kê và điều chỉnh độ ghi nhớ từ vựng cho bạn! Tất cả đã sẵn sàng.\n\nBạn muốn học gì tiếp theo?",
     chat_practice_start_today_action: "🎯 Bắt Đầu Luyện Tập",
     action_next_practice: "🎯 Phiên Luyện Tập Tiếp Theo",
+    action_next_flashcard: "🃏 Flashcard Tiếp Theo",
+    action_next_quiz: "🏆 Bài Kiểm Tra Tiếp Theo",
     chat_quiz_common_phrases_action: "🗣️ Cụm Từ & Thành Ngữ Phổ Biến",
     chat_lookup_status: "🔍 *Đang tra từ điển, dịch và tạo định nghĩa cho **\"{word}\"**{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **Không tìm thấy định nghĩa hợp lệ cho \"{word}\"**{contextHintStr}.\n\nMục này **chưa** được thêm vào bộ sưu tập.\n\n👇 **Nhập một từ khác bên dưới** để thử lại!",

@@ -238,6 +238,8 @@ export const zhTranslations: LanguageTranslations = {
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **测验已完成！**\n\n您的得分是 **{score} / {total}** (正确率 {accuracy}%)。\n\n我已更新您的统计数据并调整了词汇的记忆强度！一切就绪。\n\n接下来您想学点什么？",
     chat_practice_start_today_action: "🎯 开始今日练习",
     action_next_practice: "🎯 下一次练习",
+    action_next_flashcard: "🃏 下一张抽认卡",
+    action_next_quiz: "🏆 下一次测验",
     chat_quiz_common_phrases_action: "🗣️ 常用短语与地道表达",
     chat_lookup_status: "🔍 *正在为您查询词典、翻译并生成 **“{word}”** 的释义{contextHintStr}...*",
     chat_lookup_not_found: "⚠️ **未找到 “{word}” 的有效释义**{contextHintStr}。\n\n该条目**未**被添加至您的词汇本。\n\n👇 **在下方输入其他单词**以重试！",

@@ -52,6 +52,14 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
   const lower = rawLabel.toLowerCase();
 
+  if (act.action === "view_flashcard" || act.action === "next_flashcard" || lower.includes("next flashcard") || lower.includes("flashcard")) {
+    return t("action_next_flashcard", currentAppLang);
+  }
+
+  if (act.action === "start_practice_quiz_only" || act.action === "next_quiz" || lower.includes("next quiz") || lower.includes("quiz review")) {
+    return t("action_next_quiz", currentAppLang);
+  }
+
   if (act.action === "start_practice" || lower.includes("start practice") || lower.includes("practice")) {
     return t("chat_practice_start_today_action", currentAppLang);
   }
@@ -285,16 +293,47 @@ function ChatMessageItem({
           }
         }));
 
-        // Keep non-word actions from msg.suggestedActions (e.g. view_flashcard, start_practice)
-        const nonWordActions = (msg.suggestedActions || []).filter(
-          a => a && a.action !== "add_word" && a.action !== "confirm_save_word" && a.action !== "add_multiplewords"
-        );
+        // Keep non-word actions from msg.suggestedActions (e.g. view_flashcard)
+        const nonWordActions = (msg.suggestedActions || [])
+          .filter(
+            a => a && a.action !== "add_word" && a.action !== "confirm_save_word" && a.action !== "add_multiplewords"
+          )
+          .map(a => {
+            if (a.action === "start_practice" || a.action === "view_flashcard" || a.action === "next_flashcard") {
+              return {
+                ...a,
+                action: "view_flashcard",
+                label: t("action_next_flashcard", currentAppLang)
+              };
+            }
+            return a;
+          });
+
+        if (nonWordActions.length === 0) {
+          nonWordActions.push({
+            label: t("action_next_flashcard", currentAppLang),
+            action: "view_flashcard"
+          });
+        }
 
         rawActions = [...flashcardWordActions, ...nonWordActions];
       } else if (hasQuizOptions) {
         rawActions = [...parsedQuizOptions];
       } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
-        rawActions = [...msg.suggestedActions];
+        if (msg.quizFinishedData || msg.id.startsWith("quiz-")) {
+          rawActions = msg.suggestedActions.map(a => {
+            if (a && (a.action === "start_practice" || a.action === "start_practice_quiz_only")) {
+              return {
+                ...a,
+                action: "start_practice_quiz_only",
+                label: t("action_next_quiz", currentAppLang)
+              };
+            }
+            return a;
+          });
+        } else {
+          rawActions = [...msg.suggestedActions];
+        }
       }
 
       // On the latest message, if no quiz options and not flashcard, extract or generate topic choices
@@ -488,7 +527,7 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_balanced") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "balanced");
-    } else if (act.action === "view_flashcard") {
+    } else if (act.action === "view_flashcard" || act.action === "next_flashcard") {
       handleRecordActionUse("view_flashcard");
       onViewFlashcard?.();
     } else if (act.action === "quiz_answer" && act.payload?.answer) {

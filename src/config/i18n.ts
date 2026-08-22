@@ -258,6 +258,8 @@ export type TranslationKey =
   | "chat_quiz_finished_msg"
   | "chat_practice_start_today_action"
   | "action_next_practice"
+  | "action_next_flashcard"
+  | "action_next_quiz"
   | "chat_quiz_common_phrases_action"
   | "chat_lookup_status"
   | "chat_lookup_not_found"
