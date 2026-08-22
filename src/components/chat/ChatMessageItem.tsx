@@ -52,15 +52,15 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
   const lower = rawLabel.toLowerCase();
 
-  if (act.action === "view_flashcard" || act.action === "next_flashcard" || lower.includes("next flashcard") || lower.includes("flashcard")) {
+  if (act.action === "view_flashcard" || act.action === "next_flashcard" || lower === "next flashcard" || lower === "🃏 next flashcard") {
     return t("action_next_flashcard", currentAppLang);
   }
 
-  if (act.action === "start_practice_quiz_only" || act.action === "next_quiz" || lower.includes("next quiz") || lower.includes("quiz review")) {
+  if (act.action === "next_quiz" || lower === "next quiz" || lower === "🏆 next quiz") {
     return t("action_next_quiz", currentAppLang);
   }
 
-  if (act.action === "start_practice" || lower.includes("start practice") || lower.includes("practice")) {
+  if (act.action === "start_practice" && (lower === "start practice" || lower.includes("start practice"))) {
     return t("chat_practice_start_today_action", currentAppLang);
   }
 
@@ -320,12 +320,12 @@ function ChatMessageItem({
       } else if (hasQuizOptions) {
         rawActions = [...parsedQuizOptions];
       } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
-        if (msg.quizFinishedData || msg.id.startsWith("quiz-")) {
+        if (msg.quizFinishedData) {
           rawActions = msg.suggestedActions.map(a => {
-            if (a && (a.action === "start_practice" || a.action === "start_practice_quiz_only")) {
+            if (a && (a.action === "start_practice" || a.action === "start_practice_quiz_only" || a.action === "next_quiz")) {
               return {
                 ...a,
-                action: "start_practice_quiz_only",
+                action: "next_quiz",
                 label: t("action_next_quiz", currentAppLang)
               };
             }
@@ -521,7 +521,7 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_flashcards_new") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "flashcards_new");
-    } else if (act.action === "start_practice_quiz_only") {
+    } else if (act.action === "start_practice_quiz_only" || act.action === "next_quiz") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "quiz_only");
     } else if (act.action === "start_practice_balanced") {

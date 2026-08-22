@@ -753,7 +753,7 @@ export function useChat({
         },
         suggestedActions: [
           ...wordAddActions,
-          { label: t("action_next_quiz", currentAppLang), action: "start_practice_quiz_only" },
+          { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
           { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
         ],
       };
