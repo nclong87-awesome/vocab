@@ -157,31 +157,7 @@ function FormattedMessage({
         currentSectionWord = hMatch[1].trim();
       }
 
-      // Check if this line is a Pronunciation line (e.g. *Pronunciation*: `/.../` or *Phát âm*: `/.../` etc.)
-      const isPronunciationLine =
-        /^\s*\*(?:Pronunciation|Phát âm|Prononciation|Aussprache|Pronunciación|Pronuncia|Pronúncia|발음|発音|发音)\*:/i.test(line) ||
-        /^\s*(?:\*|\-)?\s*(?:Pronunciation|Phát âm|Prononciation|Aussprache|Pronunciación|Pronuncia|Pronúncia|발음|発音|发音)\s*:\s*`/i.test(line) ||
-        (/^\s*(?:\*|\-)?\s*(?:Pronunciation|Phát âm|Prononciation|Aussprache|Pronunciación|Pronuncia|Pronúncia|발음|発音|发音)\s*:/i.test(line) && /\/[^\/]+\//.test(line));
 
-      if (isPronunciationLine) {
-        const wordToPlay = currentSectionWord || globalDetectedWord || targetWord;
-        return (
-          <div key={i} className="flex items-center gap-1.5 text-stone-800 my-0.5 flex-wrap">
-            <span className="align-middle">{parseInlineMarkdown(line)}</span>
-            {onPlayAudio && wordToPlay && (
-              <button
-                type="button"
-                onClick={() => onPlayAudio(wordToPlay)}
-                className="p-1 sm:p-1.5 rounded-md bg-stone-100 hover:bg-amber-100 hover:border-amber-400 text-stone-700 hover:text-amber-950 border border-stone-200/80 transition-all cursor-pointer shadow-3xs inline-flex items-center justify-center shrink-0 active:scale-95"
-                title={`Play audio for "${wordToPlay}"`}
-                aria-label={`Play audio for "${wordToPlay}"`}
-              >
-                <Volume2 className="w-3.5 h-3.5 text-amber-700" />
-              </button>
-            )}
-          </div>
-        );
-      }
 
       // Handle Bullet Points
       if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
