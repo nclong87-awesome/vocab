@@ -4,8 +4,11 @@ import { getRecentApiLogs } from "../services/requestHistoryService";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
 export const ONE_HOUR_MS = 60 * 60 * 1000;
-export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+export const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+export const FOUR_DAYS_MS = 4 * 24 * 60 * 60 * 1000;
+export const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
 export interface LockedModelInfo {
   provider: string;
@@ -68,9 +71,49 @@ export function isModelLocked(provider: string, model: string): boolean {
 }
 
 /**
+ * Calculates the count of consecutive failed requests at the tail of recent outcomes or history.
+ */
+export function getModelConsecutiveFailures(
+  metric?: ModelMetricsRecord,
+  isCurrentlyFailing: boolean = false
+): number {
+  if (!metric) return isCurrentlyFailing ? 1 : 0;
+
+  let consecutive = 0;
+  const outcomes = metric.recentOutcomes;
+  if (Array.isArray(outcomes) && outcomes.length > 0) {
+    for (let i = outcomes.length - 1; i >= 0; i--) {
+      if (!outcomes[i].success) {
+        consecutive++;
+      } else {
+        break;
+      }
+    }
+  } else if (metric.totalSuccesses === 0 && (metric.totalCalls ?? 0) > 0) {
+    consecutive = metric.totalCalls ?? 0;
+  } else if (metric.failureLogs && metric.failureLogs.length > 0 && (metric.totalSuccesses ?? 0) === 0) {
+    consecutive = metric.failureLogs.length;
+  } else if (metric.lastError) {
+    consecutive = 1;
+  }
+
+  if (isCurrentlyFailing) {
+    // If the latest outcome in recentOutcomes was just recorded (< 2000ms ago) and is a failure,
+    // it was already counted. Otherwise, count this incoming failure.
+    const lastOutcome = outcomes && outcomes.length > 0 ? outcomes[outcomes.length - 1] : null;
+    const isAlreadyRecordedInRecent = lastOutcome && !lastOutcome.success && (Date.now() - lastOutcome.timestamp < 2000);
+    if (!isAlreadyRecordedInRecent) {
+      consecutive += 1;
+    }
+  }
+
+  return Math.max(isCurrentlyFailing ? 1 : 0, consecutive);
+}
+
+/**
  * Calculates an optimal lock duration (in ms) based on a model's metrics history,
- * failure rates, recency-weighted accumulation over the last 3 days, and response times.
- * Bounds: Minimum 1 hour, Maximum 2 days (48 hours).
+ * consecutive series of failures, historical failure rates over the last 5 days, and response times.
+ * Bounds: Minimum 1 hour, Maximum 4 days (96 hours - strictly less than 5 days).
  */
 export function calculateOptimalLockDuration(
   provider: string,
@@ -90,43 +133,59 @@ export function calculateOptimalLockDuration(
   const totalCalls = metric.totalCalls ?? 0;
   const totalSuccesses = metric.totalSuccesses ?? 0;
 
-  // 1. Calculate accumulated base duration from failure frequency over the last 3 days (72 hours)
-  const threeDaysAgo = now - THREE_DAYS_MS;
-  const recentFailures = (metric.failureLogs || []).filter(log => log.timestamp >= threeDaysAgo);
-  
   // Flag indicating whether this calculation is triggered by an active/immediate failure
   const isCurrentlyFailing = errorReason !== undefined;
 
-  let accumulatedBaseDurationMs = 0;
+  // 1. Calculate consecutive failures count
+  const consecutiveFailures = getModelConsecutiveFailures(metric, isCurrentlyFailing);
 
-  // If currently failing, add base 1-hour unit for the immediate failure (age = 0, weight = 1.0)
-  if (isCurrentlyFailing) {
-    accumulatedBaseDurationMs += ONE_HOUR_MS;
+  // Progressive base lockout for consecutive series of failed requests:
+  // - 1 failure: 1 hour
+  // - 2 consecutive failures: 4 hours
+  // - 3 consecutive failures: 24 hours (1 day)
+  // - 4 consecutive failures: 54 hours (2.25 days)
+  // - 5 consecutive failures: 78 hours (3.25 days)
+  // - 6+ consecutive failures: 96 hours (4 days - less than 5 days)
+  let baseConsecutiveDurationMs = ONE_HOUR_MS;
+  if (consecutiveFailures <= 1) {
+    baseConsecutiveDurationMs = ONE_HOUR_MS;
+  } else if (consecutiveFailures === 2) {
+    baseConsecutiveDurationMs = 4 * ONE_HOUR_MS;
+  } else if (consecutiveFailures === 3) {
+    baseConsecutiveDurationMs = ONE_DAY_MS;
+  } else if (consecutiveFailures === 4) {
+    baseConsecutiveDurationMs = Math.round(2.25 * ONE_DAY_MS);
+  } else if (consecutiveFailures === 5) {
+    baseConsecutiveDurationMs = Math.round(3.25 * ONE_DAY_MS);
+  } else {
+    // 6+ consecutive failures: capped at 4 days (96 hours)
+    baseConsecutiveDurationMs = FOUR_DAYS_MS;
   }
 
-  // Accumulate recency-weighted lockout for each separate historical failure in the 3-day window.
-  // Recent failures (e.g. 10m ago or 1h ago) contribute strongly (~1h), while older failures
-  // from 1-3 days ago decay gracefully down to a small fraction.
+  // 2. Calculate accumulated base duration from failure frequency over the last 5 days (120 hours)
+  const fiveDaysAgo = now - FIVE_DAYS_MS;
+  const recentFailures = (metric.failureLogs || []).filter(log => log.timestamp >= fiveDaysAgo);
+
+  let accumulatedRecencyPenaltyMs = 0;
+
+  // Accumulate recency-weighted lockout for each separate historical failure in the 5-day window.
   for (const log of recentFailures) {
     const ageMs = Math.max(0, now - log.timestamp);
     // If this failure log corresponds to the current immediate failure, avoid double-counting
     if (isCurrentlyFailing && ageMs < 2000) {
       continue;
     }
-    if (ageMs <= THREE_DAYS_MS) {
-      const normalizedAge = Math.min(1, ageMs / THREE_DAYS_MS);
-      // Smooth decay curve from 1.0 (now) down to 0.08 (3 days ago)
-      const recencyWeight = Math.max(0.08, Math.pow(1 - normalizedAge, 1.4));
-      accumulatedBaseDurationMs += ONE_HOUR_MS * recencyWeight;
+    if (ageMs <= FIVE_DAYS_MS) {
+      const normalizedAge = Math.min(1, ageMs / FIVE_DAYS_MS);
+      // Smooth decay curve from 1.0 (now) down to 0.05 (5 days ago)
+      const recencyWeight = Math.max(0.05, Math.pow(1 - normalizedAge, 1.4));
+      accumulatedRecencyPenaltyMs += ONE_HOUR_MS * recencyWeight;
     }
   }
 
-  // Fallback safety if no failures were accumulated
-  if (accumulatedBaseDurationMs <= 0) {
-    accumulatedBaseDurationMs = ONE_HOUR_MS;
-  }
+  const accumulatedBaseDurationMs = baseConsecutiveDurationMs + accumulatedRecencyPenaltyMs;
 
-  // 2. Response Time Multiplier
+  // 3. Response Time Multiplier
   // Models with consistently high response times are locked out for longer
   let responseTimeMultiplier = 1.0;
   const avgResponseTimeMs = metric.avgResponseTimeMs ?? metric.lastResponseTimeMs ?? 0;
@@ -135,13 +194,13 @@ export function calculateOptimalLockDuration(
     responseTimeMultiplier = Math.min(3.0, avgResponseTimeMs / 15000);
   }
 
-  // 3. Historical Reliability Factor
+  // 4. Historical Reliability Factor
   // Models with high success rates get discounts; consistently failing models get penalties.
   let reliabilityMultiplier = 1.0;
   if (totalCalls >= 3) {
     const successRate = totalSuccesses / totalCalls;
-    if (successRate >= 0.9) {
-      reliabilityMultiplier = 0.5; // Halve lock duration for highly reliable models
+    if (successRate >= 0.9 && consecutiveFailures <= 1) {
+      reliabilityMultiplier = 0.5; // Halve lock duration for isolated glitch on highly reliable models
     } else if (successRate < 0.5) {
       reliabilityMultiplier = 2.0; // Double lock duration for highly unreliable models
     } else if (successRate < 0.75) {
@@ -152,9 +211,9 @@ export function calculateOptimalLockDuration(
   // Apply multipliers to accumulated base
   const finalDurationMs = accumulatedBaseDurationMs * responseTimeMultiplier * reliabilityMultiplier;
 
-  // 4. Clamping boundaries: 1 hour minimum, 2 days (48 hours) maximum
+  // 5. Clamping boundaries: 1 hour minimum, 4 days (96 hours) maximum (< 5 days)
   const MIN_LOCK_MS = ONE_HOUR_MS; // 1 hour (3,600,000 ms)
-  const MAX_LOCK_MS = TWO_DAYS_MS; // 2 days (172,800,000 ms)
+  const MAX_LOCK_MS = FOUR_DAYS_MS; // 4 days (345,600,000 ms, strictly < 5 days)
 
   return Math.max(MIN_LOCK_MS, Math.min(MAX_LOCK_MS, Math.round(finalDurationMs)));
 }
@@ -195,7 +254,9 @@ export function lockModel(
   }
 
   const durationHours = (resolvedDurationMs / ONE_HOUR_MS).toFixed(1);
-  console.warn(`[Auto Mode] Locked model ${key} dynamically for ${durationHours}h (${Math.round(resolvedDurationMs / 60000)} mins) until ${new Date(now + resolvedDurationMs).toLocaleString()} (Error: ${errorMsg || "None"})`);
+  const durationDays = (resolvedDurationMs / ONE_DAY_MS).toFixed(1);
+  const durationDisplay = resolvedDurationMs >= ONE_DAY_MS ? `${durationDays} days (${durationHours}h)` : `${durationHours}h`;
+  console.warn(`[Auto Mode] Locked model ${key} dynamically for ${durationDisplay} (${Math.round(resolvedDurationMs / 60000)} mins) until ${new Date(now + resolvedDurationMs).toLocaleString()} (Error: ${errorMsg || "None"})`);
 }
 
 /**
@@ -576,9 +637,6 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
   const now = Date.now();
   const reason = errorMsg || "Request failed";
 
-  // Lock model
-  lockModel(provider, model, ONE_HOUR_MS, reason);
-
   const metrics = getModelMetricsMap();
   const existing = metrics[key];
 
@@ -604,10 +662,10 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     reason
   };
 
-  // Keep deduplicated failure logs from the last 3 days (up to 50 entries)
-  const threeDaysAgo = now - THREE_DAYS_MS;
+  // Keep deduplicated failure logs from the last 5 days (up to 50 entries)
+  const fiveDaysAgo = now - FIVE_DAYS_MS;
   const updatedLogs = deduplicateFailureLogs([newLogEntry, ...existingLogs])
-    .filter(log => log.timestamp >= threeDaysAgo)
+    .filter(log => log.timestamp >= fiveDaysAgo)
     .slice(0, 50);
 
   let prevOutcomes: RequestOutcomeEntry[] = Array.isArray(existing?.recentOutcomes)
@@ -650,6 +708,9 @@ export function recordModelFailure(provider: string, model: string, errorMsg?: s
     failureLogs: updatedLogs
   };
   saveModelMetricsMap(metrics);
+
+  // Lock model dynamically (calculates optimal lock based on updated consecutive failures and 5-day metrics)
+  lockModel(provider, model, ONE_HOUR_MS, reason);
 }
 
 /**
@@ -918,8 +979,8 @@ function extractModelStats(
     }
   }
 
-  const threeDaysAgo = Date.now() - THREE_DAYS_MS;
-  failureLogs = failureLogs.filter(log => log.timestamp >= threeDaysAgo);
+  const fiveDaysAgo = Date.now() - FIVE_DAYS_MS;
+  failureLogs = failureLogs.filter(log => log.timestamp >= fiveDaysAgo);
   if (failureLogs.length > 50) {
     failureLogs = failureLogs.slice(0, 50);
   }

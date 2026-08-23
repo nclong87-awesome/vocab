@@ -81,20 +81,26 @@ To ensure that models demoted due to temporary network congestion or warm-up del
 
 ### 5. Adaptive Circuit Breaker & Fault Recovery
 
-When a model encounters a transient or fatal failure (HTTP 429 rate limit, 500/503 server outage, or timeout), the engine invokes `calculateOptimalLockDuration` to apply a dynamic, multi-factor cooldown lockout.
+When a model encounters a transient or fatal failure (HTTP 429 rate limit, 500/503 server outage, or timeout), the engine invokes `calculateOptimalLockDuration` to apply a dynamic, multi-factor cooldown lockout. If a model experiences a consecutive series of failed requests, the lock duration extends progressively up to several days (capped at 4 days / 96 hours, strictly less than 5 days).
 
 ```
                   [ Model Request Fails (429 / 500 / 503 / Timeout) ]
                                            │
                                            ▼
-                       [ Query 72-Hour Failure History ]
+                    [ Analyze Consecutive Failures & 5-Day History ]
                                            │
                                            ▼
              ┌───────────────────────────────────────────────────────────┐
              │       Calculate Dynamic Lock Duration Formulation         │
              │                                                           │
-             │   1. Base Lock Duration: 1 Hour (3,600,000 ms)            │
-             │   2. Recency Decay Penalty: Sum of (1 - age/72h)^1.4      │
+             │   1. Consecutive Failure Base Duration:                   │
+             │      • 1 Failure: 1h                                      │
+             │      • 2 Failures: 4h                                     │
+             │      • 3 Failures: 24h (1 day)                            │
+             │      • 4 Failures: 54h (2.25 days)                        │
+             │      • 5 Failures: 78h (3.25 days)                        │
+             │      • 6+ Failures: 96h (4 days - less than 5 days)       │
+             │   2. Recency Decay Penalty: Sum of (1 - age/120h)^1.4     │
              │   3. Historical Reliability Multiplier: 0.5x to 2.0x      │
              │   4. Latency Penalty Multiplier: Up to 3.0x (>15s)        │
              └─────────────────────────────┬─────────────────────────────┘
@@ -102,7 +108,7 @@ When a model encounters a transient or fatal failure (HTTP 429 rate limit, 500/5
                                            ▼
                           [ Apply Boundary Clamping ]
                           • Minimum Cooldown: 1 Hour
-                          • Maximum Cooldown: 48 Hours
+                          • Maximum Cooldown: 4 Days (96 Hours)
                                            │
                                            ▼
                       [ Lock Model & Cascade to Fallback ]
@@ -110,20 +116,28 @@ When a model encounters a transient or fatal failure (HTTP 429 rate limit, 500/5
 
 #### 5.1 Mathematical Formulation
 
-$$\text{LockDuration} = \text{Clamp}\Big(\big(\text{BaseLock} + \text{AccumulatedPenalty}\big) \times M_{\text{Reliability}} \times M_{\text{Latency}}, \; 1\text{h}, \; 48\text{h}\Big)$$
+$$\text{LockDuration} = \text{Clamp}\Big(\big(\text{BaseConsecutiveDuration} + \text{AccumulatedPenalty}\big) \times M_{\text{Reliability}} \times M_{\text{Latency}}, \; 1\text{h}, \; 96\text{h}\Big)$$
 
 Where:
 
-1. **Base Cooldown**:
-   $$\text{BaseLock} = 1\text{ Hour } (3,600,000\text{ ms})$$
+1. **Consecutive Failure Base Cooldown ($\text{BaseConsecutiveDuration}$)**:
+   $$\text{BaseConsecutiveDuration} = \begin{cases}
+   1\text{ Hour } (3,600,000\text{ ms}) & \text{for } C = 1 \\
+   4\text{ Hours } (14,400,000\text{ ms}) & \text{for } C = 2 \\
+   24\text{ Hours } (86,400,000\text{ ms} / 1\text{ day}) & \text{for } C = 3 \\
+   54\text{ Hours } (194,400,000\text{ ms} / 2.25\text{ days}) & \text{for } C = 4 \\
+   78\text{ Hours } (280,800,000\text{ ms} / 3.25\text{ days}) & \text{for } C = 5 \\
+   96\text{ Hours } (345,600,000\text{ ms} / 4\text{ days}) & \text{for } C \ge 6
+   \end{cases}$$
+   *(where $C$ is the count of consecutive failed requests).*
 
-2. **72-Hour Recency Power-Decay Penalty**:
-   $$\text{AccumulatedPenalty} = \text{BaseLock} \times \sum_{i=1}^{N} \max\left(0.08, \left(1 - \frac{\text{Age}_i}{72\text{ hours}}\right)^{1.4}\right)$$
+2. **120-Hour (5-Day) Recency Power-Decay Penalty**:
+   $$\text{AccumulatedPenalty} = 1\text{h} \times \sum_{i=1}^{N} \max\left(0.05, \left(1 - \frac{\text{Age}_i}{120\text{ hours}}\right)^{1.4}\right)$$
    *Recent repeated failures contribute strong additional lockout time, while older failures from days prior decay progressively.*
 
-3. **Historical Reliability Multiplier ($M_{\text{Reliability}}$)** (for total calls $\ge 2$):
+3. **Historical Reliability Multiplier ($M_{\text{Reliability}}$)** (for total calls $\ge 3$):
    $$M_{\text{Reliability}} = \begin{cases} 
-   0.5 & \text{if Success Rate } \ge 90\% \quad \text{(Reliability Discount)} \\
+   0.5 & \text{if Success Rate } \ge 90\% \text{ and } C \le 1 \quad \text{(Reliability Discount)} \\
    2.0 & \text{if Success Rate } < 50\% \quad \text{(Severe Instability Penalty)} \\
    1.5 & \text{if Success Rate } < 75\% \quad \text{(Moderate Instability Penalty)} \\
    1.0 & \text{otherwise}
@@ -151,5 +165,5 @@ If an active model fails mid-request:
 
 - **Zero-Config Onboarding**: New models automatically receive immediate, safe validation without manual benchmarking.
 - **Anti-Thundering Herd Protection**: Eliminates single-model traffic saturation by enforcing strict round-robin rotation post-graduation.
-- **Self-Healing Infrastructure**: Dynamic power-decay locks ensure healthy models return quickly (30m–1h) while persistently unstable providers are kept in check (up to 48h).
+- **Self-Healing Infrastructure**: Dynamic power-decay locks ensure healthy models return quickly (30m–1h) while persistently unstable providers are locked out for a few days (up to 4 days / 96h, < 5 days).
 - **Sub-Second Failover**: Instant fallback ensures uninterrupted user experience across distributed multi-cloud endpoints.
