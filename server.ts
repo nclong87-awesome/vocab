@@ -2420,7 +2420,11 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - 'picture': "Which word matches the visual concept shown below?" (set 'imageKeyword' to a concise 1-3 word English search term representing a concrete, physical object or scene).
 4. MANDATORY REQUIREMENTS:
    - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'.
-   - Generate EXACTLY THREE (3) companion collocations/words across the entire quiz ('suggestedWords' array with 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
+   - Generate UP TO THREE (max 3) suggested companion words across the entire quiz ('suggestedWords' array with 1 to 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
+   - CRITICAL RULE FOR SUGGESTED WORDS:
+     * Derive these suggested words directly from candidates that are actually used in the quiz questions, specifically selecting meaningful incorrect answers (distractors) or options presented in the quiz (e.g. options such as 'freighter' or other notable distractor choices).
+     * Set 'pairedWith' to the quiz word/question it accompanied.
+     * Keep the total number of suggested words at a maximum of three (3).
 5. STRICT CORRECT ANSWER MATCHING RULE (CRITICAL):
    - The correct answer to every question MUST be EXACTLY the target vocabulary word itself (matching the spelling in the input list exactly).
    - Under no circumstances should the correct answer be a synonym, a definition, or any other word.
@@ -2441,10 +2445,10 @@ Output MUST be strictly valid JSON matching this schema:
   ],
   "suggestedWords": [
     {
-      "word": "string (Companion word/collocation in ${targetLanguage})",
+      "word": "string (Suggested word derived from incorrect answer options/distractors used in the quiz)",
       "translation": "string (Translation in ${nativeLanguage})",
-      "pairedWith": "string (Which quiz word it accompanies)",
-      "hint": "string (Brief note on how/why it frequently appears alongside the quiz word)"
+      "pairedWith": "string (Which quiz word it accompanies as an option)",
+      "hint": "string (Brief note on its meaning or context from the quiz options)"
     }
   ]
 }`;
@@ -2455,9 +2459,9 @@ Output MUST be strictly valid JSON matching this schema:
       `2. The correct answer (correctAnswer) to each question MUST be EXACTLY the target word being tested. For example, if the word being tested is "minutes", the correctAnswer MUST be "minutes".\n` +
       `3. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
       `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n` +
-      `5. Include exactly 3 suggested companion words ('suggestedWords' array) total.`;
+      `5. Include up to 3 suggested companion words ('suggestedWords' array, max 3) derived directly from the candidates actually used in the quiz questions, specifically selecting meaningful incorrect answer options (distractors) presented in the quiz (such as 'freighter' or other options found in the distractors).`;
 
-    const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of EXACTLY 3 items with word, translation, pairedWith, hint).`;
+    const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of up to 3 items with word, translation, pairedWith, hint derived from quiz distractors/options).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
@@ -2516,14 +2520,37 @@ Output MUST be strictly valid JSON matching this schema:
         normalizedTop3Suggestions.push({
           word: w,
           translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
-          hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Frequently appears in context`) : `Frequently appears in context`,
+          hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Option used in quiz question`) : `Option used in quiz question`,
           pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : (words[0]?.word || "")
         });
 
         if (normalizedTop3Suggestions.length >= 3) break;
       }
 
-      // Fallback if model generated none: pick from word database collocations up to 3
+      // Fallback 1: Extract plausible distractors from the generated quiz questions if under 3
+      if (normalizedTop3Suggestions.length < 3) {
+        for (const q of questionsArray) {
+          const rawOpts = Array.isArray(q.options) ? q.options : [];
+          const targetLower = (q.word || "").toLowerCase().trim();
+          for (const opt of rawOpts) {
+            const optStr = String(opt || "").trim();
+            if (!optStr) continue;
+            const optLower = optStr.toLowerCase();
+            if (optLower === targetLower || seenWordKeys.has(optLower)) continue;
+            seenWordKeys.add(optLower);
+            normalizedTop3Suggestions.push({
+              word: optStr,
+              translation: "",
+              hint: `Option used in quiz question for "${q.word || ""}"`,
+              pairedWith: q.word || ""
+            });
+            if (normalizedTop3Suggestions.length >= 3) break;
+          }
+          if (normalizedTop3Suggestions.length >= 3) break;
+        }
+      }
+
+      // Fallback 2: Pick from word database collocations up to 3
       if (normalizedTop3Suggestions.length < 3) {
         for (const w of words) {
           if (Array.isArray(w.suggestedWords)) {

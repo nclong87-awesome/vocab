@@ -699,13 +699,36 @@ export function useChat({
           allSuggestedWords.push({
             word: wordText,
             translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
-            hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Frequently appears with ${targetWord}`) : `Frequently appears with ${targetWord}`,
+            hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Appeared as option in quiz for ${targetWord}`) : `Appeared as option in quiz for ${targetWord}`,
             pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWord,
             relationship: typeof item === "object" ? item.relationship : undefined,
             partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
           });
         });
       });
+
+      // If under 3 suggestions, pull directly from incorrect options (distractors) used in the quiz questions
+      if (allSuggestedWords.length < 3) {
+        for (const q of activeQuiz.questions) {
+          const targetWordLower = (q.word || "").toLowerCase().trim();
+          const rawOpts = Array.isArray(q.options) ? q.options : [];
+          for (const opt of rawOpts) {
+            const optStr = String(opt || "").trim();
+            if (!optStr) continue;
+            const optLower = optStr.toLowerCase();
+            if (optLower === targetWordLower || seenWords.has(optLower)) continue;
+            seenWords.add(optLower);
+            allSuggestedWords.push({
+              word: optStr,
+              translation: "",
+              hint: `Option used in quiz for "${q.word}"`,
+              pairedWith: q.word
+            });
+            if (allSuggestedWords.length >= 3) break;
+          }
+          if (allSuggestedWords.length >= 3) break;
+        }
+      }
 
       const top3SuggestedWords = allSuggestedWords.slice(0, 3);
 

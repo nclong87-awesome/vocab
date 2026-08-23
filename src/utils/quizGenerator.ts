@@ -248,28 +248,53 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     });
   });
 
-  // Collect up to 3 unique companion words across all words in the quiz
+  // Collect up to 3 unique companion/suggested words across all questions in the quiz, prioritizing distractors actually used in the quiz options
   const seenKeys = new Set<string>();
   const top3Suggestions: any[] = [];
-  for (const w of wordList) {
-    if (Array.isArray(w.suggestedWords)) {
-      for (const item of w.suggestedWords) {
-        const wordText = typeof item === "string" ? item.trim() : (item.word || "").trim();
-        if (!wordText) continue;
-        const key = wordText.toLowerCase();
-        if (seenKeys.has(key) || key === w.word.toLowerCase()) continue;
-        seenKeys.add(key);
 
-        top3Suggestions.push({
-          word: wordText,
-          translation: typeof item === "object" ? (item.translation || "") : "",
-          hint: typeof item === "object" ? (item.hint || `Frequently appears with ${w.word}`) : `Frequently appears with ${w.word}`,
-          pairedWith: w.word
-        });
-        if (top3Suggestions.length >= 3) break;
-      }
+  // 1. First, extract interesting options/distractors used in the generated quiz questions
+  for (const q of generated) {
+    const rawOpts = Array.isArray(q.options) ? q.options : [];
+    const targetLower = (q.word || "").toLowerCase().trim();
+    for (const opt of rawOpts) {
+      const optStr = String(opt || "").trim();
+      if (!optStr) continue;
+      const optLower = optStr.toLowerCase();
+      if (optLower === targetLower || seenKeys.has(optLower)) continue;
+      seenKeys.add(optLower);
+      top3Suggestions.push({
+        word: optStr,
+        translation: "",
+        hint: `Option used in quiz question for "${q.word}"`,
+        pairedWith: q.word
+      });
+      if (top3Suggestions.length >= 3) break;
     }
     if (top3Suggestions.length >= 3) break;
+  }
+
+  // 2. If under 3, fallback to wordList suggestedWords
+  if (top3Suggestions.length < 3) {
+    for (const w of wordList) {
+      if (Array.isArray(w.suggestedWords)) {
+        for (const item of w.suggestedWords) {
+          const wordText = typeof item === "string" ? item.trim() : (item.word || "").trim();
+          if (!wordText) continue;
+          const key = wordText.toLowerCase();
+          if (seenKeys.has(key) || key === w.word.toLowerCase()) continue;
+          seenKeys.add(key);
+
+          top3Suggestions.push({
+            word: wordText,
+            translation: typeof item === "object" ? (item.translation || "") : "",
+            hint: typeof item === "object" ? (item.hint || `Frequently appears with ${w.word}`) : `Frequently appears with ${w.word}`,
+            pairedWith: w.word
+          });
+          if (top3Suggestions.length >= 3) break;
+        }
+      }
+      if (top3Suggestions.length >= 3) break;
+    }
   }
 
   const randomized = generated.sort(() => 0.5 - Math.random());
