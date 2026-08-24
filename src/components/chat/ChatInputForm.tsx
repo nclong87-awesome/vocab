@@ -38,17 +38,19 @@ function ChatInputForm({
   inputRef,
 }: ChatInputFormProps) {
   const baseTextRef = useRef("");
-  const [speechLangMode, setSpeechLangMode] = useState<"target" | "native">("target");
+  // Default to native language as requested
+  const [speechLangMode, setSpeechLangMode] = useState<"native" | "target">("native");
 
-  const currentSpeechLang = speechLangMode === "target" ? targetLanguage : (nativeLanguage || "English");
+  const effectiveNative = nativeLanguage || "Vietnamese";
+  const effectiveTarget = targetLanguage || "English";
+  const currentSpeechLang = speechLangMode === "native" ? effectiveNative : effectiveTarget;
+  const alternateSpeechLang = speechLangMode === "native" ? effectiveTarget : effectiveNative;
 
-  const handleTranscript = useCallback((transcript: string, isFinal: boolean) => {
+  const handleTranscript = useCallback((transcript: string) => {
     const base = baseTextRef.current.trim();
-    const updated = base ? `${base} ${transcript.trim()}` : transcript.trim();
+    const cleanTranscript = transcript.trim();
+    const updated = base ? `${base} ${cleanTranscript}` : cleanTranscript;
     setInputText(updated);
-    if (isFinal) {
-      baseTextRef.current = updated;
-    }
   }, [setInputText]);
 
   const handleSpeechError = useCallback((errMsg: string) => {
@@ -61,7 +63,7 @@ function ChatInputForm({
     startListening,
     stopListening,
   } = useSpeechToText({
-    targetLanguage: currentSpeechLang,
+    language: currentSpeechLang,
     onTranscript: handleTranscript,
     onError: handleSpeechError,
   });
@@ -103,22 +105,23 @@ function ChatInputForm({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {nativeLanguage && nativeLanguage.toLowerCase() !== targetLanguage.toLowerCase() && (
+            {effectiveNative.toLowerCase() !== effectiveTarget.toLowerCase() && (
               <button
                 type="button"
                 onClick={() => {
-                  const newMode = speechLangMode === "target" ? "native" : "target";
+                  const newMode = speechLangMode === "native" ? "target" : "native";
                   setSpeechLangMode(newMode);
-                  const nextLang = newMode === "target" ? targetLanguage : nativeLanguage;
+                  const nextLang = newMode === "native" ? effectiveNative : effectiveTarget;
+                  baseTextRef.current = inputText;
                   stopListening();
                   setTimeout(() => {
                     startListening(getLanguageCode(nextLang));
                   }, 120);
                 }}
                 className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-white border border-rose-200 text-rose-700 hover:bg-rose-100 cursor-pointer transition-colors"
-                title={`Switch speech language to ${speechLangMode === "target" ? nativeLanguage : targetLanguage}`}
+                title={`Switch speech language to ${alternateSpeechLang}`}
               >
-                Switch to {speechLangMode === "target" ? nativeLanguage : targetLanguage}
+                Switch to {alternateSpeechLang}
               </button>
             )}
             <button

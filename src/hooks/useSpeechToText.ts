@@ -4,12 +4,13 @@ import { getLanguageCode } from "../utils/ttsService";
 interface UseSpeechToTextOptions {
   onTranscript?: (transcript: string, isFinal: boolean) => void;
   onError?: (error: string) => void;
+  language?: string;
   targetLanguage?: string;
   nativeLanguage?: string;
 }
 
 export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
-  const { onTranscript, onError, targetLanguage } = options;
+  const { onTranscript, onError, language, targetLanguage, nativeLanguage } = options;
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -17,7 +18,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       setIsSupported(!!SpeechRecognition);
     }
   }, []);
@@ -39,7 +40,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
     (langOverride?: string) => {
       if (typeof window === "undefined") return;
 
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
         onError?.("Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.");
         return;
@@ -59,7 +60,8 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
 
-        const langCode = langOverride || (targetLanguage ? getLanguageCode(targetLanguage) : "en-US");
+        const effectiveLang = langOverride || language || nativeLanguage || targetLanguage || "en-US";
+        const langCode = effectiveLang.includes("-") ? effectiveLang : getLanguageCode(effectiveLang);
         recognition.lang = langCode;
         recognition.continuous = true;
         recognition.interimResults = true;
@@ -69,26 +71,29 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
           setIsListening(true);
         };
 
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-          let interim = "";
+        recognition.onresult = (event: any) => {
           let final = "";
+          let interim = "";
 
           for (let i = 0; i < event.results.length; ++i) {
             const res = event.results[i];
+            const text = (res[0]?.transcript || "").trim();
+            if (!text) continue;
+
             if (res.isFinal) {
-              final += res[0].transcript;
+              final = final ? `${final} ${text}` : text;
             } else {
-              interim += res[0].transcript;
+              interim = interim ? `${interim} ${text}` : text;
             }
           }
 
-          const combined = (final + (interim ? " " + interim : "")).trim();
+          const combined = (final + (interim ? (final ? " " : "") + interim : "")).trim();
           if (combined && onTranscript) {
             onTranscript(combined, !interim);
           }
         };
 
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        recognition.onerror = (event: any) => {
           console.warn("Speech recognition error:", event.error);
           setIsListening(false);
 
@@ -116,7 +121,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
         onError?.(err?.message || "Failed to start speech recognition.");
       }
     },
-    [targetLanguage, onTranscript, onError]
+    [language, nativeLanguage, targetLanguage, onTranscript, onError]
   );
 
   const toggleListening = useCallback(
