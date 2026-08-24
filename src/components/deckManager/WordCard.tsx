@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, CheckCircle, Trash2, History } from "lucide-react";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages } from "lucide-react";
 import { Word } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
@@ -35,6 +35,7 @@ function WordCard({
 }: WordCardProps) {
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showTranslation, setShowTranslation] = useState(false);
 
   const word = localWord || initialWord;
 
@@ -155,10 +156,44 @@ function WordCard({
 
           {word.example && (
             <div className="bg-stone-50 border border-stone-150 p-3 rounded-lg space-y-1.5 text-xs">
-              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context Example</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-400 block">Context Example</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {word.exampleTranslation && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowTranslation(prev => !prev);
+                      }}
+                      className={`p-1 rounded border transition-colors flex items-center justify-center cursor-pointer ${
+                        showTranslation
+                          ? "bg-amber-100 text-amber-900 border-amber-300"
+                          : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                      }`}
+                      title={showTranslation ? "Hide translation" : "Show translation"}
+                    >
+                      <Languages className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      speakWord(word.example!);
+                    }}
+                    className="p-1 rounded border border-stone-200 bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 transition-colors flex items-center justify-center cursor-pointer"
+                    title="Listen to example sentence"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
               <p className="font-serif italic text-stone-800 leading-relaxed">"{word.example}"</p>
-              {word.exampleTranslation && (
-                <p className="text-[11px] text-stone-500 font-sans leading-normal border-t border-stone-100 pt-1 mt-1">{word.exampleTranslation}</p>
+              {word.exampleTranslation && showTranslation && (
+                <p className="text-[11px] text-stone-500 font-sans leading-normal border-t border-stone-100 pt-1 mt-1">
+                  {word.exampleTranslation}
+                </p>
               )}
             </div>
           )}

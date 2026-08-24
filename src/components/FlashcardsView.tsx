@@ -15,7 +15,8 @@ import {
   Sparkles,
   Clock,
   Filter,
-  History
+  History,
+  Languages
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
 import { isWordEligibleForReview, isWordLearnedOrStudied } from "../utils/spacedRepetition";
@@ -54,6 +55,8 @@ export default function FlashcardsView({
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [filterCategory, setFilterCategory] = useState<"all" | "new" | "due" | "starred">("all");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const [showExampleTranslation, setShowExampleTranslation] = useState(false);
+  const [expandedListTranslations, setExpandedListTranslations] = useState<Record<string, boolean>>({});
   const cardContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToCardTop = () => {
@@ -122,6 +125,7 @@ export default function FlashcardsView({
     setFilterCategory(category);
     setCurrentIndex(0);
     setIsFlipped(false);
+    setShowExampleTranslation(false);
   };
 
   const currentWord = sortedWords[currentIndex];
@@ -152,6 +156,7 @@ export default function FlashcardsView({
 
   const handleNext = () => {
     setIsFlipped(false);
+    setShowExampleTranslation(false);
     stopSpeech();
     if (currentIndex < sortedWords.length - 1) {
       const nextIdx = currentIndex + 1;
@@ -166,6 +171,7 @@ export default function FlashcardsView({
 
   const handlePrev = () => {
     setIsFlipped(false);
+    setShowExampleTranslation(false);
     stopSpeech();
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
@@ -326,13 +332,13 @@ export default function FlashcardsView({
                       <span className="text-xs font-semibold text-stone-500 font-mono">
                         {currentWord.partOfSpeech}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedHistoryWord(currentWord);
                           }}
-                          className="p-2 border border-stone-200 text-stone-400 hover:text-amber-700 hover:border-amber-400 hover:bg-amber-50/50 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-400 text-stone-500 hover:text-amber-700 transition-colors cursor-pointer shadow-2xs"
                           title="View Strength History"
                         >
                           <History className="w-4 h-4 text-amber-600" />
@@ -342,20 +348,21 @@ export default function FlashcardsView({
                             e.stopPropagation();
                             onToggleStar(currentWord.id);
                           }}
-                          className={`p-2 border transition-colors cursor-pointer ${
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer shadow-2xs ${
                             currentWord.starred 
-                              ? "text-stone-900 border-stone-900 bg-stone-50" 
-                              : "text-stone-400 border-stone-200 hover:border-stone-900"
+                              ? "text-amber-500 border-amber-300 bg-amber-50" 
+                              : "text-stone-400 border-stone-200 hover:border-stone-400 bg-white"
                           }`}
+                          title={currentWord.starred ? "Unstar word" : "Star word"}
                         >
                           <Star className="w-4 h-4 fill-current" />
                         </button>
                         <button
                           onClick={(e) => speakWord(currentWord.word, e)}
-                          className={`p-2 border transition-all cursor-pointer ${
+                          className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-2xs ${
                             isSpeaking 
-                              ? "text-stone-900 bg-stone-100 border-stone-900 scale-100" 
-                              : "text-stone-400 border-stone-200 hover:border-stone-900"
+                              ? "text-stone-950 bg-amber-400 border-amber-500" 
+                              : "text-stone-600 border-stone-200 hover:border-stone-400 bg-white"
                           }`}
                           title="Listen Pronunciation"
                         >
@@ -375,10 +382,10 @@ export default function FlashcardsView({
                             exit={{ opacity: 0, y: -5 }}
                             className="space-y-4 my-auto"
                           >
-                            <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-stone-950">
+                            <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-stone-950 break-words max-w-full">
                               {currentWord.word}
                             </h3>
-                            <p className="text-sm font-mono text-stone-400 italic">
+                            <p className="text-sm font-mono text-stone-400 italic break-words">
                               {currentWord.pronunciation}
                             </p>
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-50 text-stone-500 border border-stone-200 text-xs font-medium mt-4">
@@ -395,7 +402,7 @@ export default function FlashcardsView({
                           >
                             <div className="space-y-1.5">
                               <span className="text-xs font-semibold text-stone-500 font-mono">{t("flashcards_meaning_trans", appLanguage)}</span>
-                              <h4 className="text-xl sm:text-2xl font-bold text-stone-900 leading-tight font-serif italic">
+                              <h4 className="text-xl sm:text-2xl font-bold text-stone-900 leading-tight font-serif italic break-words">
                                 "{currentWord.translation}"
                               </h4>
                               <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto leading-relaxed pt-0.5 font-sans">
@@ -407,13 +414,48 @@ export default function FlashcardsView({
                               className="bg-stone-50 p-3.5 border border-stone-200 text-left space-y-1.5 mt-2 max-h-48 overflow-y-auto"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <span className="text-xs font-semibold text-stone-500 font-mono">{t("flashcards_example_usage", appLanguage)}</span>
-                              <p className="text-xs md:text-sm text-stone-800 font-serif italic leading-relaxed">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-stone-500 font-mono">{t("flashcards_example_usage", appLanguage)}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {currentWord.exampleTranslation && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowExampleTranslation(prev => !prev);
+                                      }}
+                                      className={`p-1 rounded border transition-colors flex items-center justify-center cursor-pointer ${
+                                        showExampleTranslation
+                                          ? "bg-amber-100 text-amber-900 border-amber-300"
+                                          : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                                      }`}
+                                      title={showExampleTranslation ? "Hide translation" : "Show translation"}
+                                    >
+                                      <Languages className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => speakWord(currentWord.example, e)}
+                                    className={`p-1 rounded border transition-colors flex items-center justify-center cursor-pointer ${
+                                      isSpeaking
+                                        ? "bg-amber-400 text-stone-950 border-amber-500"
+                                        : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                                    }`}
+                                    title="Listen to example sentence"
+                                  >
+                                    <Volume2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-xs md:text-sm text-stone-800 font-serif italic leading-relaxed break-words">
                                 "{currentWord.example}"
                               </p>
-                              <p className="text-xs text-stone-500 italic">
-                                "{currentWord.exampleTranslation}"
-                              </p>
+                              {currentWord.exampleTranslation && showExampleTranslation && (
+                                <p className="text-xs text-stone-500 italic pt-1 border-t border-stone-200/80">
+                                  "{currentWord.exampleTranslation}"
+                                </p>
+                              )}
                             </div>
                           </motion.div>
                         )}
@@ -509,36 +551,61 @@ export default function FlashcardsView({
                   <p className="text-xs text-stone-500 font-sans leading-relaxed">
                     <span className="font-bold text-stone-500 text-xs mr-1">Definition:</span> {w.definition}
                   </p>
-                  <div className="text-xs border-l-2 border-stone-900 pl-3 mt-2 py-1 bg-stone-50">
-                    <p className="italic text-stone-800 font-serif">"{w.example}"</p>
-                    <p className="italic text-stone-400 text-[11px] mt-0.5">"{w.exampleTranslation}"</p>
-                  </div>
+                  {w.example && (
+                    <div className="text-xs border-l-2 border-stone-900 pl-3 mt-2 py-1 bg-stone-50 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="italic text-stone-800 font-serif min-w-0 flex-1">"{w.example}"</p>
+                        {w.exampleTranslation && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedListTranslations(prev => ({ ...prev, [w.id]: !prev[w.id] }));
+                            }}
+                            className={`p-1 rounded border transition-colors flex items-center justify-center cursor-pointer shrink-0 ${
+                              expandedListTranslations[w.id]
+                                ? "bg-amber-100 text-amber-900 border-amber-300"
+                                : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                            }`}
+                            title={expandedListTranslations[w.id] ? "Hide translation" : "Show translation"}
+                          >
+                            <Languages className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {w.exampleTranslation && expandedListTranslations[w.id] && (
+                        <p className="italic text-stone-500 text-[11px] pt-1 border-t border-stone-200/70">
+                          "{w.exampleTranslation}"
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Star / Learn control row */}
                 <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3 pt-2 sm:pt-0">
-                  <div className="flex gap-1.5">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedHistoryWord(w);
                       }}
-                      className="p-1.5 border border-stone-200 hover:border-amber-400 hover:bg-amber-50/50 text-stone-400 hover:text-amber-700 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg border border-stone-200 hover:border-amber-400 hover:bg-amber-50 text-stone-500 hover:text-amber-700 transition-colors cursor-pointer shadow-2xs"
                       title="View Strength History"
                     >
                       <History className="w-4 h-4 text-amber-600" />
                     </button>
                     <button
                       onClick={() => speakWord(w.word)}
-                      className="p-1.5 border border-stone-200 hover:border-stone-900 text-stone-400 hover:text-stone-900 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg border border-stone-200 hover:border-stone-400 text-stone-600 hover:text-stone-900 transition-colors cursor-pointer bg-white shadow-2xs"
                       title="Speak"
                     >
                       <Volume2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => onToggleStar(w.id)}
-                      className={`p-1.5 border transition-colors cursor-pointer ${
-                        w.starred ? "text-stone-900 border-stone-900 bg-stone-50" : "text-stone-400 border-stone-200 hover:border-stone-900"
+                      className={`p-1.5 rounded-lg border transition-colors cursor-pointer shadow-2xs ${
+                        w.starred ? "text-amber-500 border-amber-300 bg-amber-50" : "text-stone-400 border-stone-200 hover:border-stone-400 bg-white"
                       }`}
                     >
                       <Star className="w-4 h-4 fill-current" />

@@ -6,7 +6,8 @@ import {
   ChevronRight, 
   Layers, 
   LayoutGrid,
-  History
+  History,
+  Languages
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
@@ -67,7 +68,16 @@ function FlashcardMessageCard({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"deck" | "grid">("deck");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const [expandedTranslations, setExpandedTranslations] = useState<Record<string, boolean>>({});
   const cardContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleTranslation = (key: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedTranslations((prev) => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
@@ -250,52 +260,52 @@ function FlashcardMessageCard({
           {/* Active Card Body */}
           <div className="bg-stone-50/70 border border-stone-200/80 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
             {/* Word Heading, Part of Speech, Pronunciation, Audio */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight">
+            <div className="flex items-start justify-between gap-2.5">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <h3 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight break-words max-w-full leading-tight">
                     {currentCard.word}
                   </h3>
                   {currentCard.partOfSpeech && (
-                    <span className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200 rounded-md">
+                    <span className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-200 rounded-md shrink-0">
                       {currentCard.partOfSpeech}
                     </span>
                   )}
                   {currentCard.category && (
-                    <span className="bg-stone-200/80 text-stone-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                    <span className="bg-stone-200/80 text-stone-700 text-[10px] font-semibold px-2 py-0.5 rounded-md truncate max-w-[160px] sm:max-w-xs">
                       {currentCard.category}
                     </span>
                   )}
                 </div>
 
                 {currentCard.pronunciation && (
-                  <p className="text-xs sm:text-sm font-mono font-semibold text-amber-700 mt-1">
+                  <p className="text-xs sm:text-sm font-mono font-semibold text-amber-700 break-words">
                     {currentCard.pronunciation}
                   </p>
                 )}
               </div>
 
               {/* Action buttons: History & Speaker */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0 self-start pt-0.5">
                 <button
                   type="button"
                   onClick={() => setSelectedHistoryWord(getWordObjectForCard(currentCard))}
-                  className="p-3 rounded-xl border border-stone-200/80 bg-white hover:bg-amber-50 hover:border-amber-400 text-amber-700 hover:text-amber-950 transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0 hover:scale-105"
+                  className="p-1.5 sm:p-2 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-600 hover:text-amber-800 transition-colors cursor-pointer shadow-2xs flex items-center justify-center shrink-0"
                   title={`View Strength History for "${currentCard.word}"`}
                 >
-                  <History className="w-5 h-5 text-amber-600" />
+                  <History className="w-4 h-4 text-amber-600" />
                 </button>
                 <button
                   type="button"
                   onClick={(e) => handleSpeak(currentCard.word, e)}
-                  className={`p-3 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center shrink-0 ${
+                  className={`p-1.5 sm:p-2 rounded-lg border transition-colors cursor-pointer shadow-2xs flex items-center justify-center shrink-0 ${
                     speakingText === currentCard.word
-                      ? "bg-amber-400 text-stone-950 scale-105 ring-2 ring-amber-400/50 animate-pulse"
-                      : "bg-stone-900 hover:bg-stone-800 text-white hover:scale-105"
+                      ? "bg-amber-400 border-amber-500 text-stone-950 scale-105 ring-2 ring-amber-300"
+                      : "bg-white border-stone-200 text-stone-700 hover:bg-stone-100 hover:text-stone-950"
                   }`}
                   title={`Listen to "${currentCard.word}" pronunciation`}
                 >
-                  <Volume2 className="w-5 h-5" />
+                  <Volume2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -306,7 +316,7 @@ function FlashcardMessageCard({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-0.5">
                   {t("fc_native_translation", currentAppLang, { nativeLanguage })}
                 </span>
-                <p className="text-base sm:text-lg font-bold text-stone-900">
+                <p className="text-base sm:text-lg font-bold text-stone-900 break-words">
                   "{currentCard.translation}"
                 </p>
               </div>
@@ -324,38 +334,59 @@ function FlashcardMessageCard({
             </div>
 
             {/* 1 Example Sentence */}
-            {currentCard.example && (
-              <div className="bg-white border border-stone-200/70 rounded-xl p-3.5 space-y-1.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block mb-1">
+            {currentCard.example && (() => {
+              const cardKey = currentCard.wordId || currentCard.word || String(currentIndex);
+              const isTranslationOpen = Boolean(expandedTranslations[cardKey]);
+              return (
+                <div className="bg-white border border-stone-200/70 rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
                       Example Sentence
                     </span>
-                    <p className="text-xs sm:text-sm font-semibold text-stone-900 leading-snug">
-                      {currentCard.example}
-                    </p>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {currentCard.exampleTranslation && (
+                        <button
+                          type="button"
+                          onClick={(e) => toggleTranslation(cardKey, e)}
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                            isTranslationOpen
+                              ? "bg-amber-100 text-amber-900 border-amber-300 shadow-2xs"
+                              : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                          }`}
+                          title={isTranslationOpen ? "Hide sentence translation" : "Show sentence translation"}
+                        >
+                          <Languages className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => handleSpeak(currentCard.example!, e)}
+                        className={`p-1.5 rounded-lg border transition-colors cursor-pointer shrink-0 ${
+                          speakingText === currentCard.example
+                            ? "bg-amber-400 border-amber-500 text-stone-950 shadow-2xs"
+                            : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                        }`}
+                        title="Listen to example sentence"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => handleSpeak(currentCard.example!, e)}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 mt-1 ${
-                      speakingText === currentCard.example
-                        ? "bg-amber-400 text-stone-950"
-                        : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                    }`}
-                    title="Listen to example sentence"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
 
-                {currentCard.exampleTranslation && (
-                  <p className="text-xs text-stone-500 font-medium italic pt-1">
-                    "{currentCard.exampleTranslation}"
+                  <p className="text-xs sm:text-sm font-semibold text-stone-900 leading-snug break-words">
+                    {currentCard.example}
                   </p>
-                )}
-              </div>
-            )}
+
+                  {currentCard.exampleTranslation && isTranslationOpen && (
+                    <div className="pt-2 border-t border-stone-100">
+                      <p className="text-xs text-stone-600 font-medium italic">
+                        "{currentCard.exampleTranslation}"
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Stepper Navigation Footer */}
@@ -405,93 +436,121 @@ function FlashcardMessageCard({
       {viewMode === "grid" && (
         <div className="p-3 sm:p-4 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {cards.map((card, cIdx) => (
-              <div
-                key={cIdx}
-                className="bg-stone-50/80 border border-stone-200 hover:border-amber-300/80 rounded-xl p-3.5 space-y-2.5 transition-all shadow-2xs flex flex-col justify-between"
-              >
-                {/* Header info */}
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-mono font-bold bg-stone-200 text-stone-700 px-1.5 py-0.2 rounded">
-                          #{cIdx + 1}
-                        </span>
-                        <h4 className="text-lg font-bold text-stone-900">
-                          {card.word}
-                        </h4>
-                        {card.partOfSpeech && (
-                          <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded">
-                            {card.partOfSpeech}
+            {cards.map((card, cIdx) => {
+              const gridCardKey = card.wordId || card.word || `grid-${cIdx}`;
+              const isGridTranslationOpen = Boolean(expandedTranslations[gridCardKey]);
+              return (
+                <div
+                  key={cIdx}
+                  className="bg-stone-50/80 border border-stone-200 hover:border-amber-300/80 rounded-xl p-3.5 space-y-2.5 transition-all shadow-2xs flex flex-col justify-between"
+                >
+                  {/* Header info */}
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <span className="text-[10px] font-mono font-bold bg-stone-200 text-stone-700 px-1.5 py-0.2 rounded shrink-0">
+                            #{cIdx + 1}
                           </span>
+                          <h4 className="text-lg font-bold text-stone-900 break-words">
+                            {card.word}
+                          </h4>
+                          {card.partOfSpeech && (
+                            <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded shrink-0">
+                              {card.partOfSpeech}
+                            </span>
+                          )}
+                        </div>
+                        {card.pronunciation && (
+                          <p className="text-xs font-mono text-amber-700 mt-0.5 break-words">
+                            {card.pronunciation}
+                          </p>
                         )}
                       </div>
-                      {card.pronunciation && (
-                        <p className="text-xs font-mono text-amber-700 mt-0.5">
-                          {card.pronunciation}
-                        </p>
-                      )}
-                    </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedHistoryWord(getWordObjectForCard(card))}
-                        className="p-1.5 bg-white border border-stone-200 text-amber-700 hover:text-amber-950 hover:bg-amber-50 hover:border-amber-400 rounded-lg shrink-0 cursor-pointer shadow-2xs transition-transform hover:scale-105"
-                        title={`View Strength History for "${card.word}"`}
-                      >
-                        <History className="w-3.5 h-3.5 text-amber-600" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleSpeak(card.word, e)}
-                        className="p-1.5 bg-stone-900 text-amber-400 hover:bg-stone-800 rounded-lg shrink-0 cursor-pointer shadow-2xs"
-                        title={`Listen to ${card.word}`}
-                      >
-                        <Volume2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Translation & Definition */}
-                  <div className="bg-white p-2.5 rounded-lg border border-stone-200/60 space-y-1">
-                    <p className="text-sm font-bold text-stone-900">
-                      "{card.translation}"
-                    </p>
-                    {card.definition && (
-                      <p className="text-xs text-stone-600 line-clamp-2">
-                        {card.definition}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Example */}
-                  {card.example && (
-                    <div className="bg-white p-2.5 rounded-lg border border-stone-200/60 space-y-0.5">
-                      <div className="flex items-start justify-between gap-1">
-                        <p className="text-xs font-semibold text-stone-800 line-clamp-2">
-                          {card.example}
-                        </p>
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={(e) => handleSpeak(card.example!, e)}
-                          className="p-1 text-stone-400 hover:text-stone-900 rounded shrink-0"
-                          title="Listen to example"
+                          onClick={() => setSelectedHistoryWord(getWordObjectForCard(card))}
+                          className="p-1.5 bg-white border border-stone-200 text-amber-700 hover:text-amber-950 hover:bg-amber-50 hover:border-amber-400 rounded-lg shrink-0 cursor-pointer shadow-2xs transition-colors"
+                          title={`View Strength History for "${card.word}"`}
                         >
-                          <Volume2 className="w-3 h-3" />
+                          <History className="w-3.5 h-3.5 text-amber-600" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSpeak(card.word, e)}
+                          className={`p-1.5 rounded-lg shrink-0 cursor-pointer shadow-2xs transition-colors border ${
+                            speakingText === card.word
+                              ? "bg-amber-400 border-amber-500 text-stone-950"
+                              : "bg-white border-stone-200 text-stone-700 hover:bg-stone-100"
+                          }`}
+                          title={`Listen to ${card.word}`}
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      {card.exampleTranslation && (
-                        <p className="text-[11px] text-stone-500 italic truncate">
-                          "{card.exampleTranslation}"
+                    </div>
+
+                    {/* Translation & Definition */}
+                    <div className="bg-white p-2.5 rounded-lg border border-stone-200/60 space-y-1">
+                      <p className="text-sm font-bold text-stone-900 break-words">
+                        "{card.translation}"
+                      </p>
+                      {card.definition && (
+                        <p className="text-xs text-stone-600 line-clamp-2">
+                          {card.definition}
                         </p>
                       )}
                     </div>
-                  )}
+
+                    {/* Example */}
+                    {card.example && (
+                      <div className="bg-white p-2.5 rounded-lg border border-stone-200/60 space-y-1">
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="text-xs font-semibold text-stone-800 line-clamp-2 min-w-0 flex-1">
+                            {card.example}
+                          </p>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {card.exampleTranslation && (
+                              <button
+                                type="button"
+                                onClick={(e) => toggleTranslation(gridCardKey, e)}
+                                className={`p-1 rounded border transition-colors flex items-center justify-center cursor-pointer ${
+                                  isGridTranslationOpen
+                                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                                    : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                                }`}
+                                title={isGridTranslationOpen ? "Hide translation" : "Show translation"}
+                              >
+                                <Languages className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => handleSpeak(card.example!, e)}
+                              className={`p-1 rounded border transition-colors flex items-center justify-center cursor-pointer ${
+                                speakingText === card.example
+                                  ? "bg-amber-400 text-stone-950 border-amber-500"
+                                  : "bg-white hover:bg-stone-100 text-stone-500 hover:text-stone-800 border-stone-200"
+                              }`}
+                              title="Listen to example"
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        {card.exampleTranslation && isGridTranslationOpen && (
+                          <p className="text-[11px] text-stone-600 italic pt-1 border-t border-stone-100">
+                            "{card.exampleTranslation}"
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
