@@ -19,15 +19,15 @@ export const WORD_LIBRARY_SETS: WordLibrarySet[] = [
   /* English Target Libraries (Universal & Vietnamese-tailored)                */
   /* -------------------------------------------------------------------------- */
   {
-    id: "ielts-band8-vi",
-    name: "IELTS Band 8 Vocabulary (Song Ngữ Anh - Việt)",
-    url: "https://gist.github.com/nclong87-awesome/ef16a9a0d59412d3bdd13fbc5b5b152b#file-ielts_band8_vocabulary-json",
-    description: "Từ vựng Band 8 IELTS - 10 từ vựng cốt lõi...",
+    id: "b-level-daily-conversation-vi",
+    name: "B-Level Daily Conversation Vocabulary",
+    url: "https://gist.github.com/nclong87-awesome/6cbd6e701c2d8c94234c4d1d9744fb3b#file-b-level-daily-conversation-en-vi-json",
+    description: "150 từ vựng B1-B2 thường dùng nhất trong giao tiếp hàng ngày. Bao gồm phát âm IPA, loại từ, danh mục, nghĩa tiếng Việt, ngữ cảnh, định nghĩa và ví dụ.",
     category: "core",
     categoryLabel: "Core English (Anh - Việt)",
-    itemCount: 10,
-    level: "B2 - C1",
-    tags: ["IELTS", "Song Ngữ", "Anh - Việt", "Band 8", "Advanced"],
+    itemCount: 150,
+    level: "B1 - B2",
+    tags: ["Daily Conversation", "Song Ngữ", "Anh - Việt", "B Level", "Intermediate", "Everyday English"],
     author: "AI Studio",
     targetLanguage: "English",
     nativeLanguages: ["Vietnamese"]

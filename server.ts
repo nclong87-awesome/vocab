@@ -936,19 +936,22 @@ app.get("/api/health", (_req, res) => {
 app.all(["/api/gist", "/api/gist/*"], async (req, res) => {
   const method = req.method.toUpperCase();
 
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Proxy-Key");
+
   if (method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Proxy-Key");
+    res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, POST, DELETE, OPTIONS");
     return res.status(204).end();
   }
 
-  if (method !== "GET" && method !== "PATCH") {
-    return res.status(405).json({ error: "Method Not Allowed. Only GET, PATCH, and OPTIONS are allowed." });
+  const allowedMethods = ["GET", "PATCH", "POST", "DELETE"];
+  if (!allowedMethods.includes(method)) {
+    return res.status(405).json({ error: `Method Not Allowed. Only ${allowedMethods.join(", ")} and OPTIONS are allowed.` });
   }
 
   try {
-    const subPath = req.path.replace(/^\/api\/gist/, ""); // e.g. "" or "/<gistId>"
+    let subPath = req.path.replace(/^\/api\/gist/, ""); // e.g. "" or "/<gistId>"
+    if (subPath === "/") subPath = "";
     const authHeader = req.headers["authorization"] || "";
     const token = typeof authHeader === "string" ? authHeader.replace(/^Bearer\s+/i, "").trim() : "";
     const clientProxyKey = (req.headers["x-proxy-key"] as string) || "";
@@ -1000,16 +1003,27 @@ app.all(["/api/gist", "/api/gist/*"], async (req, res) => {
       headers
     };
 
-    if (method === "PATCH" && req.body && Object.keys(req.body).length > 0) {
-      fetchOptions.body = JSON.stringify(req.body);
+    if (["PATCH", "POST", "PUT"].includes(method) && req.body) {
+      if (typeof req.body === "string") {
+        fetchOptions.body = req.body;
+      } else if (Object.keys(req.body).length > 0) {
+        fetchOptions.body = JSON.stringify(req.body);
+      }
     }
 
+    console.log(`[Gist Proxy] ${method} ${targetUrl} (Body length: ${fetchOptions.body ? (fetchOptions.body as string).length : 0})`);
+
     const response = await fetchWithTimeout(targetUrl, fetchOptions);
-    const dataText = await response.text();
 
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
+
+    if (response.status === 204) {
+      return res.status(204).end();
+    }
+
+    const dataText = await response.text();
 
     let dataJson;
     try {
@@ -1020,7 +1034,7 @@ app.all(["/api/gist", "/api/gist/*"], async (req, res) => {
 
     res.status(response.status).json(dataJson);
   } catch (error: any) {
-    console.error("Gist proxy error:", error);
+    console.error("[Gist Proxy] Error:", error);
     res.status(500).json({ error: error.message || "Failed to communicate with Gist service" });
   }
 });
