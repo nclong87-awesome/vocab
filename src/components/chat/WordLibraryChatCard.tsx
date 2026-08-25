@@ -8,7 +8,7 @@ import {
   Sparkles,
   X
 } from "lucide-react";
-import { getWordLibrarySets, fetchWordLibrarySetData, WordLibrarySet } from "../../config/wordLibraries";
+import { getWordLibrarySets, fetchWordLibrarySets, fetchWordLibrarySetData, WordLibrarySet } from "../../config/wordLibraries";
 import { getImportedLibraryIdsFromDB, saveImportedLibraryIdToDB } from "../../db/indexedDB";
 import { t } from "../../config/i18n";
 import { getLanguageFlag } from "../../config/languages";
@@ -38,6 +38,11 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
   const effectiveTarget = targetLanguage || localStorage.getItem("vocab_learner_target_lang") || "English";
   const effectiveNative = nativeLanguage || localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
 
+  const [librarySets, setLibrarySets] = useState<WordLibrarySet[]>(() =>
+    getWordLibrarySets(effectiveTarget, effectiveNative)
+  );
+  const [isLoadingLibraries, setIsLoadingLibraries] = useState<boolean>(true);
+
   const loadImportedIds = async () => {
     try {
       const ids = await getImportedLibraryIdsFromDB();
@@ -50,6 +55,35 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
   useEffect(() => {
     void loadImportedIds();
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingLibraries(true);
+
+    const syncSets = getWordLibrarySets(effectiveTarget, effectiveNative);
+    if (syncSets.length > 0) {
+      setLibrarySets(syncSets);
+      setIsLoadingLibraries(false);
+    }
+
+    fetchWordLibrarySets(effectiveTarget, effectiveNative)
+      .then((sets) => {
+        if (isMounted) {
+          setLibrarySets(sets);
+          setIsLoadingLibraries(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch word libraries from public Gist index:", err);
+        if (isMounted) {
+          setIsLoadingLibraries(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [effectiveTarget, effectiveNative]);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -69,14 +103,21 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
     setIsActionLoading((prev) => ({ ...prev, [set.id]: true }));
     try {
       // 1. Fetch library items from URL
-      let rawItems: any[] = [];
+      let fetchedData: any = null;
       try {
-        rawItems = await fetchWordLibrarySetData(set.url);
+        fetchedData = await fetchWordLibrarySetData(set.url);
       } catch (fetchErr) {
         console.error("Failed to fetch library set data from URL:", fetchErr);
         showToast?.(`Failed to download vocabulary set "${set.name}". Please check network connection.`);
         setIsActionLoading((prev) => ({ ...prev, [set.id]: false }));
         return;
+      }
+
+      let rawItems: any[] = [];
+      if (Array.isArray(fetchedData)) {
+        rawItems = fetchedData;
+      } else if (fetchedData && typeof fetchedData === "object") {
+        rawItems = fetchedData.words || fetchedData.items || fetchedData.data || [];
       }
 
       if (!rawItems || rawItems.length === 0) {
@@ -124,8 +165,8 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
 
   // Only get word library sets that match the user's target language and native language
   const languageMatchedSets = useMemo(() => {
-    return getWordLibrarySets(effectiveTarget, effectiveNative);
-  }, [effectiveTarget, effectiveNative]);
+    return librarySets;
+  }, [librarySets]);
 
   // Extract available categories within the language-matched libraries
   const categories = useMemo(() => {
@@ -259,7 +300,14 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
       </div>
 
       {/* List of Word Sets */}
-      {filteredSets.length > 0 ? (
+      {isLoadingLibraries && librarySets.length === 0 ? (
+        <div className="py-8 px-4 text-center rounded-xl bg-white border border-stone-200/80 space-y-2.5 shadow-3xs">
+          <RefreshCw className="w-5 h-5 mx-auto animate-spin text-sky-600" />
+          <p className="text-xs text-stone-600 font-medium">
+            Loading vocabulary libraries...
+          </p>
+        </div>
+      ) : filteredSets.length > 0 ? (
         <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
           {filteredSets.map((libSet) => {
             const isImported = importedIds.includes(libSet.id);

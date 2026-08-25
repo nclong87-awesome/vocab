@@ -9,30 +9,34 @@ export interface WordLibrarySet {
   level?: string;
   tags?: string[];
   author?: string;
-  targetLanguage: string;
+  targetLanguage?: string;
   nativeLanguage?: string;
   nativeLanguages?: string[];
 }
 
-export const WORD_LIBRARY_SETS: WordLibrarySet[] = [
+export interface WordLibraryIndexSource {
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  nativeLanguages?: string[];
+  url: string;
+  id?: string;
+  name?: string;
+}
+
+export const WORD_LIBRARY_SETS: (WordLibrarySet | WordLibraryIndexSource)[] = [
   /* -------------------------------------------------------------------------- */
   /* English Target Libraries (Universal & Vietnamese-tailored)                */
   /* -------------------------------------------------------------------------- */
   {
-    id: "b-level-daily-conversation-vi",
-    name: "B-Level Daily Conversation Vocabulary",
-    url: "https://gist.github.com/nclong87-awesome/6cbd6e701c2d8c94234c4d1d9744fb3b#file-b-level-daily-conversation-en-vi-json",
-    description: "150 từ vựng B1-B2 thường dùng nhất trong giao tiếp hàng ngày. Bao gồm phát âm IPA, loại từ, danh mục, nghĩa tiếng Việt, ngữ cảnh, định nghĩa và ví dụ.",
-    category: "core",
-    categoryLabel: "Core English (Anh - Việt)",
-    itemCount: 150,
-    level: "B1 - B2",
-    tags: ["Daily Conversation", "Song Ngữ", "Anh - Việt", "B Level", "Intermediate", "Everyday English"],
-    author: "AI Studio",
     targetLanguage: "English",
-    nativeLanguages: ["Vietnamese"]
+    nativeLanguage: "Vietnamese",
+    url: "https://gist.github.com/nclong87-awesome/6a5e3f4505055b969d636b461bc8bc85#file-0-libraries-json"
   }
 ];
+
+// In-memory cache for resolved library sets per language pair
+const librarySetsCache = new Map<string, WordLibrarySet[]>();
+const pendingIndexFetches = new Map<string, Promise<WordLibrarySet[]>>();
 
 /**
  * Normalizes language names or language codes into a canonical identifier
@@ -89,36 +93,125 @@ export function isLanguageMatch(
 }
 
 /**
- * Returns word library sets filtered to only those matching target and native languages
+ * Dynamically fetches and resolves library sets from public Gist index URLs.
+ */
+export async function fetchWordLibrarySets(
+  targetLanguage?: string,
+  nativeLanguage?: string
+): Promise<WordLibrarySet[]> {
+  const normTarget = normalizeLanguage(targetLanguage);
+  const normNative = normalizeLanguage(nativeLanguage);
+  const cacheKey = `${normTarget}_${normNative}`;
+
+  if (pendingIndexFetches.has(cacheKey)) {
+    return pendingIndexFetches.get(cacheKey)!;
+  }
+
+  const fetchPromise = (async () => {
+    const matchedSources = WORD_LIBRARY_SETS.filter((source) => {
+      const targetMatch = targetLanguage
+        ? isLanguageMatch(source.targetLanguage, targetLanguage)
+        : true;
+      const nativeMatch = nativeLanguage
+        ? isLanguageMatch(source.nativeLanguages || source.nativeLanguage, nativeLanguage)
+        : true;
+      return targetMatch && nativeMatch;
+    });
+
+    const resolvedSets: WordLibrarySet[] = [];
+
+    for (const source of matchedSources) {
+      // If the source item is already a fully formed WordLibrarySet with an id and name
+      if (source.id && source.name) {
+        resolvedSets.push(source as WordLibrarySet);
+        continue;
+      }
+
+      // Otherwise, fetch the library list manifest from the public Gist URL
+      try {
+        const rawData = await fetchWordLibrarySetData(source.url);
+        let items: any[] = [];
+        if (Array.isArray(rawData)) {
+          items = rawData;
+        } else if (rawData && typeof rawData === "object") {
+          items = (rawData as any).libraries || (rawData as any).sets || (rawData as any).items || (rawData as any).words || [];
+        }
+
+        items.forEach((item: any, idx: number) => {
+          if (!item) return;
+          const libSet: WordLibrarySet = {
+            id: item.id || `gist-lib-${idx}`,
+            name: item.name || "Word Library",
+            url: item.url || source.url,
+            description: item.description || undefined,
+            category: item.category || "core",
+            categoryLabel: item.categoryLabel || undefined,
+            itemCount: typeof item.itemCount === "number" ? item.itemCount : (Array.isArray(item.words) ? item.words.length : undefined),
+            level: item.level || undefined,
+            tags: Array.isArray(item.tags) ? item.tags : undefined,
+            author: item.author || "AI Studio",
+            targetLanguage: item.targetLanguage || source.targetLanguage || targetLanguage || "English",
+            nativeLanguage: item.nativeLanguage || source.nativeLanguage || nativeLanguage || "Vietnamese",
+            nativeLanguages: item.nativeLanguages || (source.nativeLanguages ? source.nativeLanguages : source.nativeLanguage ? [source.nativeLanguage] : undefined),
+          };
+          resolvedSets.push(libSet);
+        });
+      } catch (err) {
+        console.error(`Failed to fetch word library index from ${source.url}:`, err);
+      }
+    }
+
+    librarySetsCache.set(cacheKey, resolvedSets);
+    return resolvedSets;
+  })();
+
+  pendingIndexFetches.set(cacheKey, fetchPromise);
+
+  try {
+    return await fetchPromise;
+  } finally {
+    pendingIndexFetches.delete(cacheKey);
+  }
+}
+
+/**
+ * Returns word library sets filtered to only those matching target and native languages (from cache or explicit sets)
  */
 export function getWordLibrarySets(
   targetLanguage?: string,
   nativeLanguage?: string
 ): WordLibrarySet[] {
-  return WORD_LIBRARY_SETS.filter((set) => {
-    // Check target language match
-    const targetMatch = targetLanguage
-      ? isLanguageMatch(set.targetLanguage, targetLanguage)
-      : true;
+  const normTarget = normalizeLanguage(targetLanguage);
+  const normNative = normalizeLanguage(nativeLanguage);
+  const cacheKey = `${normTarget}_${normNative}`;
 
-    // Check native language match
-    const nativeMatch = nativeLanguage
-      ? isLanguageMatch(set.nativeLanguages || set.nativeLanguage, nativeLanguage)
-      : true;
+  const cached = librarySetsCache.get(cacheKey);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
 
+  // Fallback to any explicit fully-formed WordLibrarySet entries in WORD_LIBRARY_SETS
+  return WORD_LIBRARY_SETS.filter((set): set is WordLibrarySet => {
+    if (!set.id || !set.name) return false;
+    const targetMatch = targetLanguage ? isLanguageMatch(set.targetLanguage, targetLanguage) : true;
+    const nativeMatch = nativeLanguage ? isLanguageMatch(set.nativeLanguages || set.nativeLanguage, nativeLanguage) : true;
     return targetMatch && nativeMatch;
   });
 }
 
 export function getWordLibrarySetById(id: string): WordLibrarySet | undefined {
-  return WORD_LIBRARY_SETS.find(set => set.id === id);
+  for (const list of librarySetsCache.values()) {
+    const found = list.find(set => set.id === id);
+    if (found) return found;
+  }
+  return WORD_LIBRARY_SETS.find(set => (set as WordLibrarySet).id === id) as WordLibrarySet | undefined;
 }
 
 /**
- * Fetches and parses word array from a library set URL.
+ * Fetches and parses word array or JSON data from a library set URL.
  * Supports GitHub Gists (web and raw URLs) as well as direct HTTP JSON endpoints.
  */
-export async function fetchWordLibrarySetData(url: string): Promise<any[]> {
+export async function fetchWordLibrarySetData(url: string): Promise<any> {
   const cleanUrl = (url || "").trim();
   if (!cleanUrl) return [];
 
@@ -174,7 +267,7 @@ export async function fetchWordLibrarySetData(url: string): Promise<any[]> {
       }
 
       const parsed = JSON.parse(contentStr);
-      return Array.isArray(parsed) ? parsed : (parsed.words || parsed.items || []);
+      return parsed;
     }
   }
 
@@ -184,5 +277,5 @@ export async function fetchWordLibrarySetData(url: string): Promise<any[]> {
     throw new Error(`Failed to download library data (HTTP ${res.status})`);
   }
   const data = await res.json();
-  return Array.isArray(data) ? data : (data.words || data.items || []);
+  return data;
 }
