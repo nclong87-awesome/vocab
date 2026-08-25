@@ -20,6 +20,7 @@ interface QuickActionsSectionProps {
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onSuggestCasualReplyPrompt?: () => void;
+  onOpenWordLibrary?: () => void;
   onSwitchProvider?: (provider: LLMProvider, model?: string) => void;
   showToast: (msg: string) => void;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
@@ -32,6 +33,7 @@ interface QuickActionsSectionProps {
 const ACTION_THEMES: Record<string, { cardHover: string; iconBgHover: string }> = {
   add_word: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
   generate_topic: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
+  import_library: { cardHover: "hover:bg-sky-50/50 hover:border-sky-300/80", iconBgHover: "group-hover:bg-sky-100" },
   practice: { cardHover: "hover:bg-stone-50 hover:border-stone-400/60", iconBgHover: "group-hover:bg-stone-200" },
   fix_grammar: { cardHover: "hover:bg-rose-50/50 hover:border-rose-300/80", iconBgHover: "group-hover:bg-rose-100" },
   suggest_reply: { cardHover: "hover:bg-amber-50/50 hover:border-amber-300/80", iconBgHover: "group-hover:bg-amber-100" },
@@ -56,6 +58,7 @@ function QuickActionsSection({
   onFixGrammar,
   onViewFlashcard,
   onSuggestCasualReplyPrompt,
+  onOpenWordLibrary,
   onSwitchProvider,
   showToast,
   scrollToBottom,
@@ -83,6 +86,7 @@ function QuickActionsSection({
     onFixGrammar,
     onViewFlashcard,
     onSuggestCasualReplyPrompt,
+    onOpenWordLibrary,
     onSwitchProvider,
     showToast,
     scrollToBottom,
@@ -106,6 +110,7 @@ function QuickActionsSection({
       onFixGrammar,
       onViewFlashcard,
       onSuggestCasualReplyPrompt,
+      onOpenWordLibrary,
       onSwitchProvider,
       showToast,
       scrollToBottom,
@@ -143,6 +148,7 @@ function QuickActionsSection({
             p.setIsPhotoModalOpen(true);
             p.onSuggestCasualReplyPrompt?.();
           },
+          onOpenWordLibrary: p.onOpenWordLibrary,
         });
         setIsActionsPanelOpen(false);
         p.scrollToBottom("smooth");

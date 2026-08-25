@@ -264,6 +264,7 @@ export interface ChatMessage {
   fixedSentence?: string;
   flashcardData?: FlashcardData;
   quizFinishedData?: QuizFinishedData;
+  wordLibraries?: boolean;
   answeredQuizWordId?: string;
   suggestedReplies?: {
     reply: string;

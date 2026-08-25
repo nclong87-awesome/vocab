@@ -2339,6 +2339,23 @@ export function useChat({
     localStorage.removeItem("vocab_learner_chat_history");
   };
 
+  const handleShowWordLibraries = () => {
+    setActiveQuiz(null);
+    setConversationalState("none");
+    setPendingTopicSubject("");
+    setPendingWordSenses(null);
+    setPendingConfirmWord(null);
+    const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
+    const libMsg: ChatMessage = {
+      id: `word-library-msg-${Date.now()}`,
+      role: "assistant",
+      content: t("chat_library_intro", currentAppLang),
+      timestamp: new Date().toISOString(),
+      wordLibraries: true,
+    };
+    setChatMessages([libMsg]);
+  };
+
   return {
     chatMessages,
     setChatMessages,
@@ -2370,6 +2387,7 @@ export function useChat({
     handlePromptFixGrammar,
     handleConversationalFixGrammar,
     handleViewFlashcard,
+    handleShowWordLibraries,
     handleClearChatHistory,
     handleRetryErrorMessage,
     handleCancelErrorMessage,

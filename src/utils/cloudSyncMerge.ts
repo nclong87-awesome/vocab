@@ -427,7 +427,29 @@ export function autoMergeLocalAndRemote(
 
   const settingsMap = new Map<string, StoredSetting>();
   for (const s of remoteSettings) if (s && s.key) settingsMap.set(s.key, s);
-  for (const s of localSettings) if (s && s.key) settingsMap.set(s.key, s);
+  for (const s of localSettings) {
+    if (s && s.key) {
+      if (s.key === "imported_library_ids" && settingsMap.has("imported_library_ids")) {
+        const remoteSetting = settingsMap.get("imported_library_ids")!;
+        try {
+          const localIds = JSON.parse(s.value || "[]");
+          const remoteIds = JSON.parse(remoteSetting.value || "[]");
+          if (Array.isArray(localIds) && Array.isArray(remoteIds)) {
+            const mergedIds = Array.from(new Set([...localIds, ...remoteIds].map(id => String(id).trim()).filter(Boolean)));
+            settingsMap.set("imported_library_ids", {
+              key: "imported_library_ids",
+              value: JSON.stringify(mergedIds),
+              updatedAt: new Date().toISOString()
+            });
+            continue;
+          }
+        } catch {
+          // fallback to local
+        }
+      }
+      settingsMap.set(s.key, s);
+    }
+  }
 
   const activeWordKeys = new Set<string>();
   for (const w of mergedWordsList) {

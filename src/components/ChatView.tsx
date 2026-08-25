@@ -25,6 +25,7 @@ interface ChatViewProps {
   startPractice: () => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
+  onOpenWordLibrary?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onSuggestCasualReply?: (imageDataUrl: string | null, customPrompt: string) => Promise<void>;
@@ -57,6 +58,7 @@ function ChatView({
   startPractice,
   onFixGrammar,
   onViewFlashcard,
+  onOpenWordLibrary,
   onAnalyzeImageVocab,
   onSuggestCasualReplyPrompt,
   onSuggestCasualReply,
@@ -476,6 +478,7 @@ function ChatView({
         onFixGrammar={onFixGrammar}
         onViewFlashcard={onViewFlashcard}
         onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
+        onOpenWordLibrary={onOpenWordLibrary}
         onSwitchProvider={onSwitchProvider}
         showToast={showToast}
         scrollToBottom={scrollToBottom}

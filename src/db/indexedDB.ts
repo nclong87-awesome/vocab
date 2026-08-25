@@ -592,6 +592,89 @@ export async function saveSettingToDB(key: string, value: string): Promise<void>
 }
 
 /* -------------------------------------------------------------------------- */
+/* Imported Word Library IDs                                                  */
+/* -------------------------------------------------------------------------- */
+
+export const IMPORTED_LIBRARY_IDS_KEY = "imported_library_ids";
+const LOCAL_IMPORTED_LIBRARY_IDS_KEY = "vocab_learner_imported_library_ids";
+
+export async function getImportedLibraryIdsFromDB(): Promise<string[]> {
+  try {
+    const raw = await getSettingFromDB(IMPORTED_LIBRARY_IDS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.map(id => String(id).trim()).filter(Boolean)));
+      }
+    }
+    // Fallback to localStorage if present
+    const lsRaw = lsGet(LOCAL_IMPORTED_LIBRARY_IDS_KEY);
+    if (lsRaw) {
+      const parsed = JSON.parse(lsRaw);
+      if (Array.isArray(parsed)) {
+        const unique = Array.from(new Set(parsed.map(id => String(id).trim()).filter(Boolean)));
+        await saveSettingToDB(IMPORTED_LIBRARY_IDS_KEY, JSON.stringify(unique));
+        return unique;
+      }
+    }
+    return [];
+  } catch (err) {
+    console.error("Error reading imported library IDs from IndexedDB:", err);
+    return [];
+  }
+}
+
+export async function saveImportedLibraryIdsToDB(libraryIds: string[]): Promise<void> {
+  try {
+    const unique = Array.from(new Set(libraryIds.map(id => String(id).trim()).filter(Boolean)));
+    const jsonStr = JSON.stringify(unique);
+    await saveSettingToDB(IMPORTED_LIBRARY_IDS_KEY, jsonStr);
+    lsSet(LOCAL_IMPORTED_LIBRARY_IDS_KEY, jsonStr);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-library-imported", { detail: { importedIds: unique } }));
+      window.dispatchEvent(new CustomEvent("vocab-db-updated"));
+    }
+  } catch (err) {
+    console.error("Error saving imported library IDs to IndexedDB:", err);
+  }
+}
+
+export async function saveImportedLibraryIdToDB(libraryId: string): Promise<string[]> {
+  const cleanId = String(libraryId).trim();
+  if (!cleanId) return await getImportedLibraryIdsFromDB();
+  try {
+    const existing = await getImportedLibraryIdsFromDB();
+    if (!existing.includes(cleanId)) {
+      const updated = [...existing, cleanId];
+      await saveImportedLibraryIdsToDB(updated);
+      return updated;
+    }
+    return existing;
+  } catch (err) {
+    console.error("Error recording imported library ID:", err);
+    return [];
+  }
+}
+
+export async function removeImportedLibraryIdFromDB(libraryId: string): Promise<string[]> {
+  const cleanId = String(libraryId).trim();
+  try {
+    const existing = await getImportedLibraryIdsFromDB();
+    const updated = existing.filter(id => id !== cleanId);
+    await saveImportedLibraryIdsToDB(updated);
+    return updated;
+  } catch (err) {
+    console.error("Error removing imported library ID:", err);
+    return [];
+  }
+}
+
+export async function isLibraryImportedInDB(libraryId: string): Promise<boolean> {
+  const ids = await getImportedLibraryIdsFromDB();
+  return ids.includes(String(libraryId).trim());
+}
+
+/* -------------------------------------------------------------------------- */
 /* Backup / restore / reset                                                   */
 /* -------------------------------------------------------------------------- */
 

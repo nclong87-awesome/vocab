@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, BookOpen } from "lucide-react";
 import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
@@ -28,6 +28,7 @@ export interface QuickActionItem {
     onClearHistory: () => void;
     onViewFlashcard?: () => void;
     onSuggestCasualReplyPrompt?: () => void;
+    onOpenWordLibrary?: () => void;
   }) => void;
 }
 
@@ -145,6 +146,21 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       }
     },
     {
+      id: "import_library",
+      label: t("qa_import_library_label", appLanguage),
+      category: "vocab",
+      categoryLabel: t("qa_cat_vocab", appLanguage),
+      icon: <BookOpen className="w-4 h-4 text-sky-600" />,
+      title: t("qa_import_library_title", appLanguage),
+      description: t("qa_import_library_desc", appLanguage),
+      className: "bg-sky-50/80 hover:bg-sky-100 text-sky-950 border border-sky-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 2,
+      getAction: ({ onOpenWordLibrary, onClearHistory }) => {
+        onClearHistory();
+        onOpenWordLibrary?.();
+      }
+    },
+    {
       id: "practice",
       label: t("qa_practice_label", appLanguage),
       category: "study",
@@ -153,7 +169,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_practice_title", appLanguage),
       description: t("qa_practice_desc", appLanguage),
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 2,
+      defaultIndex: 3,
       getAction: ({ startPractice, onClearHistory }) => {
         onClearHistory();
         startPractice();

@@ -105,6 +105,7 @@ export default function App() {
     handleSuggestCasualReply,
     handlePromptFixGrammar,
     handleViewFlashcard,
+    handleShowWordLibraries,
     handleClearChatHistory,
     handleAnalyzeImageVocab,
     handleAddMultipleWords,
@@ -435,6 +436,7 @@ export default function App() {
                     startPractice={startPractice}
                     onFixGrammar={handlePromptFixGrammar}
                     onViewFlashcard={handleViewFlashcard}
+                    onOpenWordLibrary={handleShowWordLibraries}
                     onSelectDefinition={handleSelectDefinition}
                     onClearHistory={handleClearChatHistory}
                     onSwitchProvider={handleSwitchProviderQuick}

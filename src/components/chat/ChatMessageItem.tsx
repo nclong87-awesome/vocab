@@ -10,6 +10,7 @@ import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
+import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
@@ -838,6 +839,18 @@ function ChatMessageItem({
                     })}
                   </div>
                 </div>
+              )}
+
+              {/* Word Libraries List Card */}
+              {msg.wordLibraries && (
+                <WordLibraryChatCard
+                  targetLanguage={targetLanguage}
+                  nativeLanguage={nativeLanguage}
+                  appLanguage={currentAppLang}
+                  showToast={showToast}
+                  onAddMultipleWords={onAddMultipleWords}
+                  onGenerateByTopic={onGenerateByTopic}
+                />
               )}
 
               {/* Suggested replies cards with direct Copy buttons */}
