@@ -1194,7 +1194,21 @@ export function useChat({
 
         const categoryVal = sense?.category || data.category || "General";
         const contextVal = sense?.context || data.context || hint || definitionVal;
-        const targetWordStr = sense?.word || data.word || rawWordInput;
+        let targetWordStr = sense?.word || data.word || rawWordInput;
+
+        // Safeguard against over-aggressive LLM headword isolation when the user intends to add a multi-word phrase
+        const rawTrimmed = rawWordInput.trim();
+        if (
+          rawTrimmed.includes(" ") &&
+          !rawTrimmed.startsWith("(") &&
+          !/^(i want|how to|how do|what is|can we|can i|please add|add word|add |thêm từ|thêm )/i.test(rawTrimmed)
+        ) {
+          const shortenedMatch = findWordInCollection(words, targetWordStr);
+          const fullMatch = findWordInCollection(words, rawTrimmed);
+          if (shortenedMatch && !fullMatch && rawTrimmed.toLowerCase().startsWith(targetWordStr.toLowerCase())) {
+            targetWordStr = rawTrimmed;
+          }
+        }
 
         const finalMatch = findWordInCollection(words, targetWordStr);
         if (finalMatch) {

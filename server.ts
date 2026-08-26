@@ -1129,13 +1129,25 @@ Target language being learned: "${userTarget}".
 User's native language: "${userNative}".
 
 CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
-0. CRITICAL WORD EXTRACTION & HEADWORD ISOLATION DIRECTIVE:
-   - Always attempt to extract individual target vocabulary words or key lexical terms from user input whenever possible, rather than using the entire sentence or request phrase as a single word!
-   - If "${word}" is a full user sentence, clause, natural language query, or conversational request (e.g., "The weather is very whimsical today", "I want to add the word serendipity", "She had an innate talent for music", "Thêm từ enthusiastic vào từ điển", "How do you say resilience in Spanish?", "Can we learn about biodiversity?"):
+0. MULTI-WORD INPUT ANALYSIS & TARGET DETERMINATION FLOW:
+   - When the input "${word}" contains more than one word, first perform an LLM analysis of the user's input:
+     1. ANALYZE INTENT: Determine whether the user wants to add a specific word (along with its specific context or domain) OR the whole multi-word expression/sentence as the target entry:
+        * OPTION A (SPECIFIC WORD + CONTEXT): If the input is a full conversational sentence, question, or request mentioning a specific word (e.g., "I want to add table in database context", "She had an innate talent for music", "How do you say resilience in Spanish?"), EXTRACT the specific target word/term (e.g., "table", "innate", "resilience") and isolate the specified context/domain (e.g. "database context", "musical ability").
+        * OPTION B (WHOLE MULTI-WORD PHRASE / EXPRESSION): If the input is a multi-word vocabulary item, phrasal verb, collocation, idiom, or fixed expression (e.g., "postpone until a later date", "forward to", "wholesale market", "look forward to", "take into account", "break down", "piece of cake"), TREAT THE ENTIRE MULTI-WORD PHRASE as the target item! DO NOT strip prepositions or shorten the phrase!
+     2. CONTINUE WITH WORD-ADDING PROCESS: Generate the complete vocabulary details (definition, translation, example, IPA, part of speech, category, context) for the target term identified in Step 1.
+   - CRITICAL WORD EXTRACTION & TARGET PHRASE PRESERVATION DIRECTIVE:
+     * Always attempt to extract individual target vocabulary words or key lexical terms from user sentences, queries, or natural language requests whenever possible, rather than using an entire conversational request phrase as a single entry.
+     * CRITICAL EXCEPTION FOR MULTI-WORD EXPRESSIONS, PHRASAL VERBS, & COLLOCATIONS:
+       If "${word}" or the target item being learned is a multi-word vocabulary item, phrase, collocation, phrasal verb, idiom, or fixed expression (e.g. "postpone until a later date", "forward to", "wholesale market", "look forward to", "take into account"):
+       - YOU MUST PRESERVE AND KEEP THE ENTIRE MULTI-WORD PHRASE / EXPRESSION INTACT AS THE TARGET "word" FIELD!
+       - ABSOLUTELY DO NOT strip words, prepositions, or modifiers from a multi-word target phrase (e.g. DO NOT shorten "postpone until a later date" to "postpone", DO NOT shorten "forward to" to "forward", DO NOT shorten "wholesale market" to "wholesale").
+       - Treat the COMPLETE multi-word phrase/expression as the target vocabulary headword to be defined, translated, and stored in the user's collection.
+   - EXTRACTING CORE HEADWORDS FROM CONVERSATIONAL SENTENCES OR QUESTIONS:
+     If "${word}" is a full conversational sentence, clause, natural language query, or conversational request (e.g., "The weather is very whimsical today", "I want to add the word serendipity", "She had an innate talent for music", "Thêm từ enthusiastic vào từ điển", "How do you say resilience in Spanish?", "Can we learn about biodiversity?"):
      * NEVER set the "word" field to the entire input sentence or question!
-     * Isolate and extract the core headword / target vocabulary item being learned or referenced (e.g. "whimsical", "serendipity", "innate", "enthusiastic", "resilience", "biodiversity").
+     * Isolate and extract ONLY the core target vocabulary word/expression being learned or referenced (e.g. "whimsical", "serendipity", "innate", "enthusiastic", "resilience", "biodiversity").
      * If the input sentence was in the native language (${userNative}) or describes a concept, extract or translate that core headword into ${userTarget} for "word" and provide the ${userNative} translation.
-     * Established multi-word phrasal verbs or fixed idioms (e.g., "break down", "piece of cake", "give up") may be extracted as a unit, but NEVER treat full descriptive sentences, greetings, or conversational questions as a single word!
+     * If the target item inside the sentence is a multi-word phrase or expression (e.g. "postpone until a later date"), preserve that full multi-word phrase intact!
 1. NATURAL LANGUAGE REQUEST OR SENTENCE (EXTRACT CLEAN HEADWORD & CONTEXT):
    - If "${word}" is a user sentence or natural request specifying a word and context (e.g. "I want to add a citation in the RAG context", "I want to add table in database context", "add the word citation in RAG context"):
      * EXTRACT ONLY the pure headword or core term itself for the "word" field (e.g., set "word": "citation", NOT "I want to add a citation in the RAG context").
@@ -1221,13 +1233,25 @@ Target language: "${userTarget}".
 User's native language: "${userNative}".
 
 CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
-0. CRITICAL WORD EXTRACTION & HEADWORD ISOLATION DIRECTIVE:
-   - Always attempt to extract individual target vocabulary words or key lexical terms from user input whenever possible, rather than using the entire sentence or request phrase as a single word!
-   - If "${word}" is a full user sentence, clause, natural language query, or conversational request (e.g., "The weather is very whimsical today", "I want to add the word serendipity", "She had an innate talent for music", "Thêm từ enthusiastic vào từ điển", "How do you say resilience in Spanish?", "Can we learn about biodiversity?"):
+0. MULTI-WORD INPUT ANALYSIS & TARGET DETERMINATION FLOW:
+   - When the input "${word}" contains more than one word, first perform an LLM analysis of the user's input:
+     1. ANALYZE INTENT: Determine whether the user wants to add a specific word (along with its specific context or domain) OR the whole multi-word expression/sentence as the target entry:
+        * OPTION A (SPECIFIC WORD + CONTEXT): If the input is a full conversational sentence, question, or request mentioning a specific word (e.g., "I want to add table in database context", "She had an innate talent for music", "How do you say resilience in Spanish?"), EXTRACT the specific target word/term (e.g., "table", "innate", "resilience") and isolate the specified context/domain (e.g. "database context", "musical ability").
+        * OPTION B (WHOLE MULTI-WORD PHRASE / EXPRESSION): If the input is a multi-word vocabulary item, phrasal verb, collocation, idiom, or fixed expression (e.g., "postpone until a later date", "forward to", "wholesale market", "look forward to", "take into account", "break down", "piece of cake"), TREAT THE ENTIRE MULTI-WORD PHRASE as the target item! DO NOT strip prepositions or shorten the phrase!
+     2. CONTINUE WITH WORD-ADDING PROCESS: Generate the complete vocabulary details (definition, translation, example, IPA, part of speech, category, context) for the target term identified in Step 1.
+   - CRITICAL WORD EXTRACTION & TARGET PHRASE PRESERVATION DIRECTIVE:
+     * Always attempt to extract individual target vocabulary words or key lexical terms from user sentences, queries, or natural language requests whenever possible, rather than using an entire conversational request phrase as a single entry.
+     * CRITICAL EXCEPTION FOR MULTI-WORD EXPRESSIONS, PHRASAL VERBS, & COLLOCATIONS:
+       If "${word}" or the target item being learned is a multi-word vocabulary item, phrase, collocation, phrasal verb, idiom, or fixed expression (e.g. "postpone until a later date", "forward to", "wholesale market", "look forward to", "take into account"):
+       - YOU MUST PRESERVE AND KEEP THE ENTIRE MULTI-WORD PHRASE / EXPRESSION INTACT AS THE TARGET "word" FIELD!
+       - ABSOLUTELY DO NOT strip words, prepositions, or modifiers from a multi-word target phrase (e.g. DO NOT shorten "postpone until a later date" to "postpone", DO NOT shorten "forward to" to "forward", DO NOT shorten "wholesale market" to "wholesale").
+       - Treat the COMPLETE multi-word phrase/expression as the target vocabulary headword to be defined, translated, and stored in the user's collection.
+   - EXTRACTING CORE HEADWORDS FROM CONVERSATIONAL SENTENCES OR QUESTIONS:
+     If "${word}" is a full conversational sentence, clause, natural language query, or conversational request (e.g., "The weather is very whimsical today", "I want to add the word serendipity", "She had an innate talent for music", "Thêm từ enthusiastic vào từ điển", "How do you say resilience in Spanish?", "Can we learn about biodiversity?"):
      * NEVER set the "word" field to the entire input sentence or question!
-     * Isolate and extract the core headword / target vocabulary item being learned or referenced (e.g. "whimsical", "serendipity", "innate", "enthusiastic", "resilience", "biodiversity").
+     * Isolate and extract ONLY the core target vocabulary word/expression being learned or referenced (e.g. "whimsical", "serendipity", "innate", "enthusiastic", "resilience", "biodiversity").
      * If multiple distinct candidate vocabulary terms exist in the sentence, or if the user's focus is ambiguous, set "hasMultipleSenses": true and provide candidate senses for each extracted individual word from the sentence so the user can choose which specific word to add.
-     * Established multi-word phrasal verbs or fixed idioms (e.g., "break down", "piece of cake", "give up") may be extracted as a unit, but NEVER treat full descriptive sentences, greetings, or conversational questions as a single word!
+     * If the target item inside the sentence is a multi-word phrase or expression (e.g. "postpone until a later date"), preserve that full multi-word phrase intact!
 1. NATURAL LANGUAGE REQUEST OR SENTENCE (EXTRACT CLEAN HEADWORD & CONTEXT):
    - If "${word}" is a user sentence or request asking to add a word and context (e.g., "I want to add a citation in the RAG context", "I want to add table in database context", "add the word citation in RAG context"):
      * EXTRACT ONLY the target vocabulary headword itself for the "word" field (both for top-level "word" and inside every sense item in "senses", e.g., set "word": "citation", NOT "I want to add a citation in the RAG context").
@@ -1255,9 +1279,16 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
    - "partOfSpeech": noun, verb, adjective, adverb, expression, or idiom.
    - "pronunciation": IPA pronunciation guide for "${userTarget}" word.
 
-4. MULTIPLE SENSES / CANDIDATES DISAMBIGUATION:
-   - If there are 2 to 4 distinct matching terms or meanings (e.g. "Ternary operator" vs "Guard clause"), set "hasMultipleSenses": true and include each candidate in "senses".
-   - If only 1 dominant matching term exists, set "hasMultipleSenses": false and return 1 matching sense in "senses".
+4. MULTIPLE SENSES / CANDIDATES DISAMBIGUATION & STRICT CONTEXT FILTERING:
+   - CRITICAL CONTEXT FILTERING RULE:
+     If a specific Scope / Context Hint was provided ("${hint}") OR if a specific context/domain was extracted or specified in the input (e.g., "color" from "orange in color", "database" from "table in database context", "RAG" from "citation in RAG context"):
+     * YOU MUST STRICTLY FILTER AND EXCLUDE ALL SENSES THAT DO NOT MATCH OR BELONG TO THAT SPECIFIED CONTEXT!
+     * DO NOT include senses from unrelated domains! (e.g., for "orange in color" or context "color", INCLUDE ONLY color-related senses such as noun/adjective for color, and ABSOLUTELY EXCLUDE citrus fruit senses like "quả cam" / fruit!).
+     * If the specified context restricts the word to a specific domain (like "color"), include ONLY senses matching that domain and DO NOT return meanings from other domains!
+   - GENERAL DISAMBIGUATION:
+     * If a specific context or hint narrows the word down to 1 single meaning domain or concept, set "hasMultipleSenses": false and return ONLY exact matching sense(s) in "senses".
+     * If there are 2 to 4 distinct matching terms or meanings fitting the context (or across domains when no context is specified), set "hasMultipleSenses": true and include each candidate in "senses".
+     * If only 1 dominant matching term exists, set "hasMultipleSenses": false and return 1 matching sense in "senses".
    - Set "notFound": false unless the input is complete gibberish with zero semantic meaning.
    - Provide the matching sense(s) in "senses". For each sense, include:
      "word": string (Target Language word in "${userTarget}"),
