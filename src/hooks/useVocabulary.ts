@@ -9,6 +9,7 @@ import {
 } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { speakText as speakTextService } from "../utils/ttsService";
+import { isWordInCollection } from "../utils/wordNormalization";
 
 export function useVocabulary() {
   const [words, setWords] = useState<Word[]>([]);
@@ -66,11 +67,10 @@ export function useVocabulary() {
     llmConfig?: LLMConfig,
     targetLanguage?: string
   ) => {
-    const normalizedTarget = wordData.word.trim().toLowerCase();
     setWords(prev => {
-      const exists = prev.some(w => w.word.trim().toLowerCase() === normalizedTarget);
+      const exists = isWordInCollection(prev, wordData.word);
       if (exists) {
-        console.warn(`Word "${wordData.word}" already exists in collection. Skipping duplicate.`);
+        console.warn(`Word "${wordData.word}" already exists in collection (exact or singular/plural). Skipping duplicate.`);
         return prev;
       }
       const newWord: Word = recordStrengthHistory(

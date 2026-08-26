@@ -12,6 +12,7 @@ import FlashcardMessageCard from "./FlashcardMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
+import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -29,7 +30,11 @@ interface ChatMessageItemProps {
   onAddWord: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
-  startPractice: (overrideConfig?: any, mode?: "auto" | "flashcards_new" | "quiz_only" | "balanced") => void;
+  startPractice: (
+    overrideConfig?: any,
+    mode?: "auto" | "flashcards_new" | "quiz_only" | "balanced" | "sandwich_quiz",
+    options?: { warmupWordIds?: string[] }
+  ) => void;
   onFixGrammar: () => void;
   onViewFlashcard?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
@@ -155,10 +160,7 @@ function ChatMessageItem({
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
   const handleAddSuggestedWord = (wordText: string, hint?: string) => {
-    const key = wordText.trim().toLowerCase();
-    const isAlreadyInWords = words?.some(
-      (w) => w.word.trim().toLowerCase() === key
-    );
+    const isAlreadyInWords = words && isWordInCollection(words, wordText);
     if (isAlreadyInWords) return;
     onAddWord(wordText, hint);
   };
@@ -269,9 +271,7 @@ function ChatMessageItem({
             const lower = wordStr.toLowerCase();
             if (wordStr && !seenWords.has(lower)) {
               seenWords.add(lower);
-              const isAlreadyInCollection = words && Array.isArray(words) && words.some(
-                w => w && typeof w.word === "string" && w.word.trim().toLowerCase() === lower
-              );
+              const isAlreadyInCollection = words && Array.isArray(words) && isWordInCollection(words, wordStr);
               if (!isAlreadyInCollection) {
                 top3Suggested.push({
                   word: wordStr,
@@ -408,8 +408,8 @@ function ChatMessageItem({
 
       // Filter out add_word or confirm_save_word if word is already in words collection
       if (act.action === "add_word" || act.action === "confirm_save_word") {
-        const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim().toLowerCase();
-        if (actWord && words && Array.isArray(words) && words.some(w => w.word.trim().toLowerCase() === actWord)) {
+        const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim();
+        if (actWord && words && Array.isArray(words) && isWordInCollection(words, actWord)) {
           return false;
         }
       }
@@ -417,8 +417,8 @@ function ChatMessageItem({
       // Filter out add_multiplewords if all individual words are already in the collection
       if (act.action === "add_multiplewords" && act.payload && Array.isArray(act.payload.words)) {
         const unsavedCount = act.payload.words.filter((w: any) => {
-          const wText = (w?.word || "").trim().toLowerCase();
-          return wText && words && Array.isArray(words) && !words.some(x => x.word.trim().toLowerCase() === wText);
+          const wText = (w?.word || "").trim();
+          return wText && words && Array.isArray(words) && !isWordInCollection(words, wText);
         }).length;
         if (unsavedCount === 0) {
           return false;
@@ -528,6 +528,9 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_balanced") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "balanced");
+    } else if (act.action === "start_sandwich_quiz") {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "sandwich_quiz", { warmupWordIds: act.payload?.warmupWordIds });
     } else if (act.action === "view_flashcard" || act.action === "next_flashcard") {
       handleRecordActionUse("view_flashcard");
       onViewFlashcard?.();
@@ -740,9 +743,7 @@ function ChatMessageItem({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                     {msg.quizFinishedData.suggestedWords.map((sw, idx) => {
-                      const isAlreadyInWords = words?.some(
-                        (w) => w.word.trim().toLowerCase() === sw.word.trim().toLowerCase()
-                      );
+                      const isAlreadyInWords = words && isWordInCollection(words, sw.word);
 
                       return (
                         <div
@@ -770,7 +771,7 @@ function ChatMessageItem({
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 {isAlreadyInWords && (() => {
-                                  const matched = words?.find((w) => w.word.trim().toLowerCase() === sw.word.trim().toLowerCase());
+                                  const matched = words ? findWordInCollection(words, sw.word) : undefined;
                                   if (matched) {
                                     return (
                                       <button

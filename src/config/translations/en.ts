@@ -398,5 +398,13 @@ export const enTranslations: LanguageTranslations = {
     chat_error_cancel_retry: "Cancel",
     chat_error_retry_cancelled: "Auto-retry cancelled",
     chat_error_retry_btn: "Try again",
-    chat_error_retrying_now: "Retrying now..."
+    chat_error_retrying_now: "Retrying now...",
+    chat_sandwich_warmup_title: "🥪 **Smart Balanced Session (Step 1/3: Flashcard Warm-up)**",
+    chat_sandwich_warmup_desc: "Explore these **{count} warm-up word(s)** first with pronunciation and examples. Next, we'll review existing vocabulary and test your retention with an immediate check!",
+    chat_sandwich_start_quiz_action: "🎯 Start Practice Quiz (Steps 2 & 3) ➔",
+    chat_sandwich_quiz_intro: "🥪 **Smart Balanced Session: Core Review & Immediate Check (Steps 2 & 3)**\n\nTesting **{reviewCount} review word(s)** + **{warmupCount} warm-up word(s)** for maximum retention!\n\n---\n\n### Question 1 of {total} ({qTag}):\n**{question}**",
+    chat_sandwich_q_warmup_tag: "Warm-up Check 🥪",
+    chat_sandwich_q_review_tag: "Core Review 🔄",
+    chat_sandwich_finished_msg: "{feedback}\n\n---\n\n🎉 **Smart Balanced Session Completed! (3/3)**\n\nYou successfully finished the full **Sandwich Learning Loop**:\n1. 🎴 **Warm-up**: Explored new vocabulary cards\n2. 🔄 **Core Retrieval**: Addressed memory decay on overdue words\n3. ⚡ **Immediate Check**: Quizzed & locked in the new words!\n\n🏆 **Final Score: {score} out of {total}** ({accuracy}% accuracy)\n\nI have updated your memory strength history and spaced repetition schedules!",
+    action_next_balanced_session: "⚡ Next Balanced Session"
   };

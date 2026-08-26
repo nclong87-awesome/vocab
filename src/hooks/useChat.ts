@@ -27,6 +27,7 @@ import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService } from "../utils/ttsService";
+import { areWordsEquivalent, findWordInCollection, isWordInCollection } from "../utils/wordNormalization";
 
 interface UseChatProps {
   words: Word[];
@@ -127,6 +128,8 @@ export function useChat({
     score: number;
     correctIds: string[];
     incorrectIds: string[];
+    isSandwichSession?: boolean;
+    warmupWordIds?: string[];
   } | null>(null);
 
   const wordsRef = useRef(words);
@@ -240,7 +243,8 @@ export function useChat({
   // Start the unified Practice flow: checks Quiz candidates first, then Flashcard candidates, or displays no-words message
   const startPractice = async (
     overrideConfig?: LLMConfig,
-    practiceMode: "auto" | "flashcards_new" | "quiz_only" | "balanced" = "auto"
+    practiceMode: "auto" | "flashcards_new" | "quiz_only" | "balanced" | "sandwich_quiz" = "auto",
+    options?: { warmupWordIds?: string[] }
   ) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
@@ -293,10 +297,11 @@ export function useChat({
 
       const actions: { label: string; action: string }[] = [];
 
-      if (flashcardCount > 0) {
+      // Balanced Sandwich Loop is the premier, scientifically balanced learning mode
+      if (activeWords.length >= 2) {
         actions.push({
-          label: `🎴 Study Flashcards (${flashcardCount} ${flashcardCount === 1 ? "word" : "words"})`,
-          action: "start_practice_flashcards_new",
+          label: `🥪 Smart Balanced Session (Flashcards + Quiz)`,
+          action: "start_practice_balanced",
         });
       }
 
@@ -307,10 +312,10 @@ export function useChat({
         });
       }
 
-      if (flashcardCount > 0 && quizCount >= 2) {
+      if (flashcardCount > 0) {
         actions.push({
-          label: `⚡ Smart Balanced Session (Flashcards + Quiz)`,
-          action: "start_practice_balanced",
+          label: `🎴 Study Flashcards (${flashcardCount} ${flashcardCount === 1 ? "word" : "words"})`,
+          action: "start_practice_flashcards_new",
         });
       }
 
@@ -332,11 +337,225 @@ export function useChat({
       return;
     }
 
-    const unstudiedWords = activeWords.filter(w => !isWordLearnedOrStudied(w));
+    // --- SANDWICH LOOP STEP 2 & 3: Retrieval Quiz (Core Reviews + Immediate Warm-up Check) ---
+    if (practiceMode === "sandwich_quiz") {
+      const warmupIds = new Set(options?.warmupWordIds || []);
+      const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
+      
+      // Select up to 3 core review words (excluding warm-up words)
+      const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
+      const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
+      const coreReviewWords = quizCandidates.length > 0
+        ? quizCandidates
+        : (dueQuizCandidates.filter((w) => !warmupIds.has(w.id)).slice(0, 3));
+      
+      const fallbackReviewWords = coreReviewWords.length > 0 
+        ? coreReviewWords 
+        : nonWarmupWords.slice(0, 3);
+
+      const effectiveQuizWords = [...fallbackReviewWords, ...warmupWords];
+      if (effectiveQuizWords.length === 0) {
+        effectiveQuizWords.push(...activeWords.slice(0, 5));
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const configForServer = startTypingWithConfig(configToUse);
+
+      try {
+        const quizResult = await generateAiQuizQuestionsService({
+          words: effectiveQuizWords,
+          targetLanguage,
+          nativeLanguage,
+          llmConfig: configForServer,
+          stats,
+          signal: controller.signal,
+        });
+
+        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
+        const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
+        const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
+
+        if (!generatedQuestions || generatedQuestions.length === 0) {
+          throw new Error("No quiz questions were generated.");
+        }
+
+        const firstQ = generatedQuestions[0];
+        const isFirstQWarmup = warmupIds.has(firstQ.wordId);
+        const qTag = isFirstQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang);
+
+        setActiveQuiz({
+          questions: generatedQuestions,
+          currentIndex: 0,
+          score: 0,
+          correctIds: [],
+          incorrectIds: [],
+          isSandwichSession: true,
+          warmupWordIds: Array.from(warmupIds),
+        });
+
+        const introMsg: ChatMessage = {
+          id: `sandwich-quiz-start-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_sandwich_quiz_intro", currentAppLang, {
+            reviewCount: String(fallbackReviewWords.length),
+            warmupCount: String(warmupWords.length),
+            total: String(generatedQuestions.length),
+            question: firstQ.question,
+            qTag: qTag,
+          }),
+          timestamp: new Date().toISOString(),
+          audioWord: firstQ.type === "listening" ? firstQ.word : undefined,
+          quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
+          imageUrl: firstQ.imageUrl,
+          imageKeyword: firstQ.imageKeyword,
+          suggestedActions: firstQ.options?.map((opt: any) => ({
+            label: opt,
+            action: "quiz_answer",
+            payload: { answer: opt, wordId: firstQ.wordId },
+          })) || [
+            { label: firstQ.correctAnswer, action: "quiz_answer", payload: { answer: firstQ.correctAnswer, wordId: firstQ.wordId } },
+          ],
+          provider,
+          model,
+          responseTimeMs,
+        };
+
+        setChatMessages([introMsg]);
+      } catch (e: any) {
+        if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
+          console.log("Quiz generation was cancelled by user.");
+          return;
+        }
+        console.error("Error starting sandwich quiz:", e);
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode, options), "quiz-error");
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
+
+    // --- SANDWICH LOOP STEP 1: Warm-up Flashcards ---
+    if (practiceMode === "balanced") {
+      const unstudiedWords = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+      let warmupCandidates: Word[] = [];
+
+      if (unstudiedWords.length > 0) {
+        warmupCandidates = unstudiedWords.slice(0, 3);
+      } else if (flashcardCandidates.length > 0) {
+        warmupCandidates = flashcardCandidates.slice(0, 3);
+      } else {
+        warmupCandidates = activeWords.slice(0, 3);
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const configForServer = startTypingWithConfig(configToUse);
+
+      try {
+        const batchResult = await generateBatchFlashcardsService({
+          words: warmupCandidates,
+          targetLanguage,
+          nativeLanguage,
+          llmConfig: configForServer,
+          signal: controller.signal,
+        });
+
+        const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
+
+        // Update strength and review history for all studied words
+        const candidateIds = new Set(warmupCandidates.map((w) => w.id));
+        setWords((prevWords) => {
+          const updatedWords = prevWords.map((w) => {
+            if (candidateIds.has(w.id)) {
+              const prevStrength = w.strength ?? 0;
+              const calcNewStrength = Math.min(100, prevStrength + 10);
+              const strengthGained = calcNewStrength - prevStrength;
+              return recordStrengthHistory(
+                w,
+                calcNewStrength,
+                'flashcard_review',
+                `Studied Warm-up Flashcard (+${strengthGained}% strength gained)`
+              );
+            }
+            return w;
+          });
+          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB flashcard word save error:", e));
+          return updatedWords;
+        });
+
+        // Collect companion words suggestions
+        const seenSuggested = new Set<string>();
+        const top3SuggestedActions: { label: string; action: string; payload: { word: string; hint?: string } }[] = [];
+        cards.forEach((c) => {
+          (c.suggestedWords || []).forEach((sw: any) => {
+            const swWord = typeof sw === "string" ? sw.trim() : (sw?.word || "").trim();
+            const swHint = typeof sw === "object" ? (sw?.hint || sw?.relationship || sw?.translation || "") : "";
+            if (swWord && !seenSuggested.has(swWord.toLowerCase())) {
+              seenSuggested.add(swWord.toLowerCase());
+              if (top3SuggestedActions.length < 3) {
+                top3SuggestedActions.push({
+                  label: `+ ${swWord}`,
+                  action: "add_word",
+                  payload: { word: swWord, hint: swHint || undefined },
+                });
+              }
+            }
+          });
+        });
+
+        const primaryCard: FlashcardItem | undefined = cards[0];
+        const flashcardMsg: ChatMessage = {
+          id: `sandwich-warmup-msg-${Date.now()}`,
+          role: "assistant",
+          content: `${t("chat_sandwich_warmup_title", currentAppLang)}\n\n${t("chat_sandwich_warmup_desc", currentAppLang, { count: String(cards.length) })}`,
+          timestamp: new Date().toISOString(),
+          audioWord: primaryCard?.word,
+          quizSpeechText: primaryCard ? `${primaryCard.word}. ${primaryCard.definition}` : undefined,
+          imageKeyword: primaryCard?.word,
+          flashcardData: {
+            cards: cards,
+            wordId: primaryCard?.wordId,
+            word: primaryCard?.word,
+            pronunciation: primaryCard?.pronunciation,
+            partOfSpeech: primaryCard?.partOfSpeech,
+            definition: primaryCard?.definition,
+            translation: primaryCard?.translation,
+            example: primaryCard?.example,
+            exampleTranslation: primaryCard?.exampleTranslation,
+            category: primaryCard?.category,
+            context: primaryCard?.context,
+            suggestedWords: primaryCard?.suggestedWords,
+          },
+          provider: batchResult.provider,
+          model: batchResult.model,
+          responseTimeMs: batchResult.responseTimeMs,
+          suggestedActions: [
+            {
+              label: t("chat_sandwich_start_quiz_action", currentAppLang),
+              action: "start_sandwich_quiz",
+              payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
+            },
+            ...top3SuggestedActions,
+          ],
+        };
+
+        setChatMessages([flashcardMsg]);
+      } catch (e: any) {
+        console.error("Error generating sandwich warm-up cards:", e);
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "flashcard-error");
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
+
+    const unstudiedWords = activeWords.filter((w) => !isWordLearnedOrStudied(w));
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
 
-    // Determine if we should launch Quiz mode
-    const shouldRunQuiz = (practiceMode === "quiz_only" || practiceMode === "balanced") && (quizWords.length >= 1 || dueQuizCandidates.length >= 1);
+    // Determine if we should launch Quiz mode (only for quiz_only)
+    const shouldRunQuiz = practiceMode === "quiz_only" && (quizWords.length >= 1 || dueQuizCandidates.length >= 1);
 
     // Step 1: Look for candidate words for Quiz questions
     if (shouldRunQuiz) {
@@ -413,9 +632,9 @@ export function useChat({
       return;
     }
 
-    // Step 2: Search for candidate words for Flashcards (prioritizing new words when flashcards_new or balanced mode is chosen)
+    // Step 2: Search for candidate words for Flashcards (for flashcards_new mode)
     let batchFlashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
-    if (practiceMode === "flashcards_new" || practiceMode === "balanced" || unstudiedWords.length > 0) {
+    if (practiceMode === "flashcards_new" || unstudiedWords.length > 0) {
       if (unstudiedWords.length > 0) {
         batchFlashcardCandidates = unstudiedWords.slice(0, 3);
       } else if (flashcardCandidates.length > 0) {
@@ -635,6 +854,10 @@ export function useChat({
 
     if (nextIndex < activeQuiz.questions.length) {
       const nextQ = activeQuiz.questions[nextIndex];
+      const isNextQWarmup = activeQuiz.isSandwichSession && activeQuiz.warmupWordIds?.includes(nextQ.wordId);
+      const qTag = activeQuiz.isSandwichSession
+        ? ` (${isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
+        : "";
 
       setActiveQuiz({
         ...activeQuiz,
@@ -647,7 +870,7 @@ export function useChat({
       const nextMsg: ChatMessage = {
         id: `quiz-next-${Date.now()}`,
         role: "assistant",
-        content: `${feedback}\n\n---\n\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}:\n**${nextQ.question}**`,
+        content: `${feedback}\n\n---\n\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}${qTag}:\n**${nextQ.question}**`,
         timestamp: new Date().toISOString(),
         audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
         quizSpeechText: isCorrect
@@ -669,6 +892,7 @@ export function useChat({
       setChatMessages((prev) => [...prev, nextMsg]);
     } else {
       const totalQs = activeQuiz.questions.length;
+      const wasSandwich = activeQuiz.isSandwichSession;
       setActiveQuiz(null);
 
       handleFinishQuiz(newScore, totalQs);
@@ -732,12 +956,19 @@ export function useChat({
 
       const top3SuggestedWords = allSuggestedWords.slice(0, 3);
 
-      let finishedContent = t("chat_quiz_finished_msg", currentAppLang, {
-        feedback: feedback,
-        score: String(newScore),
-        total: String(totalQs),
-        accuracy: String(Math.round((newScore / totalQs) * 100)),
-      });
+      let finishedContent = wasSandwich
+        ? t("chat_sandwich_finished_msg", currentAppLang, {
+            feedback: feedback,
+            score: String(newScore),
+            total: String(totalQs),
+            accuracy: String(Math.round((newScore / totalQs) * 100)),
+          })
+        : t("chat_quiz_finished_msg", currentAppLang, {
+            feedback: feedback,
+            score: String(newScore),
+            total: String(totalQs),
+            accuracy: String(Math.round((newScore / totalQs) * 100)),
+          });
 
       if (top3SuggestedWords.length > 0) {
         const header = t("chat_quiz_suggested_words_header", currentAppLang);
@@ -756,6 +987,17 @@ export function useChat({
         action: "add_word",
         payload: { word: sw.word, hint: sw.translation || sw.hint },
       }));
+
+      const defaultActions = wasSandwich
+        ? [
+            { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
+            { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
+            { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" },
+          ]
+        : [
+            { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
+            { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
+          ];
 
       const finishedMsg: ChatMessage = {
         id: `quiz-end-${Date.now()}`,
@@ -776,8 +1018,7 @@ export function useChat({
         },
         suggestedActions: [
           ...wordAddActions,
-          { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
-          { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
+          ...defaultActions,
         ],
       };
 
@@ -791,10 +1032,9 @@ export function useChat({
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
     const rawWordInput = wordText.trim();
-    const normalizedWordText = rawWordInput.toLowerCase();
-    const existingMatch = words.find((w) => w.word.trim().toLowerCase() === normalizedWordText);
+    const existingMatch = findWordInCollection(words, rawWordInput);
     if (existingMatch) {
-      const remainingActions = getRemainingWordActions(chatMessages, words, normalizedWordText, currentAppLang);
+      const remainingActions = getRemainingWordActions(chatMessages, words, rawWordInput, currentAppLang);
       const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
       const wordSpecificActions = [
         {
@@ -956,7 +1196,7 @@ export function useChat({
         const contextVal = sense?.context || data.context || hint || definitionVal;
         const targetWordStr = sense?.word || data.word || rawWordInput;
 
-        const finalMatch = words.find((w) => w.word.trim().toLowerCase() === targetWordStr.trim().toLowerCase());
+        const finalMatch = findWordInCollection(words, targetWordStr);
         if (finalMatch) {
           const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, currentAppLang);
           const existingDetails = formatExistingWordDetails(finalMatch, currentAppLang);
@@ -1366,7 +1606,7 @@ export function useChat({
       const formattedItems: string[] = [];
 
       items.forEach((item: any, idx: number) => {
-        const isAlreadySaved = words.some((existing) => existing.word.toLowerCase().trim() === item.word.toLowerCase().trim());
+        const isAlreadySaved = isWordInCollection(words, item.word);
         const statusBadge = isAlreadySaved ? t("label_already_in_collection", currentAppLang) : "";
 
         formattedItems.push(
@@ -1390,7 +1630,7 @@ export function useChat({
         }
       });
 
-      const unsavedItems = items.filter((item) => !words.some((e) => e.word.toLowerCase().trim() === item.word.toLowerCase().trim()));
+      const unsavedItems = items.filter((item) => !isWordInCollection(words, item.word));
 
       if (unsavedItems.length > 1) {
         actions.unshift({
@@ -1453,7 +1693,7 @@ export function useChat({
       const targetWord = (c.word || "").trim();
       if (!targetWord) return;
 
-      const exists = words.some((w) => w.word.toLowerCase().trim() === targetWord.toLowerCase());
+      const exists = isWordInCollection(words, targetWord) || newWordsToAdd.some((nw) => areWordsEquivalent(nw.word, targetWord));
       if (exists) {
         skippedNames.push(targetWord);
         return;
@@ -1483,7 +1723,7 @@ export function useChat({
 
     if (newWordsToAdd.length === 0) {
       const skippedMatches = skippedNames
-        .map((name) => words.find((w) => w.word.trim().toLowerCase() === name.toLowerCase()))
+        .map((name) => findWordInCollection(words, name))
         .filter((w): w is Word => Boolean(w));
 
       const skippedDetails = skippedMatches
@@ -1533,7 +1773,7 @@ export function useChat({
       rawSuggested.forEach((sw) => {
         const swWord = typeof sw === "string" ? sw.trim() : sw?.word?.trim();
         if (!swWord) return;
-        const existsAlready = updatedWords.some((w) => w.word.trim().toLowerCase() === swWord.toLowerCase());
+        const existsAlready = isWordInCollection(updatedWords, swWord);
         if (!existsAlready) {
           collocatedStrings.push(swWord);
           const swObj = typeof sw === "object" && sw !== null ? sw : null;
@@ -1603,7 +1843,7 @@ export function useChat({
     if (!sense) return;
 
     const targetWord = (sense.word || word).trim();
-    const existingMatch = words.find((w) => w.word.trim().toLowerCase() === targetWord.toLowerCase());
+    const existingMatch = findWordInCollection(words, targetWord);
     if (existingMatch) {
       const remainingActions = getRemainingWordActions(chatMessages, words, targetWord, currentAppLang);
       const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
@@ -1755,7 +1995,6 @@ export function useChat({
     ]);
 
     try {
-      const existingWordSet = new Set(words.map((w) => w.word.trim().toLowerCase()));
       const targetTopicClean = topic.toLowerCase().trim();
       const existingCategoryWords = Array.from(
         new Set(
@@ -1805,7 +2044,7 @@ export function useChat({
         })
         .filter((item: any) => item && item.word && typeof item.word === "string" && item.word.trim().length > 0);
 
-      const newUniqueWords = generatedList.filter((item: any) => item?.word && !existingWordSet.has(item.word.trim().toLowerCase()));
+      const newUniqueWords = generatedList.filter((item: any) => item?.word && !isWordInCollection(words, item.word));
 
       if (newUniqueWords.length === 0) {
         setChatMessages((prev) => {

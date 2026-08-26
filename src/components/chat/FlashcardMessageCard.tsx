@@ -13,6 +13,7 @@ import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { speakText, stopSpeech, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
+import { areWordsEquivalent } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 
 interface FlashcardMessageCardProps {
@@ -83,7 +84,7 @@ function FlashcardMessageCard({
 
   const getWordObjectForCard = (card: FlashcardItem): Word => {
     const matched = (words || []).find(
-      (w) => (card.wordId && w.id === card.wordId) || w.word.toLowerCase() === card.word.toLowerCase()
+      (w) => (card.wordId && w.id === card.wordId) || areWordsEquivalent(w.word, card.word)
     );
     if (matched) return matched;
     return {

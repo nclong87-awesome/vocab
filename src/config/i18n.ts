@@ -405,7 +405,15 @@ export type TranslationKey =
   | "chat_error_retry_btn"
   | "action_add_related_words"
   | "action_ask_question_about"
-  | "chat_error_retrying_now";
+  | "chat_error_retrying_now"
+  | "chat_sandwich_warmup_title"
+  | "chat_sandwich_warmup_desc"
+  | "chat_sandwich_start_quiz_action"
+  | "chat_sandwich_quiz_intro"
+  | "chat_sandwich_q_warmup_tag"
+  | "chat_sandwich_q_review_tag"
+  | "chat_sandwich_finished_msg"
+  | "action_next_balanced_session";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

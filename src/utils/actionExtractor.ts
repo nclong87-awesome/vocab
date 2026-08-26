@@ -1,4 +1,5 @@
 import { t } from "../config/i18n";
+import { areWordsEquivalent } from "./wordNormalization";
 
 export function formatExistingWordDetails(existingWord: any, appLang: string = "English"): string {
   if (!existingWord) return "";
@@ -80,16 +81,16 @@ export function getRemainingWordActions(
 
     if (act.action === "add_multiplewords" && Array.isArray(act.payload?.words)) {
       for (const w of act.payload.words) {
-        const actWord = (w?.word || "").trim().toLowerCase();
+        const actWord = (w?.word || "").trim();
         if (!actWord) continue;
-        if (normalizedJustAdded && actWord === normalizedJustAdded) continue;
-        if (seenWords.has(actWord)) continue;
+        if (normalizedJustAdded && areWordsEquivalent(actWord, normalizedJustAdded)) continue;
+        if (Array.from(seenWords).some((sw) => areWordsEquivalent(sw, actWord))) continue;
         const isAlreadyInCollection = wordsList.some(
-          (item) => item && typeof item.word === "string" && item.word.trim().toLowerCase() === actWord
+          (item) => item && typeof item.word === "string" && areWordsEquivalent(item.word, actWord)
         );
         if (isAlreadyInCollection) continue;
 
-        seenWords.add(actWord);
+        seenWords.add(actWord.toLowerCase());
         const details = w.translation || w.definition || "";
         const hasFullDetails = Boolean(w.translation && w.definition);
 
@@ -116,21 +117,21 @@ export function getRemainingWordActions(
       act.payload?.targetWord ||
       (act as any).word ||
       ""
-    ).trim().toLowerCase();
+    ).trim();
 
     if (!actWord) continue;
 
     // Skip if it matches the newly added word
-    if (normalizedJustAdded && actWord === normalizedJustAdded) continue;
+    if (normalizedJustAdded && areWordsEquivalent(actWord, normalizedJustAdded)) continue;
 
     // Skip if already seen or in collection
-    if (seenWords.has(actWord)) continue;
+    if (Array.from(seenWords).some((sw) => areWordsEquivalent(sw, actWord))) continue;
     const isAlreadyInCollection = wordsList.some(
-      (w) => w && typeof w.word === "string" && w.word.trim().toLowerCase() === actWord
+      (w) => w && typeof w.word === "string" && areWordsEquivalent(w.word, actWord)
     );
     if (isAlreadyInCollection) continue;
 
-    seenWords.add(actWord);
+    seenWords.add(actWord.toLowerCase());
 
     let finalAct = { ...act };
     if (finalAct.action === "confirm_save_word") {
