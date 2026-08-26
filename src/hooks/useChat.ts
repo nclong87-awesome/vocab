@@ -300,7 +300,7 @@ export function useChat({
       // Balanced Sandwich Loop is the premier, scientifically balanced learning mode
       if (activeWords.length >= 2) {
         actions.push({
-          label: `🥪 Smart Balanced Session (Flashcards + Quiz)`,
+          label: `🥪 Smart Balanced Session`,
           action: "start_practice_balanced",
         });
       }
