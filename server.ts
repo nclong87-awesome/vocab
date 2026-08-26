@@ -1162,7 +1162,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Technology & Programming", "Travel & Hospitality", "Business & Work", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.
-- "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]).`;
+- "suggestedWords": Array of 1 or 2 practical vocabulary words or collocations in "${userTarget}" that people frequently pair or use together with this word in natural contexts.
+  CRITICAL VERB & COLLOCATION RULE: For verbs or verb-derived phrases, prioritize natural verb + dependent preposition collocations (e.g. "cure for", "elaborate on", "rely on", "participate in", "deal with", "benefit from") rather than bare verbs, so learners master the complete prepositional pattern. Do NOT include or repeat the current word itself in the suggested words. ALWAYS output each suggested word as an object containing "word", "definition" (short definition in ${userTarget}), and "translation" (translation in ${userNative}). Example: for "cure" -> [{"word": "cure for", "definition": "A remedy or solution that restores health or fixes a condition", "translation": "phương thuốc chữa cho"}, {"word": "elaborate on", "definition": "To add more detail or explain further", "translation": "nói chi tiết về"}].`;
 
     const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -1269,7 +1270,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
      "category": string,
      "context": string,
-     "suggestedWords": Array of exactly 1 or 2 practical vocabulary words in "${userTarget}" that people frequently pair or use together with this word in natural contexts. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "apple" -> ["crisp", "orchard"] or ["cider", "pie"]; for "whimsical" -> ["charm", "notion"]; for "acquire" -> ["knowledge", "skill"]; for "mitigate" -> ["risk", "impact"]).`;
+     "suggestedWords": Array of exactly 1 or 2 practical vocabulary words/collocations in "${userTarget}" that people frequently pair or use together with this word in natural contexts. CRITICAL: For verbs or actions, prioritize natural verb + dependent preposition collocations (e.g. "cure for", "elaborate on", "rely on", "participate in", "benefit from", "cope with") rather than bare verbs. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "cure" -> ["cure for", "remedy"]; for "elaborate" -> ["elaborate on", "details"]; for "apple" -> ["crisp", "orchard"]; for "acquire" -> ["acquire knowledge", "skill"]; for "mitigate" -> ["mitigate risk", "impact"]).`;
 
     const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -1363,8 +1364,9 @@ The user's native language is "${userNative}".
 ${Array.isArray(existingWords) && existingWords.length > 0 ? `\nCRITICAL DO-NOT-DUPLICATE DIRECTIVE:\nThe user ALREADY has the following words in their collection for the "${topic}" category:\n${JSON.stringify(existingWords)}\nDO NOT generate or include any of these existing words! Generate ${count} NEW, DISTINCT words for this category that are NOT in the list above.\n` : ""}
 CRITICAL INSTRUCTIONS:
 - Every word generated SHOULD BE unique and practical for a language learner.
-- "word": The target vocabulary word or expression STRICTLY in the target language (${userTarget}), e.g. "hello".
-- "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide for the target language word, e.g. "/həˈloʊ/". Must NOT be empty.
+- CRITICAL VERB & COLLOCATION RULE: When generating verbs or action terms, ALWAYS pair verbs with their natural dependent prepositions and key collocations (e.g. generate "elaborate on", "rely on", "focus on", "specialize in", "cure for", "abide by", "invest in", "refrain from", "participate in", "deal with") rather than bare isolated verbs, so learners master the complete verb + preposition usage.
+- "word": The target vocabulary word, collocation, or expression STRICTLY in the target language (${userTarget}), e.g. "elaborate on".
+- "pronunciation": International Phonetic Alphabet (IPA) pronunciation guide for the target language word/expression, e.g. "/ɪˈlæbəreɪt ɒn/". Must NOT be empty.
 - "partOfSpeech": The part of speech of the word (e.g. noun, verb, adjective, adverb, idiom, interjection, or expression).
 - "definition": Write clear, concise definitions/explanations STRICTLY in the TARGET language (${userTarget}) for target language immersion.
 - "translation": Direct translation into the user's native language (${userNative}).
@@ -1444,12 +1446,13 @@ CRITICAL INSTRUCTIONS:
    - What corrections were made (grammar, spelling, punctuation)
    - Why those changes make the sentence sound more natural and fluent
    - Alternative casual ways to express the same idea
-3. "vocabularyCandidates": Identify 1 to 4 valuable candidate vocabulary words, expressions, or idioms from EITHER the user's input or the fixed sentence that are worth learning in "${userTarget}".
+3. "vocabularyCandidates": Identify 1 to 4 valuable candidate vocabulary words, collocations, or expressions from EITHER the user's input or the fixed sentence that are worth learning in "${userTarget}".
+  CRITICAL VERB & PREPOSITION RULE: For any verb candidates, always suggest the verb together with its dependent preposition or key collocation (e.g. "elaborate on", "apologize for", "prevent from", "insist on", "comply with", "cure for", "rely on") instead of bare isolated verbs.
   PRIORITY RULE: If the user's input contains misspelled words, prioritize those first as vocabulary candidates.
   - For misspelled candidates, set "word" to the corrected form in "${userTarget}" and mention the original misspelling in "reason".
   - If there are multiple misspellings, rank them before other candidate words.
    For each candidate, provide:
-   - "word": string (the target language word or expression)
+   - "word": string (the target language word or expression, with dependent prepositions for verbs)
    - "definition": string (clear, concise definition written strictly in ${userTarget})
    - "translation": string (direct translation into user's native language ${userNative})
    - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
@@ -2155,9 +2158,10 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
      * Ask the user an interactive practice question (e.g., fill-in-the-blank, multiple choice, or conversational scenario) to test their understanding of "{word}".
      * CRITICAL: You MUST include 3 to 4 interactive reply options as "send_message" in 'suggestedActions' (with helpful answers/responses to your practice question) so the user can click to reply!
 
-7. **General Rules**:
+7. **Suggesting Words & Vocabulary Actions**:
    - Answer questions about grammar, translation, and pronunciation clearly and encouragingly.
    - If you introduce a valuable vocabulary word or expression, include an "add_word" action in suggestedActions.
+   - CRITICAL VERB & COLLOCATION RULE: Whenever suggesting or adding verbs via "add_word" or introducing verbs, ALWAYS pair verbs with their natural dependent prepositions and key collocations (e.g., "cure for", "elaborate on", "rely on", "participate in", "account for", "specialize in", "abide by", "benefit from") rather than bare isolated verbs.
    - If the user wants to practice flashcards or take a test, include a "start_practice" action in suggestedActions.
    - You MUST strictly output valid JSON-only output matching the schema below.
    - Do not include any conversational filler outside the JSON.`;
@@ -2268,6 +2272,7 @@ Given target vocabulary words, generate a clean, focused, high-retention flashca
 
 FOR EACH WORD:
 1. "word": The target vocabulary word in ${targetLanguage}.
+   CRITICAL VERB & PREPOSITION RULE: When teaching or reviewing verbs that commonly take dependent prepositions or are phrasal/prepositional verbs (e.g. "elaborate on", "cure for", "cure of", "rely on", "participate in", "consist of", "focus on", "deal with", "abide by", "specialize in", "benefit from"), format the headword with its dependent preposition (e.g., "elaborate on", "cure for", "rely on") so the learner masters the complete grammatical usage.
 2. "pronunciation": Accurate IPA pronunciation guide (e.g. /ɪˈfɛmərəl/).
 3. "partOfSpeech": Part of speech (noun, verb, adjective, adverb, idiom, etc.).
 4. "translation": Natural, accurate translation in ${nativeLanguage}.
@@ -2275,8 +2280,9 @@ FOR EACH WORD:
 6. "example": EXACTLY 1 natural, realistic example sentence in ${targetLanguage} demonstrating practical usage in context (do not include translation for the example).
 7. "category": Thematic domain/tag (e.g. "Everyday", "Business", "Travel", "Academic", "Emotions").
 8. "suggestedWords": Optional top 1 or 2 most natural collocations or paired expressions (keep it strictly concise, maximum 1-2 items per card).
+   CRITICAL COLLOCATION RULE: For verbs and action words, prioritize verb + dependent preposition collocations and phrasal patterns (e.g. "cure for", "elaborate on", "rely on", "cope with").
    For each pairing, provide:
-   - "word": The collocated expression in ${targetLanguage} (e.g., "heavy rain", "deep breath").
+   - "word": The collocated expression in ${targetLanguage} (e.g., "elaborate on", "cure for", "heavy rain", "deep breath").
    - "translation": Native translation in ${nativeLanguage}.
    - "hint": A brief 2-4 word explanation note.
 
@@ -2437,6 +2443,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - Generate UP TO THREE (max 3) suggested companion words across the entire quiz ('suggestedWords' array with 1 to 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
    - CRITICAL RULE FOR SUGGESTED WORDS:
      * Derive these suggested words directly from candidates that are actually used in the quiz questions, specifically selecting meaningful incorrect answers (distractors) or options presented in the quiz (e.g. options such as 'freighter' or other notable distractor choices).
+     * CRITICAL VERB & COLLOCATION RULE: For verbs or verb options, prioritize verbs with their dependent prepositions/collocations (e.g., "elaborate on", "rely on", "cure for", "participate in").
      * Set 'pairedWith' to the quiz word/question it accompanied.
      * Keep the total number of suggested words at a maximum of three (3).
 5. STRICT CORRECT ANSWER MATCHING RULE (CRITICAL):
