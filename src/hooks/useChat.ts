@@ -531,14 +531,34 @@ export function useChat({
           provider: batchResult.provider,
           model: batchResult.model,
           responseTimeMs: batchResult.responseTimeMs,
-          suggestedActions: [
-            {
-              label: t("chat_sandwich_start_quiz_action", currentAppLang),
-              action: "start_sandwich_quiz",
-              payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
-            },
-            ...top3SuggestedActions,
-          ],
+          suggestedActions: (() => {
+            const warmupIds = new Set(warmupCandidates.map((w) => w.id));
+            const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
+            
+            // Check if there are words eligible for quiz review
+            const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
+            const hasQuizEligibleWords = quizCandidates.length > 0 || getQuizCandidates(activeWords).length > 0;
+
+            // Check if there are words eligible for flashcard review
+            const flashcardCandidates = getCandidateWordsForFlashcards(nonWarmupWords, 3);
+            const hasFlashcardEligibleWords = flashcardCandidates.length > 0 || getCandidateWordsForFlashcards(activeWords, 3).length > 0;
+
+            const sessionNextActions: any[] = [];
+            if (hasQuizEligibleWords) {
+              sessionNextActions.push({
+                label: t("chat_sandwich_start_quiz_action", currentAppLang),
+                action: "start_sandwich_quiz",
+                payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
+              });
+            } else if (hasFlashcardEligibleWords) {
+              sessionNextActions.push({
+                label: t("action_next_flashcard", currentAppLang),
+                action: "view_flashcard",
+              });
+            }
+
+            return [...sessionNextActions, ...top3SuggestedActions];
+          })(),
         };
 
         setChatMessages([flashcardMsg]);

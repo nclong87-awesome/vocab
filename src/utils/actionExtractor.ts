@@ -1,5 +1,6 @@
 import { t } from "../config/i18n";
 import { areWordsEquivalent } from "./wordNormalization";
+import { getQuizCandidates, getCandidateWordsForFlashcards } from "./spacedRepetition";
 
 export function formatExistingWordDetails(existingWord: any, appLang: string = "English"): string {
   if (!existingWord) return "";
@@ -40,7 +41,7 @@ export function getRemainingWordActions(
 ): any[] {
   if (!Array.isArray(messages) || messages.length === 0) return [];
 
-  // Search backwards for the most recent assistant message with word addition actions
+  // Search backwards for the most recent assistant message with word addition actions or practice session actions
   const reversed = [...messages].reverse();
   const lastMsgWithWordActions = reversed.find((m) =>
     m &&
@@ -52,7 +53,9 @@ export function getRemainingWordActions(
         (a.action === "add_word" ||
           a.action === "confirm_save_word" ||
           a.action === "select_definition" ||
-          a.action === "add_multiplewords")
+          a.action === "add_multiplewords" ||
+          a.action === "start_sandwich_quiz" ||
+          a.action === "start_practice_balanced")
     )
   );
 
@@ -65,6 +68,38 @@ export function getRemainingWordActions(
 
   const remainingWordActions: any[] = [];
   const seenWords = new Set<string>();
+
+  // Extract non-word session navigation actions (e.g. start_sandwich_quiz) to preserve them across word additions
+  let rawSessionActions = (lastMsgWithWordActions.suggestedActions || []).filter(
+    (a: any) =>
+      a &&
+      typeof a === "object" &&
+      (a.action === "start_sandwich_quiz" ||
+        a.action === "start_practice_balanced" ||
+        a.action === "start_practice_quiz_only" ||
+        a.action === "start_practice" ||
+        a.action === "view_flashcard" ||
+        a.action === "next_flashcard" ||
+        a.action === "next_quiz")
+  );
+
+  // If session actions include start_sandwich_quiz, check if quiz-eligible words exist
+  const hasQuizEligible = getQuizCandidates(wordsList).length > 0;
+  const sessionActions = rawSessionActions
+    .map((a: any) => {
+      if (a.action === "start_sandwich_quiz" && !hasQuizEligible) {
+        const hasFlashcardEligible = getCandidateWordsForFlashcards(wordsList, 3).length > 0;
+        if (hasFlashcardEligible) {
+          return {
+            label: t("action_next_flashcard", appLang),
+            action: "view_flashcard",
+          };
+        }
+        return null;
+      }
+      return a;
+    })
+    .filter(Boolean);
 
   // Sort actions so that individual word additions are processed FIRST, and batch actions (add_multiplewords) LAST.
   // This preserves the original individual action types and prevents them from being converted to confirm_save_word prematurely.
@@ -153,7 +188,7 @@ export function getRemainingWordActions(
   }
 
   if (remainingWordActions.length === 0) {
-    return [];
+    return sessionActions;
   }
 
   // If 2 or more remaining word actions, add a batch action at the top
@@ -168,10 +203,10 @@ export function getRemainingWordActions(
       payload: { words: candidatePayloads },
     };
 
-    return [batchAction, ...remainingWordActions];
+    return [batchAction, ...remainingWordActions, ...sessionActions];
   }
 
-  return remainingWordActions;
+  return [...remainingWordActions, ...sessionActions];
 }
 
 export function extractOrGenerateTopicActions(

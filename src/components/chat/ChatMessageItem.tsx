@@ -390,14 +390,22 @@ function ChatMessageItem({
       }
 
       // Filter actions if this is NOT the latest message in the thread:
-      // Word addition options are moved to the latest message so users don't need to scroll up
+      // Word addition options are moved to the latest message so users don't need to scroll up,
+      // but practice session flow actions remain visible so users can continue practice sessions.
       if (!isLatestMessage) {
         rawActions = rawActions.filter(
           a =>
             a.action === "retry_analyze_image" ||
             a.action === "retry_suggest_reply" ||
             a.action === "copy_text" ||
-            a.action === "copy_sentence"
+            a.action === "copy_sentence" ||
+            a.action === "start_sandwich_quiz" ||
+            a.action === "start_practice_balanced" ||
+            a.action === "start_practice_quiz_only" ||
+            a.action === "start_practice" ||
+            a.action === "view_flashcard" ||
+            a.action === "next_flashcard" ||
+            a.action === "next_quiz"
         );
       }
     }
