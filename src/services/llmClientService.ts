@@ -1196,6 +1196,55 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
   }
 }
 
+// 2b. Generate Image Search Query Parameter using LLM
+export async function generateImageSearchQueryService(params: {
+  word: string;
+  definition?: string;
+  context?: string;
+  partOfSpeech?: string;
+  placeholderIndex?: number;
+  cfg?: LLMConfig;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const { word, definition, context, partOfSpeech, placeholderIndex = 1, cfg, signal } = params;
+  const llmConfig = getOverrideConfig(cfg);
+  notifyLlmRequestStartFromConfig(llmConfig);
+
+  const slotDescriptions = [
+    "a direct main subject visual depiction",
+    "a realistic photo showing the word in action or real-world setting",
+    "a clear illustration or creative visual flashcard depiction"
+  ];
+  const slotHint = slotDescriptions[(placeholderIndex - 1) % 3] || "a clear visual clue";
+
+  const prompt = `Vocabulary Word: "${word}"
+Part of Speech: "${partOfSpeech || 'noun'}"
+Definition: "${definition || ''}"
+Context/Usage: "${context || ''}"
+
+Goal: Generate a concise, highly specific 1-3 word English visual search query term for fetching an image from an image search API for placeholder #${placeholderIndex} (${slotHint}).
+Output MUST be strictly JSON format: {"query": "search_query_here"}`;
+
+  const systemInstruction = "You are a helpful dictionary visual search assistant. Generate a short 1-3 word query term for image search in JSON format. Do not include markdown code block formatting outside the JSON.";
+  const schemaDescription = '{\n  "query": "string"\n}';
+
+  try {
+    const rawText = await callLLMClientSide(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+    const parsed = cleanAndParseJson(rawText);
+    if (parsed && typeof parsed === "object" && typeof parsed.query === "string" && parsed.query.trim()) {
+      return parsed.query.trim();
+    }
+  } catch (err) {
+    console.warn("LLM image query generation failed, using fallback query parameter:", err);
+  }
+
+  // Fallback query if LLM fails or is offline
+  const cleanWord = word.includes(",") ? word.split(",")[0].trim() : word.trim();
+  if (placeholderIndex === 2) return `${cleanWord} photo`;
+  if (placeholderIndex === 3) return `${cleanWord} illustration`;
+  return cleanWord;
+}
+
 // 3. Autofill Word Details
 export async function autofillWordService(params: {
   word: string;

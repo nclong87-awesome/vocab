@@ -183,6 +183,7 @@ export default function WordDetailsModal({
             brokenImageIds={new Set()}
             handleImageError={() => {}}
             onUpdateWord={onUpdateWord}
+            llmConfig={llmConfig}
           />
         </div>
 

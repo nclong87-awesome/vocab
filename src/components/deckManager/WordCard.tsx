@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, Image as ImageIcon, Plus, X, ExternalLink } from "lucide-react";
-import { Word } from "../../types";
-import { fetchWorkerImageUrl, getWorkerThreeImageUrls, fetchThreeCandidateImageUrls } from "../../utils/quizGenerator";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, Image as ImageIcon, Plus, X, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { Word, LLMConfig } from "../../types";
+import { fetchWorkerImageUrl } from "../../utils/quizGenerator";
+import { generateImageSearchQueryService } from "../../services/llmClientService";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
@@ -19,6 +20,7 @@ interface WordCardProps {
   brokenImageIds: Set<string>;
   handleImageError: (wordId: string) => void;
   onUpdateWord?: (updatedWord: Word) => void;
+  llmConfig?: LLMConfig;
 }
 
 function WordCard({
@@ -32,7 +34,8 @@ function WordCard({
   onDeleteWord,
   brokenImageIds: _brokenImageIds,
   handleImageError: _handleImageError,
-  onUpdateWord
+  onUpdateWord,
+  llmConfig
 }: WordCardProps) {
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -40,7 +43,7 @@ function WordCard({
   const [newImageUrlInput, setNewImageUrlInput] = useState("");
   const [showAddImageInput, setShowAddImageInput] = useState(false);
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
-  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [generatingSlotIndex, setGeneratingSlotIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setLocalWord(initialWord);
@@ -85,28 +88,42 @@ function WordCard({
     handleModalWordUpdate(updatedWord);
   };
 
-  const handleRestoreDefaultImages = async () => {
-    setIsGeneratingImages(true);
+  const handleGenerateSlotQuery = async (slotIndex: number) => {
+    setGeneratingSlotIndex(slotIndex);
     try {
-      const candidateUrls = await fetchThreeCandidateImageUrls(word.word);
-      const defaultUrls = candidateUrls.length > 0 ? candidateUrls : getWorkerThreeImageUrls(word.word);
+      // 1. Generate query parameter using LLM
+      const queryTerm = await generateImageSearchQueryService({
+        word: word.word,
+        definition: word.definition,
+        context: word.context,
+        partOfSpeech: word.partOfSpeech,
+        placeholderIndex: slotIndex + 1,
+        cfg: llmConfig,
+      });
+
+      // 2. Fetch resulting URL from image.nclong87.workers.dev
+      const fetchedUrl = await fetchWorkerImageUrl(queryTerm, slotIndex + 1);
+      const resultingUrl = fetchedUrl || `https://image.nclong87.workers.dev?query=${encodeURIComponent(queryTerm)}`;
+
+      // 3. Save resulting URL to that placeholder slot
+      const currentList = [...allImageUrls];
+      while (currentList.length <= slotIndex) {
+        currentList.push("");
+      }
+      currentList[slotIndex] = resultingUrl;
+      const nextList = currentList.filter(Boolean);
+
       const updatedWord: Word = {
         ...word,
-        imageUrls: defaultUrls,
-        imageUrl: defaultUrls[0] || undefined,
+        imageUrls: nextList,
+        imageUrl: nextList[0] || undefined,
       };
+
       handleModalWordUpdate(updatedWord);
     } catch (err) {
-      console.error("Failed to generate candidate images:", err);
-      const defaultUrls = getWorkerThreeImageUrls(word.word);
-      const updatedWord: Word = {
-        ...word,
-        imageUrls: defaultUrls,
-        imageUrl: defaultUrls[0] || undefined,
-      };
-      handleModalWordUpdate(updatedWord);
+      console.error(`Failed to generate query for placeholder #${slotIndex + 1}:`, err);
     } finally {
-      setIsGeneratingImages(false);
+      setGeneratingSlotIndex(null);
     }
   };
 
@@ -287,12 +304,12 @@ function WordCard({
             </div>
           )}
 
-          {/* Word Images Section (imageUrls) */}
+          {/* Word Images Section (imageUrls & 3 Placeholders) */}
           <div className="bg-stone-50/80 border border-stone-200/80 p-3 rounded-lg space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
                 <ImageIcon className="w-3 h-3 text-stone-400" />
-                Word Images {allImageUrls.length > 0 && `(${allImageUrls.length})`}
+                Word Images ({Math.max(3, allImageUrls.length)})
               </span>
               <button
                 type="button"
@@ -328,39 +345,70 @@ function WordCard({
               </form>
             )}
 
-            {/* Display stored image URLs gallery */}
-            {allImageUrls.length > 0 ? (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
-                {allImageUrls.map((imgUrl, idx) => (
-                  <WordCardImageItem
-                    key={`${imgUrl}-${idx}`}
-                    imgUrl={imgUrl}
-                    wordText={word.word}
-                    index={idx}
-                    onPreview={(src) => setSelectedPreviewImage(src)}
-                    onRemove={(src) => handleRemoveImageUrl(src)}
-                    onResolveUrl={handleResolveImageUrl}
-                  />
-                ))}
-              </div>
-            ) : (
-              !showAddImageInput && (
-                <div className="space-y-1.5 pt-0.5">
-                  <p className="text-[11px] text-stone-400 font-serif italic">
-                    No images stored yet. Click "Add Image URL" or "Generate Images" to attach visual flashcard images.
-                  </p>
+            {/* Display stored image URLs gallery or 3 Placeholders */}
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1">
+              {Array.from({ length: Math.max(3, allImageUrls.length) }).map((_, idx) => {
+                const imgUrl = allImageUrls[idx];
+                const isGenerating = generatingSlotIndex === idx;
+
+                if (imgUrl) {
+                  return (
+                    <WordCardImageItem
+                      key={`slot-${idx}-${imgUrl}`}
+                      imgUrl={imgUrl}
+                      wordText={word.word}
+                      index={idx}
+                      onPreview={(src) => setSelectedPreviewImage(src)}
+                      onRemove={(src) => handleRemoveImageUrl(src)}
+                      onResolveUrl={handleResolveImageUrl}
+                      onRegenerateSlot={() => handleGenerateSlotQuery(idx)}
+                      isGenerating={isGenerating}
+                    />
+                  );
+                }
+
+                // Empty Placeholder slot - Entire card is clickable touch target for mobile
+                return (
                   <button
+                    key={`placeholder-${idx}`}
                     type="button"
-                    onClick={handleRestoreDefaultImages}
-                    disabled={isGeneratingImages}
-                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-amber-900 font-bold text-[10.5px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (generatingSlotIndex === null) {
+                        handleGenerateSlotQuery(idx);
+                      }
+                    }}
+                    disabled={generatingSlotIndex !== null}
+                    className="relative rounded-xl border border-dashed border-stone-300/90 bg-white/90 aspect-square flex flex-col items-center justify-center p-1.5 sm:p-2 text-center transition-all hover:border-amber-400 hover:bg-amber-50/40 active:bg-amber-100/40 group/placeholder cursor-pointer disabled:opacity-50 select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50"
+                    title={`Click to generate image with AI for Placeholder #${idx + 1}`}
                   >
-                    <RefreshCw className={`w-3 h-3 text-amber-700 ${isGeneratingImages ? "animate-spin" : ""}`} />
-                    <span>{isGeneratingImages ? "Generating Images..." : "Generate Candidate Images"}</span>
+                    {isGenerating ? (
+                      <div className="flex flex-col items-center justify-center space-y-1">
+                        <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 animate-spin" />
+                        <span className="text-[8.5px] sm:text-[9.5px] font-bold text-amber-800 uppercase tracking-tight">
+                          Querying...
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="absolute top-1 left-1.5 text-[8.5px] sm:text-[9.5px] font-mono font-semibold text-stone-400 group-hover/placeholder:text-amber-700 transition-colors">
+                          #{idx + 1}
+                        </span>
+
+                        <div className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 mt-1 sm:mt-0">
+                          <div className="p-1 sm:p-1.5 rounded-full bg-amber-50/80 group-hover/placeholder:bg-amber-100 text-amber-700 transition-colors border border-amber-200/60 shadow-3xs">
+                            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 group-hover/placeholder:scale-110 transition-transform" />
+                          </div>
+                          <span className="text-[9.5px] sm:text-[10.5px] font-bold text-stone-700 group-hover/placeholder:text-amber-900 leading-tight">
+                            AI Query
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </button>
-                </div>
-              )
-            )}
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -435,9 +483,11 @@ interface WordCardImageItemProps {
   onPreview: (src: string) => void;
   onRemove: (src: string) => void;
   onResolveUrl?: (oldUrl: string, resolvedUrl: string) => void;
+  onRegenerateSlot?: () => void;
+  isGenerating?: boolean;
 }
 
-function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove, onResolveUrl }: WordCardImageItemProps) {
+function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove, onResolveUrl, onRegenerateSlot, isGenerating }: WordCardImageItemProps) {
   const [resolvedSrc, setResolvedSrc] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [failed, setFailed] = useState<boolean>(false);
@@ -503,9 +553,9 @@ function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove, onRes
 
   return (
     <div className="relative group/img rounded-lg overflow-hidden border border-stone-200 aspect-square bg-stone-100 hover:shadow-xs transition-all">
-      {isLoading ? (
+      {isLoading || isGenerating ? (
         <div className="w-full h-full flex items-center justify-center bg-stone-100 text-stone-400 animate-pulse">
-          <ImageIcon className="w-4 h-4 animate-bounce" />
+          <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
         </div>
       ) : (
         <img
@@ -523,7 +573,26 @@ function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove, onRes
         />
       )}
 
-      <div className="absolute top-1 right-1 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 bg-stone-900/70 p-0.5 rounded backdrop-blur-xs">
+      {/* Index Badge */}
+      <span className="absolute bottom-1 left-1 px-1.5 py-0.2 bg-stone-900/75 text-white text-[9px] font-mono font-bold rounded backdrop-blur-xs select-none shadow-3xs">
+        #{index + 1}
+      </span>
+
+      <div className="absolute top-1 right-1 opacity-100 sm:opacity-0 sm:group-hover/img:opacity-100 transition-opacity flex items-center gap-1 bg-stone-900/75 p-0.5 rounded-md backdrop-blur-xs shadow-2xs">
+        {onRegenerateSlot && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRegenerateSlot();
+            }}
+            disabled={isGenerating}
+            className="text-white hover:text-amber-300 p-0.5 rounded cursor-pointer disabled:opacity-50"
+            title="Generate new image query with AI"
+          >
+            <Sparkles className="w-3 h-3 text-amber-300" />
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => {

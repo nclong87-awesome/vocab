@@ -417,6 +417,7 @@ function CollectionManager({
                         brokenImageIds={brokenImageIds}
                         handleImageError={handleImageError}
                         onUpdateWord={handleSingleWordUpdate}
+                        llmConfig={llmConfig}
                       />
                     ))}
                   </div>
