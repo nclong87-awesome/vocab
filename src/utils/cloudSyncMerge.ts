@@ -295,13 +295,19 @@ export function autoMergeLocalAndRemote(
       const remoteImageUrls = match.imageUrls || (match.imageUrl ? [match.imageUrl] : []);
       const mergedImageUrls = Array.from(new Set([...localImageUrls, ...remoteImageUrls].filter(Boolean)));
 
+      const chosenImageUrl =
+        primary.imageUrl ||
+        lWord.imageUrl ||
+        match.imageUrl ||
+        (mergedImageUrls.length > 0 ? mergedImageUrls[0] : undefined);
+
       const mergedWordItem: Word = {
         ...primary,
         id: lWord.id || match.id,
         starred: mergedStarred,
         strength: mergedStrength,
         learned: mergedLearned,
-        imageUrl: primary.imageUrl || (mergedImageUrls.length > 0 ? mergedImageUrls[0] : undefined),
+        imageUrl: chosenImageUrl,
         imageUrls: mergedImageUrls.length > 0 ? mergedImageUrls : undefined,
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
         nextReviewDate: primary.nextReviewDate || lWord.nextReviewDate || match.nextReviewDate,
@@ -327,6 +333,33 @@ export function autoMergeLocalAndRemote(
 
       if ((lWord.definition || "").trim() !== (match.definition || "").trim()) {
         changesList.push(`Definition updated from latest edit`);
+      }
+
+      if (
+        (lWord.translation || "").trim() !== (match.translation || "").trim() ||
+        (lWord.example || "").trim() !== (match.example || "").trim() ||
+        (lWord.pronunciation || "").trim() !== (match.pronunciation || "").trim()
+      ) {
+        changesList.push(`Word details updated from latest edit`);
+      }
+
+      // Detect image differences between local and remote
+      const localImgSet = new Set(localImageUrls);
+      const remoteImgSet = new Set(remoteImageUrls);
+      const hasNewImagesInLocal = localImageUrls.some(url => !remoteImgSet.has(url));
+      const hasNewImagesInRemote = remoteImageUrls.some(url => !localImgSet.has(url));
+      const isMainImageDifferent = (lWord.imageUrl || "") !== (match.imageUrl || "");
+
+      if (hasNewImagesInLocal || hasNewImagesInRemote || isMainImageDifferent || localImageUrls.length !== remoteImageUrls.length) {
+        if (hasNewImagesInLocal && hasNewImagesInRemote) {
+          changesList.push(`Word images merged (${mergedImageUrls.length} total)`);
+        } else if (hasNewImagesInLocal) {
+          changesList.push(`New local image(s) added (${mergedImageUrls.length} total)`);
+        } else if (hasNewImagesInRemote) {
+          changesList.push(`New cloud image(s) pulled (${mergedImageUrls.length} total)`);
+        } else {
+          changesList.push(`Word images updated`);
+        }
       }
 
       if (changesList.length > 0) {
