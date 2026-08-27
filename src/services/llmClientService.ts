@@ -2671,7 +2671,20 @@ Output MUST be strictly valid JSON matching this schema:
         }
 
         const keywordText = q.imageKeyword || (q.type === 'picture' ? getImageKeyword(matchingWord) : undefined);
-        const imgUrl = q.imageUrl && q.imageUrl.startsWith("http") ? q.imageUrl : (keywordText ? `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}` : undefined);
+
+        const existingWordImages = [
+          ...(matchingWord.imageUrls || []),
+          ...(matchingWord.imageUrl ? [matchingWord.imageUrl] : [])
+        ].map(u => String(u || "").trim()).filter(Boolean);
+
+        let imgUrl: string | undefined = undefined;
+        if (existingWordImages.length > 0 && (q.type === 'picture' || q.imageUrl || keywordText)) {
+          imgUrl = existingWordImages[Math.floor(Math.random() * existingWordImages.length)];
+        } else if (q.imageUrl && q.imageUrl.startsWith("http")) {
+          imgUrl = q.imageUrl;
+        } else if (keywordText) {
+          imgUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
+        }
 
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
@@ -2696,7 +2709,17 @@ Output MUST be strictly valid JSON matching this schema:
         targetQ.type = 'picture';
         targetQ.question = "Which word matches the visual concept shown below?";
         targetQ.imageKeyword = getImageKeyword(matchingWord);
-        targetQ.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(targetQ.imageKeyword)}`;
+
+        const existingWordImages = [
+          ...(matchingWord.imageUrls || []),
+          ...(matchingWord.imageUrl ? [matchingWord.imageUrl] : [])
+        ].map(u => String(u || "").trim()).filter(Boolean);
+
+        if (existingWordImages.length > 0) {
+          targetQ.imageUrl = existingWordImages[Math.floor(Math.random() * existingWordImages.length)];
+        } else {
+          targetQ.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(targetQ.imageKeyword)}`;
+        }
       }
 
       if (provider && model && responseTimeMs) {

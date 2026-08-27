@@ -251,7 +251,17 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
       imageKeyword = getImageKeyword(word);
-      imageUrl = (word.imageUrls && word.imageUrls.length > 0 ? word.imageUrls[0] : word.imageUrl) || `https://image.nclong87.workers.dev?query=${encodeURIComponent(imageKeyword)}`;
+
+      const existingWordImages = [
+        ...(word.imageUrls || []),
+        ...(word.imageUrl ? [word.imageUrl] : [])
+      ].map(u => String(u || "").trim()).filter(Boolean);
+
+      if (existingWordImages.length > 0) {
+        imageUrl = existingWordImages[Math.floor(Math.random() * existingWordImages.length)];
+      } else {
+        imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(imageKeyword)}`;
+      }
 
       const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
