@@ -7,7 +7,8 @@ import {
   Layers, 
   LayoutGrid,
   History,
-  Languages
+  Languages,
+  BookOpen
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
@@ -15,6 +16,7 @@ import { speakText, stopSpeech, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
 import { areWordsEquivalent } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
+import WordDetailsModal from "../deckManager/WordDetailsModal";
 
 interface FlashcardMessageCardProps {
   data: FlashcardData;
@@ -69,6 +71,7 @@ function FlashcardMessageCard({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<"deck" | "grid">("deck");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const [selectedDetailsWord, setSelectedDetailsWord] = useState<Word | null>(null);
   const [expandedTranslations, setExpandedTranslations] = useState<Record<string, boolean>>({});
   const cardContainerRef = useRef<HTMLDivElement>(null);
 
@@ -286,16 +289,8 @@ function FlashcardMessageCard({
                 )}
               </div>
 
-              {/* Action buttons: History & Speaker */}
+              {/* Action buttons: Speaker only (History moved to bottom) */}
               <div className="flex items-center gap-1.5 shrink-0 self-start pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedHistoryWord(getWordObjectForCard(currentCard))}
-                  className="p-1.5 sm:p-2 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-600 hover:text-amber-800 transition-colors cursor-pointer shadow-2xs flex items-center justify-center shrink-0"
-                  title={`View Strength History for "${currentCard.word}"`}
-                >
-                  <History className="w-4 h-4 text-amber-600" />
-                </button>
                 <button
                   type="button"
                   onClick={(e) => handleSpeak(currentCard.word, e)}
@@ -388,6 +383,28 @@ function FlashcardMessageCard({
                 </div>
               );
             })()}
+
+            {/* Bottom Word Display Area Buttons: Strength History & Word Details */}
+            <div className="flex items-center justify-end gap-2 pt-2.5 border-t border-stone-200/70">
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryWord(getWordObjectForCard(currentCard))}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                title={`View Strength History for "${currentCard.word}"`}
+              >
+                <History className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Strength History</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDetailsWord(getWordObjectForCard(currentCard))}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                title={`View Word Details for "${currentCard.word}"`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-stone-600 shrink-0" />
+                <span>Word Details</span>
+              </button>
+            </div>
           </div>
 
           {/* Stepper Navigation Footer */}
@@ -472,14 +489,6 @@ function FlashcardMessageCard({
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setSelectedHistoryWord(getWordObjectForCard(card))}
-                          className="p-1.5 bg-white border border-stone-200 text-amber-700 hover:text-amber-950 hover:bg-amber-50 hover:border-amber-400 rounded-lg shrink-0 cursor-pointer shadow-2xs transition-colors"
-                          title={`View Strength History for "${card.word}"`}
-                        >
-                          <History className="w-3.5 h-3.5 text-amber-600" />
-                        </button>
-                        <button
-                          type="button"
                           onClick={(e) => handleSpeak(card.word, e)}
                           className={`p-1.5 rounded-lg shrink-0 cursor-pointer shadow-2xs transition-colors border ${
                             speakingText === card.word
@@ -548,6 +557,28 @@ function FlashcardMessageCard({
                         )}
                       </div>
                     )}
+
+                    {/* Bottom Word Display Area Buttons: Strength History & Word Details */}
+                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-stone-200/60">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHistoryWord(getWordObjectForCard(card))}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        title={`View Strength History for "${card.word}"`}
+                      >
+                        <History className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span>History</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDetailsWord(getWordObjectForCard(card))}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-stone-200 bg-white hover:bg-stone-100 hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        title={`View Word Details for "${card.word}"`}
+                      >
+                        <BookOpen className="w-3 h-3 text-stone-600 shrink-0" />
+                        <span>Details</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -596,6 +627,25 @@ function FlashcardMessageCard({
             word={selectedHistoryWord}
             onClose={() => setSelectedHistoryWord(null)}
             onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Word Details Modal */}
+      <AnimatePresence>
+        {selectedDetailsWord && (
+          <WordDetailsModal
+            word={selectedDetailsWord}
+            isOpen={Boolean(selectedDetailsWord)}
+            onClose={() => setSelectedDetailsWord(null)}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            targetLanguage={targetLanguage}
+            appLanguage={currentAppLang}
+            onUpdateWord={(updated) => {
+              setSelectedDetailsWord(updated);
+              handleModalWordUpdate(updated);
+            }}
           />
         )}
       </AnimatePresence>

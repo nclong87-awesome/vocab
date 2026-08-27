@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages } from "lucide-react";
 import { Word } from "../../types";
@@ -36,6 +36,10 @@ function WordCard({
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
+
+  useEffect(() => {
+    setLocalWord(initialWord);
+  }, [initialWord]);
 
   const word = localWord || initialWord;
 

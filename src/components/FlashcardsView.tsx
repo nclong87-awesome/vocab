@@ -8,22 +8,24 @@ import {
   ArrowRight, 
   RefreshCw, 
   Check, 
-  HelpCircle,
-  Trophy,
-  List,
-  Layers,
-  Sparkles,
-  Clock,
-  Filter,
-  History,
-  Languages,
-  ArrowUpDown
+  HelpCircle, 
+  Trophy, 
+  List, 
+  Layers, 
+  Sparkles, 
+  Clock, 
+  Filter, 
+  History, 
+  Languages, 
+  ArrowUpDown,
+  BookOpen
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
 import { isWordEligibleForReview, isWordLearnedOrStudied, getWordCreationTimestamp } from "../utils/spacedRepetition";
 import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { t } from "../config/i18n";
 import StrengthHistoryModal from "./analytics/StrengthHistoryModal";
+import WordDetailsModal from "./deckManager/WordDetailsModal";
 
 interface FlashcardsViewProps {
   words: Word[];
@@ -57,6 +59,7 @@ export default function FlashcardsView({
   const [filterCategory, setFilterCategory] = useState<"all" | "new" | "due" | "starred">("all");
   const [sortBy, setSortBy] = useState<"smart" | "oldest" | "newest" | "alpha">("smart");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const [selectedDetailsWord, setSelectedDetailsWord] = useState<Word | null>(null);
   const [showExampleTranslation, setShowExampleTranslation] = useState(false);
   const [expandedListTranslations, setExpandedListTranslations] = useState<Record<string, boolean>>({});
   const cardContainerRef = useRef<HTMLDivElement>(null);
@@ -394,16 +397,6 @@ export default function FlashcardsView({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedHistoryWord(currentWord);
-                          }}
-                          className="p-1.5 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-400 text-stone-500 hover:text-amber-700 transition-colors cursor-pointer shadow-2xs"
-                          title="View Strength History"
-                        >
-                          <History className="w-4 h-4 text-amber-600" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
                             onToggleStar(currentWord.id);
                           }}
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer shadow-2xs ${
@@ -518,6 +511,34 @@ export default function FlashcardsView({
                           </motion.div>
                         )}
                       </AnimatePresence>
+                    </div>
+
+                    {/* Bottom Word Display Area Buttons: Strength History & Word Details */}
+                    <div className="flex items-center justify-center sm:justify-end gap-2 pt-2.5 pb-1 border-t border-stone-100 z-10">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedHistoryWord(currentWord);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-stone-50/80 hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        title="View Strength History"
+                      >
+                        <History className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Strength History</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedDetailsWord(currentWord);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-stone-50/80 hover:bg-white hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        title="View Word Details"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-stone-600 shrink-0" />
+                        <span>Word Details</span>
+                      </button>
                     </div>
 
 
@@ -654,6 +675,16 @@ export default function FlashcardsView({
                       <History className="w-4 h-4 text-amber-600" />
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDetailsWord(w);
+                      }}
+                      className="p-1.5 rounded-lg border border-stone-200 hover:border-stone-400 hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition-colors cursor-pointer shadow-2xs bg-white"
+                      title="View Word Details"
+                    >
+                      <BookOpen className="w-4 h-4 text-stone-600" />
+                    </button>
+                    <button
                       onClick={() => speakWord(w.word)}
                       className="p-1.5 rounded-lg border border-stone-200 hover:border-stone-400 text-stone-600 hover:text-stone-900 transition-colors cursor-pointer bg-white shadow-2xs"
                       title="Speak"
@@ -704,6 +735,30 @@ export default function FlashcardsView({
             onClose={() => setSelectedHistoryWord(null)}
             onUpdateWord={(updated) => {
               setSelectedHistoryWord(updated);
+              if (onUpdateWords) {
+                const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
+                onUpdateWords(nextWords);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Word Details Modal */}
+      <AnimatePresence>
+        {selectedDetailsWord && (
+          <WordDetailsModal
+            word={selectedDetailsWord}
+            isOpen={Boolean(selectedDetailsWord)}
+            onClose={() => setSelectedDetailsWord(null)}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            targetLanguage={targetLanguage}
+            appLanguage={appLanguage}
+            onToggleStar={onToggleStar}
+            onToggleLearned={onToggleLearned}
+            onUpdateWord={(updated) => {
+              setSelectedDetailsWord(updated);
               if (onUpdateWords) {
                 const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
                 onUpdateWords(nextWords);
