@@ -78,24 +78,27 @@ export default function WordDetailsModal({
     setInternalSuccessId(null);
 
     try {
+      const resolvedNative = nativeLanguage || 
+        (typeof window !== "undefined" ? localStorage.getItem("vocab_learner_native_lang") || undefined : undefined) || 
+        (appLanguage === "vi" ? "Vietnamese" : undefined);
+
       const details = await autofillWordService({
         word: targetWord.word,
+        category: targetWord.category,
+        context: targetWord.context,
+        hint: targetWord.context || targetWord.category,
         targetLanguage: targetLanguage || "English",
-        nativeLanguage: nativeLanguage || appLanguage || "Vietnamese",
+        nativeLanguage: resolvedNative,
         cfg: llmConfig
       });
 
       const updatedWord: Word = {
         ...targetWord,
-        word: details.word || targetWord.word,
-        translation: details.translation || targetWord.translation,
-        definition: details.definition || targetWord.definition,
-        partOfSpeech: details.partOfSpeech || targetWord.partOfSpeech,
         pronunciation: details.pronunciation || targetWord.pronunciation,
+        definition: details.definition || targetWord.definition,
+        translation: details.translation || targetWord.translation,
         example: details.example || targetWord.example,
-        exampleTranslation: details.exampleTranslation || targetWord.exampleTranslation,
-        category: details.category || targetWord.category,
-        context: details.context || targetWord.context
+        exampleTranslation: details.exampleTranslation || targetWord.exampleTranslation
       };
 
       if (onUpdateWord) {

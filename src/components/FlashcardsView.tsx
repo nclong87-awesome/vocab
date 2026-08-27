@@ -36,6 +36,7 @@ interface FlashcardsViewProps {
   ttsConfig?: TTSConfig;
   llmConfig?: LLMConfig;
   targetLanguage?: string;
+  nativeLanguage?: string;
   appLanguage?: string;
   onUpdateWords?: (updatedWords: Word[]) => void;
 }
@@ -49,6 +50,7 @@ export default function FlashcardsView({
   ttsConfig = DEFAULT_TTS_CONFIG,
   llmConfig,
   targetLanguage = "English",
+  nativeLanguage,
   appLanguage = "Vietnamese",
   onUpdateWords
 }: FlashcardsViewProps) {
@@ -754,6 +756,7 @@ export default function FlashcardsView({
             ttsConfig={ttsConfig}
             llmConfig={llmConfig}
             targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
             appLanguage={appLanguage}
             onToggleStar={onToggleStar}
             onToggleLearned={onToggleLearned}

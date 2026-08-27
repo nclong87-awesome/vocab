@@ -166,7 +166,7 @@ function ChatMessageItem({
   };
 
   const handleModalWordUpdate = (updated: Word) => {
-    setSelectedHistoryWord(updated);
+    setSelectedHistoryWord((prev) => (prev ? updated : null));
     if (onUpdateWords && words) {
       const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
       onUpdateWords(nextWords);

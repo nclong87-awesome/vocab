@@ -112,7 +112,10 @@ function WordRow({
           <div className="flex items-center gap-1 bg-stone-50 p-1 border border-stone-150 rounded-lg shrink-0 shadow-3xs">
             <button
               type="button"
-              onClick={() => setShowHistoryModal(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowHistoryModal(true);
+              }}
               className="p-1.5 rounded-md text-amber-700 hover:text-amber-950 hover:bg-white transition-all cursor-pointer"
               title="View Strength History"
             >
@@ -120,7 +123,10 @@ function WordRow({
             </button>
             <button
               type="button"
-              onClick={() => speakWord(word.word)}
+              onClick={(e) => {
+                e.stopPropagation();
+                speakWord(word.word);
+              }}
               className="p-1.5 rounded-md text-stone-450 hover:text-stone-950 hover:bg-white transition-all cursor-pointer"
               title="Listen Pronunciation"
             >
@@ -128,7 +134,10 @@ function WordRow({
             </button>
             <button
               type="button"
-              onClick={() => handleRegenerateWord(word)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRegenerateWord(word);
+              }}
               disabled={regeneratingWordId === word.id}
               className="p-1.5 rounded-md text-stone-450 hover:text-amber-600 hover:bg-white transition-all cursor-pointer disabled:opacity-50"
               title="Re-generate details with AI"

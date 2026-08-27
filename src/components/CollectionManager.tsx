@@ -90,6 +90,9 @@ function CollectionManager({
 
       const details = await autofillWordService({
         word: word.word,
+        category: word.category,
+        context: word.context,
+        hint: word.context || word.category,
         targetLanguage,
         nativeLanguage,
         cfg: configToUse
@@ -100,15 +103,11 @@ function CollectionManager({
           if (w.id === word.id) {
             return {
               ...w,
-              word: details.word || w.word,
-              translation: details.translation || w.translation,
-              definition: details.definition || w.definition,
-              partOfSpeech: details.partOfSpeech || w.partOfSpeech,
               pronunciation: details.pronunciation || w.pronunciation,
+              definition: details.definition || w.definition,
+              translation: details.translation || w.translation,
               example: details.example || w.example,
-              exampleTranslation: details.exampleTranslation || w.exampleTranslation,
-              category: details.category || w.category,
-              context: details.context || w.context
+              exampleTranslation: details.exampleTranslation || w.exampleTranslation
             };
           }
           return w;

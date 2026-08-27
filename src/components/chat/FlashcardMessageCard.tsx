@@ -111,7 +111,8 @@ function FlashcardMessageCard({
   };
 
   const handleModalWordUpdate = (updated: Word) => {
-    setSelectedHistoryWord(updated);
+    setSelectedHistoryWord((prev) => (prev ? updated : null));
+    setSelectedDetailsWord((prev) => (prev ? updated : null));
     if (onUpdateWords && words) {
       const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
       onUpdateWords(nextWords);
@@ -641,6 +642,7 @@ function FlashcardMessageCard({
             ttsConfig={ttsConfig}
             llmConfig={llmConfig}
             targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
             appLanguage={currentAppLang}
             onUpdateWord={(updated) => {
               setSelectedDetailsWord(updated);

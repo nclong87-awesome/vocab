@@ -71,7 +71,10 @@ function WordCard({
             <div className="flex items-center gap-0.5 bg-stone-50/80 p-0.5 border border-stone-200/80 rounded-lg shrink-0 shadow-2xs">
               <button
                 type="button"
-                onClick={() => speakWord(word.word)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  speakWord(word.word);
+                }}
                 className="p-1.5 rounded-md text-stone-500 hover:text-stone-950 hover:bg-stone-100 transition-all cursor-pointer"
                 title="Listen Pronunciation"
               >
@@ -79,7 +82,10 @@ function WordCard({
               </button>
               <button
                 type="button"
-                onClick={() => setShowHistoryModal(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowHistoryModal(true);
+                }}
                 className="p-1.5 rounded-md text-amber-700 hover:text-amber-950 hover:bg-amber-100/80 transition-all cursor-pointer"
                 title="View Strength History"
               >
@@ -87,7 +93,10 @@ function WordCard({
               </button>
               <button
                 type="button"
-                onClick={() => handleRegenerateWord(word)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRegenerateWord(word);
+                }}
                 disabled={regeneratingWordId === word.id}
                 className="p-1.5 rounded-md text-stone-400 hover:text-amber-600 hover:bg-white transition-all cursor-pointer disabled:opacity-50"
                 title="Re-generate details with AI"
@@ -96,7 +105,10 @@ function WordCard({
               </button>
               <button
                 type="button"
-                onClick={() => onDeleteWord(word.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteWord(word.id);
+                }}
                 className="p-1.5 rounded-md text-stone-400 hover:text-red-600 hover:bg-white transition-all cursor-pointer"
                 title="Delete Entry"
               >

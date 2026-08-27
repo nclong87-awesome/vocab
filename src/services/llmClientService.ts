@@ -1200,20 +1200,63 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
 export async function autofillWordService(params: {
   word: string;
   hint?: string;
+  category?: string;
+  context?: string;
   targetLanguage?: string;
   nativeLanguage?: string;
   cfg?: LLMConfig;
   signal?: AbortSignal;
 }): Promise<any> {
-  const { word, hint, targetLanguage, nativeLanguage, cfg, signal } = params;
+  const { word, hint, category, context, targetLanguage, nativeLanguage, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
   notifyLlmRequestStartFromConfig(llmConfig);
 
-  const userNative = nativeLanguage || "Vietnamese";
-  const userTarget = targetLanguage || "Spanish";
+  function normalizeLanguageName(lang?: string): string {
+    if (!lang) return "";
+    const trimmed = lang.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === "vi" || lower === "vietnamese") return "Vietnamese";
+    if (lower === "en" || lower === "english") return "English";
+    if (lower === "es" || lower === "spanish") return "Spanish";
+    if (lower === "fr" || lower === "french") return "French";
+    if (lower === "ja" || lower === "japanese") return "Japanese";
+    if (lower === "zh" || lower === "chinese") return "Chinese";
+    if (lower === "de" || lower === "german") return "German";
+    if (lower === "ko" || lower === "korean") return "Korean";
+    return trimmed;
+  }
+
+  const userTarget = normalizeLanguageName(targetLanguage) || "English";
+  let userNative = normalizeLanguageName(nativeLanguage);
+
+  if (!userNative && typeof window !== "undefined") {
+    const stored = localStorage.getItem("vocab_learner_native_lang");
+    if (stored) {
+      userNative = normalizeLanguageName(stored);
+    }
+  }
+
+  if (!userNative || userNative.toLowerCase() === userTarget.toLowerCase()) {
+    const storedNative = typeof window !== "undefined" ? localStorage.getItem("vocab_learner_native_lang") : null;
+    const normalizedStored = normalizeLanguageName(storedNative || "");
+    if (normalizedStored && normalizedStored.toLowerCase() !== userTarget.toLowerCase()) {
+      userNative = normalizedStored;
+    } else {
+      userNative = userTarget === "English" ? "Vietnamese" : "English";
+    }
+  }
+
+  const contextSections: string[] = [];
+  if (category) contextSections.push(`- CATEGORY / TOPIC DOMAIN: "${category}"`);
+  if (context) contextSections.push(`- CURRENT USAGE CONTEXT: "${context}"`);
+  if (hint && hint !== context && hint !== category) contextSections.push(`- SCOPE / USAGE HINT: "${hint}"`);
+
+  const contextPromptText = contextSections.length > 0
+    ? `\nCRITICAL CATEGORY & USAGE CONTEXT SPECIFICATION:\n${contextSections.join("\n")}\nCRITICAL DIRECTIVE: Generate the definition, translation, example sentence, and pronunciation guide specifically tailored and matching the above Category and Usage Context.\n`
+    : "";
 
   const prompt = `Provide detailed vocabulary learning material for the input word or expression "${word}".
-${hint ? `Scope / Context Hint: "${hint}"\nCRITICAL: Generate the definition, translation, and example sentence matching this exact scope/context hint.` : ""}
+${contextPromptText}
 Target language being learned: "${userTarget}".
 User's native language: "${userNative}".
 
