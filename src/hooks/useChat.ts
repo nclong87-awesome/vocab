@@ -343,8 +343,9 @@ export function useChat({
       const warmupIds = new Set(options?.warmupWordIds || []);
       const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
       
-      // Select up to 3 core review words (excluding warm-up words)
+      // Select core review words (excluding warm-up words from Step 1)
       const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
+      const studiedNonWarmup = nonWarmupWords.filter(isWordLearnedOrStudied);
       const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
       const coreReviewWords = quizCandidates.length > 0
         ? quizCandidates
@@ -352,12 +353,16 @@ export function useChat({
       
       const fallbackReviewWords = coreReviewWords.length > 0 
         ? coreReviewWords 
-        : nonWarmupWords.slice(0, 3);
+        : (studiedNonWarmup.length > 0 ? studiedNonWarmup.slice(0, 3) : nonWarmupWords.slice(0, 3));
 
-      const effectiveQuizWords = [...fallbackReviewWords, ...warmupWords];
-      if (effectiveQuizWords.length === 0) {
-        effectiveQuizWords.push(...activeWords.slice(0, 5));
-      }
+      // Prioritize non-warmup words so the practice quiz tests DIFFERENT words from Step 1 flashcard review.
+      // Fall back to warmupWords ONLY if no other words exist in the user's collection.
+      const effectiveQuizWords = fallbackReviewWords.length > 0
+        ? fallbackReviewWords
+        : (warmupWords.length > 0 ? warmupWords : activeWords.slice(0, 5));
+
+      const actualReviewCount = fallbackReviewWords.length;
+      const actualWarmupCount = effectiveQuizWords.filter((w) => warmupIds.has(w.id)).length;
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -400,8 +405,8 @@ export function useChat({
           id: `sandwich-quiz-start-${Date.now()}`,
           role: "assistant",
           content: t("chat_sandwich_quiz_intro", currentAppLang, {
-            reviewCount: String(fallbackReviewWords.length),
-            warmupCount: String(warmupWords.length),
+            reviewCount: String(actualReviewCount),
+            warmupCount: String(actualWarmupCount),
             total: String(generatedQuestions.length),
             question: firstQ.question,
             qTag: qTag,

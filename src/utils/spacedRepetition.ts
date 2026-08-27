@@ -336,8 +336,8 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   // 2. Filter for words whose dynamic nextReviewDate is reached/due
   const eligibleWords = learnedWords.filter(word => isWordEligibleForReview(word, now));
 
-  // If fewer than 2 eligible words, return [] to allow falling back to flashcard study / word addition
-  if (eligibleWords.length < 2) {
+  // If no eligible words, return [] to allow falling back to flashcard study / word addition
+  if (eligibleWords.length < 1) {
     return [];
   }
 
