@@ -87,7 +87,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     tagline: "High performance API gateway",
     defaultModel: "pro/claude-haiku-4-5",
     models: [
-      "pro/claude-haiku-4-5", 
+      // "pro/claude-haiku-4-5", 
       "pro/gpt-5.6-luna",
     ],
     visionModels: ["pro/gpt-5.6-luna"],
@@ -145,7 +145,7 @@ export const RELIABLE_MODELS: string[] = [
   "gemini-3.5-flash",
   "gemini-3.6-flash",
   "gpt-oss:20b",
-  "pro/claude-haiku-4-5",
+  // "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
   "@cf/aisingapore/gemma-sea-lion-v4-27b-it"
 ];
