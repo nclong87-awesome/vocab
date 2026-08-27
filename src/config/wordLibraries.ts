@@ -9,9 +9,6 @@ export interface WordLibrarySet {
   level?: string;
   tags?: string[];
   author?: string;
-  targetLanguage?: string;
-  nativeLanguage?: string;
-  nativeLanguages?: string[];
 }
 
 export interface WordLibraryIndexSource {
@@ -28,9 +25,9 @@ export const WORD_LIBRARY_SETS: (WordLibrarySet | WordLibraryIndexSource)[] = [
   /* English Target Libraries (Universal & Vietnamese-tailored)                */
   /* -------------------------------------------------------------------------- */
   {
-    targetLanguage: "English",
-    nativeLanguage: "Vietnamese",
-    url: "https://gist.githubusercontent.com/nclong87-awesome/6a5e3f4505055b969d636b461bc8bc85/raw/2d9342aabb91f8800a0991fa37fa05aad48800ea/0-libraries.json"
+    targetLanguage: "*",
+    nativeLanguage: "*",
+    url: "https://gist.githubusercontent.com/nclong87-awesome/6a5e3f4505055b969d636b461bc8bc85/raw/0-libraries.json"
   }
 ];
 
@@ -109,21 +106,26 @@ export async function fetchWordLibrarySets(
 
   const fetchPromise = (async () => {
     const matchedSources = WORD_LIBRARY_SETS.filter((source) => {
+      const idxSource = source as WordLibraryIndexSource;
       const targetMatch = targetLanguage
-        ? isLanguageMatch(source.targetLanguage, targetLanguage)
+        ? isLanguageMatch(idxSource.targetLanguage, targetLanguage)
         : true;
       const nativeMatch = nativeLanguage
-        ? isLanguageMatch(source.nativeLanguages || source.nativeLanguage, nativeLanguage)
+        ? isLanguageMatch(idxSource.nativeLanguages || idxSource.nativeLanguage, nativeLanguage)
         : true;
       return targetMatch && nativeMatch;
     });
 
     const resolvedSets: WordLibrarySet[] = [];
+    const seenIds = new Set<string>();
 
     for (const source of matchedSources) {
       // If the source item is already a fully formed WordLibrarySet with an id and name
       if (source.id && source.name) {
-        resolvedSets.push(source as WordLibrarySet);
+        if (!seenIds.has(source.id)) {
+          seenIds.add(source.id);
+          resolvedSets.push(source as WordLibrarySet);
+        }
         continue;
       }
 
@@ -139,8 +141,12 @@ export async function fetchWordLibrarySets(
 
         items.forEach((item: any, idx: number) => {
           if (!item) return;
+          const setId = item.id || `gist-lib-${idx}`;
+          if (seenIds.has(setId)) return;
+          seenIds.add(setId);
+
           const libSet: WordLibrarySet = {
-            id: item.id || `gist-lib-${idx}`,
+            id: setId,
             name: item.name || "Word Library",
             url: item.url || source.url,
             description: item.description || undefined,
@@ -150,9 +156,6 @@ export async function fetchWordLibrarySets(
             level: item.level || undefined,
             tags: Array.isArray(item.tags) ? item.tags : undefined,
             author: item.author || "AI Studio",
-            targetLanguage: item.targetLanguage || source.targetLanguage || targetLanguage || "English",
-            nativeLanguage: item.nativeLanguage || source.nativeLanguage || nativeLanguage || "Vietnamese",
-            nativeLanguages: item.nativeLanguages || (source.nativeLanguages ? source.nativeLanguages : source.nativeLanguage ? [source.nativeLanguage] : undefined),
           };
           resolvedSets.push(libSet);
         });
@@ -175,7 +178,7 @@ export async function fetchWordLibrarySets(
 }
 
 /**
- * Returns word library sets filtered to only those matching target and native languages (from cache or explicit sets)
+ * Returns word library sets (from cache or explicit sets)
  */
 export function getWordLibrarySets(
   targetLanguage?: string,
@@ -190,12 +193,26 @@ export function getWordLibrarySets(
     return cached;
   }
 
+  // Check all cached entries across all keys
+  const allCachedSets: WordLibrarySet[] = [];
+  const seenIds = new Set<string>();
+  for (const list of librarySetsCache.values()) {
+    for (const set of list) {
+      if (!seenIds.has(set.id)) {
+        seenIds.add(set.id);
+        allCachedSets.push(set);
+      }
+    }
+  }
+
+  if (allCachedSets.length > 0) {
+    return allCachedSets;
+  }
+
   // Fallback to any explicit fully-formed WordLibrarySet entries in WORD_LIBRARY_SETS
   return WORD_LIBRARY_SETS.filter((set): set is WordLibrarySet => {
     if (!set.id || !set.name) return false;
-    const targetMatch = targetLanguage ? isLanguageMatch(set.targetLanguage, targetLanguage) : true;
-    const nativeMatch = nativeLanguage ? isLanguageMatch(set.nativeLanguages || set.nativeLanguage, nativeLanguage) : true;
-    return targetMatch && nativeMatch;
+    return true;
   });
 }
 
@@ -215,12 +232,16 @@ export async function fetchWordLibrarySetData(url: string): Promise<any> {
   let cleanUrl = (url || "").trim();
   if (!cleanUrl) return [];
 
-  // If a Gist web link like https://gist.github.com/username/gistId (without raw) is passed, append /raw
+  // Convert Gist web links (gist.github.com/user/gistId) to direct raw endpoint if not raw
   if (cleanUrl.includes("gist.github.com") && !cleanUrl.includes("gist.githubusercontent.com") && !cleanUrl.includes("/raw")) {
     cleanUrl = cleanUrl.replace(/\/$/, "") + "/raw";
   }
 
-  // Direct fetch of the JSON file
+  // Convert gist.github.com/.../raw to direct CDN gist.githubusercontent.com/.../raw
+  if (cleanUrl.includes("gist.github.com/") && cleanUrl.includes("/raw/")) {
+    cleanUrl = cleanUrl.replace("gist.github.com/", "gist.githubusercontent.com/");
+  }
+
   const res = await fetch(cleanUrl);
   if (!res.ok) {
     throw new Error(`Failed to download library data (HTTP ${res.status})`);
