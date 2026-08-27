@@ -128,13 +128,14 @@ export function getRemainingWordActions(
         seenWords.add(actWord.toLowerCase());
         const details = w.translation || w.definition || "";
         const hasFullDetails = Boolean(w.translation && w.definition);
+        const wordPayload = { ...w };
 
         remainingWordActions.push({
           label: hasFullDetails
             ? t("action_confirm_add_word", appLang, { word: w.word, details })
             : t("action_confirm_add", appLang, { word: w.word, translation: w.translation || "" }),
           action: hasFullDetails ? "confirm_save_word" : "add_word",
-          payload: hasFullDetails ? w : { word: w.word, hint: w.hint || w.definition },
+          payload: hasFullDetails ? wordPayload : { word: w.word, hint: w.hint || w.definition },
         });
       }
       continue;
@@ -182,6 +183,8 @@ export function getRemainingWordActions(
             hint,
           };
         }
+      } else if (finalAct.payload && finalAct.payload.word) {
+        finalAct.payload = { ...finalAct.payload };
       }
     }
     remainingWordActions.push(finalAct);

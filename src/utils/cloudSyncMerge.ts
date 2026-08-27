@@ -291,12 +291,18 @@ export function autoMergeLocalAndRemote(
         }
       }
 
+      const localImageUrls = lWord.imageUrls || (lWord.imageUrl ? [lWord.imageUrl] : []);
+      const remoteImageUrls = match.imageUrls || (match.imageUrl ? [match.imageUrl] : []);
+      const mergedImageUrls = Array.from(new Set([...localImageUrls, ...remoteImageUrls].filter(Boolean)));
+
       const mergedWordItem: Word = {
         ...primary,
         id: lWord.id || match.id,
         starred: mergedStarred,
         strength: mergedStrength,
         learned: mergedLearned,
+        imageUrl: primary.imageUrl || (mergedImageUrls.length > 0 ? mergedImageUrls[0] : undefined),
+        imageUrls: mergedImageUrls.length > 0 ? mergedImageUrls : undefined,
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
         nextReviewDate: primary.nextReviewDate || lWord.nextReviewDate || match.nextReviewDate,
         createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt,

@@ -11,6 +11,7 @@ import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
+import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { t } from "../../config/i18n";
@@ -495,7 +496,9 @@ function ChatMessageItem({
     return unfilteredActions.filter(act => !inlineMatchedActions.has(act));
   }, [unfilteredActions, displayContent]);
 
-  const handleActionClick = (act: { label: string; action: string; payload?: any }) => {
+  const [customActionPayloads, setCustomActionPayloads] = useState<Record<number, any>>({});
+
+  const handleActionClick = (act: { label: string; action: string; payload?: any }, actionIndex?: number) => {
     if (act.action === "copy_text" || act.action === "copy_sentence") {
       const textToCopy = act.payload?.text || msg.fixedSentence || "";
       if (textToCopy) {
@@ -513,7 +516,8 @@ function ChatMessageItem({
       handleRecordActionUse("generate_topic");
       onGenerateByTopic?.();
     } else if (act.action === "confirm_save_word" && act.payload && onAddMultipleWords) {
-      onAddMultipleWords([act.payload]);
+      const payloadToUse = (actionIndex !== undefined && customActionPayloads[actionIndex]) || act.payload;
+      onAddMultipleWords([payloadToUse]);
     } else if (act.action === "add_word") {
       handleRecordActionUse("add_word");
       if (act.payload?.word) {
@@ -1058,17 +1062,36 @@ function ChatMessageItem({
                 actLbl.startsWith("next question") ||
                 actLbl.includes("continue to question")
               );
+              const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
+              const currentPayload = customActionPayloads[aIdx] || act.payload;
 
               return (
-                <button
-                  key={aIdx}
-                  onClick={() => handleActionClick(act)}
-                  className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs cursor-pointer group ${
-                    isNextQ
-                      ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold"
-                      : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white"
-                  }`}
-                >
+                <React.Fragment key={aIdx}>
+                  {isConfirmSave && (
+                    <WordAddGalleryPreview
+                      word={currentPayload}
+                      onImagesChange={(updatedUrls) => {
+                        setCustomActionPayloads((prev) => ({
+                          ...prev,
+                          [aIdx]: {
+                            ...currentPayload,
+                            imageUrls: updatedUrls,
+                            imageUrl: updatedUrls[0] || undefined,
+                          },
+                        }));
+                      }}
+                    />
+                  )}
+
+                  <button
+                    key={aIdx}
+                    onClick={() => handleActionClick(act, aIdx)}
+                    className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs cursor-pointer group ${
+                      isNextQ
+                        ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold"
+                        : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white"
+                    }`}
+                  >
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     {isNextQ ? (
                       <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -1136,8 +1159,9 @@ function ChatMessageItem({
                       : "text-stone-400 group-hover:text-white group-focus:text-white group-active:text-white"
                   }`} />
                 </button>
-              );
-            })}
+              </React.Fragment>
+            );
+          })}
           </div>
         )}
       </div>

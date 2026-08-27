@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History } from "lucide-react";
+import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon } from "lucide-react";
 import { Word } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 
@@ -65,6 +65,12 @@ function WordRow({
                 <span className="text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/50 px-1.5 py-0.5 rounded flex items-center gap-1">
                   <span>🏷️</span>
                   <span>{word.category}</span>
+                </span>
+              )}
+              {((word.imageUrls && word.imageUrls.length > 0) || word.imageUrl) && (
+                <span className="text-[9px] font-bold bg-sky-50 text-sky-800 border border-sky-200/60 px-1.5 py-0.5 rounded flex items-center gap-1" title={`${word.imageUrls?.length || 1} image(s) attached`}>
+                  <ImageIcon className="w-3 h-3 text-sky-600" />
+                  <span>{word.imageUrls?.length || 1} img</span>
                 </span>
               )}
             </div>

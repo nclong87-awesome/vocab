@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, Image as ImageIcon, Plus, X, ExternalLink } from "lucide-react";
 import { Word } from "../../types";
+import { fetchWorkerImageUrl, getWorkerThreeImageUrls } from "../../utils/quizGenerator";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
@@ -36,6 +37,9 @@ function WordCard({
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
+  const [newImageUrlInput, setNewImageUrlInput] = useState("");
+  const [showAddImageInput, setShowAddImageInput] = useState(false);
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalWord(initialWord);
@@ -43,11 +47,51 @@ function WordCard({
 
   const word = localWord || initialWord;
 
+  const allImageUrls = useMemo<string[]>(() => {
+    const list = [...(word.imageUrls || []), ...(word.imageUrl ? [word.imageUrl] : [])];
+    return Array.from(new Set(list.map((u) => String(u || "").trim()).filter(Boolean)));
+  }, [word.imageUrls, word.imageUrl]);
+
   const handleModalWordUpdate = (updated: Word) => {
     setLocalWord(updated);
     if (onUpdateWord) {
       onUpdateWord(updated);
     }
+  };
+
+  const handleAddImageUrl = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newImageUrlInput.trim();
+    if (!trimmed) return;
+    const updatedList: string[] = Array.from(new Set([...allImageUrls, trimmed]));
+    const updatedWord: Word = {
+      ...word,
+      imageUrls: updatedList,
+      imageUrl: updatedList[0] || undefined
+    };
+    handleModalWordUpdate(updatedWord);
+    setNewImageUrlInput("");
+    setShowAddImageInput(false);
+  };
+
+  const handleRemoveImageUrl = (urlToRemove: string) => {
+    const updatedList: string[] = allImageUrls.filter((u) => u !== urlToRemove);
+    const updatedWord: Word = {
+      ...word,
+      imageUrls: updatedList,
+      imageUrl: updatedList[0] || undefined,
+    };
+    handleModalWordUpdate(updatedWord);
+  };
+
+  const handleRestoreDefaultImages = () => {
+    const defaultUrls: string[] = getWorkerThreeImageUrls(word.word);
+    const updatedWord: Word = {
+      ...word,
+      imageUrls: defaultUrls,
+      imageUrl: defaultUrls[0] || undefined,
+    };
+    handleModalWordUpdate(updatedWord);
   };
 
   return (
@@ -213,6 +257,80 @@ function WordCard({
               )}
             </div>
           )}
+
+          {/* Word Images Section (imageUrls) */}
+          <div className="bg-stone-50/80 border border-stone-200/80 p-3 rounded-lg space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                <ImageIcon className="w-3 h-3 text-stone-400" />
+                Word Images {allImageUrls.length > 0 && `(${allImageUrls.length})`}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAddImageInput(prev => !prev);
+                }}
+                className="text-[10px] font-medium text-amber-700 hover:text-amber-900 hover:bg-amber-100/70 px-2 py-0.5 rounded transition-all cursor-pointer flex items-center gap-1"
+                title="Add Image URL"
+              >
+                <Plus className="w-3 h-3" />
+                <span>{showAddImageInput ? "Cancel" : "Add Image URL"}</span>
+              </button>
+            </div>
+
+            {/* Input form to add a new image URL */}
+            {showAddImageInput && (
+              <form onSubmit={handleAddImageUrl} onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 pt-1">
+                <input
+                  type="url"
+                  placeholder="Paste image URL (e.g. https://example.com/photo.jpg)"
+                  value={newImageUrlInput}
+                  onChange={(e) => setNewImageUrlInput(e.target.value)}
+                  className="flex-1 text-xs bg-white border border-stone-300 rounded px-2 py-1 text-stone-800 placeholder:text-stone-400 focus:outline-hidden focus:border-amber-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!newImageUrlInput.trim()}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded cursor-pointer transition-colors"
+                >
+                  Save
+                </button>
+              </form>
+            )}
+
+            {/* Display stored image URLs gallery */}
+            {allImageUrls.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+                {allImageUrls.map((imgUrl, idx) => (
+                  <WordCardImageItem
+                    key={`${imgUrl}-${idx}`}
+                    imgUrl={imgUrl}
+                    wordText={word.word}
+                    index={idx}
+                    onPreview={(src) => setSelectedPreviewImage(src)}
+                    onRemove={(src) => handleRemoveImageUrl(src)}
+                  />
+                ))}
+              </div>
+            ) : (
+              !showAddImageInput && (
+                <div className="space-y-1.5 pt-0.5">
+                  <p className="text-[11px] text-stone-400 font-serif italic">
+                    No images stored yet. Click "Add Image URL" or "Generate Images" to attach visual flashcard images.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRestoreDefaultImages}
+                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-amber-900 font-bold text-[10.5px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3 h-3 text-amber-700" />
+                    <span>Generate Candidate Images</span>
+                  </button>
+                </div>
+              )
+            )}
+          </div>
         </div>
 
         {/* Card Footer Status & Memory Strength */}
@@ -247,10 +365,154 @@ function WordCard({
             onUpdateWord={handleModalWordUpdate}
           />
         )}
+        {selectedPreviewImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedPreviewImage(null)}
+            className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div className="relative max-w-3xl max-h-[85vh] bg-black rounded-xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-stone-900/80 text-white hover:bg-stone-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img
+                src={selectedPreviewImage}
+                alt={`${word.word} full view`}
+                className="max-w-full max-h-[85vh] object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </>
   );
 }
 
 export default React.memo(WordCard);
+
+interface WordCardImageItemProps {
+  imgUrl: string;
+  wordText: string;
+  index: number;
+  onPreview: (src: string) => void;
+  onRemove: (src: string) => void;
+}
+
+function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove }: WordCardImageItemProps) {
+  const [resolvedSrc, setResolvedSrc] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [failed, setFailed] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+    setFailed(false);
+
+    if (!imgUrl) {
+      setFailed(true);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!imgUrl.includes("image.nclong87.workers.dev")) {
+      setResolvedSrc(imgUrl);
+      setIsLoading(false);
+      return;
+    }
+
+    const match = imgUrl.match(/query=([^&]+)/);
+    const queryTerm = match ? decodeURIComponent(match[1]) : wordText;
+
+    fetchWorkerImageUrl(queryTerm, index + 1).then((url) => {
+      if (isMounted) {
+        if (url) {
+          setResolvedSrc(url);
+        } else {
+          setFailed(true);
+        }
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [imgUrl, wordText, index]);
+
+  if (failed) {
+    return (
+      <div className="relative group/img rounded-lg overflow-hidden border border-stone-200 aspect-square bg-stone-100 flex flex-col items-center justify-center p-1 text-center">
+        <ImageIcon className="w-4 h-4 text-stone-400 mb-1" />
+        <span className="text-[9px] text-stone-400 italic">Error</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(imgUrl);
+          }}
+          className="absolute top-1 right-1 text-stone-400 hover:text-red-500 p-0.5 rounded cursor-pointer"
+          title="Remove Image"
+        >
+          <X className="w-3 h-3 text-stone-500" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative group/img rounded-lg overflow-hidden border border-stone-200 aspect-square bg-stone-100 hover:shadow-xs transition-all">
+      {isLoading ? (
+        <div className="w-full h-full flex items-center justify-center bg-stone-100 text-stone-400 animate-pulse">
+          <ImageIcon className="w-4 h-4 animate-bounce" />
+        </div>
+      ) : (
+        <img
+          src={resolvedSrc}
+          alt={`${wordText} visual clue ${index + 1}`}
+          className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+          referrerPolicy="no-referrer"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPreview(resolvedSrc || imgUrl);
+          }}
+          onError={() => {
+            setFailed(true);
+          }}
+        />
+      )}
+
+      <div className="absolute top-1 right-1 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center gap-1 bg-stone-900/70 p-0.5 rounded backdrop-blur-xs">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPreview(resolvedSrc || imgUrl);
+          }}
+          className="text-white hover:text-amber-300 p-0.5 rounded cursor-pointer"
+          title="Expand Image"
+        >
+          <ExternalLink className="w-3 h-3" />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(imgUrl);
+          }}
+          className="text-white hover:text-red-400 p-0.5 rounded cursor-pointer"
+          title="Remove Image URL"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
 

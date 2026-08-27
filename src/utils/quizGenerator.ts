@@ -42,14 +42,28 @@ export function getImageKeyword(word: Word | string): string {
   return term;
 }
 
+// Helper function to generate 3 Cloudflare Worker candidate query URLs for a word or keyword
+export function getWorkerThreeImageUrls(word: string | Word): string[] {
+  const keyword = getImageKeyword(word);
+  if (!keyword || !keyword.trim()) return [];
+  const cleanKey = keyword.includes(",") ? keyword.split(",")[0].trim() : keyword.trim();
+  const encoded = encodeURIComponent(cleanKey);
+  return [
+    `https://image.nclong87.workers.dev?query=${encoded}`,
+    `https://image.nclong87.workers.dev?query=${encodeURIComponent(cleanKey + " photo")}`,
+    `https://image.nclong87.workers.dev?query=${encodeURIComponent(cleanKey + " illustration")}`
+  ];
+}
+
 // Helper function to fetch image URL from Cloudflare Worker endpoint using keyword query
-export async function fetchWorkerImageUrl(keyword: string): Promise<string> {
+export async function fetchWorkerImageUrl(keyword: string, fallbackLockIndex: number = 1): Promise<string> {
   if (!keyword) return "";
 
+  const cleanKey = keyword.includes(",") ? keyword.split(",")[0].trim() : keyword.trim();
   const effectiveProxyKey = getStoredAccessCode();
 
   try {
-    const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keyword)}`;
+    const workerUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(cleanKey)}`;
     const headers: Record<string, string> = {};
     if (effectiveProxyKey) {
       headers["X-Proxy-Key"] = effectiveProxyKey;
@@ -64,7 +78,7 @@ export async function fetchWorkerImageUrl(keyword: string): Promise<string> {
       if (url.startsWith("{")) {
         try {
           const p = JSON.parse(url);
-          url = p.url || p.imageUrl || p.image || url;
+          url = p.url || p.imageUrl || p.image || p.src || (Array.isArray(p.images) ? p.images[0] : "") || (Array.isArray(p.results) ? p.results[0]?.url : "") || url;
         } catch (e) {}
       }
       if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
@@ -75,7 +89,26 @@ export async function fetchWorkerImageUrl(keyword: string): Promise<string> {
     console.warn("Direct image worker call failed:", e);
   }
 
-  return "";
+  // Fallback to reliable topic image endpoint if worker endpoint returns unauthorized or empty
+  return `https://loremflickr.com/400/400/${encodeURIComponent(cleanKey.toLowerCase())}?lock=${fallbackLockIndex}`;
+}
+
+export async function fetchThreeCandidateImageUrls(word: string | Word): Promise<string[]> {
+  const keyword = getImageKeyword(word);
+  if (!keyword || !keyword.trim()) return [];
+  const cleanKey = keyword.includes(",") ? keyword.split(",")[0].trim() : keyword.trim();
+
+  const queries = [
+    cleanKey,
+    `${cleanKey} photo`,
+    `${cleanKey} illustration`
+  ];
+
+  const results = await Promise.all(
+    queries.map((q, idx) => fetchWorkerImageUrl(q, idx + 1))
+  );
+
+  return results.filter(Boolean);
 }
 
 // Helper to generate confusing sound-alike, particle-shift, or morphological distractors
@@ -218,7 +251,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
       imageKeyword = getImageKeyword(word);
-      imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(imageKeyword)}`;
+      imageUrl = (word.imageUrls && word.imageUrls.length > 0 ? word.imageUrls[0] : word.imageUrl) || `https://image.nclong87.workers.dev?query=${encodeURIComponent(imageKeyword)}`;
 
       const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
@@ -244,7 +277,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       correctAnswer,
       hint: hintText,
       imageKeyword,
-      imageUrl
+      imageUrl,
+      imageUrls: word.imageUrls
     });
   });
 

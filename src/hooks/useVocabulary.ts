@@ -73,9 +73,15 @@ export function useVocabulary() {
         console.warn(`Word "${wordData.word}" already exists in collection (exact or singular/plural). Skipping duplicate.`);
         return prev;
       }
+      const defaultUrls = wordData.imageUrls && wordData.imageUrls.length > 0
+        ? wordData.imageUrls
+        : (wordData.imageUrl ? [wordData.imageUrl] : undefined);
+
       const newWord: Word = recordStrengthHistory(
         {
           ...wordData,
+          imageUrls: defaultUrls,
+          imageUrl: wordData.imageUrl || defaultUrls[0] || undefined,
           id: `manual-word-${Date.now()}`,
           learned: false,
           starred: wordData.starred || false,

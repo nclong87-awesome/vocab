@@ -102,6 +102,7 @@ export interface Word {
   nextReviewDate?: string | null; // Exact ISO timestamp when this word becomes eligible for next review/quiz
   strength: number; // 0 to 100
   imageUrl?: string;
+  imageUrls?: string[]; // Field to store word's image URLs
   imageKeyword?: string;
   category?: string;
   context?: string;
@@ -118,6 +119,8 @@ export interface WordSense {
   example: string;
   exampleTranslation: string;
   imageKeyword: string;
+  imageUrl?: string;
+  imageUrls?: string[];
   category?: string;
   context?: string;
   suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string })[];
@@ -153,6 +156,7 @@ export interface QuizQuestion {
   hint?: string;
   imageKeyword?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   suggestedWords?: (string | QuizSuggestedWord | SuggestedPairedWord)[];
 }
 
@@ -201,6 +205,7 @@ export interface FlashcardItem {
   suggestedWords?: SuggestedPairedWord[];
   imageKeyword?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   previousStrength?: number;
   newStrength?: number;
   strengthGained?: number;
@@ -225,6 +230,7 @@ export interface FlashcardData {
   }[];
   usageNotes?: string;
   imageUrl?: string;
+  imageUrls?: string[];
   imageKeyword?: string;
   suggestedVocabulary?: SuggestedVocabularyWord[];
   suggestedWords?: (string | SuggestedPairedWord)[];

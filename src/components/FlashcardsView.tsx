@@ -18,7 +18,8 @@ import {
   History, 
   Languages, 
   ArrowUpDown,
-  BookOpen
+  BookOpen,
+  X
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
 import { isWordEligibleForReview, isWordLearnedOrStudied, getWordCreationTimestamp } from "../utils/spacedRepetition";
@@ -26,6 +27,7 @@ import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLangu
 import { t } from "../config/i18n";
 import StrengthHistoryModal from "./analytics/StrengthHistoryModal";
 import WordDetailsModal from "./deckManager/WordDetailsModal";
+import FlashcardRandomImage from "./common/FlashcardRandomImage";
 
 interface FlashcardsViewProps {
   words: Word[];
@@ -64,6 +66,7 @@ export default function FlashcardsView({
   const [selectedDetailsWord, setSelectedDetailsWord] = useState<Word | null>(null);
   const [showExampleTranslation, setShowExampleTranslation] = useState(false);
   const [expandedListTranslations, setExpandedListTranslations] = useState<Record<string, boolean>>({});
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToCardTop = () => {
@@ -433,8 +436,15 @@ export default function FlashcardsView({
                             initial={{ opacity: 0, y: 5 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -5 }}
-                            className="space-y-4 my-auto"
+                            className="space-y-4 my-auto flex flex-col items-center w-full"
                           >
+                            <FlashcardRandomImage
+                              imageUrls={currentWord.imageUrls}
+                              imageUrl={currentWord.imageUrl}
+                              wordText={currentWord.word}
+                              onPreviewImage={(src) => setSelectedPreviewImage(src)}
+                              className="w-56 sm:w-64 h-36 sm:h-44 mx-auto"
+                            />
                             <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-stone-950 break-words max-w-full">
                               {currentWord.word}
                             </h3>
@@ -453,6 +463,13 @@ export default function FlashcardsView({
                             exit={{ opacity: 0, y: -5 }}
                             className="space-y-3 w-full my-auto"
                           >
+                            <FlashcardRandomImage
+                              imageUrls={currentWord.imageUrls}
+                              imageUrl={currentWord.imageUrl}
+                              wordText={currentWord.word}
+                              onPreviewImage={(src) => setSelectedPreviewImage(src)}
+                              className="w-full h-32 sm:h-40 mx-auto"
+                            />
                             <div className="space-y-1.5">
                               <span className="text-xs font-semibold text-stone-500 font-mono">{t("flashcards_meaning_trans", appLanguage)}</span>
                               <h4 className="text-xl sm:text-2xl font-bold text-stone-900 leading-tight font-serif italic break-words">
@@ -768,6 +785,35 @@ export default function FlashcardsView({
               }
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Image Preview Lightbox Modal */}
+      <AnimatePresence>
+        {selectedPreviewImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedPreviewImage(null)}
+            className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div className="relative max-w-3xl max-h-[85vh] bg-black rounded-xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-stone-900/80 text-white hover:bg-stone-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img
+                src={selectedPreviewImage}
+                alt="Flashcard image full view"
+                className="max-w-full max-h-[85vh] object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

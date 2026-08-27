@@ -1283,6 +1283,8 @@ export function useChat({
           createdAt: new Date().toISOString(),
           lastReviewed: null,
           strength: 0,
+          imageUrls: sense?.imageUrls || data.imageUrls || undefined,
+          imageUrl: sense?.imageUrl || data.imageUrl || undefined,
         };
 
         setPendingConfirmWord(newWordObj);
@@ -1665,6 +1667,8 @@ export function useChat({
             action: "confirm_save_word",
             payload: {
               ...item,
+              imageUrls: item.imageUrls || undefined,
+              imageUrl: item.imageUrl || undefined,
               category: item.category || "Photo Vocabulary",
               context: item.context || item.definition || "",
             },
@@ -1741,6 +1745,10 @@ export function useChat({
         return;
       }
 
+      const defaultImageUrls = Array.isArray(c.imageUrls)
+        ? c.imageUrls
+        : (c.imageUrl ? [c.imageUrl] : undefined);
+
       const wordObj: Word = {
         id: `ai-word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         word: targetWord,
@@ -1758,6 +1766,8 @@ export function useChat({
         createdAt: new Date().toISOString(),
         lastReviewed: null,
         strength: 0,
+        imageUrls: defaultImageUrls,
+        imageUrl: c.imageUrl || defaultImageUrls[0] || undefined,
       };
 
       newWordsToAdd.push(wordObj);
@@ -1928,6 +1938,8 @@ export function useChat({
       createdAt: new Date().toISOString(),
       lastReviewed: null,
       strength: 0,
+      imageUrls: sense.imageUrls || undefined,
+      imageUrl: sense.imageUrl || undefined,
     };
 
     setPendingConfirmWord(newWord);
@@ -2122,6 +2134,8 @@ export function useChat({
           createdAt: new Date().toISOString(),
           lastReviewed: null,
           strength: 0,
+          imageUrls: item.imageUrls || undefined,
+          imageUrl: item.imageUrl || undefined,
         };
         generatedWords.push(newWord);
       });

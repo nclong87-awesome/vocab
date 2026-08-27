@@ -8,7 +8,8 @@ import {
   LayoutGrid,
   History,
   Languages,
-  BookOpen
+  BookOpen,
+  X
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
 import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
@@ -17,6 +18,7 @@ import { t } from "../../config/i18n";
 import { areWordsEquivalent } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import WordDetailsModal from "../deckManager/WordDetailsModal";
+import FlashcardRandomImage, { getWordImageUrls } from "../common/FlashcardRandomImage";
 
 interface FlashcardMessageCardProps {
   data: FlashcardData;
@@ -73,6 +75,7 @@ function FlashcardMessageCard({
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedDetailsWord, setSelectedDetailsWord] = useState<Word | null>(null);
   const [expandedTranslations, setExpandedTranslations] = useState<Record<string, boolean>>({});
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
 
   const toggleTranslation = (key: string, e?: React.MouseEvent) => {
@@ -264,6 +267,24 @@ function FlashcardMessageCard({
         <div className="p-3 sm:p-4 space-y-3">
           {/* Active Card Body */}
           <div className="bg-stone-50/70 border border-stone-200/80 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xs">
+            {/* Word Random Image (if word has any images) */}
+            {(() => {
+              const matchedWord = getWordObjectForCard(currentCard);
+              const cardImages = Array.from(new Set([
+                ...getWordImageUrls(undefined, currentCard.imageUrl, currentCard.imageUrls),
+                ...getWordImageUrls(undefined, matchedWord.imageUrl, matchedWord.imageUrls)
+              ]));
+              if (cardImages.length === 0) return null;
+              return (
+                <FlashcardRandomImage
+                  images={cardImages}
+                  wordText={currentCard.word}
+                  onPreviewImage={(src) => setSelectedPreviewImage(src)}
+                  className="w-full h-36 sm:h-44 mx-auto"
+                />
+              );
+            })()}
+
             {/* Word Heading, Part of Speech, Pronunciation, Audio */}
             <div className="flex items-start justify-between gap-2.5">
               <div className="min-w-0 flex-1 space-y-1">
@@ -458,6 +479,11 @@ function FlashcardMessageCard({
             {cards.map((card, cIdx) => {
               const gridCardKey = card.wordId || card.word || `grid-${cIdx}`;
               const isGridTranslationOpen = Boolean(expandedTranslations[gridCardKey]);
+              const cardWordObj = getWordObjectForCard(card);
+              const cardImages = Array.from(new Set([
+                ...getWordImageUrls(undefined, card.imageUrl, card.imageUrls),
+                ...getWordImageUrls(undefined, cardWordObj.imageUrl, cardWordObj.imageUrls)
+              ]));
               return (
                 <div
                   key={cIdx}
@@ -465,6 +491,15 @@ function FlashcardMessageCard({
                 >
                   {/* Header info */}
                   <div className="space-y-2">
+                    {cardImages.length > 0 && (
+                      <FlashcardRandomImage
+                        images={cardImages}
+                        wordText={card.word}
+                        onPreviewImage={(src) => setSelectedPreviewImage(src)}
+                        className="w-full h-28 sm:h-32 mx-auto"
+                        showRefreshButton={false}
+                      />
+                    )}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -649,6 +684,32 @@ function FlashcardMessageCard({
               handleModalWordUpdate(updated);
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Image Preview Lightbox Modal */}
+      <AnimatePresence>
+        {selectedPreviewImage && (
+          <div
+            onClick={() => setSelectedPreviewImage(null)}
+            className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
+          >
+            <div className="relative max-w-3xl max-h-[85vh] bg-black rounded-xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-stone-900/80 text-white hover:bg-stone-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <img
+                src={selectedPreviewImage}
+                alt="Flashcard image full view"
+                className="max-w-full max-h-[85vh] object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
         )}
       </AnimatePresence>
     </div>
