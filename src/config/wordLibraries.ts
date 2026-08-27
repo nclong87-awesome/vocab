@@ -30,7 +30,7 @@ export const WORD_LIBRARY_SETS: (WordLibrarySet | WordLibraryIndexSource)[] = [
   {
     targetLanguage: "English",
     nativeLanguage: "Vietnamese",
-    url: "https://gist.github.com/nclong87-awesome/6a5e3f4505055b969d636b461bc8bc85#file-0-libraries-json"
+    url: "https://gist.githubusercontent.com/nclong87-awesome/6a5e3f4505055b969d636b461bc8bc85/raw/2d9342aabb91f8800a0991fa37fa05aad48800ea/0-libraries.json"
   }
 ];
 
@@ -209,69 +209,18 @@ export function getWordLibrarySetById(id: string): WordLibrarySet | undefined {
 
 /**
  * Fetches and parses word array or JSON data from a library set URL.
- * Supports GitHub Gists (web and raw URLs) as well as direct HTTP JSON endpoints.
+ * Fetches directly from the given URL (e.g., raw Gist URL, S3, Worker, or direct JSON file endpoint).
  */
 export async function fetchWordLibrarySetData(url: string): Promise<any> {
-  const cleanUrl = (url || "").trim();
+  let cleanUrl = (url || "").trim();
   if (!cleanUrl) return [];
 
-  // Handle GitHub Gist web links (e.g. https://gist.github.com/user/gistId#file-filename-json)
-  if (cleanUrl.includes("gist.github.com") && !cleanUrl.includes("gist.githubusercontent.com")) {
-    const gistIdMatch = cleanUrl.match(/gist\.github\.com\/(?:[^\/]+\/)?([a-f0-9]+)/i);
-    if (gistIdMatch && gistIdMatch[1]) {
-      const gistId = gistIdMatch[1];
-      const apiUrl = `https://api.github.com/gists/${gistId}`;
-      const res = await fetch(apiUrl, {
-        headers: { Accept: "application/vnd.github+json" }
-      });
-
-      if (!res.ok) {
-        throw new Error(`GitHub Gist API error (HTTP ${res.status})`);
-      }
-
-      const gistData = await res.json();
-      if (!gistData.files) {
-        throw new Error("No files found in Gist");
-      }
-
-      let targetFileKey: string | null = null;
-      if (cleanUrl.includes("#file-")) {
-        const fileHash = cleanUrl.split("#file-")[1]?.toLowerCase() || "";
-        const cleanHash = fileHash.replace(/[^a-z0-9]/g, "");
-        for (const filename of Object.keys(gistData.files)) {
-          if (filename.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanHash) {
-            targetFileKey = filename;
-            break;
-          }
-        }
-      }
-
-      if (!targetFileKey) {
-        const fileKeys = Object.keys(gistData.files);
-        targetFileKey = fileKeys.find(k => k.endsWith(".json")) || fileKeys[0];
-      }
-
-      const fileObj = gistData.files[targetFileKey];
-      if (!fileObj) {
-        throw new Error("Target file not found in Gist");
-      }
-
-      let contentStr = fileObj.content;
-      if (!contentStr && fileObj.raw_url) {
-        const rawRes = await fetch(fileObj.raw_url);
-        contentStr = await rawRes.text();
-      }
-
-      if (!contentStr) {
-        throw new Error("Empty content in Gist file");
-      }
-
-      const parsed = JSON.parse(contentStr);
-      return parsed;
-    }
+  // If a Gist web link like https://gist.github.com/username/gistId (without raw) is passed, append /raw
+  if (cleanUrl.includes("gist.github.com") && !cleanUrl.includes("gist.githubusercontent.com") && !cleanUrl.includes("/raw")) {
+    cleanUrl = cleanUrl.replace(/\/$/, "") + "/raw";
   }
 
-  // Direct JSON fetch (GitHub Raw URL, Worker, S3, or Web URL)
+  // Direct fetch of the JSON file
   const res = await fetch(cleanUrl);
   if (!res.ok) {
     throw new Error(`Failed to download library data (HTTP ${res.status})`);
