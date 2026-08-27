@@ -141,6 +141,8 @@ export const viTranslations: LanguageTranslations = {
     library_modal_desc: "Các gói từ vựng chất lượng cao được tuyển chọn theo từng trình độ và mục tiêu học.",
     library_btn_import: "Nhập gói",
     library_btn_imported: "Đã nhập",
+    library_btn_view_words: "Xem danh sách từ",
+    library_modal_search_words: "Tìm kiếm từ vựng theo chính tả, bản dịch hoặc định nghĩa...",
     library_imported_badge: "Đã có trong bộ từ",
     library_search_placeholder: "Tìm kiếm bộ từ vựng theo tên, mã hoặc thẻ...",
     library_filter_all: "Tất cả thư viện",

@@ -141,6 +141,8 @@ export const enTranslations: LanguageTranslations = {
     library_modal_desc: "Curated word packages with comprehensive definitions, examples, and spaced repetition tracking.",
     library_btn_import: "Import",
     library_btn_imported: "Imported",
+    library_btn_view_words: "View",
+    library_modal_search_words: "Search words in package by spelling, translation, or definition...",
     library_imported_badge: "Already in Collection",
     library_search_placeholder: "Search word packages by name, ID, or tag...",
     library_filter_all: "All Libraries",

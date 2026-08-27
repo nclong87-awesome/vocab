@@ -857,8 +857,12 @@ function ChatMessageItem({
                   nativeLanguage={nativeLanguage}
                   appLanguage={currentAppLang}
                   showToast={showToast}
+                  onAddWord={onAddWord}
                   onAddMultipleWords={onAddMultipleWords}
                   onGenerateByTopic={onGenerateByTopic}
+                  words={words}
+                  ttsConfig={ttsConfig}
+                  llmConfig={llmConfig}
                 />
               )}
 

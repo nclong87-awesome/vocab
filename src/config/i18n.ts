@@ -148,6 +148,8 @@ export type TranslationKey =
   | "library_modal_desc"
   | "library_btn_import"
   | "library_btn_imported"
+  | "library_btn_view_words"
+  | "library_modal_search_words"
   | "library_imported_badge"
   | "library_search_placeholder"
   | "library_filter_all"

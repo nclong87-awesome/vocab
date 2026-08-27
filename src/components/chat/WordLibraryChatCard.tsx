@@ -3,6 +3,7 @@ import {
   BookOpen, 
   Check, 
   Download, 
+  Eye,
   RefreshCw,
   Search,
   Sparkles,
@@ -12,14 +13,20 @@ import { getWordLibrarySets, fetchWordLibrarySets, fetchWordLibrarySetData, Word
 import { getImportedLibraryIdsFromDB, saveImportedLibraryIdToDB } from "../../db/indexedDB";
 import { t } from "../../config/i18n";
 import { getLanguageFlag } from "../../config/languages";
+import { Word, LLMConfig, TTSConfig } from "../../types";
+import { LibraryWordListModal, LibraryWordItem } from "./LibraryWordListModal";
 
 interface WordLibraryChatCardProps {
   targetLanguage?: string;
   nativeLanguage?: string;
   appLanguage?: string;
   showToast?: (msg: string) => void;
+  onAddWord?: (word?: string, hint?: string) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
+  words?: Word[];
+  ttsConfig?: TTSConfig;
+  llmConfig?: LLMConfig;
 }
 
 export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
@@ -27,13 +34,24 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
   nativeLanguage,
   appLanguage = "en",
   showToast,
+  onAddWord,
   onAddMultipleWords,
   onGenerateByTopic,
+  words = [],
+  ttsConfig,
+  llmConfig,
 }) => {
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [isActionLoading, setIsActionLoading] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  // Modal Preview States
+  const [previewSet, setPreviewSet] = useState<WordLibrarySet | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+  const [previewWordsMap, setPreviewWordsMap] = useState<Record<string, LibraryWordItem[]>>({});
+  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const effectiveTarget = targetLanguage || localStorage.getItem("vocab_learner_target_lang") || "English";
   const effectiveNative = nativeLanguage || localStorage.getItem("vocab_learner_native_lang") || "Vietnamese";
@@ -161,6 +179,73 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
     } finally {
       setIsActionLoading((prev) => ({ ...prev, [set.id]: false }));
     }
+  };
+
+  const handleOpenViewWords = async (set: WordLibrarySet) => {
+    setPreviewSet(set);
+    setIsPreviewOpen(true);
+    setPreviewError(null);
+
+    if (previewWordsMap[set.id] && previewWordsMap[set.id].length > 0) {
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    try {
+      const fetchedData = await fetchWordLibrarySetData(set.url);
+      let rawItems: any[] = [];
+      if (Array.isArray(fetchedData)) {
+        rawItems = fetchedData;
+      } else if (fetchedData && typeof fetchedData === "object") {
+        rawItems = fetchedData.words || fetchedData.items || fetchedData.data || [];
+      }
+
+      const parsedWords = rawItems
+        .map((item: any): LibraryWordItem | null => {
+          const wordText = (item.word || "").trim();
+          if (!wordText) return null;
+          return {
+            word: wordText,
+            pronunciation: item.pronunciation || item.ipa || undefined,
+            partOfSpeech: item.partOfSpeech || item.pos || "noun",
+            definition: item.definition || item.meaning || "",
+            translation: item.translation || item.meaning || item.definition || wordText,
+            example: item.example || item.exampleSentence || undefined,
+            exampleTranslation: item.exampleTranslation || item.example_translation || undefined,
+            category: item.category || set.categoryLabel || set.name || "Library",
+            context: item.context || item.description || undefined,
+          };
+        })
+        .filter((w): w is LibraryWordItem => w !== null);
+
+      setPreviewWordsMap((prev) => ({ ...prev, [set.id]: parsedWords }));
+    } catch (err: any) {
+      console.error("Failed to load words for preview:", err);
+      setPreviewError(err?.message || "Failed to load vocabulary words from set.");
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleAddSingleWordFromModal = (item: LibraryWordItem) => {
+    if (onAddMultipleWords) {
+      onAddMultipleWords([
+        {
+          word: item.word,
+          pronunciation: item.pronunciation,
+          partOfSpeech: item.partOfSpeech || "noun",
+          definition: item.definition || "",
+          translation: item.translation || item.word,
+          example: item.example,
+          exampleTranslation: item.exampleTranslation,
+          category: item.category,
+          context: item.context,
+        },
+      ]);
+    } else if (onAddWord) {
+      onAddWord(item.word, item.translation || item.definition);
+    }
+    showToast?.(`Added "${item.word}" to your collection!`);
   };
 
   // Only get word library sets that match the user's target language and native language
@@ -381,8 +466,19 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
                     </div>
                   </div>
 
-                  {/* Right button */}
-                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1.5 shrink-0 pt-1.5 sm:pt-0">
+                  {/* Right buttons (View + Import/Imported) */}
+                  <div className="flex items-center justify-end gap-1.5 shrink-0 pt-1.5 sm:pt-0">
+                    <button
+                      type="button"
+                      id={`chat-lib-view-btn-${libSet.id}`}
+                      onClick={() => void handleOpenViewWords(libSet)}
+                      className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 bg-white hover:bg-stone-100 active:bg-stone-200 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold rounded-lg shadow-3xs transition-all cursor-pointer"
+                      title={`View words in "${libSet.name}"`}
+                    >
+                      <Eye className="w-3.5 h-3.5 text-stone-600" />
+                      <span>{t("library_btn_view_words", appLanguage) || "View"}</span>
+                    </button>
+
                     {isImported ? (
                       <button
                         type="button"
@@ -457,6 +553,28 @@ export const WordLibraryChatCard: React.FC<WordLibraryChatCardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Library Word List Modal Preview */}
+      <LibraryWordListModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        librarySet={previewSet}
+        wordsList={previewSet ? previewWordsMap[previewSet.id] || [] : []}
+        isLoading={isPreviewLoading}
+        error={previewError}
+        isImported={previewSet ? importedIds.includes(previewSet.id) : false}
+        isImportLoading={previewSet ? Boolean(isActionLoading[previewSet.id]) : false}
+        onImportClick={(set) => {
+          void handleImportClick(set);
+        }}
+        targetLanguage={effectiveTarget}
+        nativeLanguage={effectiveNative}
+        appLanguage={appLanguage}
+        wordsInCollection={words}
+        onAddSingleWord={handleAddSingleWordFromModal}
+        ttsConfig={ttsConfig}
+        llmConfig={llmConfig}
+      />
     </div>
   );
 };
