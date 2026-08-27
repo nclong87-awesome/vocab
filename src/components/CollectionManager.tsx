@@ -130,6 +130,13 @@ function CollectionManager({
     }
   }, [llmConfig, targetLanguage, nativeLanguage, onUpdateWords, words, onLlmApiError]);
 
+  const handleSingleWordUpdate = useCallback((updatedWord: Word) => {
+    if (onUpdateWords) {
+      const updatedWords = words.map(w => w.id === updatedWord.id ? updatedWord : w);
+      onUpdateWords(updatedWords);
+    }
+  }, [words, onUpdateWords]);
+
   // Filter and sort words by search query and selected sort mode (defaults to newest first)
   const filteredWords = useMemo(() => {
     // Map words with original array index for fallback ordering
@@ -409,6 +416,7 @@ function CollectionManager({
                         onDeleteWord={onDeleteWord}
                         brokenImageIds={brokenImageIds}
                         handleImageError={handleImageError}
+                        onUpdateWord={handleSingleWordUpdate}
                       />
                     ))}
                   </div>
@@ -426,6 +434,7 @@ function CollectionManager({
                         onDeleteWord={onDeleteWord}
                         brokenImageIds={brokenImageIds}
                         handleImageError={handleImageError}
+                        onUpdateWord={handleSingleWordUpdate}
                       />
                     ))}
                   </div>

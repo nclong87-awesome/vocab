@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, Image as ImageIcon, Plus, X, ExternalLink } from "lucide-react";
 import { Word } from "../../types";
-import { fetchWorkerImageUrl, getWorkerThreeImageUrls } from "../../utils/quizGenerator";
+import { fetchWorkerImageUrl, getWorkerThreeImageUrls, fetchThreeCandidateImageUrls } from "../../utils/quizGenerator";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 
@@ -40,6 +40,7 @@ function WordCard({
   const [newImageUrlInput, setNewImageUrlInput] = useState("");
   const [showAddImageInput, setShowAddImageInput] = useState(false);
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
 
   useEffect(() => {
     setLocalWord(initialWord);
@@ -84,12 +85,40 @@ function WordCard({
     handleModalWordUpdate(updatedWord);
   };
 
-  const handleRestoreDefaultImages = () => {
-    const defaultUrls: string[] = getWorkerThreeImageUrls(word.word);
+  const handleRestoreDefaultImages = async () => {
+    setIsGeneratingImages(true);
+    try {
+      const candidateUrls = await fetchThreeCandidateImageUrls(word.word);
+      const defaultUrls = candidateUrls.length > 0 ? candidateUrls : getWorkerThreeImageUrls(word.word);
+      const updatedWord: Word = {
+        ...word,
+        imageUrls: defaultUrls,
+        imageUrl: defaultUrls[0] || undefined,
+      };
+      handleModalWordUpdate(updatedWord);
+    } catch (err) {
+      console.error("Failed to generate candidate images:", err);
+      const defaultUrls = getWorkerThreeImageUrls(word.word);
+      const updatedWord: Word = {
+        ...word,
+        imageUrls: defaultUrls,
+        imageUrl: defaultUrls[0] || undefined,
+      };
+      handleModalWordUpdate(updatedWord);
+    } finally {
+      setIsGeneratingImages(false);
+    }
+  };
+
+  const handleResolveImageUrl = (oldUrl: string, resolvedUrl: string) => {
+    if (!oldUrl || !resolvedUrl || oldUrl === resolvedUrl) return;
+    const currentList = allImageUrls.length > 0 ? allImageUrls : [oldUrl];
+    const nextList = currentList.map((u) => (u === oldUrl ? resolvedUrl : u));
+    if (JSON.stringify(nextList) === JSON.stringify(currentList)) return;
     const updatedWord: Word = {
       ...word,
-      imageUrls: defaultUrls,
-      imageUrl: defaultUrls[0] || undefined,
+      imageUrls: nextList,
+      imageUrl: nextList[0] || resolvedUrl,
     };
     handleModalWordUpdate(updatedWord);
   };
@@ -310,6 +339,7 @@ function WordCard({
                     index={idx}
                     onPreview={(src) => setSelectedPreviewImage(src)}
                     onRemove={(src) => handleRemoveImageUrl(src)}
+                    onResolveUrl={handleResolveImageUrl}
                   />
                 ))}
               </div>
@@ -322,10 +352,11 @@ function WordCard({
                   <button
                     type="button"
                     onClick={handleRestoreDefaultImages}
-                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-amber-900 font-bold text-[10.5px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5"
+                    disabled={isGeneratingImages}
+                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-amber-900 font-bold text-[10.5px] rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    <RefreshCw className="w-3 h-3 text-amber-700" />
-                    <span>Generate Candidate Images</span>
+                    <RefreshCw className={`w-3 h-3 text-amber-700 ${isGeneratingImages ? "animate-spin" : ""}`} />
+                    <span>{isGeneratingImages ? "Generating Images..." : "Generate Candidate Images"}</span>
                   </button>
                 </div>
               )
@@ -403,9 +434,10 @@ interface WordCardImageItemProps {
   index: number;
   onPreview: (src: string) => void;
   onRemove: (src: string) => void;
+  onResolveUrl?: (oldUrl: string, resolvedUrl: string) => void;
 }
 
-function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove }: WordCardImageItemProps) {
+function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove, onResolveUrl }: WordCardImageItemProps) {
   const [resolvedSrc, setResolvedSrc] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [failed, setFailed] = useState<boolean>(false);
@@ -434,6 +466,9 @@ function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove }: Wor
       if (isMounted) {
         if (url) {
           setResolvedSrc(url);
+          if (onResolveUrl) {
+            onResolveUrl(imgUrl, url);
+          }
         } else {
           setFailed(true);
         }
@@ -444,7 +479,7 @@ function WordCardImageItem({ imgUrl, wordText, index, onPreview, onRemove }: Wor
     return () => {
       isMounted = false;
     };
-  }, [imgUrl, wordText, index]);
+  }, [imgUrl, wordText, index, onResolveUrl]);
 
   if (failed) {
     return (
