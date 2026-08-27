@@ -16,10 +16,11 @@ import {
   Clock,
   Filter,
   History,
-  Languages
+  Languages,
+  ArrowUpDown
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
-import { isWordEligibleForReview, isWordLearnedOrStudied } from "../utils/spacedRepetition";
+import { isWordEligibleForReview, isWordLearnedOrStudied, getWordCreationTimestamp } from "../utils/spacedRepetition";
 import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
 import { t } from "../config/i18n";
 import StrengthHistoryModal from "./analytics/StrengthHistoryModal";
@@ -54,6 +55,7 @@ export default function FlashcardsView({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
   const [filterCategory, setFilterCategory] = useState<"all" | "new" | "due" | "starred">("all");
+  const [sortBy, setSortBy] = useState<"smart" | "oldest" | "newest" | "alpha">("smart");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [showExampleTranslation, setShowExampleTranslation] = useState(false);
   const [expandedListTranslations, setExpandedListTranslations] = useState<Record<string, boolean>>({});
@@ -100,26 +102,60 @@ export default function FlashcardsView({
     }
 
     const list = subset.map((w, originalIndex) => ({ word: w, originalIndex }));
-    const getWordTimestamp = (w: Word, originalIndex: number): number => {
-      if (w.createdAt) {
-        const t = new Date(w.createdAt).getTime();
-        if (!isNaN(t) && t > 0) return t;
-      }
-      const match = w.id.match(/\d{10,13}/);
-      if (match) {
-        const parsed = parseInt(match[0], 10);
-        if (!isNaN(parsed) && parsed > 1000000000) return parsed;
-      }
-      return originalIndex;
-    };
+
     list.sort((a, b) => {
-      const tA = getWordTimestamp(a.word, a.originalIndex);
-      const tB = getWordTimestamp(b.word, b.originalIndex);
-      if (tA !== tB) return tB - tA;
-      return b.originalIndex - a.originalIndex;
+      const tA = getWordCreationTimestamp(a.word, a.originalIndex);
+      const tB = getWordCreationTimestamp(b.word, b.originalIndex);
+
+      if (sortBy === "oldest") {
+        if (tA !== tB) return tA - tB;
+        return a.originalIndex - b.originalIndex;
+      }
+
+      if (sortBy === "newest") {
+        if (tA !== tB) return tB - tA;
+        return b.originalIndex - a.originalIndex;
+      }
+
+      if (sortBy === "alpha") {
+        return a.word.word.localeCompare(b.word.word);
+      }
+
+      // Default "smart" mode:
+      // Priority 1: Starred & Due review items
+      // Priority 2: Unstudied words ordered chronologically FIFO (oldest added first, e.g. yesterday before today)
+      // Priority 3: Mastered / learned words
+      const isDueA = isWordEligibleForReview(a.word, now) && isWordLearnedOrStudied(a.word);
+      const isDueB = isWordEligibleForReview(b.word, now) && isWordLearnedOrStudied(b.word);
+      const isUnstudiedA = !isWordLearnedOrStudied(a.word);
+      const isUnstudiedB = !isWordLearnedOrStudied(b.word);
+
+      const rank = (isDue: boolean, isUnstudied: boolean, starred?: boolean) => {
+        if (starred && isDue) return 0;
+        if (isDue) return 1;
+        if (starred && isUnstudied) return 2;
+        if (isUnstudied) return 3;
+        return 4;
+      };
+
+      const rankA = rank(isDueA, isUnstudiedA, a.word.starred);
+      const rankB = rank(isDueB, isUnstudiedB, b.word.starred);
+
+      if (rankA !== rankB) return rankA - rankB;
+
+      // Within unstudied tier: oldest added first (FIFO) so yesterday's words come before today's
+      if (isUnstudiedA && isUnstudiedB) {
+        if (tA !== tB) return tA - tB;
+        return a.originalIndex - b.originalIndex;
+      }
+
+      // Within due tier or other: oldest created first
+      if (tA !== tB) return tA - tB;
+      return a.originalIndex - b.originalIndex;
     });
+
     return list.map(item => item.word);
-  }, [words, filterCategory]);
+  }, [words, filterCategory, sortBy]);
 
   const handleSelectFilter = (category: "all" | "new" | "due" | "starred") => {
     setFilterCategory(category);
@@ -243,53 +279,75 @@ export default function FlashcardsView({
         </div>
       </div>
 
-      {/* Category Filter Pills (All, New/Unstudied, Due Review, Starred) */}
-      <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-stone-100" id="flashcard-filter-tabs">
-        <button
-          onClick={() => handleSelectFilter("all")}
-          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-            filterCategory === "all"
-              ? "bg-stone-900 text-white shadow-xs"
-              : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
-          }`}
-        >
-          <Filter className="w-3.5 h-3.5" /> All Words ({filterCounts.all})
-        </button>
+      {/* Category Filter Pills and Sort Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-stone-100" id="flashcard-filter-tabs">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => handleSelectFilter("all")}
+            className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              filterCategory === "all"
+                ? "bg-stone-900 text-white shadow-xs"
+                : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" /> All Words ({filterCounts.all})
+          </button>
 
-        <button
-          onClick={() => handleSelectFilter("new")}
-          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-            filterCategory === "new"
-              ? "bg-amber-500 text-stone-950 shadow-xs"
-              : "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200"
-          }`}
-          title="Filter for newly added words that have not been studied yet"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-700 fill-amber-300" /> New / Unstudied ({filterCounts.new})
-        </button>
+          <button
+            onClick={() => handleSelectFilter("new")}
+            className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              filterCategory === "new"
+                ? "bg-amber-500 text-stone-950 shadow-xs"
+                : "bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200"
+            }`}
+            title="Filter for newly added words that have not been studied yet (prioritized oldest to newest)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-700 fill-amber-300" /> New / Unstudied ({filterCounts.new})
+          </button>
 
-        <button
-          onClick={() => handleSelectFilter("due")}
-          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-            filterCategory === "due"
-              ? "bg-stone-900 text-white shadow-xs"
-              : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
-          }`}
-          title="Filter for words scheduled for spaced repetition review"
-        >
-          <Clock className="w-3.5 h-3.5 text-stone-500" /> Due Review ({filterCounts.due})
-        </button>
+          <button
+            onClick={() => handleSelectFilter("due")}
+            className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              filterCategory === "due"
+                ? "bg-stone-900 text-white shadow-xs"
+                : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
+            }`}
+            title="Filter for words scheduled for spaced repetition review"
+          >
+            <Clock className="w-3.5 h-3.5 text-stone-500" /> Due Review ({filterCounts.due})
+          </button>
 
-        <button
-          onClick={() => handleSelectFilter("starred")}
-          className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-            filterCategory === "starred"
-              ? "bg-stone-900 text-white shadow-xs"
-              : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
-          }`}
-        >
-          <Star className="w-3.5 h-3.5 fill-current text-amber-400" /> Starred ({filterCounts.starred})
-        </button>
+          <button
+            onClick={() => handleSelectFilter("starred")}
+            className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              filterCategory === "starred"
+                ? "bg-stone-900 text-white shadow-xs"
+                : "bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200"
+            }`}
+          >
+            <Star className="w-3.5 h-3.5 fill-current text-amber-400" /> Starred ({filterCounts.starred})
+          </button>
+        </div>
+
+        {/* Sort Order Selector */}
+        <div className="flex items-center gap-1.5 self-end sm:self-auto text-xs" id="flashcard-sort-selector">
+          <ArrowUpDown className="w-3.5 h-3.5 text-stone-400" />
+          <select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value as any);
+              setCurrentIndex(0);
+              setIsFlipped(false);
+            }}
+            className="bg-white border border-stone-200 text-stone-700 text-xs px-2.5 py-1 font-medium focus:outline-none focus:border-stone-900 cursor-pointer"
+            title="Sort flashcard presentation order"
+          >
+            <option value="smart">Smart Backlog (Oldest Unstudied First)</option>
+            <option value="oldest">Oldest Added First (FIFO)</option>
+            <option value="newest">Newest Added First (LIFO)</option>
+            <option value="alpha">Alphabetical (A–Z)</option>
+          </select>
+        </div>
       </div>
 
       {viewMode === "card" ? (

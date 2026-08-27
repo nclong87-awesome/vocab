@@ -484,6 +484,36 @@ export function hasUnresolvedQuizMistake(word: Word): boolean {
 }
 
 /**
+ * Gets a reliable numerical creation timestamp for a word.
+ * Checks createdAt ISO string, regex match on ID, or falls back to original index.
+ */
+export function getWordCreationTimestamp(word: Word, fallbackIndex: number = 0): number {
+  if (word.createdAt) {
+    const t = new Date(word.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  const match = word.id.match(/\d{10,13}/);
+  if (match) {
+    const parsed = parseInt(match[0], 10);
+    if (!isNaN(parsed) && parsed > 1000000000) return parsed;
+  }
+  return fallbackIndex;
+}
+
+/**
+ * Sorts unstudied / new words chronologically in FIFO order (oldest created first).
+ * This ensures that a backlog of unreviewed words (e.g. added yesterday) is prioritized
+ * before newer words added today.
+ */
+export function sortUnstudiedWordsOldestFirst(words: Word[]): Word[] {
+  return [...words].sort((a, b) => {
+    const tA = getWordCreationTimestamp(a);
+    const tB = getWordCreationTimestamp(b);
+    return tA - tB;
+  });
+}
+
+/**
  * Checks whether a word is brand new and has never been studied/practiced.
  */
 export function isNewUnstudiedWord(word: Word): boolean {
@@ -550,12 +580,12 @@ export function getCandidateWordsForFlashcards(
     }
   }
 
-  // Shuffle within categories for variety
-  const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
+  // Prioritize unstudied words chronologically FIFO (oldest added first, e.g. yesterday before today)
+  const sortedNeverLearned = sortUnstudiedWordsOldestFirst(neverLearnedWords);
   const prioritized = [
-    ...shuffle(quizErrorWords),
-    ...shuffle(neverLearnedWords),
-    ...shuffle(srsDueWords),
+    ...quizErrorWords,
+    ...sortedNeverLearned,
+    ...srsDueWords,
   ];
 
   return prioritized.slice(0, count);

@@ -16,6 +16,7 @@ import {
   getQuizCandidates,
   getFlashcardCandidates,
   isWordLearnedOrStudied,
+  sortUnstudiedWordsOldestFirst,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
@@ -438,7 +439,8 @@ export function useChat({
 
     // --- SANDWICH LOOP STEP 1: Warm-up Flashcards ---
     if (practiceMode === "balanced") {
-      const unstudiedWords = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+      const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+      const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
       let warmupCandidates: Word[] = [];
 
       if (unstudiedWords.length > 0) {
@@ -571,7 +573,8 @@ export function useChat({
       return;
     }
 
-    const unstudiedWords = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+    const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+    const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
 
     // Determine if we should launch Quiz mode (only for quiz_only)
