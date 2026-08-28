@@ -233,6 +233,8 @@ export const jaTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **正解です！**\n\n「{questionTitle}」の正解は **「{answer}」** です。",
     chat_quiz_feedback_incorrect_msg: "❌ **不正解です！**\n\n正解は: **「{answer}」** (あなたの回答: 「{userAnswer}」)。",
     chat_quiz_word_details: "\n\n*単語*: **{word}** ({partOfSpeech})\n*発音*: `{pronunciation}`\n*翻訳*: 「{translation}」",
+    chat_quiz_sentence_details: "\n*例文*: 「{sentence}」\n*例文訳*: 「{sentenceTranslation}」",
+    chat_quiz_sentence_only: "\n*例文*: 「{sentence}」",
     chat_quiz_speech_correct: "正解です！答えは {answer} です。",
     chat_quiz_speech_incorrect: "不正解です！正解は {answer} です。",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **クイズ完了！**\n\nスコアは **{total} 問中 {score} 問正解** ({accuracy}%) でした。\n\n統計情報を更新し、単語の記憶定着度を調整しました！お疲れ様でした。\n\n次は何を学びますか？",

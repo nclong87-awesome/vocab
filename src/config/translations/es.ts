@@ -233,6 +233,8 @@ export const esTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **¡Correcto!**\n\nLa respuesta a \"{questionTitle}\" es **\"{answer}\"**.",
     chat_quiz_feedback_incorrect_msg: "❌ **¡Incorrecto!**\n\nLa respuesta correcta es: **\"{answer}\"** (tu respuesta: \"{userAnswer}\").",
     chat_quiz_word_details: "\n\n*Palabra*: **{word}** ({partOfSpeech})\n*Pronunciación*: `{pronunciation}`\n*Traducción*: \"{translation}\"",
+    chat_quiz_sentence_details: "\n*Frase*: \"{sentence}\"\n*Traducción de la frase*: \"{sentenceTranslation}\"",
+    chat_quiz_sentence_only: "\n*Frase*: \"{sentence}\"",
     chat_quiz_speech_correct: "¡Correcto! La respuesta es {answer}",
     chat_quiz_speech_incorrect: "¡Incorrecto! La respuesta correcta es {answer}",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **¡Cuestionario completado!**\n\nHas acertado **{score} de {total}** ({accuracy}%).\n\n¡He actualizado tus estadísticas y ajustado los niveles de retención de las palabras! Todo listo.\n\n¿Qué te gustaría aprender a continuación?",

@@ -878,6 +878,50 @@ export function useChat({
       }
     }
 
+    // Determine complete sentence and its translation to display in feedback
+    let resolvedSentence = currentQ.sentence;
+    if (!resolvedSentence) {
+      const qText = currentQ.question || "";
+      if (currentQ.type === "sentence" || /_{2,}|\[blank\]|\.\.\./i.test(qText)) {
+        const cleanQ = qText
+          .replace(/^Fill in the blank (?:for the sentence)?:\s*/i, "")
+          .replace(/^["“]|["”]$/g, "")
+          .trim();
+        if (/_{2,}|\[blank\]|\.\.\./i.test(cleanQ)) {
+          resolvedSentence = cleanQ.replace(/_{2,}|\[blank\]|\.\.\./gi, currentQ.correctAnswer);
+        } else {
+          resolvedSentence = cleanQ;
+        }
+      } else if (targetWordObj?.example) {
+        resolvedSentence = targetWordObj.example;
+      }
+    }
+
+    if (resolvedSentence) {
+      // Highlight/bold the target word in the sentence if not already formatted with bold
+      if (!resolvedSentence.includes("**")) {
+        const escapedWord = currentQ.correctAnswer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const wordRegex = new RegExp(`\\b(${escapedWord})\\b`, "i");
+        if (wordRegex.test(resolvedSentence)) {
+          resolvedSentence = resolvedSentence.replace(wordRegex, "**$1**");
+        }
+      }
+      resolvedSentence = resolvedSentence.replace(/^["“]|["”]$/g, "").trim();
+
+      const resolvedSentenceTranslation = (currentQ.sentenceTranslation || targetWordObj?.exampleTranslation || "").replace(/^["“]|["”]$/g, "").trim();
+
+      if (resolvedSentenceTranslation) {
+        feedback += t("chat_quiz_sentence_details", currentAppLang, {
+          sentence: resolvedSentence,
+          sentenceTranslation: resolvedSentenceTranslation,
+        });
+      } else {
+        feedback += t("chat_quiz_sentence_only", currentAppLang, {
+          sentence: resolvedSentence,
+        });
+      }
+    }
+
     const nextIndex = activeQuiz.currentIndex + 1;
 
     if (nextIndex < activeQuiz.questions.length) {

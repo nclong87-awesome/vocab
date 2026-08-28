@@ -271,6 +271,8 @@ export const viTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **Chính xác!**\n\nĐáp án cho câu hỏi là **\"{answer}\"**.",
     chat_quiz_feedback_incorrect_msg: "❌ **Chưa chính xác!**\n\nĐáp án đúng: **\"{answer}\"** (câu trả lời của bạn: \"{userAnswer}\").",
     chat_quiz_word_details: "\n\n*Từ*: **{word}** ({partOfSpeech})\n*Phát âm*: `{pronunciation}`\n*Bản dịch*: \"{translation}\"",
+    chat_quiz_sentence_details: "\n*Câu hoàn chỉnh*: \"{sentence}\"\n*Dịch câu*: \"{sentenceTranslation}\"",
+    chat_quiz_sentence_only: "\n*Câu hoàn chỉnh*: \"{sentence}\"",
     chat_quiz_speech_correct: "Chính xác! Đáp án là {answer}",
     chat_quiz_speech_incorrect: "Chưa chính xác! Đáp án đúng là {answer}",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Hoàn thành bài kiểm tra!**\n\nBạn đạt **{score} / {total}** ({accuracy}%).\n\nTôi đã cập nhật thống kê và điều chỉnh độ ghi nhớ từ vựng cho bạn! Tất cả đã sẵn sàng.\n\nBạn muốn học gì tiếp theo?",

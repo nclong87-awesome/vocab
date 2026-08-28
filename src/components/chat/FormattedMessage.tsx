@@ -8,8 +8,8 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
   const parts: (string | React.ReactNode)[] = [];
   let index = 0;
   
-  // Combine bolding and code highlights
-  const tokenRegex = /(\*\*|`)(.*?)\1/g;
+  // Combine bolding, code highlights, and italics
+  const tokenRegex = /(\*\*|`|\*)(.*?)\1/g;
   let match: RegExpExecArray | null;
   
   while ((match = tokenRegex.exec(safeText)) !== null) {
@@ -25,6 +25,8 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
       parts.push(<strong key={match.index} className="font-bold text-stone-950 bg-stone-100/40 px-0.5 rounded">{content}</strong>);
     } else if (type === "`") {
       parts.push(<code key={match.index} className="px-1 py-0.5 bg-stone-100 rounded text-amber-700 font-mono text-xs sm:text-sm font-semibold">{content}</code>);
+    } else if (type === "*") {
+      parts.push(<em key={match.index} className="italic text-stone-700 font-medium not-italic-labels">{content}</em>);
     }
     
     index = tokenRegex.lastIndex;
@@ -250,6 +252,28 @@ function FormattedMessage({
           <h3 key={i} className="text-lg font-bold text-stone-900 pt-3 pb-1 border-b border-stone-100">
             {parseInlineMarkdown(line.trim().substring(3))}
           </h3>
+        );
+      }
+
+      // Handle Sentence line with audio button
+      const sentenceLineMatch = line.match(/^\s*\*(?:Sentence|Câu hoàn chỉnh|Câu mẫu|例文|Frase|Vollständiger Satz|完整例句|완성된 문장|Phrase complète)\*:\s*(?:\*\*)?["“]?([^"”\n\r]+)["”]?/i);
+      if (sentenceLineMatch && onPlayAudio) {
+        const rawSentence = sentenceLineMatch[1].replace(/\*\*/g, "").trim();
+        return (
+          <div key={i} className="flex items-center gap-1.5 flex-wrap my-0.5">
+            <p className="text-stone-800 m-0">{parseInlineMarkdown(line)}</p>
+            {rawSentence && (
+              <button
+                type="button"
+                onClick={() => onPlayAudio(rawSentence)}
+                className="p-1 rounded-md bg-stone-100 hover:bg-amber-100 hover:border-amber-400 text-stone-700 hover:text-amber-950 border border-stone-200/80 transition-all cursor-pointer shadow-3xs inline-flex items-center justify-center shrink-0 active:scale-95 ml-0.5"
+                title="Listen to sentence"
+                aria-label="Listen to sentence"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-amber-700" />
+              </button>
+            )}
+          </div>
         );
       }
 

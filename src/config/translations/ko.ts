@@ -233,6 +233,8 @@ export const koTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **정답입니다!**\n\n\"{questionTitle}\"의 답은 **\"{answer}\"**입니다.",
     chat_quiz_feedback_incorrect_msg: "❌ **틀렸습니다!**\n\n정답: **\"{answer}\"** (회원님의 답: \"{userAnswer}\").",
     chat_quiz_word_details: "\n\n*단어*: **{word}** ({partOfSpeech})\n*발음*: `{pronunciation}`\n*번역*: \"{translation}\"",
+    chat_quiz_sentence_details: "\n*완성된 문장*: \"{sentence}\"\n*문장 번역*: \"{sentenceTranslation}\"",
+    chat_quiz_sentence_only: "\n*완성된 문장*: \"{sentence}\"",
     chat_quiz_speech_correct: "정답입니다! 정답은 {answer}입니다.",
     chat_quiz_speech_incorrect: "틀렸습니다! 정답은 {answer}입니다.",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **퀴즈 완료!**\n\n성적은 **{total}문제 중 {score}문제 정답** ({accuracy}%)입니다.\n\n통계 정보를 업데이트하고 단어의 기억 정착도를 조정했습니다! 모두 완료되었습니다.\n\n다음엔 무엇을 학습하시겠습니까?",

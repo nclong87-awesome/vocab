@@ -2467,6 +2467,9 @@ STRICT GENERATION RULES & RESTRICTIONS:
    - Exactly 4 unique options per question (1 correct answer + 3 distractors).
 3. Question Types (mix across questions):
    - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'" (Ensure unambiguous single correct answer with distinct collocation/preposition cues).
+     * For 'sentence' questions, you MUST also provide:
+       - 'sentence': The full, complete sentence in ${targetLanguage} with the target word filled in.
+       - 'sentenceTranslation': The natural, complete sentence translation in ${nativeLanguage}.
    - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
    - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words).
    - 'picture': "Which word matches the visual concept shown below?" (set 'imageKeyword' to a concise 1-3 word English search term representing a concrete, physical object or scene).
@@ -2493,6 +2496,8 @@ Output MUST be strictly valid JSON matching this schema:
       "options": ["string", "string", "string", "string"],
       "correctAnswer": "string (MUST be exactly the target word itself matching the 'word' field)",
       "hint": "string",
+      "sentence": "string (for sentence-type questions, provide the complete sentence in ${targetLanguage} with the target word)",
+      "sentenceTranslation": "string (for sentence-type questions, provide the full sentence translation in ${nativeLanguage})",
       "imageKeyword": "string (1-3 word English search term)"
     }
   ],
@@ -2514,7 +2519,7 @@ Output MUST be strictly valid JSON matching this schema:
     `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n` +
     `5. Include up to 3 suggested companion words ('suggestedWords' array, max 3) derived directly from the candidates actually used in the quiz questions, specifically selecting meaningful incorrect answer options (distractors) presented in the quiz (such as 'freighter' or other options found in the distractors).`;
 
-  const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword) and suggestedWords (array of up to 3 items with word, translation, pairedWith, hint derived from quiz distractors/options).`;
+  const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword) and suggestedWords (array of up to 3 items with word, translation, pairedWith, hint derived from quiz distractors/options).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2716,6 +2721,21 @@ Output MUST be strictly valid JSON matching this schema:
           imgUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
         }
 
+        let resolvedSentence = q.sentence || (matchingWord.example ? matchingWord.example : undefined);
+        if (!resolvedSentence && (q.type === 'sentence' || /_{2,}|\[blank\]|\.\.\./i.test(q.question || ""))) {
+          const cleanedQ = (q.question || "")
+            .replace(/^Fill in the blank (?:for the sentence)?:\s*/i, "")
+            .replace(/^["“]|["”]$/g, "")
+            .trim();
+          if (/_{2,}|\[blank\]|\.\.\./i.test(cleanedQ)) {
+            resolvedSentence = cleanedQ.replace(/_{2,}|\[blank\]|\.\.\./gi, correctAns);
+          } else {
+            resolvedSentence = cleanedQ;
+          }
+        }
+
+        const resolvedSentenceTranslation = q.sentenceTranslation || matchingWord.exampleTranslation || undefined;
+
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
@@ -2725,6 +2745,8 @@ Output MUST be strictly valid JSON matching this schema:
           options: cleanOptions.sort(() => 0.5 - Math.random()),
           correctAnswer: correctAns,
           hint: q.hint || matchingWord.pronunciation,
+          sentence: resolvedSentence,
+          sentenceTranslation: resolvedSentenceTranslation,
           imageKeyword: keywordText,
           imageUrl: imgUrl,
           suggestedWords: idx === 0 ? normalizedTop3Suggestions : undefined

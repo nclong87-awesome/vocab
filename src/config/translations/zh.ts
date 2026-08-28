@@ -233,6 +233,8 @@ export const zhTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **回答正确！**\n\n“{questionTitle}”的答案是 **“{answer}”**。",
     chat_quiz_feedback_incorrect_msg: "❌ **回答错误！**\n\n正确答案是: **“{answer}”** (您的回答: “{userAnswer}”)。",
     chat_quiz_word_details: "\n\n*词汇*: **{word}** ({partOfSpeech})\n*读音*: `{pronunciation}`\n*翻译*: “{translation}”",
+    chat_quiz_sentence_details: "\n*完整例句*: “{sentence}”\n*例句翻译*: “{sentenceTranslation}”",
+    chat_quiz_sentence_only: "\n*完整例句*: “{sentence}”",
     chat_quiz_speech_correct: "回答正确！答案是 {answer}",
     chat_quiz_speech_incorrect: "回答错误！正确答案是 {answer}",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **测验已完成！**\n\n您的得分是 **{score} / {total}** (正确率 {accuracy}%)。\n\n我已更新您的统计数据并调整了词汇的记忆强度！一切就绪。\n\n接下来您想学点什么？",

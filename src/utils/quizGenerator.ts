@@ -286,6 +286,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options,
       correctAnswer,
       hint: hintText,
+      sentence: word.example,
+      sentenceTranslation: word.exampleTranslation,
       imageKeyword,
       imageUrl,
       imageUrls: word.imageUrls

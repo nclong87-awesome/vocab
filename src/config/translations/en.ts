@@ -271,6 +271,8 @@ export const enTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **Correct!**\n\nThe answer to \"{questionTitle}\" is **\"{answer}\"**.",
     chat_quiz_feedback_incorrect_msg: "❌ **Incorrect!**\n\nCorrect answer: **\"{answer}\"** (your answer: \"{userAnswer}\").",
     chat_quiz_word_details: "\n\n*Word*: **{word}** ({partOfSpeech})\n*Pronunciation*: `{pronunciation}`\n*Translation*: \"{translation}\"",
+    chat_quiz_sentence_details: "\n*Sentence*: \"{sentence}\"\n*Sentence Translation*: \"{sentenceTranslation}\"",
+    chat_quiz_sentence_only: "\n*Sentence*: \"{sentence}\"",
     chat_quiz_speech_correct: "Correct! The answer is {answer}",
     chat_quiz_speech_incorrect: "Incorrect! Correct answer: {answer}",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Quiz Completed!**\n\nYou scored **{score} out of {total}** ({accuracy}%).\n\nI have updated your statistics and adjusted word learning strength values! All set.\n\nWhat would you like to learn next?",

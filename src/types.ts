@@ -154,6 +154,8 @@ export interface QuizQuestion {
   options?: string[]; // For multiple choice
   correctAnswer: string;
   hint?: string;
+  sentence?: string; // Complete sentence with target word
+  sentenceTranslation?: string; // Full sentence translation in native language
   imageKeyword?: string;
   imageUrl?: string;
   imageUrls?: string[];

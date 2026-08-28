@@ -274,6 +274,8 @@ export type TranslationKey =
   | "chat_quiz_feedback_correct_msg"
   | "chat_quiz_feedback_incorrect_msg"
   | "chat_quiz_word_details"
+  | "chat_quiz_sentence_details"
+  | "chat_quiz_sentence_only"
   | "chat_quiz_speech_correct"
   | "chat_quiz_speech_incorrect"
   | "chat_quiz_finished_msg"

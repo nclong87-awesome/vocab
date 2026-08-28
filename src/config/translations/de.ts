@@ -233,6 +233,8 @@ export const deTranslations: LanguageTranslations = {
     chat_quiz_feedback_correct_msg: "🎉 **Richtig!**\n\nDie Antwort auf „{questionTitle}“ ist **„{answer}“**.",
     chat_quiz_feedback_incorrect_msg: "❌ **Falsch!**\n\nRichtige Antwort: **„{answer}“** (Ihre Antwort: „{userAnswer}“).",
     chat_quiz_word_details: "\n\n*Wort*: **{word}** ({partOfSpeech})\n*Aussprache*: `{pronunciation}`\n*Übersetzung*: „{translation}“",
+    chat_quiz_sentence_details: "\n*Vollständiger Satz*: „{sentence}“\n*Satzübersetzung*: „{sentenceTranslation}“",
+    chat_quiz_sentence_only: "\n*Vollständiger Satz*: „{sentence}“",
     chat_quiz_speech_correct: "Richtig! Die Antwort ist {answer}",
     chat_quiz_speech_incorrect: "Falsch! Die richtige Antwort ist {answer}",
     chat_quiz_finished_msg: "{feedback}\n\n---\n\n🏆 **Quiz abgeschlossen!**\n\nSie haben **{score} von {total}** Fragen richtig beantwortet ({accuracy}%).\n\nIch habe Ihre Statistiken aktualisiert und die Gedächtnisstärke der Wörter angepasst! Alles bereit.\n\nWas möchten Sie als Nächstes lernen?",
