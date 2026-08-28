@@ -699,6 +699,7 @@ export interface LLMResponseWithMeta {
 export interface LLMCallOptions {
   skipHistory?: boolean;
   skipMetrics?: boolean;
+  action?: string;
 }
 
 // Client-side LLM invocation returning text plus provider and model metadata
@@ -767,7 +768,8 @@ export async function callLLMClientSideWithMeta(
           rawResponse: text,
           responseTimeMs: candidateDuration,
           status: "success",
-          statusCode: 200
+          statusCode: 200,
+          action: options?.action
         }).catch(() => undefined);
       }
 
@@ -803,7 +805,8 @@ export async function callLLMClientSideWithMeta(
           responseTimeMs: candidateDuration,
           status: "error",
           statusCode: err?.statusCode || 500,
-          errorMessage: err?.userMessage || err?.message || String(err)
+          errorMessage: err?.userMessage || err?.message || String(err),
+          action: options?.action
         }).catch(() => undefined);
       }
 
@@ -840,7 +843,8 @@ export async function callLLMClientSideWithMeta(
         rawResponse: text,
         responseTimeMs: singleDuration,
         status: "success",
-        statusCode: 200
+        statusCode: 200,
+        action: options?.action
       }).catch(() => undefined);
     }
 
@@ -871,7 +875,8 @@ export async function callLLMClientSideWithMeta(
         responseTimeMs: singleDuration,
         status: "error",
         statusCode: err?.statusCode || 500,
-        errorMessage: err?.userMessage || err?.message || String(err)
+        errorMessage: err?.userMessage || err?.message || String(err),
+        action: options?.action
       }).catch(() => undefined);
     }
 
@@ -3139,7 +3144,7 @@ Output MUST be strictly valid JSON matching this schema:
     let metaModel: string | undefined;
 
     if (isStaticHost()) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal, { action: "Flashcards" });
       rawResultText = resWithMeta.text;
       metaProvider = resWithMeta.provider;
       metaModel = resWithMeta.model;
@@ -3157,6 +3162,20 @@ Output MUST be strictly valid JSON matching this schema:
           const prov = data.provider || llmConfig?.provider || "gemini";
           const mod = data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
           recordModelResponse(prov, mod, duration);
+
+          logApiRequest({
+            provider: prov,
+            model: mod,
+            prompt,
+            systemInstruction,
+            schemaDescription: schemaDesc,
+            response: JSON.stringify(data),
+            responseTimeMs: duration,
+            status: "success",
+            statusCode: 200,
+            action: "Flashcards"
+          }).catch(() => undefined);
+
           const rawCards = Array.isArray(data.cards) ? data.cards : Array.isArray(data) ? data : [];
           const cards: FlashcardItem[] = rawCards.map((card: any, idx: number) => {
             const orig = wordsList[idx] || wordsList.find(w => w.word.toLowerCase().trim() === card.word?.toLowerCase().trim()) || fallbackCards[idx];
@@ -3194,7 +3213,7 @@ Output MUST be strictly valid JSON matching this schema:
           };
         }
       }
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal, { action: "Flashcards" });
       rawResultText = resWithMeta.text;
       metaProvider = resWithMeta.provider;
       metaModel = resWithMeta.model;

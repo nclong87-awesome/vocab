@@ -27,39 +27,137 @@ export function detectActionCategory(
 
   const combined = `${prompt || ""} ${systemInstruction || ""} ${schemaDescription || ""}`.toLowerCase();
 
-  if (combined.includes("status\": \"connected\"") || combined.includes("test assistant") || combined.includes("connection successful")) {
+  // 1. Connection test
+  if (
+    combined.includes('status": "connected"') || 
+    combined.includes("test assistant") || 
+    combined.includes("connection successful") ||
+    combined.includes("/api/test-llm")
+  ) {
     return "Connection Test";
   }
-  if (combined.includes("fix grammar") || combined.includes("polish sentence") || combined.includes("language coach") || combined.includes("fixedsentence")) {
-    return "Grammar Polish";
-  }
-  if (combined.includes("quiz") || combined.includes("generate multiple choice") || combined.includes("quizquestion")) {
-    return "AI Quiz";
-  }
-  if (combined.includes("provide detailed vocabulary learning material") || combined.includes("autofill") || combined.includes("suggestedwords")) {
-    return "Autofill Word";
-  }
-  if (combined.includes("sense detection") || combined.includes("multiple senses") || combined.includes("checkworddefinitions") || combined.includes("senses\": [")) {
-    return "Sense Lookup";
-  }
-  if (combined.includes("practical vocabulary words") || combined.includes("topic") || combined.includes("generaterandomwords")) {
-    return "Topic Vocabulary";
-  }
-  if (combined.includes("image") || combined.includes("photo") || combined.includes("visual")) {
-    return "Image Analysis";
-  }
-  if (combined.includes("casual reply") || combined.includes("suggestcasualreply")) {
-    return "Casual Reply";
-  }
-  if (combined.includes("flashcard") || combined.includes("flashcards")) {
+
+  // 2. Flashcards (prioritized above generic dictionary/vocab matching)
+  if (
+    combined.includes("flashcard") || 
+    combined.includes("flashcards") || 
+    combined.includes("generate interactive study flashcards") ||
+    combined.includes("study flashcard") ||
+    combined.includes("study card for") ||
+    combined.includes("/api/generate-flashcard") ||
+    combined.includes("/api/generate-flashcards")
+  ) {
     return "Flashcards";
   }
-  if (combined.includes("overallassessment") || combined.includes("performance") || combined.includes("coach")) {
+
+  // 3. AI Quiz
+  if (
+    combined.includes("generate-quiz") ||
+    combined.includes("/api/generate-quiz") ||
+    combined.includes("quizquestion") || 
+    combined.includes("assessment specializing") || 
+    combined.includes("quiz question") ||
+    combined.includes("generate multiple choice") ||
+    combined.includes("distractor") ||
+    (combined.includes("quiz") && !combined.includes("chat"))
+  ) {
+    return "AI Quiz";
+  }
+
+  // 4. Grammar Polish
+  if (
+    combined.includes("fix grammar") || 
+    combined.includes("polish sentence") || 
+    combined.includes("language coach") || 
+    combined.includes("fixedsentence") ||
+    combined.includes("fix-grammar") ||
+    combined.includes("/api/fix-grammar")
+  ) {
+    return "Grammar Polish";
+  }
+
+  // 5. Image Analysis
+  if (
+    combined.includes("image-vocab") || 
+    combined.includes("analyze this image") || 
+    combined.includes("analyze photographs and visual media") || 
+    combined.includes("analyze the attached conversation screenshot") ||
+    combined.includes("imagedescription") ||
+    combined.includes("computer vision") ||
+    combined.includes("image-analysis")
+  ) {
+    return "Image Analysis";
+  }
+
+  // 6. Sense Detection / Multiple Definition Senses
+  if (
+    combined.includes("detect-word-senses") ||
+    combined.includes("check-word-definitions") ||
+    combined.includes("sense detection") || 
+    combined.includes("multiple senses") || 
+    combined.includes("checkworddefinitions") || 
+    combined.includes('senses": [') ||
+    combined.includes("hasmultiplesenses")
+  ) {
+    return "Sense Lookup";
+  }
+
+  // 7. Topic Vocabulary / Random Words Generation
+  if (
+    combined.includes("generate-topic-words") ||
+    combined.includes("generaterandomwords") ||
+    combined.includes("practical vocabulary words") || 
+    combined.includes("words related to the topic") ||
+    combined.includes("generate random words") ||
+    combined.includes("generate-words-by-topic")
+  ) {
+    return "Topic Vocabulary";
+  }
+
+  // 8. Casual Reply Suggestions
+  if (
+    combined.includes("suggest-casual-reply") ||
+    combined.includes("suggest-reply") ||
+    combined.includes("casual reply") || 
+    combined.includes("suggestcasualreply") ||
+    combined.includes("suggest natural casual replies")
+  ) {
+    return "Casual Reply";
+  }
+
+  // 9. Performance Coach / Analytics
+  if (
+    combined.includes("overallassessment") || 
+    combined.includes("analyze-performance") ||
+    combined.includes("performance coach") || 
+    combined.includes("vocabulary analyst") ||
+    combined.includes("student performance data")
+  ) {
     return "Performance Coach";
   }
-  if (combined.includes("chat") || combined.includes("conversation") || combined.includes("assistant")) {
+
+  // 10. Autofill Word / Dictionary Lookup
+  if (
+    combined.includes("autofill-word") ||
+    combined.includes("provide detailed vocabulary learning material") || 
+    combined.includes("multilingual dictionary database engine") ||
+    combined.includes("detailed vocabulary learning material") ||
+    combined.includes("autofill") ||
+    combined.includes("dictionary lookup")
+  ) {
+    return "Autofill Word";
+  }
+
+  // 11. Chat Message
+  if (
+    combined.includes("chat") || 
+    combined.includes("conversation") || 
+    combined.includes("assistant") ||
+    combined.includes("suggestedactions")
+  ) {
     return "Chat Message";
   }
+
   return "LLM Query";
 }
 
