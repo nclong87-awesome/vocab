@@ -696,13 +696,19 @@ export interface LLMResponseWithMeta {
   responseTimeMs?: number;
 }
 
+export interface LLMCallOptions {
+  skipHistory?: boolean;
+  skipMetrics?: boolean;
+}
+
 // Client-side LLM invocation returning text plus provider and model metadata
 export async function callLLMClientSideWithMeta(
   prompt: string, 
   systemInstruction: string, 
   schemaDescription: string,
   llmConfig?: LLMConfig,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: LLMCallOptions
 ): Promise<LLMResponseWithMeta> {
   const provider = llmConfig?.provider || "auto";
 
@@ -745,21 +751,25 @@ export async function callLLMClientSideWithMeta(
         }
       }
 
-      recordModelResponse(candidate.provider, candidate.model, candidateDuration);
+      if (!options?.skipMetrics) {
+        recordModelResponse(candidate.provider, candidate.model, candidateDuration);
+      }
 
-      // Record successful request/response history log
-      logApiRequest({
-        provider: candidate.provider,
-        model: candidate.model,
-        prompt,
-        systemInstruction,
-        schemaDescription,
-        response: text,
-        rawResponse: text,
-        responseTimeMs: candidateDuration,
-        status: "success",
-        statusCode: 200
-      }).catch(() => undefined);
+      if (!options?.skipHistory) {
+        // Record successful request/response history log
+        logApiRequest({
+          provider: candidate.provider,
+          model: candidate.model,
+          prompt,
+          systemInstruction,
+          schemaDescription,
+          response: text,
+          rawResponse: text,
+          responseTimeMs: candidateDuration,
+          status: "success",
+          statusCode: 200
+        }).catch(() => undefined);
+      }
 
       return {
         text,
@@ -773,25 +783,29 @@ export async function callLLMClientSideWithMeta(
       }
       const candidateDuration = Date.now() - candidateStartTime;
       console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking dynamically.`);
-      recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
-      lockModel(candidate.provider, candidate.model, 3600000, err?.message || String(err));
+      if (!options?.skipMetrics) {
+        recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
+        lockModel(candidate.provider, candidate.model, 3600000, err?.message || String(err));
+      }
 
       const rawResp = err?.rawResponse || (typeof err?.response === 'string' ? err.response : "") || "";
 
-      // Record failed request/response history log
-      logApiRequest({
-        provider: candidate.provider,
-        model: candidate.model,
-        prompt,
-        systemInstruction,
-        schemaDescription,
-        response: rawResp || err?.userMessage || err?.message || String(err),
-        rawResponse: rawResp || undefined,
-        responseTimeMs: candidateDuration,
-        status: "error",
-        statusCode: err?.statusCode || 500,
-        errorMessage: err?.userMessage || err?.message || String(err)
-      }).catch(() => undefined);
+      if (!options?.skipHistory) {
+        // Record failed request/response history log
+        logApiRequest({
+          provider: candidate.provider,
+          model: candidate.model,
+          prompt,
+          systemInstruction,
+          schemaDescription,
+          response: rawResp || err?.userMessage || err?.message || String(err),
+          rawResponse: rawResp || undefined,
+          responseTimeMs: candidateDuration,
+          status: "error",
+          statusCode: err?.statusCode || 500,
+          errorMessage: err?.userMessage || err?.message || String(err)
+        }).catch(() => undefined);
+      }
 
       err.provider = candidate.provider;
       err.model = candidate.model;
@@ -810,21 +824,25 @@ export async function callLLMClientSideWithMeta(
   try {
     const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig, signal);
     const singleDuration = Date.now() - singleStartTime;
-    recordModelResponse(activeProvider, activeModel, singleDuration);
+    if (!options?.skipMetrics) {
+      recordModelResponse(activeProvider, activeModel, singleDuration);
+    }
 
-    // Record successful single request/response history log
-    logApiRequest({
-      provider: activeProvider,
-      model: activeModel,
-      prompt,
-      systemInstruction,
-      schemaDescription,
-      response: text,
-      rawResponse: text,
-      responseTimeMs: singleDuration,
-      status: "success",
-      statusCode: 200
-    }).catch(() => undefined);
+    if (!options?.skipHistory) {
+      // Record successful single request/response history log
+      logApiRequest({
+        provider: activeProvider,
+        model: activeModel,
+        prompt,
+        systemInstruction,
+        schemaDescription,
+        response: text,
+        rawResponse: text,
+        responseTimeMs: singleDuration,
+        status: "success",
+        statusCode: 200
+      }).catch(() => undefined);
+    }
 
     return {
       text,
@@ -834,24 +852,28 @@ export async function callLLMClientSideWithMeta(
     };
   } catch (err: any) {
     const singleDuration = Date.now() - singleStartTime;
-    recordModelFailure(activeProvider, activeModel, err?.message || String(err), singleDuration);
+    if (!options?.skipMetrics) {
+      recordModelFailure(activeProvider, activeModel, err?.message || String(err), singleDuration);
+    }
 
     const rawResp = err?.rawResponse || (typeof err?.response === 'string' ? err.response : "") || "";
 
-    // Record failed single request/response history log
-    logApiRequest({
-      provider: activeProvider,
-      model: activeModel,
-      prompt,
-      systemInstruction,
-      schemaDescription,
-      response: rawResp || err?.userMessage || err?.message || String(err),
-      rawResponse: rawResp || undefined,
-      responseTimeMs: singleDuration,
-      status: "error",
-      statusCode: err?.statusCode || 500,
-      errorMessage: err?.userMessage || err?.message || String(err)
-    }).catch(() => undefined);
+    if (!options?.skipHistory) {
+      // Record failed single request/response history log
+      logApiRequest({
+        provider: activeProvider,
+        model: activeModel,
+        prompt,
+        systemInstruction,
+        schemaDescription,
+        response: rawResp || err?.userMessage || err?.message || String(err),
+        rawResponse: rawResp || undefined,
+        responseTimeMs: singleDuration,
+        status: "error",
+        statusCode: err?.statusCode || 500,
+        errorMessage: err?.userMessage || err?.message || String(err)
+      }).catch(() => undefined);
+    }
 
     throw err;
   }
@@ -863,9 +885,10 @@ export async function callLLMClientSide(
   systemInstruction: string, 
   schemaDescription: string,
   llmConfig?: LLMConfig,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: LLMCallOptions
 ): Promise<string> {
-  const res = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+  const res = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig, signal, options);
   return res.text;
 }
 
@@ -1229,7 +1252,14 @@ Output MUST be strictly JSON format: {"query": "search_query_here"}`;
   const schemaDescription = '{\n  "query": "string"\n}';
 
   try {
-    const rawText = await callLLMClientSide(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+    const rawText = await callLLMClientSide(
+      prompt,
+      systemInstruction,
+      schemaDescription,
+      llmConfig,
+      signal,
+      { skipHistory: true, skipMetrics: true }
+    );
     const parsed = cleanAndParseJson(rawText);
     if (parsed && typeof parsed === "object" && typeof parsed.query === "string" && parsed.query.trim()) {
       return parsed.query.trim();
