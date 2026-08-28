@@ -1070,6 +1070,7 @@ function ChatMessageItem({
                   {isConfirmSave && (
                     <WordAddGalleryPreview
                       word={currentPayload}
+                      llmConfig={llmConfig}
                       onImagesChange={(updatedUrls) => {
                         setCustomActionPayloads((prev) => ({
                           ...prev,
