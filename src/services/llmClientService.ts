@@ -2259,6 +2259,7 @@ export interface ChatMessageRequest {
   targetLanguage: string;
   nativeLanguage: string;
   llmConfig?: LLMConfig;
+  wordContext?: Partial<Word> | null;
   signal?: AbortSignal;
 }
 
@@ -2277,7 +2278,7 @@ export interface ChatMessageResult {
 }
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
-  const { messages, targetLanguage, nativeLanguage, llmConfig, signal } = params;
+  const { messages, targetLanguage, nativeLanguage, llmConfig, wordContext, signal } = params;
   notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
@@ -2286,11 +2287,33 @@ export async function sendChatMessageService(params: ChatMessageRequest): Promis
     .map((m: any) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
     .join("\n");
 
+  let wordContextInstruction = "";
+  if (wordContext && typeof wordContext === "object" && wordContext.word) {
+    wordContextInstruction = `\n\nTARGET FLASHCARD / VOCABULARY FOCUS:
+You are currently providing focused language coaching for the word "${wordContext.word}".
+- Target Word: "${wordContext.word}"
+- Part of Speech: "${wordContext.partOfSpeech || "N/A"}"
+- IPA Pronunciation: "${wordContext.pronunciation || "N/A"}"
+- Target Language Definition: "${wordContext.definition || "N/A"}"
+- Native Translation (${nativeLanguage}): "${wordContext.translation || "N/A"}"
+- Category/Topic: "${wordContext.category || "General"}"
+- Real-world Usage Context: "${wordContext.context || "N/A"}"
+- Example Sentence: "${wordContext.example || "N/A"}"
+- Example Translation: "${wordContext.exampleTranslation || "N/A"}"
+${Array.isArray(wordContext.suggestedWords) && wordContext.suggestedWords.length > 0 ? `- Common Collocations / Paired Words: ${JSON.stringify(wordContext.suggestedWords)}` : ""}
+
+CRITICAL FLASHCARD VOCABULARY COACHING INSTRUCTIONS:
+- Directly and accurately answer all user questions about this specific word ("${wordContext.word}"), its grammar, prepositions, collocations, nuances, distinctions from synonyms, etymology, and conversation practice.
+- Ensure all explanations incorporate these specific details, and maintain seamless continuity with the full conversation history.
+- When generating example sentences, highlight "${wordContext.word}" in bold (**${wordContext.word}**).
+- Provide interactive response options or follow-up practice prompts in "suggestedActions" where appropriate!`;
+  }
+
   const prompt = `Below is the recent conversation history between the User and you (the Assistant):\n\n${chatHistoryStr}\n\nAssistant, formulate your next helpful response. Ensure to check if the user is interested in practicing or adding words, and attach appropriate suggestedActions.`;
 
   const systemInstruction = `You are an elite, highly encouraging AI Language Coach and Vocabulary Assistant.
 Your mission is to help the user master their target language "${targetLanguage}" from their native language "${nativeLanguage}".
-You speak in a warm, welcoming, and linguistically precise tone.
+You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}
 
 CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 1. **Explain Grammar Rules**:
@@ -2372,7 +2395,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     const res = await fetchWithTimeout("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig }),
+      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig, wordContext }),
       signal
     });
 

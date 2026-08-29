@@ -9,15 +9,17 @@ import {
   History,
   Languages,
   BookOpen,
+  MessageSquare,
   X
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
-import { getProviderBadgeStyle, formatResponseTime } from "../../utils/llmHelpers";
 import { speakText, stopSpeech, getLanguageCode } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
 import { areWordsEquivalent } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import WordDetailsModal from "../deckManager/WordDetailsModal";
+import WordChatModal from "./WordChatModal";
+import LlmResponseMetadata from "./LlmResponseMetadata";
 import FlashcardRandomImage, { getWordImageUrls } from "../common/FlashcardRandomImage";
 
 interface FlashcardMessageCardProps {
@@ -74,6 +76,7 @@ function FlashcardMessageCard({
   const [viewMode, setViewMode] = useState<"deck" | "grid">("deck");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedDetailsWord, setSelectedDetailsWord] = useState<Word | null>(null);
+  const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
   const [expandedTranslations, setExpandedTranslations] = useState<Record<string, boolean>>({});
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
@@ -406,25 +409,34 @@ function FlashcardMessageCard({
               );
             })()}
 
-            {/* Bottom Word Display Area Buttons: Strength History & Word Details */}
-            <div className="flex items-center justify-end gap-2 pt-2.5 border-t border-stone-200/70">
+            {/* Bottom Word Display Area Buttons: History, Details, Ask AI */}
+            <div className="flex items-center justify-end gap-1.5 pt-2.5 border-t border-stone-200/70 overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => setSelectedHistoryWord(getWordObjectForCard(currentCard))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                 title={`View Strength History for "${currentCard.word}"`}
               >
                 <History className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>Strength History</span>
+                <span>History</span>
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedDetailsWord(getWordObjectForCard(currentCard))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                 title={`View Word Details for "${currentCard.word}"`}
               >
                 <BookOpen className="w-3.5 h-3.5 text-stone-600 shrink-0" />
-                <span>Word Details</span>
+                <span>Details</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedChatWord(getWordObjectForCard(currentCard))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 hover:border-indigo-300 text-indigo-800 hover:text-indigo-950 transition-colors text-xs font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                title={`Ask AI about "${currentCard.word}"`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span>Ask AI</span>
               </button>
             </div>
           </div>
@@ -594,12 +606,12 @@ function FlashcardMessageCard({
                       </div>
                     )}
 
-                    {/* Bottom Word Display Area Buttons: Strength History & Word Details */}
-                    <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-stone-200/60">
+                    {/* Bottom Word Display Area Buttons: History, Details, Ask AI */}
+                    <div className="flex items-center justify-end gap-1 pt-2 border-t border-stone-200/60 overflow-x-auto no-scrollbar">
                       <button
                         type="button"
                         onClick={() => setSelectedHistoryWord(getWordObjectForCard(card))}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                         title={`View Strength History for "${card.word}"`}
                       >
                         <History className="w-3 h-3 text-amber-600 shrink-0" />
@@ -608,11 +620,20 @@ function FlashcardMessageCard({
                       <button
                         type="button"
                         onClick={() => setSelectedDetailsWord(getWordObjectForCard(card))}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-stone-200 bg-white hover:bg-stone-100 hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-stone-200 bg-white hover:bg-stone-100 hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                         title={`View Word Details for "${card.word}"`}
                       >
                         <BookOpen className="w-3 h-3 text-stone-600 shrink-0" />
                         <span>Details</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChatWord(getWordObjectForCard(card))}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-300 text-indigo-800 hover:text-indigo-950 transition-colors text-[11px] font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                        title={`Ask AI about "${card.word}"`}
+                      >
+                        <MessageSquare className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span>Ask AI</span>
                       </button>
                     </div>
                   </div>
@@ -624,37 +645,12 @@ function FlashcardMessageCard({
       )}
 
       {/* AI Metadata Footer */}
-      {(provider || model || responseTimeMs !== undefined) && (
-        <div className="px-4 py-2 bg-stone-50/80 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-1.5 flex-nowrap whitespace-nowrap min-w-0 w-full overflow-hidden">
-          <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden shrink">
-            {provider && (() => {
-              const style = getProviderBadgeStyle(provider);
-              return (
-                <span className={`text-[10px] px-2 py-0.5 rounded-md border shadow-2xs font-semibold shrink-0 ${style.bg} ${style.text} ${style.border}`}>
-                  {style.label}
-                </span>
-              );
-            })()}
-            {model && (
-              <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-white px-1.5 py-0.5 rounded border border-stone-200/60 truncate min-w-0 max-w-[130px] sm:max-w-[220px]" title={model}>
-                {model}
-              </span>
-            )}
-          </div>
-          {responseTimeMs !== undefined && (() => {
-            const rt = formatResponseTime(responseTimeMs);
-            return (
-              <div 
-                className={`flex items-center gap-1 shrink-0 text-[10.5px] px-2 py-0.5 rounded-md border shadow-2xs font-mono ${rt.style}`}
-                title={`AI Response Time: ${responseTimeMs}ms (${rt.badgeText})`}
-              >
-                <span>{rt.icon}</span>
-                <span>{rt.text}</span>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      <LlmResponseMetadata
+        provider={provider}
+        model={model}
+        responseTimeMs={responseTimeMs}
+        className="px-4 py-2 bg-stone-50/80 border-t border-stone-100"
+      />
 
       {/* Strength History Modal */}
       <AnimatePresence>
@@ -682,6 +678,44 @@ function FlashcardMessageCard({
             onUpdateWord={(updated) => {
               setSelectedDetailsWord(updated);
               handleModalWordUpdate(updated);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Free Chat AI Modal */}
+      <AnimatePresence>
+        {selectedChatWord && (
+          <WordChatModal
+            word={selectedChatWord}
+            isOpen={Boolean(selectedChatWord)}
+            onClose={() => setSelectedChatWord(null)}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
+            appLanguage={currentAppLang}
+            onAddWord={(newWord) => {
+              if (onUpdateWords && words) {
+                const fullWord: Word = {
+                  id: `word_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  word: newWord.word || "",
+                  definition: newWord.definition || "",
+                  translation: newWord.translation || "",
+                  pronunciation: newWord.pronunciation || "",
+                  partOfSpeech: newWord.partOfSpeech || "noun",
+                  example: newWord.example || "",
+                  exampleTranslation: newWord.exampleTranslation || "",
+                  category: newWord.category || "General",
+                  learned: false,
+                  starred: false,
+                  createdAt: new Date().toISOString(),
+                  lastReviewed: null,
+                  strength: 0,
+                  nextReviewDate: new Date().toISOString()
+                };
+                onUpdateWords([...words, fullWord]);
+              }
             }}
           />
         )}

@@ -25,9 +25,14 @@ export const WORD_LIBRARY_SETS: (WordLibrarySet | WordLibraryIndexSource)[] = [
   /* English Target Libraries (Universal & Vietnamese-tailored)                */
   /* -------------------------------------------------------------------------- */
   {
-    targetLanguage: "*",
-    nativeLanguage: "*",
+    targetLanguage: "english",
+    nativeLanguage: "vietnamese",
     url: "https://gist.githubusercontent.com/nclong87-awesome/6a5e3f4505055b969d636b461bc8bc85/raw/0-libraries.json"
+  },
+  {
+    targetLanguage: "chinese",
+    nativeLanguage: "vietnamese",
+    url: "https://gist.githubusercontent.com/nclong87-awesome/b6727d9676bae1041f8dff23c1d29ccf/raw/0-libraries.json"
   }
 ];
 

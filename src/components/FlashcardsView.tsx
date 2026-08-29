@@ -19,6 +19,7 @@ import {
   Languages, 
   ArrowUpDown,
   BookOpen,
+  MessageSquare,
   X
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
@@ -27,6 +28,7 @@ import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLangu
 import { t } from "../config/i18n";
 import StrengthHistoryModal from "./analytics/StrengthHistoryModal";
 import WordDetailsModal from "./deckManager/WordDetailsModal";
+import WordChatModal from "./chat/WordChatModal";
 import FlashcardRandomImage from "./common/FlashcardRandomImage";
 
 interface FlashcardsViewProps {
@@ -64,6 +66,7 @@ export default function FlashcardsView({
   const [sortBy, setSortBy] = useState<"smart" | "oldest" | "newest" | "alpha">("smart");
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedDetailsWord, setSelectedDetailsWord] = useState<Word | null>(null);
+  const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
   const [showExampleTranslation, setShowExampleTranslation] = useState(false);
   const [expandedListTranslations, setExpandedListTranslations] = useState<Record<string, boolean>>({});
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
@@ -532,19 +535,19 @@ export default function FlashcardsView({
                       </AnimatePresence>
                     </div>
 
-                    {/* Bottom Word Display Area Buttons: Strength History & Word Details */}
-                    <div className="flex items-center justify-center sm:justify-end gap-2 pt-2.5 pb-1 border-t border-stone-100 z-10">
+                    {/* Bottom Word Display Area Buttons: History, Details, Ask AI */}
+                    <div className="flex items-center justify-center sm:justify-end gap-1.5 pt-2.5 pb-1 border-t border-stone-100 z-10 overflow-x-auto no-scrollbar">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedHistoryWord(currentWord);
                         }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-stone-50/80 hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-stone-50/80 hover:bg-amber-50 hover:border-amber-300 text-stone-700 hover:text-amber-900 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                         title="View Strength History"
                       >
                         <History className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Strength History</span>
+                        <span>History</span>
                       </button>
                       <button
                         type="button"
@@ -552,11 +555,23 @@ export default function FlashcardsView({
                           e.stopPropagation();
                           setSelectedDetailsWord(currentWord);
                         }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-stone-50/80 hover:bg-white hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-stone-200 bg-stone-50/80 hover:bg-white hover:border-stone-400 text-stone-700 hover:text-stone-950 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                         title="View Word Details"
                       >
                         <BookOpen className="w-3.5 h-3.5 text-stone-600 shrink-0" />
-                        <span>Word Details</span>
+                        <span>Details</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedChatWord(currentWord);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 hover:border-indigo-300 text-indigo-800 hover:text-indigo-950 transition-all text-xs font-semibold shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                        title="Ask AI about this word"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>Ask AI</span>
                       </button>
                     </div>
 
@@ -704,6 +719,16 @@ export default function FlashcardsView({
                       <BookOpen className="w-4 h-4 text-stone-600" />
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedChatWord(w);
+                      }}
+                      className="p-1.5 rounded-lg border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer shadow-2xs bg-white"
+                      title="Free Chat with AI"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => speakWord(w.word)}
                       className="p-1.5 rounded-lg border border-stone-200 hover:border-stone-400 text-stone-600 hover:text-stone-900 transition-colors cursor-pointer bg-white shadow-2xs"
                       title="Speak"
@@ -782,6 +807,44 @@ export default function FlashcardsView({
               if (onUpdateWords) {
                 const nextWords = words.map((w) => (w.id === updated.id ? updated : w));
                 onUpdateWords(nextWords);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Free Chat AI Modal */}
+      <AnimatePresence>
+        {selectedChatWord && (
+          <WordChatModal
+            word={selectedChatWord}
+            isOpen={Boolean(selectedChatWord)}
+            onClose={() => setSelectedChatWord(null)}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
+            appLanguage={appLanguage}
+            onAddWord={(newWord) => {
+              if (onUpdateWords) {
+                const fullWord: Word = {
+                  id: `word_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                  word: newWord.word || "",
+                  definition: newWord.definition || "",
+                  translation: newWord.translation || "",
+                  pronunciation: newWord.pronunciation || "",
+                  partOfSpeech: newWord.partOfSpeech || "noun",
+                  example: newWord.example || "",
+                  exampleTranslation: newWord.exampleTranslation || "",
+                  category: newWord.category || "General",
+                  learned: false,
+                  starred: false,
+                  createdAt: new Date().toISOString(),
+                  lastReviewed: null,
+                  strength: 0,
+                  nextReviewDate: new Date().toISOString()
+                };
+                onUpdateWords([...words, fullWord]);
               }
             }}
           />
