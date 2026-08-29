@@ -213,12 +213,26 @@ You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
         signal: controller.signal
       });
 
+      const filteredSuggestedActions = (res.suggestedActions || []).filter((act: any) => {
+        if (!act) return false;
+        if (act.action === "start_practice") return false;
+        const label = (act.label || "").toLowerCase();
+        if (label.includes("quiz") || label.includes("practice")) return false;
+        return true;
+      });
+
+      let cleanText = res.text || "I'm sorry, I couldn't formulate a response. Please try asking again.";
+      cleanText = cleanText
+        .replace(/,\s*practice with a short quiz,?/gi, "")
+        .replace(/or practice with a short quiz\??/gi, "")
+        .replace(/practice with a short quiz,?\s*/gi, "");
+
       const assistantMessage: ChatItem = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: res.text || "I'm sorry, I couldn't formulate a response. Please try asking again.",
+        content: cleanText,
         timestamp: new Date().toISOString(),
-        suggestedActions: res.suggestedActions as any,
+        suggestedActions: filteredSuggestedActions as any,
         provider: res.provider,
         model: res.model,
         responseTimeMs: res.responseTimeMs

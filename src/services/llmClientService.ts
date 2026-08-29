@@ -2306,7 +2306,9 @@ CRITICAL FLASHCARD VOCABULARY COACHING INSTRUCTIONS:
 - Directly and accurately answer all user questions about this specific word ("${wordContext.word}"), its grammar, prepositions, collocations, nuances, distinctions from synonyms, etymology, and conversation practice.
 - Ensure all explanations incorporate these specific details, and maintain seamless continuity with the full conversation history.
 - When generating example sentences, highlight "${wordContext.word}" in bold (**${wordContext.word}**).
-- Provide interactive response options or follow-up practice prompts in "suggestedActions" where appropriate!`;
+- ABSOLUTELY NO QUIZZES OR PRACTICE TESTS: Do NOT offer, mention, or suggest quizzes, test questions, practice tests, "Start a quick practice", or "practice with a short quiz" in this dialog.
+- Do NOT ask the user if they want to practice with a quiz. Instead, offer choices like exploring nuances, seeing more examples, asking follow-up questions, or adding related vocabulary.
+- Do NOT include "start_practice" or quiz/practice actions in suggestedActions.`;
   }
 
   const prompt = `Below is the recent conversation history between the User and you (the Assistant):\n\n${chatHistoryStr}\n\nAssistant, formulate your next helpful response. Ensure to check if the user is interested in practicing or adding words, and attach appropriate suggestedActions.`;
