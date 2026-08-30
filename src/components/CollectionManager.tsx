@@ -418,6 +418,11 @@ function CollectionManager({
                         handleImageError={handleImageError}
                         onUpdateWord={handleSingleWordUpdate}
                         llmConfig={llmConfig}
+                        targetLanguage={targetLanguage}
+                        nativeLanguage={nativeLanguage}
+                        ttsConfig={ttsConfig}
+                        words={words}
+                        onAddWord={_onAddWord ? (wText, hint) => _onAddWord({ word: wText, hint: hint || "" } as any) : undefined}
                       />
                     ))}
                   </div>
@@ -436,6 +441,12 @@ function CollectionManager({
                         brokenImageIds={brokenImageIds}
                         handleImageError={handleImageError}
                         onUpdateWord={handleSingleWordUpdate}
+                        llmConfig={llmConfig}
+                        targetLanguage={targetLanguage}
+                        nativeLanguage={nativeLanguage}
+                        ttsConfig={ttsConfig}
+                        words={words}
+                        onAddWord={_onAddWord ? (wText, hint) => _onAddWord({ word: wText, hint: hint || "" } as any) : undefined}
                       />
                     ))}
                   </div>

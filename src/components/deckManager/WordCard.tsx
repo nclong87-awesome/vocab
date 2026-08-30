@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages } from "lucide-react";
-import { Word, LLMConfig } from "../../types";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, MessageSquare } from "lucide-react";
+import { Word, LLMConfig, TTSConfig } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 import { WordImageGallery } from "../common/WordImageGallery";
+import WordChatModal from "../chat/WordChatModal";
 
 interface WordCardProps {
   key?: React.Key;
@@ -20,6 +21,11 @@ interface WordCardProps {
   handleImageError: (wordId: string) => void;
   onUpdateWord?: (updatedWord: Word) => void;
   llmConfig?: LLMConfig;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  ttsConfig?: TTSConfig;
+  words?: Word[];
+  onAddWord?: (word: string, hint?: string) => void;
 }
 
 function WordCard({
@@ -34,10 +40,16 @@ function WordCard({
   brokenImageIds: _brokenImageIds,
   handleImageError: _handleImageError,
   onUpdateWord,
-  llmConfig
+  llmConfig,
+  targetLanguage = "English",
+  nativeLanguage = "Vietnamese",
+  ttsConfig,
+  words,
+  onAddWord,
 }: WordCardProps) {
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
 
   useEffect(() => {
@@ -91,6 +103,17 @@ function WordCard({
                 title="Listen Pronunciation"
               >
                 <Volume2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowChatModal(true);
+                }}
+                className="p-1.5 rounded-md text-indigo-600 hover:text-indigo-950 hover:bg-indigo-50 transition-all cursor-pointer"
+                title="Ask AI about this word"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
@@ -264,6 +287,23 @@ function WordCard({
             word={word}
             onClose={() => setShowHistoryModal(false)}
             onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showChatModal && (
+          <WordChatModal
+            word={word}
+            isOpen={showChatModal}
+            onClose={() => setShowChatModal(false)}
+            targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            onAddWord={onAddWord ? (w) => onAddWord(w.word || "", w.definition || w.translation) : undefined}
+            onUpdateWord={handleModalWordUpdate}
+            words={words}
           />
         )}
       </AnimatePresence>

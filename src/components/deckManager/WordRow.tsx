@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon } from "lucide-react";
-import { Word } from "../../types";
+import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon, MessageSquare } from "lucide-react";
+import { Word, LLMConfig, TTSConfig } from "../../types";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
+import WordChatModal from "../chat/WordChatModal";
 
 interface WordRowProps {
   key?: React.Key;
@@ -16,6 +17,12 @@ interface WordRowProps {
   brokenImageIds: Set<string>;
   handleImageError: (wordId: string) => void;
   onUpdateWord?: (updatedWord: Word) => void;
+  llmConfig?: LLMConfig;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  ttsConfig?: TTSConfig;
+  words?: Word[];
+  onAddWord?: (word: string, hint?: string) => void;
 }
 
 function WordRow({
@@ -28,10 +35,17 @@ function WordRow({
   onDeleteWord,
   brokenImageIds: _brokenImageIds,
   handleImageError: _handleImageError,
-  onUpdateWord
+  onUpdateWord,
+  llmConfig,
+  targetLanguage = "English",
+  nativeLanguage = "Vietnamese",
+  ttsConfig,
+  words,
+  onAddWord,
 }: WordRowProps) {
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
 
   const word = localWord || initialWord;
 
@@ -120,6 +134,17 @@ function WordRow({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                setShowChatModal(true);
+              }}
+              className="p-1.5 rounded-md text-indigo-600 hover:text-indigo-950 hover:bg-indigo-50 transition-all cursor-pointer"
+              title="Ask AI about this word"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 setShowHistoryModal(true);
               }}
               className="p-1.5 rounded-md text-amber-700 hover:text-amber-950 hover:bg-white transition-all cursor-pointer"
@@ -188,6 +213,23 @@ function WordRow({
             word={word}
             onClose={() => setShowHistoryModal(false)}
             onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showChatModal && (
+          <WordChatModal
+            word={word}
+            isOpen={showChatModal}
+            onClose={() => setShowChatModal(false)}
+            targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            onAddWord={onAddWord ? (w) => onAddWord(w.word || "", w.definition || w.translation) : undefined}
+            onUpdateWord={handleModalWordUpdate}
+            words={words}
           />
         )}
       </AnimatePresence>

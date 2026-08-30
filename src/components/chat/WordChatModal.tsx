@@ -30,6 +30,8 @@ interface WordChatModalProps {
   nativeLanguage?: string;
   appLanguage?: string;
   onAddWord?: (word: Partial<Word>) => void;
+  onUpdateWord?: (updatedWord: Word) => void;
+  words?: Word[];
 }
 
 interface ChatItem {
@@ -74,10 +76,24 @@ export default function WordChatModal({
   // Initialize conversation when word changes or modal opens
   useEffect(() => {
     if (word && isOpen) {
-      const welcomeText = `Hello! How can I help you with the word **${word.word}**${word.translation ? ` (*${word.translation}*)` : ""}?
+      const isSentence = Boolean(
+        word.category === "Grammar & Expression" ||
+        word.id?.startsWith("sentence-") ||
+        (word.word && word.word.trim().split(/\s+/).length > 3 && !word.partOfSpeech)
+      );
+      const isReply = Boolean(
+        word.category === "Conversation Reply" ||
+        word.id?.startsWith("reply-")
+      );
+      const isQuizFeedback = Boolean(
+        word.category === "Quiz Recommendation" ||
+        word.id?.startsWith("quiz-")
+      );
+
+      let welcomeText = `Hello! How can I help you with the word **${word.word}**${word.translation ? ` (*${word.translation}*)` : ""}?
 You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
 
-      const initialSuggestedActions = [
+      let initialSuggestedActions: any[] = [
         {
           label: `💡 3 conversation examples`,
           action: "send_message" as const,
@@ -94,6 +110,68 @@ You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
           payload: { message: `What are common synonyms for "${word.word}" and how do they differ in nuance?` }
         }
       ];
+
+      if (isSentence) {
+        welcomeText = `Hello! Let's explore this polished sentence: **"${word.word}"**${word.translation ? ` (*${word.translation}*)` : ""}.
+You can ask about grammar structures, nuances, formal vs casual phrasing, or conversational contexts.`;
+        initialSuggestedActions = [
+          {
+            label: `🔍 Explain grammar & edits`,
+            action: "send_message" as const,
+            payload: { message: `Explain the grammar improvements and word choice in this sentence: "${word.word}".` }
+          },
+          {
+            label: `🎭 Formal vs Casual variations`,
+            action: "send_message" as const,
+            payload: { message: `Give me 2 more casual and 2 more formal ways to express this sentence: "${word.word}".` }
+          },
+          {
+            label: `💬 2 short conversation dialogues`,
+            action: "send_message" as const,
+            payload: { message: `Create 2 short natural dialogues where this sentence ("${word.word}") is spoken.` }
+          }
+        ];
+      } else if (isReply) {
+        welcomeText = `Hello! Let's explore this suggested reply: **"${word.word}"**${word.translation ? ` (*${word.translation}*)` : ""}.
+You can ask about its tone, when to use it, or how to adapt it for different people.`;
+        initialSuggestedActions = [
+          {
+            label: `🎭 Tone & nuance breakdown`,
+            action: "send_message" as const,
+            payload: { message: `What is the exact tone and nuance of saying "${word.word}", and in what situations is it best used?` }
+          },
+          {
+            label: `✨ 3 situational variations`,
+            action: "send_message" as const,
+            payload: { message: `Give me 3 slight variations of this reply ("${word.word}") for close friends vs. polite acquaintances.` }
+          },
+          {
+            label: `❓ How would a native follow up?`,
+            action: "send_message" as const,
+            payload: { message: `If I say "${word.word}", what would a native speaker likely reply in return?` }
+          }
+        ];
+      } else if (isQuizFeedback) {
+        welcomeText = `Hello! Let's explore the quiz vocabulary **${word.word}**${word.translation ? ` (*${word.translation}*)` : ""}.
+${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage in questions, collocations, or memory tips.`;
+        initialSuggestedActions = [
+          {
+            label: `💡 3 natural example sentences`,
+            action: "send_message" as const,
+            payload: { message: `Give me 3 realistic sentences demonstrating how to use "${word.word}".` }
+          },
+          {
+            label: `🔗 Collocations & pairings`,
+            action: "send_message" as const,
+            payload: { message: `What are the most common prepositions, verbs, and nouns that pair with "${word.word}"?` }
+          },
+          {
+            label: `🧠 Memory mnemonic or tip`,
+            action: "send_message" as const,
+            payload: { message: `Give me a memorable tip or mnemonic to easily remember "${word.word}".` }
+          }
+        ];
+      }
 
       setMessages([
         {
@@ -276,6 +354,20 @@ You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
     }
   };
 
+  const isSentence = Boolean(
+    word.category === "Grammar & Expression" ||
+    word.id?.startsWith("sentence-") ||
+    (word.word && word.word.trim().split(/\s+/).length > 3 && !word.partOfSpeech)
+  );
+  const isReply = Boolean(
+    word.category === "Conversation Reply" ||
+    word.id?.startsWith("reply-")
+  );
+  const isQuizFeedback = Boolean(
+    word.category === "Quiz Recommendation" ||
+    word.id?.startsWith("quiz-")
+  );
+
   return createPortal(
     <motion.div
       role="dialog"
@@ -303,21 +395,39 @@ You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 id="word-chat-title" className="text-base sm:text-lg font-bold text-stone-900 tracking-tight truncate">
-                {word.word}
+                {isSentence ? "Polished Sentence" : isReply ? "Suggested Reply" : isQuizFeedback ? "Quiz Feedback" : word.word}
               </h2>
-              {word.partOfSpeech && (
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
+              {isSentence ? (
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                  Grammar & Polish
+                </span>
+              ) : isReply ? (
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                  Casual Reply
+                </span>
+              ) : isQuizFeedback ? (
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                  Quiz Review
+                </span>
+              ) : word.partOfSpeech ? (
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 font-mono">
                   {word.partOfSpeech}
                 </span>
-              )}
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-stone-500 truncate">
-              {word.pronunciation && (
-                <span className="font-mono text-stone-500">{word.pronunciation}</span>
-              )}
-              {word.translation && (
-                <span className="text-stone-700 font-medium truncate">• {word.translation}</span>
+              {isSentence || isReply || isQuizFeedback ? (
+                <span className="text-stone-700 font-medium truncate font-serif italic">"{word.word}"</span>
+              ) : (
+                <>
+                  {word.pronunciation && (
+                    <span className="font-mono text-stone-500">{word.pronunciation}</span>
+                  )}
+                  {word.translation && (
+                    <span className="text-stone-700 font-medium truncate">• {word.translation}</span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -478,30 +588,88 @@ You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
         <div className="max-w-3xl w-full mx-auto space-y-2">
           {/* Quick suggestions scroll */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
-            <button
-              type="button"
-              onClick={() => handleSendMessage(`How do native speakers use "${word.word}" in casual conversation vs formal writing?`)}
-              disabled={isTyping}
-              className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-            >
-              Casual vs Formal
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSendMessage(`What are common mistakes learners make when using "${word.word}"?`)}
-              disabled={isTyping}
-              className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-            >
-              Common Mistakes
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSendMessage(`Give me a mnemonic or memory trick to easily remember "${word.word}".`)}
-              disabled={isTyping}
-              className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-            >
-              Memory Trick
-            </button>
+            {isSentence ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`Break down the key grammar points and structural nuances in this sentence: "${word.word}".`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Grammar Breakdown
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`How can I modify this sentence ("${word.word}") to sound natural in business vs casual texting?`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Casual vs Formal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`Give me 3 alternative ways to express the same thought as: "${word.word}".`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Alternative Phrasings
+                </button>
+              </>
+            ) : isReply ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`Explain the tone and polite implications of replying with: "${word.word}".`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Tone & Nuance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`How do I make this reply ("${word.word}") friendlier or more enthusiastic?`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  More Friendly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`What would a native speaker say right after this reply ("${word.word}")?`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Follow-up Replies
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`How do native speakers use "${word.word}" in casual conversation vs formal writing?`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Casual vs Formal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`What are common mistakes learners make when using "${word.word}"?`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Common Mistakes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage(`Give me a mnemonic or memory trick to easily remember "${word.word}".`)}
+                  disabled={isTyping}
+                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  Memory Trick
+                </button>
+              </>
+            )}
           </div>
 
           {/* Text Input Row */}
@@ -524,7 +692,13 @@ You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
                   }
                 }}
                 rows={1}
-                placeholder={`Ask any question about "${word.word}"...`}
+                placeholder={
+                  isSentence
+                    ? `Ask anything about this sentence or grammar...`
+                    : isReply
+                    ? `Ask about this reply's tone, nuance, or usage...`
+                    : `Ask any question about "${word.word}"...`
+                }
                 className="w-full px-4 py-3 bg-stone-100 border border-transparent focus:border-stone-300 focus:bg-white rounded-2xl text-sm text-stone-900 placeholder:text-stone-400 focus:outline-hidden resize-none transition-all"
                 disabled={isTyping}
               />

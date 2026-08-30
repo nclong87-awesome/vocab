@@ -535,6 +535,9 @@ export default function AnalyticsDashboard({
                       onSpeakWord={handleSpeakWord}
                       onToggleStarWord={onToggleStarWord}
                       onToggleLearnedWord={onToggleLearnedWord}
+                      llmConfig={llmConfig}
+                      ttsConfig={ttsConfig}
+                      words={words}
                     />
                   ))}
                 </div>

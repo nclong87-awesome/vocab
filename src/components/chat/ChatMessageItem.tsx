@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Plus, History
+  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -12,6 +12,7 @@ import FlashcardMessageCard from "./FlashcardMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
+import WordChatModal from "./WordChatModal";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { t } from "../../config/i18n";
@@ -52,6 +53,26 @@ interface ChatMessageItemProps {
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
 }
+
+const createAdHocWord = (overrides: Partial<Word> & { word: string }): Word => ({
+  id: overrides.id || `adhoc-${Date.now()}`,
+  word: overrides.word,
+  pronunciation: overrides.pronunciation || undefined,
+  partOfSpeech: overrides.partOfSpeech || "expression",
+  definition: overrides.definition || "",
+  translation: overrides.translation || "",
+  example: overrides.example || undefined,
+  exampleTranslation: overrides.exampleTranslation || undefined,
+  learned: overrides.learned ?? false,
+  starred: overrides.starred ?? false,
+  createdAt: overrides.createdAt || new Date().toISOString(),
+  lastReviewed: overrides.lastReviewed ?? null,
+  strength: overrides.strength ?? 0,
+  category: overrides.category,
+  context: overrides.context,
+  imageUrl: overrides.imageUrl,
+  imageUrls: overrides.imageUrls,
+});
 
 function formatActionLabel(act: { label: string; action: string; payload?: any }, currentAppLang: string): string {
   if (!act || !act.label) return "";
@@ -157,6 +178,7 @@ function ChatMessageItem({
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
@@ -654,15 +676,39 @@ function ChatMessageItem({
                       "{msg.fixedSentence}"
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, t("toast_copied_fixed_sentence", currentAppLang))}
-                    className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
-                    title={t("action_copy_fixed_sentence", currentAppLang)}
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>{copiedKey === `fixed-${msg.id}` ? t("copied", currentAppLang) : t("copy", currentAppLang)}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedChatWord(createAdHocWord({
+                          id: `sentence-fixed-${msg.id}`,
+                          word: msg.fixedSentence!,
+                          definition: `Polished sentence in ${targetLanguage}`,
+                          translation: "",
+                          category: "Grammar & Expression",
+                          context: `Polished sentence from chat session`,
+                          strength: 100,
+                          learned: true,
+                          createdAt: new Date().toISOString(),
+                          lastReviewed: null
+                        }));
+                      }}
+                      className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
+                      title="Ask AI about this sentence"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Ask AI</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, t("toast_copied_fixed_sentence", currentAppLang))}
+                      className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
+                      title={t("action_copy_fixed_sentence", currentAppLang)}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{copiedKey === `fixed-${msg.id}` ? t("copied", currentAppLang) : t("copy", currentAppLang)}</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -705,6 +751,15 @@ function ChatMessageItem({
                     >
                       <Volume2 className="w-3.5 h-3.5 text-amber-700" />
                       <span className="hidden sm:inline">Audio</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedChatWord(answeredWord)}
+                      className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-indigo-700 hover:text-indigo-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
+                      title={`Ask AI about "${answeredWord.word}"`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="hidden sm:inline">Ask AI</span>
                     </button>
                     <button
                       type="button"
@@ -782,6 +837,28 @@ function ChatMessageItem({
                                 )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const matched = words ? findWordInCollection(words, sw.word) : undefined;
+                                    setSelectedChatWord(matched || createAdHocWord({
+                                      id: `quiz-suggested-${sw.word}-${idx}`,
+                                      word: sw.word,
+                                      partOfSpeech: sw.partOfSpeech || "vocabulary",
+                                      definition: sw.hint || `Recommended vocabulary word for ${targetLanguage}`,
+                                      translation: sw.translation || "",
+                                      context: sw.pairedWith ? `Collocation with: ${sw.pairedWith}` : undefined,
+                                      strength: 0,
+                                      learned: false,
+                                      createdAt: new Date().toISOString(),
+                                      lastReviewed: null
+                                    }));
+                                  }}
+                                  className="p-1.5 bg-white hover:bg-stone-200 text-indigo-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                                  title={`Ask AI about "${sw.word}"`}
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </button>
                                 {isAlreadyInWords && (() => {
                                   const matched = words ? findWordInCollection(words, sw.word) : undefined;
                                   if (matched) {
@@ -910,15 +987,39 @@ function ChatMessageItem({
                               </p>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(rep.reply, repKey, "📋 Copied suggestion to clipboard!")}
-                            className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95 mt-0.5"
-                            title="Copy suggestion to clipboard"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>{isCopied ? "Copied!" : "Copy"}</span>
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedChatWord(createAdHocWord({
+                                  id: `reply-${msg.id}-${idx}`,
+                                  word: rep.reply,
+                                  definition: rep.explanation || rep.translation || `Suggested reply in ${targetLanguage}`,
+                                  translation: rep.translation || "",
+                                  category: "Conversation Reply",
+                                  context: rep.tone ? `Tone: ${rep.tone}` : undefined,
+                                  strength: 100,
+                                  learned: true,
+                                  createdAt: new Date().toISOString(),
+                                  lastReviewed: null
+                                }));
+                              }}
+                              className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
+                              title="Ask AI about this reply"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Ask AI</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(rep.reply, repKey, "📋 Copied suggestion to clipboard!")}
+                              className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
+                              title="Copy suggestion to clipboard"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{isCopied ? "Copied!" : "Copy"}</span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1117,6 +1218,34 @@ function ChatMessageItem({
                             Ex: "{act.payload.example}"
                           </p>
                         )}
+                        <div className="mt-1 pt-1 flex items-center justify-between gap-2 border-t border-stone-100/60 group-hover:border-stone-700/60">
+                          <span className="text-[10px] text-amber-600 group-hover:text-amber-300 font-medium">
+                            Tap card to select sense
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedChatWord(createAdHocWord({
+                                id: `sense-${act.payload.word}-${Date.now()}`,
+                                word: act.payload.targetWord || act.payload.word,
+                                partOfSpeech: act.payload.partOfSpeech || "expression",
+                                definition: act.payload.definition,
+                                translation: act.payload.translation || "",
+                                example: act.payload.example,
+                                strength: 0,
+                                learned: false,
+                                createdAt: new Date().toISOString(),
+                                lastReviewed: null
+                              }));
+                            }}
+                            className="px-2 py-0.5 rounded bg-stone-100 group-hover:bg-stone-800 text-stone-700 group-hover:text-stone-200 hover:bg-indigo-50 hover:text-indigo-700 border border-stone-200 group-hover:border-stone-700 transition-colors flex items-center gap-1 text-[10px] font-semibold cursor-pointer z-10"
+                            title="Ask AI about this specific word sense"
+                          >
+                            <MessageSquare className="w-3 h-3 text-indigo-500" />
+                            <span>Ask AI</span>
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <span className={`whitespace-normal break-words leading-relaxed font-semibold min-w-0 flex-1 transition-colors ${
@@ -1148,6 +1277,22 @@ function ChatMessageItem({
             word={selectedHistoryWord}
             onClose={() => setSelectedHistoryWord(null)}
             onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Word Chat / Ask AI Modal */}
+      <AnimatePresence>
+        {selectedChatWord && (
+          <WordChatModal
+            word={selectedChatWord}
+            isOpen={Boolean(selectedChatWord)}
+            onClose={() => setSelectedChatWord(null)}
+            targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            onAddWord={onAddWord ? (w) => onAddWord(w.word, w.definition || w.translation) : undefined}
           />
         )}
       </AnimatePresence>

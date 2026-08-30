@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, History, Timer, CheckCircle2 } from "lucide-react";
-import { Word } from "../../types";
+import { Volume2, RefreshCw, History, Timer, CheckCircle2, MessageSquare } from "lucide-react";
+import { Word, LLMConfig, TTSConfig } from "../../types";
 import { getDaysSinceLastReview, getNextReviewInfo } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "./StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
+import WordChatModal from "../chat/WordChatModal";
 
 interface WordAnalyticsCardProps {
   key?: React.Key;
@@ -14,6 +15,12 @@ interface WordAnalyticsCardProps {
   onToggleStarWord?: (wordId: string) => void;
   onToggleLearnedWord?: (wordId: string) => void;
   onUpdateWord?: (updatedWord: Word) => void;
+  llmConfig?: LLMConfig;
+  ttsConfig?: TTSConfig;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  words?: Word[];
+  onAddWord?: (word: string, hint?: string) => void;
 }
 
 export default function WordAnalyticsCard({
@@ -22,10 +29,17 @@ export default function WordAnalyticsCard({
   onSpeakWord,
   onToggleStarWord: _onToggleStarWord,
   onToggleLearnedWord: _onToggleLearnedWord,
-  onUpdateWord
+  onUpdateWord,
+  llmConfig,
+  ttsConfig,
+  targetLanguage = "English",
+  nativeLanguage = "Vietnamese",
+  words,
+  onAddWord
 }: WordAnalyticsCardProps) {
   const [localWord, setLocalWord] = useState<Word | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
 
   const word = localWord || initialWord;
 
@@ -92,6 +106,15 @@ export default function WordAnalyticsCard({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Ask AI Button */}
+              <button
+                onClick={() => setShowChatModal(true)}
+                className="p-2 rounded-lg border border-indigo-200/80 bg-indigo-50/50 text-indigo-700 hover:text-indigo-950 hover:bg-indigo-100 hover:border-indigo-300 transition-all cursor-pointer shadow-3xs flex items-center gap-1"
+                title="Ask AI about this word"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+              </button>
+
               {/* Audio Pronunciation Button */}
               <button
                 onClick={() => onSpeakWord(word.word, word.id)}
@@ -181,6 +204,23 @@ export default function WordAnalyticsCard({
             word={word}
             onClose={() => setShowHistoryModal(false)}
             onUpdateWord={handleModalWordUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showChatModal && (
+          <WordChatModal
+            word={word}
+            isOpen={showChatModal}
+            onClose={() => setShowChatModal(false)}
+            targetLanguage={targetLanguage}
+            nativeLanguage={nativeLanguage}
+            ttsConfig={ttsConfig}
+            llmConfig={llmConfig}
+            onAddWord={onAddWord ? (w) => onAddWord(w.word || "", w.definition || w.translation) : undefined}
+            onUpdateWord={handleModalWordUpdate}
+            words={words}
           />
         )}
       </AnimatePresence>
