@@ -2260,6 +2260,7 @@ export interface ChatMessageRequest {
   nativeLanguage: string;
   llmConfig?: LLMConfig;
   wordContext?: Partial<Word> | null;
+  userInquiries?: Array<{ question: string; word?: string; timestamp?: number }>;
   signal?: AbortSignal;
 }
 
@@ -2267,9 +2268,10 @@ export interface ChatMessageResult {
   text: string;
   suggestedActions?: {
     label: string;
-    action: "add_word" | "start_practice";
+    action: "add_word" | "start_practice" | "send_message";
     payload?: {
       word?: string;
+      message?: string;
     };
   }[];
   provider?: string;
@@ -2278,7 +2280,7 @@ export interface ChatMessageResult {
 }
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
-  const { messages, targetLanguage, nativeLanguage, llmConfig, wordContext, signal } = params;
+  const { messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries, signal } = params;
   notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
@@ -2311,11 +2313,35 @@ CRITICAL FLASHCARD VOCABULARY COACHING INSTRUCTIONS:
 - Do NOT include "start_practice" or quiz/practice actions in suggestedActions.`;
   }
 
+  let userInquiryInstruction = "";
+  if (Array.isArray(userInquiries) && userInquiries.length > 0) {
+    const recentQuestionsList = userInquiries
+      .slice(-8)
+      .map((item: any, idx: number) => {
+        const q = typeof item === "string" ? item : (item.question || "");
+        const w = typeof item === "object" && item.word ? ` (for "${item.word}")` : "";
+        return `${idx + 1}. "${q}"${w}`;
+      })
+      .filter((line: string) => line.trim().length > 3)
+      .join("\n");
+
+    if (recentQuestionsList) {
+      userInquiryInstruction = `\n\nUSER LEARNING PREFERENCES & RECENT INQUIRIES (JUST-IN-TIME PERSONALIZATION):
+The user recently asked the following questions during study sessions:
+${recentQuestionsList}
+
+CRITICAL PERSONALIZATION FOR SUGGESTED ACTIONS:
+- Analyze the user's inquiry patterns above (e.g. business/workplace emails, preposition precision, nuance/distinction between synonyms, spoken conversational dialogues, or memory mnemonics).
+- You MUST customize the 3 interactive suggestedActions in your response so their labels and payloads directly match this user's demonstrated learning preferences and interests for "${wordContext?.word || targetLanguage}".
+- Keep suggestedActions compelling, highly specific to the current topic/word, and immediately useful.`;
+    }
+  }
+
   const prompt = `Below is the recent conversation history between the User and you (the Assistant):\n\n${chatHistoryStr}\n\nAssistant, formulate your next helpful response. Ensure to check if the user is interested in practicing or adding words, and attach appropriate suggestedActions.`;
 
   const systemInstruction = `You are an elite, highly encouraging AI Language Coach and Vocabulary Assistant.
 Your mission is to help the user master their target language "${targetLanguage}" from their native language "${nativeLanguage}".
-You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}
+You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}${userInquiryInstruction}
 
 CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 1. **Explain Grammar Rules**:
@@ -2397,7 +2423,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     const res = await fetchWithTimeout("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig, wordContext }),
+      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries }),
       signal
     });
 
@@ -2437,6 +2463,69 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
     throw new LLMConnectionError(parsedErr);
   }
+}
+
+export interface GenerateSuggestedActionsRequest {
+  word: Partial<Word>;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  llmConfig?: LLMConfig;
+  userInquiries?: Array<{ question: string; word?: string; timestamp?: number }>;
+  signal?: AbortSignal;
+}
+
+export async function generateJitSuggestedActionsService(
+  params: GenerateSuggestedActionsRequest
+): Promise<Array<{ label: string; action: "send_message"; payload: { message: string } }>> {
+  const { word, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, userInquiries, signal } = params;
+  if (!word || !word.word) return [];
+
+  if (isStaticHost()) {
+    try {
+      let inquiryPromptPart = "";
+      if (Array.isArray(userInquiries) && userInquiries.length > 0) {
+        const qList = userInquiries.slice(-8).map((q, i) => `${i + 1}. "${q.question}"`).join("\n");
+        inquiryPromptPart = `The user frequently asks study questions like:\n${qList}\n`;
+      }
+      const prompt = `The user is studying the word "${word.word}" (Meaning: ${word.translation || word.definition || "N/A"}).
+Target Language: ${targetLanguage}. Native Language: ${nativeLanguage}.
+${inquiryPromptPart}
+Generate exactly 3 highly engaging, personalized suggested action prompts for learning "${word.word}".
+Align them with the user's demonstrated learning preferences if available (prepositions, business, nuances, conversation, mnemonics).
+Do NOT suggest quizzes or tests.`;
+
+      const sys = `Return 3 interactive suggested actions as valid JSON only.`;
+      const schema = `{"suggestedActions": [{"label": "string", "action": "send_message", "payload": {"message": "string"}}]}`;
+      const res = await callLLMClientSideWithMeta(prompt, sys, schema, llmConfig);
+      const parsed = JSON.parse(res.text);
+      if (Array.isArray(parsed?.suggestedActions)) {
+        return parsed.suggestedActions.map((a: any) => ({
+          label: a.label || a.payload?.message,
+          action: "send_message" as const,
+          payload: { message: a.payload?.message || a.label }
+        }));
+      }
+    } catch {
+      // Fallback
+    }
+    return [];
+  }
+
+  try {
+    const res = await fetchWithTimeout("/api/suggested-actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ word, targetLanguage, nativeLanguage, llmConfig, userInquiries }),
+      signal
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data?.suggestedActions) ? data.suggestedActions : [];
+    }
+  } catch (e) {
+    console.warn("Failed to fetch JIT suggested actions:", e);
+  }
+  return [];
 }
 
 export interface QuizGenerationRequest {

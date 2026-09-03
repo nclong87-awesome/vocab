@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { 
@@ -11,11 +11,19 @@ import {
   Sparkles, 
   RotateCcw, 
   Square,
-  Plus
+  Plus,
+  RefreshCw
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../../types";
 import { speakText, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
-import { sendChatMessageService, ChatMessageResult } from "../../services/llmClientService";
+import { sendChatMessageService, generateJitSuggestedActionsService, ChatMessageResult } from "../../services/llmClientService";
+import { 
+  recordUserInquiry, 
+  getRecentUserInquiries, 
+  getPersonalizedInitialActions, 
+  getAdaptiveBottomChips, 
+  analyzeUserInquiryPatterns 
+} from "../../services/userInquiryService";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
@@ -67,6 +75,13 @@ export default function WordChatModal({
   const [isTyping, setIsTyping] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isGeneratingAiActions, setIsGeneratingAiActions] = useState(false);
+  const [activeLearningTheme, setActiveLearningTheme] = useState<string | null>(null);
+
+  const bottomChips = useMemo(() => {
+    if (!word) return [];
+    return getAdaptiveBottomChips(word);
+  }, [word?.id, word?.word, word?.category, word?.partOfSpeech]);
 
   const latestResponseRef = useRef<HTMLDivElement | null>(null);
   const typingIndicatorRef = useRef<HTMLDivElement | null>(null);
@@ -93,84 +108,25 @@ export default function WordChatModal({
       let welcomeText = `Hello! How can I help you with the word **${word.word}**${word.translation ? ` (*${word.translation}*)` : ""}?
 You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
 
-      let initialSuggestedActions: any[] = [
-        {
-          label: `💡 3 conversation examples`,
-          action: "send_message" as const,
-          payload: { message: `Give me 3 realistic conversation examples using the word "${word.word}".` }
-        },
-        {
-          label: `🔗 Common Collocations`,
-          action: "send_message" as const,
-          payload: { message: `What are the most common prepositions and collocations paired with "${word.word}"?` }
-        },
-        {
-          label: `⚖️ Compare Synonyms`,
-          action: "send_message" as const,
-          payload: { message: `What are common synonyms for "${word.word}" and how do they differ in nuance?` }
-        }
-      ];
-
       if (isSentence) {
         welcomeText = `Hello! Let's explore this polished sentence: **"${word.word}"**${word.translation ? ` (*${word.translation}*)` : ""}.
 You can ask about grammar structures, nuances, formal vs casual phrasing, or conversational contexts.`;
-        initialSuggestedActions = [
-          {
-            label: `🔍 Explain grammar & edits`,
-            action: "send_message" as const,
-            payload: { message: `Explain the grammar improvements and word choice in this sentence: "${word.word}".` }
-          },
-          {
-            label: `🎭 Formal vs Casual variations`,
-            action: "send_message" as const,
-            payload: { message: `Give me 2 more casual and 2 more formal ways to express this sentence: "${word.word}".` }
-          },
-          {
-            label: `💬 2 short conversation dialogues`,
-            action: "send_message" as const,
-            payload: { message: `Create 2 short natural dialogues where this sentence ("${word.word}") is spoken.` }
-          }
-        ];
       } else if (isReply) {
         welcomeText = `Hello! Let's explore this suggested reply: **"${word.word}"**${word.translation ? ` (*${word.translation}*)` : ""}.
 You can ask about its tone, when to use it, or how to adapt it for different people.`;
-        initialSuggestedActions = [
-          {
-            label: `🎭 Tone & nuance breakdown`,
-            action: "send_message" as const,
-            payload: { message: `What is the exact tone and nuance of saying "${word.word}", and in what situations is it best used?` }
-          },
-          {
-            label: `✨ 3 situational variations`,
-            action: "send_message" as const,
-            payload: { message: `Give me 3 slight variations of this reply ("${word.word}") for close friends vs. polite acquaintances.` }
-          },
-          {
-            label: `❓ How would a native follow up?`,
-            action: "send_message" as const,
-            payload: { message: `If I say "${word.word}", what would a native speaker likely reply in return?` }
-          }
-        ];
       } else if (isQuizFeedback) {
         welcomeText = `Hello! Let's explore the quiz vocabulary **${word.word}**${word.translation ? ` (*${word.translation}*)` : ""}.
 ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage in questions, collocations, or memory tips.`;
-        initialSuggestedActions = [
-          {
-            label: `💡 3 natural example sentences`,
-            action: "send_message" as const,
-            payload: { message: `Give me 3 realistic sentences demonstrating how to use "${word.word}".` }
-          },
-          {
-            label: `🔗 Collocations & pairings`,
-            action: "send_message" as const,
-            payload: { message: `What are the most common prepositions, verbs, and nouns that pair with "${word.word}"?` }
-          },
-          {
-            label: `🧠 Memory mnemonic or tip`,
-            action: "send_message" as const,
-            payload: { message: `Give me a memorable tip or mnemonic to easily remember "${word.word}".` }
-          }
-        ];
+      }
+
+      // Personalized Suggested Actions (Zero background token burn: heuristics + JIT history)
+      const personalizedInitial = getPersonalizedInitialActions(word, nativeLanguage);
+
+      const pattern = analyzeUserInquiryPatterns();
+      if (pattern.totalInquiries > 0 && personalizedInitial.themeLabel) {
+        setActiveLearningTheme(personalizedInitial.themeLabel);
+      } else {
+        setActiveLearningTheme(null);
       }
 
       setMessages([
@@ -179,7 +135,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
           role: "assistant",
           content: welcomeText,
           timestamp: new Date().toISOString(),
-          suggestedActions: initialSuggestedActions
+          suggestedActions: personalizedInitial.actions
         }
       ]);
       setInputText("");
@@ -190,7 +146,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         inputRef.current?.focus();
       }, 250);
     }
-  }, [word?.id, word?.word, isOpen]);
+  }, [word?.id, word?.word, isOpen, nativeLanguage]);
 
   // Scroll to top of the latest response/message when displaying answers
   useEffect(() => {
@@ -240,12 +196,54 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
     setIsTyping(false);
   };
 
+  const handleGenerateAiActions = async () => {
+    if (!word || isGeneratingAiActions || isTyping) return;
+    setIsGeneratingAiActions(true);
+    try {
+      const recentInquiries = getRecentUserInquiries(8);
+      const aiActions = await generateJitSuggestedActionsService({
+        word,
+        targetLanguage,
+        nativeLanguage,
+        llmConfig,
+        userInquiries: recentInquiries
+      });
+      if (aiActions && aiActions.length > 0) {
+        setMessages(prev => {
+          if (prev.length === 0) return prev;
+          const updated = [...prev];
+          updated[0] = {
+            ...updated[0],
+            suggestedActions: aiActions
+          };
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to generate AI actions:", err);
+    } finally {
+      setIsGeneratingAiActions(false);
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const messageContent = (textToSend !== undefined ? textToSend : inputText).trim();
     if (!messageContent || isTyping) return;
 
     setErrorMsg(null);
     setInputText("");
+
+    // Record user inquiry immediately to build personalized learning history without background loops
+    recordUserInquiry(messageContent, {
+      word: word.word,
+      category: word.category,
+      partOfSpeech: word.partOfSpeech
+    });
+
+    const pattern = analyzeUserInquiryPatterns();
+    if (pattern.themeDescription) {
+      setActiveLearningTheme(pattern.themeDescription);
+    }
 
     const userMessage: ChatItem = {
       id: `user-${Date.now()}`,
@@ -282,12 +280,15 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         content: m.content
       }));
 
+      const recentInquiries = getRecentUserInquiries(8);
+
       const res: ChatMessageResult = await sendChatMessageService({
         messages: chatHistory,
         targetLanguage: targetLanguage || "English",
         nativeLanguage: nativeLanguage || "Vietnamese",
         llmConfig,
         wordContext,
+        userInquiries: recentInquiries,
         signal: controller.signal
       });
 
@@ -518,23 +519,57 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
 
               {/* Action Chips for Assistant responses */}
               {!isUser && Array.isArray(m.suggestedActions) && m.suggestedActions.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1 max-w-[95%]">
-                  {m.suggestedActions.map((act, actIdx) => (
-                    <button
-                      key={actIdx}
-                      type="button"
-                      onClick={() => handleActionClick(act)}
-                      disabled={isTyping}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-stone-200 text-stone-700 hover:border-stone-400 hover:bg-stone-50 transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
-                    >
-                      {act.action === "add_word" ? (
-                        <Plus className="w-3 h-3 text-indigo-600 shrink-0" />
+                <div className="flex flex-col gap-1.5 pt-1.5 max-w-[95%]">
+                  <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                      {activeLearningTheme && idx === 0 ? (
+                        <span>Tailored focus: <strong className="text-stone-700 font-semibold">{activeLearningTheme}</strong></span>
                       ) : (
-                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                        <span>Suggested topics</span>
                       )}
-                      <span>{act.label}</span>
-                    </button>
-                  ))}
+                    </div>
+                    {idx === 0 && (
+                      <button
+                        type="button"
+                        onClick={handleGenerateAiActions}
+                        disabled={isGeneratingAiActions || isTyping}
+                        className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 disabled:opacity-50 cursor-pointer font-medium hover:underline transition-colors"
+                        title="Analyze inquiry history with AI to generate fresh smart topics"
+                      >
+                        {isGeneratingAiActions ? (
+                          <>
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            <span>Analyzing history...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>Ask AI for custom topics</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {m.suggestedActions.map((act, actIdx) => (
+                      <button
+                        key={actIdx}
+                        type="button"
+                        onClick={() => handleActionClick(act)}
+                        disabled={isTyping}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-stone-200 text-stone-700 hover:border-stone-400 hover:bg-stone-50 transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
+                      >
+                        {act.action === "add_word" ? (
+                          <Plus className="w-3 h-3 text-indigo-600 shrink-0" />
+                        ) : (
+                          <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                        )}
+                        <span>{act.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -588,88 +623,17 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         <div className="max-w-3xl w-full mx-auto space-y-2">
           {/* Quick suggestions scroll */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
-            {isSentence ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`Break down the key grammar points and structural nuances in this sentence: "${word.word}".`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Grammar Breakdown
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`How can I modify this sentence ("${word.word}") to sound natural in business vs casual texting?`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Casual vs Formal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`Give me 3 alternative ways to express the same thought as: "${word.word}".`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Alternative Phrasings
-                </button>
-              </>
-            ) : isReply ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`Explain the tone and polite implications of replying with: "${word.word}".`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Tone & Nuance
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`How do I make this reply ("${word.word}") friendlier or more enthusiastic?`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  More Friendly
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`What would a native speaker say right after this reply ("${word.word}")?`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Follow-up Replies
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`How do native speakers use "${word.word}" in casual conversation vs formal writing?`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Casual vs Formal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`What are common mistakes learners make when using "${word.word}"?`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Common Mistakes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage(`Give me a mnemonic or memory trick to easily remember "${word.word}".`)}
-                  disabled={isTyping}
-                  className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                >
-                  Memory Trick
-                </button>
-              </>
-            )}
+            {bottomChips.map((chip, chipIdx) => (
+              <button
+                key={chipIdx}
+                type="button"
+                onClick={() => handleSendMessage(chip.query)}
+                disabled={isTyping}
+                className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap flex items-center gap-1.5"
+              >
+                <span>{chip.label}</span>
+              </button>
+            ))}
           </div>
 
           {/* Text Input Row */}

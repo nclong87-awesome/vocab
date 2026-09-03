@@ -2124,7 +2124,7 @@ app.post("/api/chat", async (req, res) => {
   const controller = new AbortController();
 
   try {
-    const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig, wordContext } = req.body;
+    const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig, wordContext, userInquiries } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Messages array is required and cannot be empty" });
@@ -2159,11 +2159,35 @@ CRITICAL FLASHCARD VOCABULARY COACHING INSTRUCTIONS:
 - Do NOT include "start_practice" or quiz/practice actions in suggestedActions.`;
     }
 
+    let userInquiryInstruction = "";
+    if (Array.isArray(userInquiries) && userInquiries.length > 0) {
+      const recentQuestionsList = userInquiries
+        .slice(-8)
+        .map((item: any, idx: number) => {
+          const q = typeof item === "string" ? item : (item.question || "");
+          const w = typeof item === "object" && item.word ? ` (for "${item.word}")` : "";
+          return `${idx + 1}. "${q}"${w}`;
+        })
+        .filter((line: string) => line.trim().length > 3)
+        .join("\n");
+
+      if (recentQuestionsList) {
+        userInquiryInstruction = `\n\nUSER LEARNING PATTERNS & RECENT INQUIRIES (JUST-IN-TIME PERSONALIZATION):
+The user has recently asked the following questions during study sessions:
+${recentQuestionsList}
+
+CRITICAL PERSONALIZATION FOR SUGGESTED ACTIONS:
+- Analyze the user's inquiry patterns above (e.g. business/workplace emails, preposition precision, nuance/distinction between synonyms, spoken conversational dialogues, or memory mnemonics).
+- Customize the 3 interactive suggestedActions in your response so their labels and payloads directly match this user's demonstrated learning preferences and interests for "${wordContext?.word || targetLanguage}".
+- Keep suggestedActions compelling, highly specific to the current topic/word, and immediately useful.`;
+      }
+    }
+
     const prompt = `Below is the recent conversation history between the User and you (the Assistant):\n\n${chatHistoryStr}\n\nAssistant, formulate your next helpful response. Ensure to check if the user is interested in practicing or adding words, and attach appropriate suggestedActions.`;
 
     const systemInstruction = `You are an elite, highly encouraging AI Language Coach and Vocabulary Assistant.
 Your mission is to help the user master their target language "${targetLanguage}" from their native language "${nativeLanguage}".
-You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}
+You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}${userInquiryInstruction}
 
 CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 1. **Explain Grammar Rules**:
@@ -2307,6 +2331,83 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
       model: parsed.model,
       serverLockedModels: getServerLockedModelsArray()
     });
+  }
+});
+
+// 7b. On-demand JIT Suggested Actions endpoint (Analyzes user inquiry history for targeted prompts)
+app.post("/api/suggested-actions", async (req, res) => {
+  const controller = new AbortController();
+  try {
+    const { word, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig, userInquiries } = req.body;
+    if (!word || !word.word) {
+      return res.status(400).json({ error: "Word object with 'word' property is required" });
+    }
+
+    let userInquiryContext = "";
+    if (Array.isArray(userInquiries) && userInquiries.length > 0) {
+      const list = userInquiries
+        .slice(-8)
+        .map((item: any, idx: number) => {
+          const q = typeof item === "string" ? item : item.question;
+          const w = typeof item === "object" && item.word ? ` (on "${item.word}")` : "";
+          return `${idx + 1}. "${q}"${w}`;
+        })
+        .filter((l: string) => l.trim().length > 3)
+        .join("\n");
+      if (list) {
+        userInquiryContext = `The user recently asked these study questions across recent sessions:\n${list}\n`;
+      }
+    }
+
+    const pos = word.partOfSpeech ? `(Part of speech: ${word.partOfSpeech})` : "";
+    const def = word.translation || word.definition ? `(Meaning: ${word.translation || word.definition})` : "";
+
+    const prompt = `The user is studying the word "${word.word}" ${pos} ${def}.
+Target Language: ${targetLanguage}. Native Language: ${nativeLanguage}.
+${userInquiryContext}
+Generate exactly 3 highly engaging, personalized suggested action prompts for exploring and mastering "${word.word}".
+Analyze the user's inquiry patterns if provided (e.g. workplace/business communication, preposition precision, nuance/distinction vs synonyms, spoken conversational dialogues, or memory mnemonics) and align the suggestions with their interests.
+Do NOT suggest quizzes, tests, or practice exams. Each action must be an engaging exploration or conversational question.`;
+
+    const systemInstruction = `You are an elite language learning coach. Return exactly 3 interactive suggested actions as valid JSON only.`;
+    const schemaDesc = `{
+  "suggestedActions": [
+    {
+      "label": "string (short enticing action label with an emoji, max 30 chars, e.g. '💼 Business email phrasing', '🔗 Prepositions with liaise', '⚖️ Liaise vs Coordinate')",
+      "action": "send_message",
+      "payload": {
+        "message": "string (the natural, comprehensive question to ask the AI coach when this action is clicked)"
+      }
+    }
+  ]
+}`;
+
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
+    let parsed: any;
+    try {
+      parsed = cleanAndParseJson(text);
+    } catch {
+      parsed = { suggestedActions: [] };
+    }
+
+    const rawActions = Array.isArray(parsed?.suggestedActions) ? parsed.suggestedActions : [];
+    const validActions = rawActions
+      .filter((a: any) => a && (a.label || a.payload?.message))
+      .map((a: any) => ({
+        label: a.label || a.payload?.message,
+        action: "send_message" as const,
+        payload: {
+          message: a.payload?.message || a.label
+        }
+      }));
+
+    res.json({ suggestedActions: validActions });
+  } catch (err: any) {
+    if (controller.signal.aborted || err?.name === "AbortError") {
+      return;
+    }
+    console.error("Error generating suggested actions:", err);
+    res.status(500).json({ error: err?.message || "Failed to generate suggested actions" });
   }
 });
 

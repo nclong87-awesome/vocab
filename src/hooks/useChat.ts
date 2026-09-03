@@ -29,6 +29,7 @@ import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../ut
 import { t } from "../config/i18n";
 import { speakText as speakTextService } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection } from "../utils/wordNormalization";
+import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 
 interface UseChatProps {
   words: Word[];
@@ -1570,11 +1571,15 @@ export function useChat({
         payloadMessages.push({ role: "user", content: text.trim() });
       }
 
+      recordUserInquiry(text.trim());
+      const recentInquiries = getRecentUserInquiries(8);
+
       const result = await sendChatMessageService({
         messages: payloadMessages,
         targetLanguage,
         nativeLanguage,
         llmConfig: configForServer,
+        userInquiries: recentInquiries,
         signal: controller.signal,
       });
 
