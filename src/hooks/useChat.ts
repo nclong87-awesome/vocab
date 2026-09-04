@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, FlashcardItem, QuizSuggestedWord } from "../types";
 import {
   sendChatMessageService,
@@ -524,6 +524,7 @@ export function useChat({
           imageKeyword: primaryCard?.word,
           flashcardData: {
             cards: cards,
+            reviewedIndices: [0],
             wordId: primaryCard?.wordId,
             word: primaryCard?.word,
             pronunciation: primaryCard?.pronunciation,
@@ -943,7 +944,7 @@ export function useChat({
       const nextMsg: ChatMessage = {
         id: `quiz-next-${Date.now()}`,
         role: "assistant",
-        content: `${feedback}\n\n---\n\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}${qTag}:\n**${nextQ.question}**`,
+        content: `${feedback}\n---\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}${qTag}:\n**${nextQ.question}**`,
         timestamp: new Date().toISOString(),
         audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
         quizSpeechText: isCorrect
@@ -1335,6 +1336,9 @@ export function useChat({
         setPendingConfirmWord(newWordObj);
         setConversationalState("confirming_add_word");
 
+        const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, currentAppLang);
+        const sessionActions = remainingActions.filter((a: any) => a?.action === "start_sandwich_quiz");
+
         const confirmActions = [
           {
             label: t("action_confirm_add_word", currentAppLang, { word: targetWordStr, details: translationVal }),
@@ -1346,6 +1350,7 @@ export function useChat({
             action: "send_message",
             payload: { message: "cancel" },
           },
+          ...sessionActions,
         ];
 
         setChatMessages((prev) => {
@@ -1455,6 +1460,7 @@ export function useChat({
         setConversationalState("adding_word");
         const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
         const wordName = currentWord?.word || text.trim();
+        const remainingActions = getRemainingWordActions(chatMessages, words, undefined, currentAppLang);
         setChatMessages((prev) => [
           ...prev,
           {
@@ -1462,6 +1468,7 @@ export function useChat({
             role: "assistant",
             content: t("chat_cancelled_add_word", currentAppLang, { word: wordName }),
             timestamp: new Date().toISOString(),
+            suggestedActions: remainingActions,
           },
         ]);
         return;
@@ -1489,6 +1496,7 @@ export function useChat({
       ) {
         setConversationalState("none");
         const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
+        const remainingActions = getRemainingWordActions(chatMessages, words, undefined, currentAppLang);
         setChatMessages((prev) => [
           ...prev,
           {
@@ -1496,6 +1504,7 @@ export function useChat({
             role: "assistant",
             content: t("chat_exited_word_adding", currentAppLang),
             timestamp: new Date().toISOString(),
+            suggestedActions: remainingActions,
           },
         ]);
         return;
@@ -1995,6 +2004,9 @@ export function useChat({
     setPendingWordSenses(null);
     setConversationalState("confirming_add_word");
 
+    const remainingActions = getRemainingWordActions(chatMessages, words, targetWord, currentAppLang);
+    const sessionActions = remainingActions.filter((a: any) => a?.action === "start_sandwich_quiz");
+
     const confirmActions = [
       {
         label: t("action_confirm_add_word", currentAppLang, { word: targetWord, details: newWord.translation }),
@@ -2006,6 +2018,7 @@ export function useChat({
         action: "send_message",
         payload: { message: "cancel" },
       },
+      ...sessionActions,
     ];
 
     setChatMessages((prev) => [
@@ -2700,9 +2713,38 @@ export function useChat({
     setChatMessages([libMsg]);
   };
 
+  const handleCardReviewed = useCallback((msgId: string, cardIndex: number | "all") => {
+    setChatMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === msgId && m.flashcardData) {
+          const totalCards = m.flashcardData.cards?.length || 1;
+          const currentReviewed = new Set(m.flashcardData.reviewedIndices || [0]);
+          if (cardIndex === "all") {
+            for (let i = 0; i < totalCards; i++) {
+              currentReviewed.add(i);
+            }
+          } else if (typeof cardIndex === "number" && cardIndex >= 0 && cardIndex < totalCards) {
+            currentReviewed.add(cardIndex);
+          }
+          if (currentReviewed.size !== (m.flashcardData.reviewedIndices?.length || 0)) {
+            return {
+              ...m,
+              flashcardData: {
+                ...m.flashcardData,
+                reviewedIndices: Array.from(currentReviewed).sort((a, b) => a - b),
+              },
+            };
+          }
+        }
+        return m;
+      })
+    );
+  }, []);
+
   return {
     chatMessages,
     setChatMessages,
+    handleCardReviewed,
     isTyping,
     activeModelInfo,
     setIsTyping,

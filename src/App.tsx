@@ -111,6 +111,7 @@ export default function App() {
     handleAddMultipleWords,
     handleRetryErrorMessage,
     handleCancelErrorMessage,
+    handleCardReviewed,
   } = useChat({
     words,
     setWords,
@@ -456,6 +457,7 @@ export default function App() {
                     onToast={showToast}
                     onRetryErrorMessage={handleRetryErrorMessage}
                     onCancelErrorMessage={handleCancelErrorMessage}
+                    onCardReviewed={handleCardReviewed}
                   />
                 )}
               </motion.div>

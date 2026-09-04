@@ -215,6 +215,7 @@ export interface FlashcardItem {
 
 export interface FlashcardData {
   cards?: FlashcardItem[];
+  reviewedIndices?: number[];
   wordId?: string;
   word?: string;
   pronunciation?: string;

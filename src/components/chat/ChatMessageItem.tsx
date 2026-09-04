@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare
+  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -52,6 +52,7 @@ interface ChatMessageItemProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
+  onCardReviewed?: (msgId: string, cardIndex: number | "all") => void;
 }
 
 const createAdHocWord = (overrides: Partial<Word> & { word: string }): Word => ({
@@ -86,6 +87,10 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
   if (act.action === "next_quiz" || lower === "next quiz" || lower === "🏆 next quiz") {
     return t("action_next_quiz", currentAppLang);
+  }
+
+  if (act.action === "start_sandwich_quiz" || lower.includes("start practice quiz")) {
+    return t("chat_sandwich_start_quiz_action", currentAppLang);
   }
 
   if (act.action === "start_practice" && (lower === "start practice" || lower.includes("start practice"))) {
@@ -162,6 +167,7 @@ function ChatMessageItem({
   onUpdateWords,
   onRetryErrorMessage,
   onCancelErrorMessage,
+  onCardReviewed,
 }: ChatMessageItemProps) {
   if (msg.isError) {
     return (
@@ -234,6 +240,39 @@ function ChatMessageItem({
   }, [messages]);
 
   const isWelcomeMsg = !isUser && msg.id.startsWith("welcome-msg") && !isQuizActive;
+
+  const activeSandwichWarmupMsg = useMemo(() => {
+    return messages.find(
+      (m) =>
+        (m.id.startsWith("sandwich-warmup-msg-") ||
+          (m.suggestedActions && m.suggestedActions.some((a) => a?.action === "start_sandwich_quiz"))) &&
+        !messages.some((quizM) => quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
+    );
+  }, [messages]);
+
+  const { totalWarmupCards, reviewedWarmupCount, isAllWarmupReviewed, remainingWarmupToReview } = useMemo(() => {
+    if (!activeSandwichWarmupMsg) {
+      return { totalWarmupCards: 1, reviewedWarmupCount: 1, isAllWarmupReviewed: true, remainingWarmupToReview: 0 };
+    }
+    const cardsList =
+      activeSandwichWarmupMsg.flashcardData?.cards &&
+      Array.isArray(activeSandwichWarmupMsg.flashcardData.cards) &&
+      activeSandwichWarmupMsg.flashcardData.cards.length > 0
+        ? activeSandwichWarmupMsg.flashcardData.cards
+        : activeSandwichWarmupMsg.flashcardData?.word
+        ? [activeSandwichWarmupMsg.flashcardData]
+        : [];
+    const total = Math.max(1, cardsList.length);
+    const reviewedSet = new Set(activeSandwichWarmupMsg.flashcardData?.reviewedIndices || [0]);
+    const reviewedCount = Math.min(total, reviewedSet.size);
+    const isAll = reviewedCount >= total;
+    return {
+      totalWarmupCards: total,
+      reviewedWarmupCount: reviewedCount,
+      isAllWarmupReviewed: isAll,
+      remainingWarmupToReview: Math.max(0, total - reviewedCount),
+    };
+  }, [activeSandwichWarmupMsg]);
 
   const practiceCandidates = useMemo(() => {
     if (!isWelcomeMsg || !words || words.length === 0) return [];
@@ -422,7 +461,6 @@ function ChatMessageItem({
             a.action === "retry_suggest_reply" ||
             a.action === "copy_text" ||
             a.action === "copy_sentence" ||
-            a.action === "start_sandwich_quiz" ||
             a.action === "start_practice_balanced" ||
             a.action === "start_practice_quiz_only" ||
             a.action === "start_practice" ||
@@ -430,6 +468,47 @@ function ChatMessageItem({
             a.action === "next_flashcard" ||
             a.action === "next_quiz"
         );
+      }
+
+      // During a smart balanced flashcard review session, when a new word is added or thread advances,
+      // consistently move the "Start practice Quiz (Step 2 & 3)" button to appear after the final message.
+      const sandwichWarmupMsg = messages.find(
+        m =>
+          (m.id.startsWith("sandwich-warmup-msg-") ||
+            (m.suggestedActions && m.suggestedActions.some(a => a?.action === "start_sandwich_quiz"))) &&
+          !messages.some(quizM => quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
+      );
+
+      if (sandwichWarmupMsg) {
+        const origQuizAction = sandwichWarmupMsg.suggestedActions?.find(
+          a => a && a.action === "start_sandwich_quiz"
+        );
+        const fallbackWarmupWordIds = sandwichWarmupMsg.flashcardData?.cards?.map(c => c.wordId).filter(Boolean);
+        const quizPayload = origQuizAction?.payload?.warmupWordIds
+          ? origQuizAction.payload
+          : { warmupWordIds: fallbackWarmupWordIds };
+
+        const sandwichQuizAction = {
+          label: origQuizAction?.label || t("chat_sandwich_start_quiz_action", currentAppLang),
+          action: "start_sandwich_quiz",
+          payload: quizPayload,
+        };
+
+        const isFinalAssistantMsg = !isUser && (() => {
+          if (isLatestMessage) return true;
+          const currentIdx = messages.indexOf(msg);
+          if (currentIdx === -1) return false;
+          return !messages.slice(currentIdx + 1).some(m => m.role !== "user");
+        })();
+
+        if (!isFinalAssistantMsg) {
+          // Never leave the quiz button on older messages; it moves to appear after the final message
+          rawActions = rawActions.filter(a => a && a.action !== "start_sandwich_quiz");
+        } else {
+          // On the final message, ensure the quiz button is placed at the end of the action list
+          const withoutQuiz = rawActions.filter(a => a && a.action !== "start_sandwich_quiz");
+          rawActions = [...withoutQuiz, sandwichQuizAction];
+        }
       }
     }
 
@@ -491,7 +570,7 @@ function ChatMessageItem({
         }
         return cleaned;
       });
-  }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage, words]);
+  }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage, words, currentAppLang]);
 
   const effectiveActions = useMemo(() => {
     const lines = (displayContent || "").split("\n");
@@ -563,8 +642,23 @@ function ChatMessageItem({
       handleRecordActionUse("start_practice");
       startPractice(undefined, "balanced");
     } else if (act.action === "start_sandwich_quiz") {
+      if (!isAllWarmupReviewed) {
+        showToast(
+          t("chat_sandwich_review_all_cards_toast", currentAppLang, {
+            total: String(totalWarmupCards),
+            remaining: String(remainingWarmupToReview),
+          })
+        );
+        return;
+      }
       handleRecordActionUse("start_practice");
-      startPractice(undefined, "sandwich_quiz", { warmupWordIds: act.payload?.warmupWordIds });
+      let warmupWordIds = act.payload?.warmupWordIds;
+      if (!warmupWordIds || !Array.isArray(warmupWordIds) || warmupWordIds.length === 0) {
+        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-"));
+        const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_quiz");
+        warmupWordIds = origAction?.payload?.warmupWordIds || warmupMsg?.flashcardData?.cards?.map(c => c.wordId).filter(Boolean);
+      }
+      startPractice(undefined, "sandwich_quiz", { warmupWordIds });
     } else if (act.action === "view_flashcard" || act.action === "next_flashcard") {
       handleRecordActionUse("view_flashcard");
       onViewFlashcard?.();
@@ -662,6 +756,7 @@ function ChatMessageItem({
               onAddWord={onAddWord}
               onAddMultipleWords={onAddMultipleWords}
               showToast={showToast}
+              onCardReviewed={(index) => onCardReviewed?.(msg.id, index)}
             />
           ) : (
             <>
@@ -1138,6 +1233,8 @@ function ChatMessageItem({
                 actLbl.includes("continue to question")
               );
               const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
+              const isSandwichQuiz = act.action === "start_sandwich_quiz";
+              const isSandwichQuizLocked = isSandwichQuiz && !isAllWarmupReviewed;
               const currentPayload = customActionPayloads[aIdx] || act.payload;
 
               return (
@@ -1162,20 +1259,79 @@ function ChatMessageItem({
                   <button
                     key={aIdx}
                     onClick={() => handleActionClick(act, aIdx)}
-                    className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs cursor-pointer group ${
-                      isNextQ
-                        ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold"
-                        : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white"
+                    title={
+                      isSandwichQuizLocked
+                        ? t("chat_sandwich_review_all_cards_toast", currentAppLang, {
+                            total: String(totalWarmupCards),
+                            remaining: String(remainingWarmupToReview),
+                          })
+                        : undefined
+                    }
+                    className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs group ${
+                      isSandwichQuizLocked
+                        ? "bg-stone-100/95 hover:bg-stone-200/80 border border-stone-300/80 text-stone-600 cursor-pointer"
+                        : isSandwichQuiz
+                        ? "bg-amber-400 hover:bg-amber-300 focus:bg-amber-300 border border-amber-500/80 text-stone-950 font-bold shadow-xs cursor-pointer"
+                        : isNextQ
+                        ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold cursor-pointer"
+                        : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
                     }`}
                   >
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                    {isNextQ ? (
+                    {isSandwichQuizLocked ? (
+                      <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                    ) : isSandwichQuiz ? (
+                      <Sparkles className="w-3.5 h-3.5 text-stone-950 animate-pulse shrink-0 mt-0.5" />
+                    ) : isNextQ ? (
                       <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 animate-pulse shrink-0 mt-0.5" />
                     )}
 
-                    {act.action === "select_definition" && act.payload?.definition ? (
+                    {isSandwichQuizLocked ? (
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-stone-700">
+                            {formatActionLabel(act, currentAppLang)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
+                            <Lock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                            <span>Step 2 & 3</span>
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-amber-800 flex items-center gap-1.5 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                          <span>
+                            {t("chat_sandwich_review_to_unlock", currentAppLang, {
+                              count: String(remainingWarmupToReview),
+                            })}
+                          </span>
+                          <span className="text-stone-500 font-mono text-[10px]">
+                            ({reviewedWarmupCount}/{totalWarmupCards})
+                          </span>
+                        </span>
+                      </div>
+                    ) : isSandwichQuiz ? (
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-stone-950">
+                            {formatActionLabel(act, currentAppLang)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-stone-950 text-amber-300 shrink-0">
+                            Ready
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-stone-900 flex items-center gap-1 mt-0.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-800 shrink-0" />
+                          <span>
+                            {t("chat_sandwich_cards_reviewed_progress", currentAppLang, {
+                              reviewed: String(reviewedWarmupCount),
+                              total: String(totalWarmupCards),
+                            })}
+                          </span>
+                        </span>
+                      </div>
+                    ) : act.action === "select_definition" && act.payload?.definition ? (
                       <div className="flex flex-col gap-1 min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded border shrink-0 transition-colors ${
@@ -1257,11 +1413,17 @@ function ChatMessageItem({
                       </span>
                     )}
                   </div>
-                  <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-all shrink-0 mt-1 ml-2 ${
-                    isNextQ 
-                      ? "text-stone-300" 
-                      : "text-stone-400 group-hover:text-white group-focus:text-white group-active:text-white"
-                  }`} />
+                  {isSandwichQuizLocked ? (
+                    <Lock className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-1 ml-2" />
+                  ) : (
+                    <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-all shrink-0 mt-1 ml-2 ${
+                      isSandwichQuiz
+                        ? "text-stone-950"
+                        : isNextQ 
+                        ? "text-stone-300" 
+                        : "text-stone-400 group-hover:text-white group-focus:text-white group-active:text-white"
+                    }`} />
+                  )}
                 </button>
               </React.Fragment>
             );

@@ -37,6 +37,7 @@ interface FlashcardMessageCardProps {
   onAddWord?: (word: string, hint?: string) => void;
   onAddMultipleWords?: (words: { word: string; translation?: string; definition?: string }[]) => void;
   showToast?: (msg: string) => void;
+  onCardReviewed?: (index: number | "all") => void;
 }
 
 function normalizeSuggestedWords(rawList?: (string | SuggestedPairedWord)[]): SuggestedPairedWord[] {
@@ -69,7 +70,8 @@ function FlashcardMessageCard({
   model,
   responseTimeMs,
   words,
-  onUpdateWords
+  onUpdateWords,
+  onCardReviewed,
 }: FlashcardMessageCardProps) {
   const [speakingText, setSpeakingText] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -188,6 +190,11 @@ function FlashcardMessageCard({
     }
   };
 
+  // Report initial card reviewed on mount
+  useEffect(() => {
+    onCardReviewed?.(0);
+  }, [onCardReviewed]);
+
   // Stop any playing audio when card unmounts
   useEffect(() => {
     return () => {
@@ -198,7 +205,9 @@ function FlashcardMessageCard({
   const handlePrevious = () => {
     if (currentIndex <= 0) return;
     stopSpeech();
-    setCurrentIndex((prev) => Math.max(0, prev - 1));
+    const prevIndex = Math.max(0, currentIndex - 1);
+    setCurrentIndex(prevIndex);
+    onCardReviewed?.(prevIndex);
     setTimeout(scrollToCardTop, 30);
   };
 
@@ -207,6 +216,7 @@ function FlashcardMessageCard({
     stopSpeech();
     const nextIndex = Math.min(cards.length - 1, currentIndex + 1);
     setCurrentIndex(nextIndex);
+    onCardReviewed?.(nextIndex);
     const nextCard = cards[nextIndex];
     if (nextCard && nextCard.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
       handleSpeak(nextCard.word);
@@ -228,8 +238,36 @@ function FlashcardMessageCard({
                 Flashcard Deck
               </span>
               <span className="text-[10px] font-mono bg-stone-800 text-stone-300 px-2 py-0.5 rounded-full border border-stone-700">
-                {cards.length} {cards.length === 1 ? "Word" : "Words"}
+                {viewMode === "deck" ? `${currentIndex + 1} / ${cards.length}` : `${cards.length} Words`}
               </span>
+              {viewMode === "deck" && cards.length > 1 && (
+                <div className="flex items-center gap-1 ml-0.5">
+                  {cards.map((_, dotIdx) => {
+                    const isReviewed = data.reviewedIndices?.includes(dotIdx) || dotIdx === currentIndex;
+                    const isCurrent = dotIdx === currentIndex;
+                    return (
+                      <button
+                        key={dotIdx}
+                        type="button"
+                        onClick={() => {
+                          stopSpeech();
+                          setCurrentIndex(dotIdx);
+                          onCardReviewed?.(dotIdx);
+                          setTimeout(scrollToCardTop, 30);
+                        }}
+                        className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                          isCurrent
+                            ? "w-4 bg-amber-400"
+                            : isReviewed
+                            ? "w-2 bg-emerald-400/90 hover:bg-emerald-300"
+                            : "w-2 bg-stone-600 hover:bg-stone-500"
+                        }`}
+                        title={`Go to card ${dotIdx + 1}${isReviewed ? " (Reviewed)" : ""}`}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -251,7 +289,10 @@ function FlashcardMessageCard({
           </button>
           <button
             type="button"
-            onClick={() => setViewMode("grid")}
+            onClick={() => {
+              setViewMode("grid");
+              onCardReviewed?.("all");
+            }}
             className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
               viewMode === "grid"
                 ? "bg-amber-400 text-stone-950 shadow-2xs"

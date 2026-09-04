@@ -39,6 +39,7 @@ interface MessageListProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
+  onCardReviewed?: (msgId: string, cardIndex: number | "all") => void;
 }
 
 function MessageList({
@@ -73,6 +74,7 @@ function MessageList({
   onUpdateWords,
   onRetryErrorMessage,
   onCancelErrorMessage,
+  onCardReviewed,
 }: MessageListProps) {
   return (
     <div 
@@ -115,6 +117,7 @@ function MessageList({
               onUpdateWords={onUpdateWords}
               onRetryErrorMessage={onRetryErrorMessage}
               onCancelErrorMessage={onCancelErrorMessage}
+              onCardReviewed={onCardReviewed}
             />
           </Fragment>
         );

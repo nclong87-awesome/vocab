@@ -75,6 +75,7 @@ export default function WordChatModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isGeneratingAiActions, setIsGeneratingAiActions] = useState(false);
+  const [generatingMessageIndex, setGeneratingMessageIndex] = useState<number | null>(null);
 
   const bottomChips = useMemo(() => {
     if (!word) return [];
@@ -179,9 +180,11 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
     setIsTyping(false);
   };
 
-  const handleGenerateAiActions = async () => {
+  const handleGenerateAiActions = async (targetMsgIndex?: number) => {
     if (!word || isGeneratingAiActions || isTyping) return;
+    const msgIdx = targetMsgIndex ?? (messages.length - 1);
     setIsGeneratingAiActions(true);
+    setGeneratingMessageIndex(msgIdx);
     try {
       const recentInquiries = getRecentUserInquiries(8);
       let aiActions = await generateJitSuggestedActionsService({
@@ -198,9 +201,18 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         setMessages(prev => {
           if (prev.length === 0) return prev;
           const updated = [...prev];
-          updated[0] = {
-            ...updated[0],
-            suggestedActions: aiActions
+          const validIdx = Math.max(0, Math.min(msgIdx, updated.length - 1));
+          const currentActions = updated[validIdx]?.suggestedActions || [];
+          const existingAddWordActions = currentActions.filter(a => a.action === "add_word");
+          const existingActionLabels = new Set(existingAddWordActions.map(a => a.label.toLowerCase()));
+          const newUniqueActions = aiActions.filter(a => !existingActionLabels.has(a.label.toLowerCase()));
+
+          updated[validIdx] = {
+            ...updated[validIdx],
+            suggestedActions: [
+              ...existingAddWordActions,
+              ...(newUniqueActions.length > 0 ? newUniqueActions : aiActions)
+            ]
           };
           return updated;
         });
@@ -212,15 +224,22 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         setMessages(prev => {
           if (prev.length === 0) return prev;
           const updated = [...prev];
-          updated[0] = {
-            ...updated[0],
-            suggestedActions: fallbackActions
+          const validIdx = Math.max(0, Math.min(msgIdx, updated.length - 1));
+          const currentActions = updated[validIdx]?.suggestedActions || [];
+          const existingAddWordActions = currentActions.filter(a => a.action === "add_word");
+          updated[validIdx] = {
+            ...updated[validIdx],
+            suggestedActions: [
+              ...existingAddWordActions,
+              ...fallbackActions
+            ]
           };
           return updated;
         });
       }
     } finally {
       setIsGeneratingAiActions(false);
+      setGeneratingMessageIndex(null);
     }
   };
 
@@ -472,6 +491,9 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         {messages.map((m, idx) => {
           const isUser = m.role === "user";
           const isLast = idx === messages.length - 1;
+          const isThisMessageGenerating = isGeneratingAiActions && generatingMessageIndex === idx;
+          const hasActions = Array.isArray(m.suggestedActions) && m.suggestedActions.length > 0;
+          const hasTopicSuggestions = hasActions && m.suggestedActions!.some(a => a.action === "send_message");
           return (
             <div
               key={m.id || idx}
@@ -530,54 +552,28 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
                 )}
               </div>
 
-              {/* On-demand topic suggestion button for initial welcome message */}
-              {!isUser && idx === 0 && (!m.suggestedActions || m.suggestedActions.length === 0) && (
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={handleGenerateAiActions}
-                    disabled={isGeneratingAiActions || isTyping}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200/80 hover:text-stone-900 border border-stone-200 transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
-                  >
-                    {isGeneratingAiActions ? (
-                      <>
-                        <RefreshCw className="w-3 h-3 text-indigo-600 animate-spin shrink-0" />
-                        <span>Generating topics based on history...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
-                        <span>Suggest topics based on history</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-
               {/* Action Chips for Assistant responses */}
-              {!isUser && Array.isArray(m.suggestedActions) && m.suggestedActions.length > 0 && (
+              {!isUser && hasActions && (
                 <div className="flex flex-col gap-1.5 pt-1.5 max-w-[95%]">
-                  {idx === 0 && (
-                    <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
-                        <span>Suggested topics</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleGenerateAiActions}
-                        disabled={isGeneratingAiActions || isTyping}
-                        className="inline-flex items-center gap-1 text-stone-500 hover:text-stone-800 disabled:opacity-50 cursor-pointer font-medium hover:underline transition-colors"
-                        title="Generate new topics"
-                      >
-                        <RefreshCw className={`w-2.5 h-2.5 ${isGeneratingAiActions ? "animate-spin" : ""}`} />
-                        <span>{isGeneratingAiActions ? "Updating..." : "Refresh"}</span>
-                      </button>
+                  <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span>Suggested topics</span>
                     </div>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateAiActions(idx)}
+                      disabled={isGeneratingAiActions || isTyping}
+                      className="inline-flex items-center gap-1 text-stone-500 hover:text-stone-800 disabled:opacity-50 cursor-pointer font-medium hover:underline transition-colors"
+                      title="Generate new topics"
+                    >
+                      <RefreshCw className={`w-2.5 h-2.5 ${isThisMessageGenerating ? "animate-spin" : ""}`} />
+                      <span>{isThisMessageGenerating ? "Updating..." : "Refresh"}</span>
+                    </button>
+                  </div>
 
                   <div className="flex flex-wrap gap-1.5">
-                    {m.suggestedActions.map((act, actIdx) => (
+                    {m.suggestedActions!.map((act, actIdx) => (
                       <button
                         key={actIdx}
                         type="button"
@@ -594,6 +590,34 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* On-demand topic suggestion button: always shown at the end of every assistant answer */}
+              {!isUser && (
+                <div className={hasActions ? "pt-1.5" : "pt-2"}>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateAiActions(idx)}
+                    disabled={isGeneratingAiActions || isTyping}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200/80 hover:text-stone-900 border border-stone-200 transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
+                  >
+                    {isThisMessageGenerating ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 text-indigo-600 animate-spin shrink-0" />
+                        <span>Generating topics based on history...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                        <span>
+                          {hasTopicSuggestions
+                            ? "Suggest new topics based on history"
+                            : "Suggest topics based on history"}
+                        </span>
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>

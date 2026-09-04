@@ -1,6 +1,5 @@
 import { t } from "../config/i18n";
 import { areWordsEquivalent } from "./wordNormalization";
-import { getQuizCandidates, getCandidateWordsForFlashcards } from "./spacedRepetition";
 
 export function formatExistingWordDetails(existingWord: any, appLang: string = "English"): string {
   if (!existingWord) return "";
@@ -59,47 +58,62 @@ export function getRemainingWordActions(
     )
   );
 
-  if (!lastMsgWithWordActions || !Array.isArray(lastMsgWithWordActions.suggestedActions)) {
-    return [];
-  }
-
-  const normalizedJustAdded = (justAddedWord || "").trim().toLowerCase();
   const wordsList = Array.isArray(currentWords) ? currentWords : [];
 
-  const remainingWordActions: any[] = [];
-  const seenWords = new Set<string>();
-
-  // Extract non-word session navigation actions (e.g. start_sandwich_quiz) to preserve them across word additions
-  let rawSessionActions = (lastMsgWithWordActions.suggestedActions || []).filter(
-    (a: any) =>
-      a &&
-      typeof a === "object" &&
-      (a.action === "start_sandwich_quiz" ||
-        a.action === "start_practice_balanced" ||
-        a.action === "start_practice_quiz_only" ||
-        a.action === "start_practice" ||
-        a.action === "view_flashcard" ||
-        a.action === "next_flashcard" ||
-        a.action === "next_quiz")
+  // Extract non-word session navigation actions (e.g. start_sandwich_quiz) to preserve them across word additions.
+  // Search backwards across all messages so intermediate messages without session actions don't lose the session action.
+  const lastMsgWithSessionAction = reversed.find((m) =>
+    m &&
+    m.role === "assistant" &&
+    Array.isArray(m.suggestedActions) &&
+    m.suggestedActions.some(
+      (a: any) =>
+        a &&
+        typeof a === "object" &&
+        (a.action === "start_sandwich_quiz" ||
+          a.action === "start_practice_balanced" ||
+          a.action === "start_practice_quiz_only" ||
+          a.action === "start_practice" ||
+          a.action === "view_flashcard" ||
+          a.action === "next_flashcard" ||
+          a.action === "next_quiz")
+    )
   );
 
-  // If session actions include start_sandwich_quiz, check if quiz-eligible words exist
-  const hasQuizEligible = getQuizCandidates(wordsList).length > 0;
+  let rawSessionActions = lastMsgWithSessionAction
+    ? (lastMsgWithSessionAction.suggestedActions || []).filter(
+        (a: any) =>
+          a &&
+          typeof a === "object" &&
+          (a.action === "start_sandwich_quiz" ||
+            a.action === "start_practice_balanced" ||
+            a.action === "start_practice_quiz_only" ||
+            a.action === "start_practice" ||
+            a.action === "view_flashcard" ||
+            a.action === "next_flashcard" ||
+            a.action === "next_quiz")
+      )
+    : [];
+
   const sessionActions = rawSessionActions
     .map((a: any) => {
-      if (a.action === "start_sandwich_quiz" && !hasQuizEligible) {
-        const hasFlashcardEligible = getCandidateWordsForFlashcards(wordsList, 3).length > 0;
-        if (hasFlashcardEligible) {
-          return {
-            label: t("action_next_flashcard", appLang),
-            action: "view_flashcard",
-          };
-        }
-        return null;
+      if (a.action === "start_sandwich_quiz") {
+        return {
+          ...a,
+          label: a.label || t("chat_sandwich_start_quiz_action", appLang),
+        };
       }
       return a;
     })
     .filter(Boolean);
+
+  if (!lastMsgWithWordActions || !Array.isArray(lastMsgWithWordActions.suggestedActions)) {
+    return sessionActions;
+  }
+
+  const normalizedJustAdded = (justAddedWord || "").trim().toLowerCase();
+  const remainingWordActions: any[] = [];
+  const seenWords = new Set<string>();
 
   // Sort actions so that individual word additions are processed FIRST, and batch actions (add_multiplewords) LAST.
   // This preserves the original individual action types and prevents them from being converted to confirm_save_word prematurely.

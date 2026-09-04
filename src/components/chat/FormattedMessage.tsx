@@ -222,14 +222,30 @@ function FormattedMessage({
         );
       }
 
+      // Handle Horizontal Rule / Divider (---, ***, ___)
+      if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(line.trim())) {
+        return <hr key={i} className="border-t border-stone-200/80 my-1 border-solid" />;
+      }
+
       // Handle Headers
       if (line.trim().startsWith("### ")) {
         const headerContent = line.trim().substring(4);
         const hasIpaOrPronunciation = /`\/[^\/]+\/`/.test(headerContent) || /\/[a-zA-Zˈˌːɪɛæɑɔʊəʌpbtdkɡfvθðszʃʒhmnŋlrjw]+?\//.test(headerContent);
         const headerWord = hMatch ? hMatch[1].trim() : (currentSectionWord || globalDetectedWord);
 
+        // If preceded by a divider or at the start, keep top spacing minimal to avoid excessive gaps
+        let isPrecededByDivider = false;
+        for (let pIdx = i - 1; pIdx >= 0; pIdx--) {
+          const prev = lines[pIdx].trim();
+          if (prev === "") continue;
+          if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(prev)) {
+            isPrecededByDivider = true;
+          }
+          break;
+        }
+
         return (
-          <div key={i} className="flex items-center gap-2 pt-2 pb-1 flex-wrap">
+          <div key={i} className={`flex items-center gap-2 ${isPrecededByDivider ? "pt-0.5" : "pt-1.5"} pb-0.5 flex-wrap`}>
             <h4 className="text-base font-bold text-stone-900">
               {parseInlineMarkdown(headerContent)}
             </h4>
@@ -249,7 +265,7 @@ function FormattedMessage({
       }
       if (line.trim().startsWith("## ")) {
         return (
-          <h3 key={i} className="text-lg font-bold text-stone-900 pt-3 pb-1 border-b border-stone-100">
+          <h3 key={i} className="text-lg font-bold text-stone-900 pt-2 pb-1 border-b border-stone-100">
             {parseInlineMarkdown(line.trim().substring(3))}
           </h3>
         );
@@ -277,9 +293,15 @@ function FormattedMessage({
         );
       }
 
-      // Default paragraph
+      // Default paragraph or empty line
       if (line.trim() === "") {
-        return <div key={i} className="h-2" />;
+        // Skip redundant empty lines: at edges, adjacent to dividers, preceding headers, or stacked
+        if (i === 0 || i === lines.length - 1) return null;
+        if (lines[i - 1]?.trim() === "") return null;
+        if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(lines[i - 1]?.trim() || "")) return null;
+        if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(lines[i + 1]?.trim() || "")) return null;
+        if (lines[i + 1]?.trim().startsWith("### ") || lines[i + 1]?.trim().startsWith("## ")) return null;
+        return <div key={i} className="h-1" />;
       }
 
       return <p key={i} className="text-stone-800">{parseInlineMarkdown(line)}</p>;
