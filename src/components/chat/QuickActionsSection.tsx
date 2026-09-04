@@ -1,9 +1,16 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Search, X, LayoutGrid } from "lucide-react";
+import { Search, X, LayoutGrid, Plus, Settings } from "lucide-react";
 import { LLMConfig, LLMProvider, Word } from "../../types";
 import { getQuickActionItems } from "./quickActionsConfig";
 import { t } from "../../config/i18n";
+import { 
+  getCustomQuickActions, 
+  CustomQuickAction, 
+  CUSTOM_ACTIONS_UPDATED_EVENT, 
+  formatPromptWithContext 
+} from "../../services/jitActionChipsService";
+import CustomQuickActionModal from "./CustomQuickActionModal";
 
 interface QuickActionsSectionProps {
   targetLanguage: string;
@@ -68,9 +75,21 @@ function QuickActionsSection({
   words: _words,
 }: QuickActionsSectionProps) {
   const [isActionsPanelOpen, setIsActionsPanelOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat">("all");
+  const [selectedCategory, setSelectedCategory] = useState<"all" | "writing" | "study" | "vocab" | "chat" | "custom">("all");
   const [actionSearchQuery, setActionSearchQuery] = useState("");
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+  const [customActions, setCustomActions] = useState<CustomQuickAction[]>([]);
   const dockScrollRef = useRef<HTMLDivElement>(null);
+
+  const loadCustomActions = useCallback(() => {
+    setCustomActions(getCustomQuickActions().filter(a => a.scope === "both" || a.scope === "chat"));
+  }, []);
+
+  useEffect(() => {
+    loadCustomActions();
+    window.addEventListener(CUSTOM_ACTIONS_UPDATED_EVENT, loadCustomActions);
+    return () => window.removeEventListener(CUSTOM_ACTIONS_UPDATED_EVENT, loadCustomActions);
+  }, [loadCustomActions]);
 
   const propsRef = useRef({
     targetLanguage,
@@ -156,7 +175,34 @@ function QuickActionsSection({
       }
     }));
 
-    return [...allQuickActionItems].sort((a, b) => {
+    const customItems = customActions.map((c, idx) => ({
+      id: `custom_${c.id}`,
+      label: c.label,
+      category: (c.category === "custom" ? "custom" : c.category) as any,
+      categoryLabel: "Custom",
+      icon: <span className="text-sm select-none">{c.iconEmoji || "⭐"}</span>,
+      title: c.label,
+      description: c.description || c.promptTemplate,
+      className: "bg-amber-50/90 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: c.isPinned ? -10 + idx : 20 + idx,
+      onClick: () => {
+        const p = propsRef.current;
+        p.handleRecordActionUse(`custom_${c.id}`);
+        p.onClearHistory();
+        const formatted = formatPromptWithContext(c.promptTemplate, {
+          targetLanguage: p.targetLanguage,
+          nativeLanguage: p.nativeLanguage
+        });
+        p.onSendMessage(formatted);
+        setIsActionsPanelOpen(false);
+        p.scrollToBottom("smooth");
+        p.focusInput();
+      }
+    }));
+
+    const combined = [...allQuickActionItems, ...customItems];
+
+    return combined.sort((a, b) => {
       const timeA = actionLastUsed[a.id] || 0;
       const timeB = actionLastUsed[b.id] || 0;
       if (timeB !== timeA) {
@@ -164,7 +210,7 @@ function QuickActionsSection({
       }
       return a.defaultIndex - b.defaultIndex;
     });
-  }, [appLanguage]);
+  }, [appLanguage, customActions]);
 
   const filteredActionItems = quickActionItems.filter((item) => {
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
@@ -236,6 +282,16 @@ function QuickActionsSection({
 
                 <button
                   type="button"
+                  onClick={() => setIsCustomModalOpen(true)}
+                  className="px-2.5 py-1.5 rounded-lg bg-white border border-stone-200 hover:bg-stone-50 text-stone-700 hover:text-stone-900 text-xs font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer shrink-0"
+                  title="Create or customize quick actions"
+                >
+                  <Settings className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">Customize</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setIsActionsPanelOpen(false)}
                   className="hidden sm:flex w-7 h-7 rounded-lg bg-stone-200/70 hover:bg-stone-300 text-stone-700 items-center justify-center text-xs transition-colors cursor-pointer shrink-0"
                   title="Close actions panel"
@@ -253,7 +309,8 @@ function QuickActionsSection({
                   { id: "writing", label: t("quick_cat_writing", appLanguage) },
                   { id: "study", label: t("quick_cat_study", appLanguage) },
                   { id: "vocab", label: t("quick_cat_vocab", appLanguage) },
-                  { id: "chat", label: t("quick_cat_chat", appLanguage) }
+                  { id: "chat", label: t("quick_cat_chat", appLanguage) },
+                  { id: "custom", label: `⭐ Custom (${customActions.length})` }
                 ].map((cat) => (
                   <button
                     key={cat.id}
@@ -341,6 +398,17 @@ function QuickActionsSection({
               </button>
             );
           })}
+
+          {/* Quick Add Custom Action Chip in Dock */}
+          <button
+            type="button"
+            onClick={() => setIsCustomModalOpen(true)}
+            className="bg-white hover:bg-stone-50 text-stone-600 hover:text-stone-900 border border-dashed border-stone-300 text-xs font-semibold py-1.5 px-2.5 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1 select-none"
+            title="Create a custom quick action chip"
+          >
+            <Plus className="w-3 h-3 text-amber-600" />
+            <span className="hidden sm:inline">Custom</span>
+          </button>
         </div>
 
         {/* Toggle All Actions Panel Button */}
@@ -364,6 +432,15 @@ function QuickActionsSection({
           </span>
         </button>
       </div>
+
+      {/* Custom Quick Actions Management Modal */}
+      <CustomQuickActionModal
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
+      />
     </>
   );
 }

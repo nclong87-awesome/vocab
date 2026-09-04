@@ -80,6 +80,19 @@ export const syncToGist = async (
         }
       }
 
+      // Dedicated human-readable AI Personality Profile file in Gist
+      const profileSetting = (sanitized.stores.settings || []).find((s: any) => s && s.key === 'user_personality_profile');
+      if (profileSetting && typeof profileSetting.value === "string") {
+        try {
+          const parsedProfile = JSON.parse(profileSetting.value);
+          filesToUpdate['VocabLearner_03_ai_personality_profile.json'] = {
+            content: JSON.stringify(parsedProfile, null, 2)
+          };
+        } catch {
+          // ignore
+        }
+      }
+
       console.log("[Sync Service] [syncToGist] Prepared files payload details:");
       Object.keys(filesToUpdate).forEach(filename => {
         const fileContent = filesToUpdate[filename]?.content;
@@ -276,6 +289,44 @@ export const syncFromGist = async (
             hasValidData = true;
           } catch (e) {
             console.error("Error parsing deletedWords from gist:", e);
+          }
+        }
+      }
+
+      // Check dedicated AI Personality Profile file
+      const profileFile = result.files['VocabLearner_03_ai_personality_profile.json'];
+      if (profileFile) {
+        const profileContentStr = await getFileContent(profileFile);
+        if (profileContentStr) {
+          try {
+            const parsedProfile = JSON.parse(profileContentStr);
+            if (parsedProfile && parsedProfile.archetype) {
+              if (!Array.isArray(parsedData.stores.settings)) {
+                parsedData.stores.settings = [];
+              }
+              const existingIdx = parsedData.stores.settings.findIndex((s: any) => s && s.key === 'user_personality_profile');
+              const profileSetting = {
+                key: 'user_personality_profile',
+                value: profileContentStr,
+                updatedAt: new Date(parsedProfile.lastUpdated || Date.now()).toISOString()
+              };
+              if (existingIdx >= 0) {
+                // If existing setting exists, keep the one with newer lastUpdated
+                try {
+                  const existingParsed = JSON.parse(parsedData.stores.settings[existingIdx].value);
+                  if ((parsedProfile.lastUpdated || 0) >= (existingParsed.lastUpdated || 0)) {
+                    parsedData.stores.settings[existingIdx] = profileSetting;
+                  }
+                } catch {
+                  parsedData.stores.settings[existingIdx] = profileSetting;
+                }
+              } else {
+                parsedData.stores.settings.push(profileSetting);
+              }
+              hasValidData = true;
+            }
+          } catch (e) {
+            console.error("Error parsing dedicated AI personality profile from gist:", e);
           }
         }
       }

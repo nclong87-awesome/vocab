@@ -10,6 +10,7 @@ import {
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { speakText as speakTextService } from "../utils/ttsService";
 import { isWordInCollection } from "../utils/wordNormalization";
+import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 
 export function useVocabulary() {
   const [words, setWords] = useState<Word[]>([]);
@@ -56,6 +57,8 @@ export function useVocabulary() {
       saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
       return newStats;
     });
+
+    recordLearningInteraction("word_learned", { wordId });
   }, []);
 
   const handleAddCustomWord = useCallback((
@@ -126,7 +129,7 @@ export function useVocabulary() {
 
   const handleFinishQuiz = useCallback((
     score: number, 
-    _total: number, 
+    total: number, 
     correctWordIds?: string[], 
     incorrectWordIds?: string[]
   ) => {
@@ -164,6 +167,8 @@ export function useVocabulary() {
       saveStatsToDB(newStats).catch(e => console.error("IndexedDB stats save error:", e));
       return newStats;
     });
+
+    recordLearningInteraction("quiz", { score, total });
   }, []);
 
   return {

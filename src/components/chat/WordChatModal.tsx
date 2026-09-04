@@ -20,12 +20,15 @@ import { sendChatMessageService, generateJitSuggestedActionsService, ChatMessage
 import { 
   recordUserInquiry, 
   getRecentUserInquiries, 
-  getPersonalizedInitialActions, 
-  getAdaptiveBottomChips
+  getPersonalizedInitialActions
 } from "../../services/userInquiryService";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
+import { getUserPersonalityProfileFromDB } from "../../db/indexedDB";
 import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
+import JitActionChipsBar from "./JitActionChipsBar";
+import CustomQuickActionModal from "./CustomQuickActionModal";
+import { UserPersonalityProfile } from "../../types";
 
 interface WordChatModalProps {
   word: Word | null;
@@ -76,11 +79,18 @@ export default function WordChatModal({
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isGeneratingAiActions, setIsGeneratingAiActions] = useState(false);
   const [generatingMessageIndex, setGeneratingMessageIndex] = useState<number | null>(null);
+  const [userProfile, setUserProfile] = useState<UserPersonalityProfile | null>(null);
+  const [isCustomActionModalOpen, setIsCustomActionModalOpen] = useState(false);
 
-  const bottomChips = useMemo(() => {
-    if (!word) return [];
-    return getAdaptiveBottomChips(word);
-  }, [word?.id, word?.word, word?.category, word?.partOfSpeech]);
+  useEffect(() => {
+    getUserPersonalityProfileFromDB().then((p) => {
+      if (p) setUserProfile(p);
+    }).catch(() => null);
+  }, []);
+
+  const lastAssistantMsg = useMemo(() => {
+    return [...messages].reverse().find(m => m.role === "assistant");
+  }, [messages]);
 
   const latestResponseRef = useRef<HTMLDivElement | null>(null);
   const typingIndicatorRef = useRef<HTMLDivElement | null>(null);
@@ -271,7 +281,8 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
     recordUserInquiry(messageContent, {
       word: word.word,
       category: word.category,
-      partOfSpeech: word.partOfSpeech
+      partOfSpeech: word.partOfSpeech,
+      source: "ask_ai_dialog"
     });
 
     const userMessage: ChatItem = {
@@ -310,6 +321,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       }));
 
       const recentInquiries = getRecentUserInquiries(8);
+      const userProfile = await getUserPersonalityProfileFromDB().catch(() => null);
 
       const res: ChatMessageResult = await sendChatMessageService({
         messages: chatHistory,
@@ -318,6 +330,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         llmConfig,
         wordContext,
         userInquiries: recentInquiries,
+        userProfile,
         signal: controller.signal
       });
 
@@ -671,20 +684,23 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       {/* Clean Bottom Input Area */}
       <footer className="border-t border-stone-200 bg-white px-3 sm:px-6 py-3 shrink-0">
         <div className="max-w-4xl w-full mx-auto space-y-2">
-          {/* Quick suggestions scroll */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
-            {bottomChips.map((chip, chipIdx) => (
-              <button
-                key={chipIdx}
-                type="button"
-                onClick={() => populateInput(chip.query || chip.label)}
-                disabled={isTyping}
-                className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap flex items-center gap-1.5 active:scale-95"
-              >
-                <span>{chip.label}</span>
-              </button>
-            ))}
-          </div>
+          {/* Dynamic JIT Action Chips Bar */}
+          <JitActionChipsBar
+            mode="word"
+            word={word}
+            lastAssistantMessage={lastAssistantMsg?.content}
+            personalityProfile={userProfile}
+            nativeLanguage={nativeLanguage}
+            targetLanguage={targetLanguage}
+            onSelectChip={(query, _chip, mode) => {
+              if (mode === "send") {
+                handleSendMessage(query);
+              } else {
+                populateInput(query);
+              }
+            }}
+            onOpenCustomActionModal={() => setIsCustomActionModalOpen(true)}
+          />
 
           {/* Text Input Row */}
           <form
@@ -733,6 +749,16 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
           </form>
         </div>
       </footer>
+
+      {/* Custom Quick Actions Management Modal */}
+      <CustomQuickActionModal
+        isOpen={isCustomActionModalOpen}
+        onClose={() => setIsCustomActionModalOpen(false)}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
+        sampleWord={word.word}
+      />
     </motion.div>,
     document.body
   );

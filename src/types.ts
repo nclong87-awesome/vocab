@@ -293,3 +293,36 @@ export interface ChatMessage {
     canRetry?: boolean;
   };
 }
+
+export type LearnerArchetype =
+  | "Pragmatic Professional"
+  | "Curious Explorer"
+  | "Meticulous Perfectionist"
+  | "Casual Conversationalist"
+  | "Academic Achiever";
+
+export interface UserPersonalityProfile {
+  version: number;
+  lastUpdated: number;
+  interactionCountAnalyzed: number;
+  confidenceScore: number; // 0 - 100
+  archetype: LearnerArchetype;
+  archetypeSummary: string;
+  archetypeTraits: string[];
+  learningPreferences: {
+    primaryModality: "contextual_examples" | "grammar_mechanics" | "visual_mnemonics" | "etymological_roots";
+    explanationDepth: "punchy_concise" | "deep_nuance" | "dialogue_driven";
+    formalityPreference: "formal" | "business_casual" | "relaxed_slang";
+    challengeAttitude: "gentle_scaffolding" | "direct_critique" | "fast_paced_gamified";
+  };
+  detectedInterests: string[];
+  frequentQuestionTypes: ("nuance_comparison" | "collocations" | "pronunciation" | "grammar" | "formality" | "usage_context")[];
+  diagnostics: {
+    strengths: string[];
+    blindSpots: string[];
+    actionableAdvice: string;
+  };
+  tailoredSystemPromptPatch: string;
+  modelUsed?: string;
+  providerUsed?: string;
+}

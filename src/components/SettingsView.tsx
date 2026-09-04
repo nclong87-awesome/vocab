@@ -241,12 +241,22 @@ export default function SettingsView({
             const remoteDate = new Date(remoteData.exportedAt).toLocaleString();
             const remoteWordCount = remoteData.stores?.words?.length || 0;
             const remoteStatsData = remoteData.stores?.stats?.[0]?.data;
+            const remoteProfileSetting = remoteData.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+            let remoteArchetype = "None";
+            if (remoteProfileSetting?.value) {
+              try { remoteArchetype = JSON.parse(remoteProfileSetting.value)?.archetype || "Unknown"; } catch {}
+            }
             
             const localData = await exportIndexedDBDatabase();
             const localWordCount = localData.stores.words.length;
             const localStatsData = localData.stores.stats?.[0]?.data;
+            const localProfileSetting = localData.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+            let localArchetype = "None";
+            if (localProfileSetting?.value) {
+              try { localArchetype = JSON.parse(localProfileSetting.value)?.archetype || "Unknown"; } catch {}
+            }
             
-            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n- ${remoteStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${remoteStatsData?.streak?.count || 0} day streak\n\nLocal Database:\n- ${localWordCount} words\n- ${localStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${localStatsData?.streak?.count || 0} day streak\n\nAre you sure you want to overwrite the remote backup?`;
+            remoteWarning = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n- ${remoteStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${remoteStatsData?.streak?.count || 0} day streak\n- AI Persona: ${remoteArchetype}\n\nLocal Database:\n- ${localWordCount} words\n- ${localStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${localStatsData?.streak?.count || 0} day streak\n- AI Persona: ${localArchetype}\n\nAre you sure you want to overwrite the remote backup?`;
           }
         } catch (e) {
           console.warn("Could not fetch remote backup for comparison", e);
@@ -297,12 +307,22 @@ export default function SettingsView({
         const remoteDate = new Date(data.exportedAt).toLocaleString();
         const remoteWordCount = data.stores?.words?.length || 0;
         const remoteStatsData = data.stores?.stats?.[0]?.data;
+        const remoteProfileSetting = data.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+        let remoteArchetype = "None";
+        if (remoteProfileSetting?.value) {
+          try { remoteArchetype = JSON.parse(remoteProfileSetting.value)?.archetype || "Unknown"; } catch {}
+        }
         
         const localData = await exportIndexedDBDatabase();
         const localWordCount = localData.stores.words.length;
         const localStatsData = localData.stores.stats?.[0]?.data;
+        const localProfileSetting = localData.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+        let localArchetype = "None";
+        if (localProfileSetting?.value) {
+          try { localArchetype = JSON.parse(localProfileSetting.value)?.archetype || "Unknown"; } catch {}
+        }
         
-        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n- ${remoteStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${remoteStatsData?.streak?.count || 0} day streak\n\nLocal Database:\n- ${localWordCount} words\n- ${localStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${localStatsData?.streak?.count || 0} day streak\n\nAre you sure you want to overwrite your local database with this remote backup?`;
+        const confirmMsg = `Remote Backup (${remoteDate}):\n- ${remoteWordCount} words\n- ${remoteStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${remoteStatsData?.streak?.count || 0} day streak\n- AI Persona: ${remoteArchetype}\n\nLocal Database:\n- ${localWordCount} words\n- ${localStatsData?.totalQuizzesTaken || 0} quizzes taken\n- ${localStatsData?.streak?.count || 0} day streak\n- AI Persona: ${localArchetype}\n\nAre you sure you want to overwrite your local database with this remote backup?`;
         if (!window.confirm(confirmMsg)) {
           setIsCloudSyncing(false);
           setDbStatusMessage(null);
@@ -463,9 +483,17 @@ export default function SettingsView({
       URL.revokeObjectURL(url);
 
       const wordCount = dbData.stores.words ? dbData.stores.words.length : 0;
+      const profileSetting = dbData.stores.settings?.find((s: any) => s && s.key === "user_personality_profile");
+      let archetypeDesc = "";
+      if (profileSetting?.value) {
+        try {
+          const arc = JSON.parse(profileSetting.value)?.archetype;
+          if (arc) archetypeDesc = `, Persona: ${arc}`;
+        } catch {}
+      }
       setDbStatusMessage({
         type: "success",
-        text: `Export successful! Database backup downloaded (${wordCount} words, version ${dbData.version}).`
+        text: `Export successful! Database backup downloaded (${wordCount} words${archetypeDesc}, version ${dbData.version}).`
       });
     } catch (err: any) {
       console.error("Export IndexedDB failed:", err);
@@ -1749,7 +1777,7 @@ export default function SettingsView({
                 </div>
               </div>
               <p className="text-xs text-stone-600">
-                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices.
+                Sync your database backup securely to a private GitHub Gist to easily restore it on other devices. Includes words, study statistics, and your compiled AI Learner Personality Profile.
                 You can create a Personal Access Token (classic) with the <code className="bg-stone-200 px-1 py-0.5 rounded">gist</code> scope at <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub Settings</a>.
               </p>
             </div>

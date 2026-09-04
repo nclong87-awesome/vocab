@@ -19,8 +19,9 @@ import {
   sortUnstudiedWordsOldestFirst,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
-import { saveAllWordsToDB, getAllWordsFromDB } from "../db/indexedDB";
+import { saveAllWordsToDB, getAllWordsFromDB, getUserPersonalityProfileFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
+import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
@@ -1580,8 +1581,9 @@ export function useChat({
         payloadMessages.push({ role: "user", content: text.trim() });
       }
 
-      recordUserInquiry(text.trim());
+      recordUserInquiry(text.trim(), { source: "main_chat" });
       const recentInquiries = getRecentUserInquiries(8);
+      const userProfile = await getUserPersonalityProfileFromDB().catch(() => null);
 
       const result = await sendChatMessageService({
         messages: payloadMessages,
@@ -1589,6 +1591,7 @@ export function useChat({
         nativeLanguage,
         llmConfig: configForServer,
         userInquiries: recentInquiries,
+        userProfile,
         signal: controller.signal,
       });
 
@@ -2727,6 +2730,7 @@ export function useChat({
             currentReviewed.add(cardIndex);
           }
           if (currentReviewed.size !== (m.flashcardData.reviewedIndices?.length || 0)) {
+            recordLearningInteraction("flashcard_review", { msgId, cardIndex });
             return {
               ...m,
               flashcardData: {

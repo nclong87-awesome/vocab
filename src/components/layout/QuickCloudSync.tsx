@@ -87,7 +87,8 @@ export default function QuickCloudSync({ onReloadData, onOpenSettings }: QuickCl
           calculatedMerge.diffDetails.newRemoteWords.length +
           calculatedMerge.diffDetails.deletedWordsToSync.length +
           calculatedMerge.diffDetails.updatedWords.length +
-          (calculatedMerge.diffDetails.statsChanged ? 1 : 0);
+          (calculatedMerge.diffDetails.statsChanged ? 1 : 0) +
+          (calculatedMerge.diffDetails.profileChanged ? 1 : 0);
         setPendingCount(count);
       } else {
         setSyncStatus("in-sync");

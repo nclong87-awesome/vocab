@@ -1,4 +1,4 @@
-import { Word, UserStats, LLMConfig, TTSConfig, ApiRequestLog } from "../types";
+import { Word, UserStats, LLMConfig, TTSConfig, ApiRequestLog, UserPersonalityProfile } from "../types";
 import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { sanitizeLlmConfig } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
@@ -675,6 +675,63 @@ export async function isLibraryImportedInDB(libraryId: string): Promise<boolean>
 }
 
 /* -------------------------------------------------------------------------- */
+/* User Personality Profile                                                   */
+/* -------------------------------------------------------------------------- */
+
+export const USER_PERSONALITY_PROFILE_KEY = "user_personality_profile";
+const LOCAL_USER_PERSONALITY_PROFILE_KEY = "vocab_learner_user_personality_profile";
+
+/**
+ * Retrieves the persisted User Personality Profile from IndexedDB (with localStorage fallback).
+ */
+export async function getUserPersonalityProfileFromDB(): Promise<UserPersonalityProfile | null> {
+  try {
+    const raw = await getSettingFromDB(USER_PERSONALITY_PROFILE_KEY);
+    if (raw) {
+      const parsed = parseJSON<UserPersonalityProfile>(raw, "user personality profile");
+      if (parsed && parsed.archetype) {
+        return parsed;
+      }
+    }
+    // Fallback to localStorage
+    const lsRaw = lsGet(LOCAL_USER_PERSONALITY_PROFILE_KEY);
+    if (lsRaw) {
+      const parsed = parseJSON<UserPersonalityProfile>(lsRaw, "user personality profile");
+      if (parsed && parsed.archetype) {
+        // Backfill to IndexedDB
+        void saveSettingToDB(USER_PERSONALITY_PROFILE_KEY, lsRaw);
+        return parsed;
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error("Error reading user personality profile from IndexedDB:", err);
+    return null;
+  }
+}
+
+/**
+ * Persists the compiled User Personality Profile to IndexedDB and localStorage,
+ * and emits an update event for reactive UI components.
+ */
+export async function saveUserPersonalityProfileToDB(profile: UserPersonalityProfile): Promise<void> {
+  try {
+    const serialized = JSON.stringify(profile);
+    await saveSettingToDB(USER_PERSONALITY_PROFILE_KEY, serialized);
+    lsSet(LOCAL_USER_PERSONALITY_PROFILE_KEY, serialized);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("vocab-user-profile-updated", { detail: { profile } })
+      );
+    }
+    notifyLocalDBUpdated();
+  } catch (err) {
+    console.error("Error saving user personality profile to IndexedDB:", err);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Backup / restore / reset                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -816,6 +873,25 @@ export async function importIndexedDBDatabase(data: unknown): Promise<ImportResu
       if (items) replaceAll(tx, name, items);
     }
   });
+
+  // Synchronize restored personality profile to localStorage and notify UI components
+  if (Array.isArray(stores.settings)) {
+    const settingsArr = stores.settings as any[];
+    const profileSetting = settingsArr.find((s) => s && s.key === USER_PERSONALITY_PROFILE_KEY) as StoredSetting | undefined;
+    if (profileSetting && typeof profileSetting.value === "string") {
+      try {
+        lsSet(LOCAL_USER_PERSONALITY_PROFILE_KEY, profileSetting.value);
+        const parsedProfile = JSON.parse(profileSetting.value);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("vocab-user-profile-updated", { detail: { profile: parsedProfile } })
+          );
+        }
+      } catch (err) {
+        console.warn("Could not sync imported user personality profile to localStorage:", err);
+      }
+    }
+  }
 
   const recordCounts = payload.reduce((acc, { name, items }) => {
     acc[name] = items?.length ?? 0;

@@ -10,7 +10,8 @@ import {
   Plus,
   RefreshCw,
   CheckCircle2,
-  Trash2
+  Trash2,
+  BrainCircuit
 } from "lucide-react";
 import { MergeResult } from "../../utils/cloudSyncMerge";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
@@ -51,6 +52,23 @@ export default function CloudSyncConfirmModal({
   const remoteDate = remoteData.exportedAt 
     ? new Date(remoteData.exportedAt).toLocaleString() 
     : "Unknown date";
+
+  // Extract learner personality profile archetypes if present
+  const localProfileSetting = localData?.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+  let localArchetype: string | null = null;
+  if (localProfileSetting?.value) {
+    try {
+      localArchetype = JSON.parse(localProfileSetting.value)?.archetype || null;
+    } catch {}
+  }
+
+  const remoteProfileSetting = remoteData?.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+  let remoteArchetype: string | null = null;
+  if (remoteProfileSetting?.value) {
+    try {
+      remoteArchetype = JSON.parse(remoteProfileSetting.value)?.archetype || null;
+    } catch {}
+  }
 
   const diff = mergeResult?.diffDetails;
 
@@ -199,6 +217,31 @@ export default function CloudSyncConfirmModal({
                   </div>
                 </div>
               )}
+
+              {/* AI Personality Profile Merge Summary */}
+              {diff && diff.personalityProfileDiff && diff.personalityProfileDiff.action !== "none" && diff.personalityProfileDiff.action !== "identical" && (
+                <div className="bg-amber-50/60 p-2 sm:p-2.5 border border-amber-200 flex flex-col gap-1 text-[10px] sm:text-[11px] text-stone-800 font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-950 flex items-center gap-1.5 font-sans">
+                      <BrainCircuit className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      AI Learner Persona:
+                    </span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                      {diff.personalityProfileDiff.action === "pull_remote" ? "Updated from Cloud" : "Uploading to Cloud"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-stone-700 pt-1 border-t border-amber-200/60">
+                    <span className="font-sans font-medium text-amber-900">
+                      Target: <strong className="font-bold">{diff.personalityProfileDiff.chosenArchetype}</strong>
+                    </span>
+                    <span className="text-[9px] text-stone-500">
+                      {diff.personalityProfileDiff.action === "pull_remote"
+                        ? `Cloud (${diff.personalityProfileDiff.remoteInteractions || 0} analyzed) > Local (${diff.personalityProfileDiff.localInteractions || 0})`
+                        : `Local (${diff.personalityProfileDiff.localInteractions || 0} analyzed) synced`}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -230,6 +273,15 @@ export default function CloudSyncConfirmModal({
                       <Layers className="w-3 h-3" /> Quizzes:
                     </span>
                     <strong className="font-bold text-stone-950">{localStats.totalQuizzesTaken || 0}</strong>
+                  </div>
+                )}
+
+                {localArchetype && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500 flex items-center gap-1">
+                      <BrainCircuit className="w-3 h-3 text-amber-600" /> Persona:
+                    </span>
+                    <strong className="font-bold text-stone-950 truncate max-w-[150px]">{localArchetype}</strong>
                   </div>
                 )}
 
@@ -270,6 +322,15 @@ export default function CloudSyncConfirmModal({
                       <Layers className="w-3 h-3" /> Quizzes:
                     </span>
                     <strong className="font-bold text-stone-950">{remoteStats.totalQuizzesTaken || 0}</strong>
+                  </div>
+                )}
+
+                {remoteArchetype && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-stone-500 flex items-center gap-1">
+                      <BrainCircuit className="w-3 h-3 text-blue-600" /> Persona:
+                    </span>
+                    <strong className="font-bold text-stone-950 truncate max-w-[150px]">{remoteArchetype}</strong>
                   </div>
                 )}
 

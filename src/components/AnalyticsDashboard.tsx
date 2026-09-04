@@ -21,6 +21,7 @@ import { getDaysSinceLastReview, isWordEligibleForReview } from "../utils/spaced
 import { t } from "../config/i18n";
 
 import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
+import AiPersonalityProfileCard from "./analytics/AiPersonalityProfileCard";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
 import PracticeTimeline from "./analytics/PracticeTimeline";
 
@@ -266,6 +267,14 @@ export default function AnalyticsDashboard({
           </button>
         </div>
       </div>
+
+      {/* AI LEARNER PERSONALITY & PROFILING CARD */}
+      <AiPersonalityProfileCard
+        words={safeWords}
+        stats={stats}
+        llmConfig={llmConfig}
+        appLanguage={appLanguage}
+      />
 
       {/* AI PERFORMANCE COACH REPORT CARD */}
       <AnimatePresence>

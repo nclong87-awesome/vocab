@@ -1,4 +1,4 @@
-import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord, FlashcardItem, SuggestedPairedWord } from "../types";
+import { LLMConfig, Word, QuizQuestion, UserStats, SuggestedVocabularyWord, FlashcardItem, SuggestedPairedWord, UserPersonalityProfile } from "../types";
 import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
@@ -2261,6 +2261,7 @@ export interface ChatMessageRequest {
   llmConfig?: LLMConfig;
   wordContext?: Partial<Word> | null;
   userInquiries?: Array<{ question: string; word?: string; timestamp?: number }>;
+  userProfile?: UserPersonalityProfile | null;
   signal?: AbortSignal;
 }
 
@@ -2280,7 +2281,7 @@ export interface ChatMessageResult {
 }
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
-  const { messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries, signal } = params;
+  const { messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries, userProfile, signal } = params;
   notifyLlmRequestStartFromConfig(llmConfig);
   const startTime = performance.now();
 
@@ -2423,7 +2424,7 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
     const res = await fetchWithTimeout("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries }),
+      body: JSON.stringify({ messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries, userProfile }),
       signal
     });
 

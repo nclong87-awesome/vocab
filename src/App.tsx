@@ -86,8 +86,18 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = useCallback((msgText: string) => {
     setToastMessage(msgText);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3500);
   }, []);
+
+  useEffect(() => {
+    const handleToastEvent = (e: any) => {
+      if (e.detail?.message) {
+        showToast(e.detail.message);
+      }
+    };
+    window.addEventListener("vocab-show-toast", handleToastEvent);
+    return () => window.removeEventListener("vocab-show-toast", handleToastEvent);
+  }, [showToast]);
 
   const {
     chatMessages,
@@ -505,6 +515,23 @@ export default function App() {
         onConfirmSwitchAndRetry={handleConfirmSwitchAndRetry}
         onClose={() => setAiErrorModal((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Global Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-4 max-w-lg w-full flex justify-center"
+          >
+            <div className="bg-stone-900/95 text-white border border-stone-700/80 px-4 py-2.5 rounded-2xl shadow-xl backdrop-blur-md text-xs sm:text-sm font-medium flex items-center gap-2.5 text-center">
+              <span>{toastMessage}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

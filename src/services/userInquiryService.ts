@@ -1,6 +1,11 @@
+import { recordLearningInteraction } from "./userPersonalityProfileService";
+
+export type InquirySource = "main_chat" | "ask_ai_dialog" | "quiz_intervention" | "quick_action";
+
 export interface UserInquiryRecord {
   id: string;
   question: string;
+  source?: InquirySource;
   word?: string;
   category?: string;
   partOfSpeech?: string;
@@ -8,7 +13,7 @@ export interface UserInquiryRecord {
 }
 
 const STORAGE_KEY = "vocab_learner_user_inquiries";
-const MAX_STORED_INQUIRIES = 30;
+const MAX_STORED_INQUIRIES = 50;
 
 /**
  * Retrieves all stored user inquiries from localStorage.
@@ -42,7 +47,7 @@ function saveUserInquiries(inquiries: UserInquiryRecord[]): void {
  */
 export function recordUserInquiry(
   question: string,
-  context?: { word?: string; category?: string; partOfSpeech?: string }
+  context?: { word?: string; category?: string; partOfSpeech?: string; source?: InquirySource }
 ): void {
   const trimmed = (question || "").trim();
   if (!trimmed || trimmed.length < 3) return;
@@ -63,6 +68,7 @@ export function recordUserInquiry(
   const newRecord: UserInquiryRecord = {
     id: `inq-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     question: trimmed,
+    source: context?.source || (context?.word ? "ask_ai_dialog" : "main_chat"),
     word: context?.word,
     category: context?.category,
     partOfSpeech: context?.partOfSpeech,
@@ -70,6 +76,10 @@ export function recordUserInquiry(
   };
 
   saveUserInquiries([...existing, newRecord]);
+  recordLearningInteraction("inquiry", {
+    word: context?.word,
+    source: newRecord.source
+  });
 }
 
 /**

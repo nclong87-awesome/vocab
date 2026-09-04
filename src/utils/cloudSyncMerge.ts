@@ -1,5 +1,5 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
-import { Word, UserStats, StrengthHistoryTuple } from "../types";
+import { Word, UserStats, StrengthHistoryTuple, UserPersonalityProfile } from "../types";
 import { recalculateWordsMemoryDecay } from "./spacedRepetition";
 
 export interface DeletedWordRecord {
@@ -11,6 +11,17 @@ export interface DeletedWordRecord {
 export interface WordDiffItem {
   word: string;
   changes: string[];
+}
+
+export interface PersonalityProfileDiff {
+  action: "push_local" | "pull_remote" | "identical" | "none";
+  localArchetype?: string;
+  remoteArchetype?: string;
+  chosenArchetype?: string;
+  localLastUpdated?: number;
+  remoteLastUpdated?: number;
+  localInteractions?: number;
+  remoteInteractions?: number;
 }
 
 export interface SyncDiffDetails {
@@ -26,6 +37,8 @@ export interface SyncDiffDetails {
     streakMerged: number;
   };
   totalMergedWordsCount: number;
+  profileChanged?: boolean;
+  personalityProfileDiff?: PersonalityProfileDiff;
 }
 
 export interface MergeResult {
@@ -460,14 +473,120 @@ export function autoMergeLocalAndRemote(
     updatedAt: new Date().toISOString()
   };
 
-  // 4. Merge Settings
+  // 4. Merge Settings & AI Learner Personality Profile
   const localSettings = (localData.stores?.settings || []).filter((s) => !s || s.key !== "deletedwords");
   const remoteSettings = (remoteData.stores?.settings || []).filter((s) => !s || s.key !== "deletedwords");
 
   const settingsMap = new Map<string, StoredSetting>();
   for (const s of remoteSettings) if (s && s.key) settingsMap.set(s.key, s);
+
+  // Reconcile AI Learner Personality Profile specifically
+  let profileChanged = false;
+  let personalityProfileDiff: PersonalityProfileDiff = {
+    action: "none"
+  };
+
+  const localProfileSetting = localSettings.find((s) => s && s.key === "user_personality_profile");
+  const remoteProfileSetting = remoteSettings.find((s) => s && s.key === "user_personality_profile");
+
+  let localProfile: UserPersonalityProfile | null = null;
+  let remoteProfile: UserPersonalityProfile | null = null;
+
+  if (localProfileSetting?.value) {
+    try {
+      localProfile = JSON.parse(localProfileSetting.value);
+    } catch {}
+  }
+  if (remoteProfileSetting?.value) {
+    try {
+      remoteProfile = JSON.parse(remoteProfileSetting.value);
+    } catch {}
+  }
+
+  if (localProfile && remoteProfile) {
+    const localTime = localProfile.lastUpdated || 0;
+    const remoteTime = remoteProfile.lastUpdated || 0;
+    const localInteractions = localProfile.interactionCountAnalyzed || 0;
+    const remoteInteractions = remoteProfile.interactionCountAnalyzed || 0;
+
+    if (
+      localProfile.archetype === remoteProfile.archetype &&
+      localProfile.version === remoteProfile.version &&
+      localInteractions === remoteInteractions &&
+      localTime === remoteTime
+    ) {
+      personalityProfileDiff = {
+        action: "identical",
+        localArchetype: localProfile.archetype,
+        remoteArchetype: remoteProfile.archetype,
+        chosenArchetype: localProfile.archetype,
+        localLastUpdated: localTime,
+        remoteLastUpdated: remoteTime,
+        localInteractions,
+        remoteInteractions
+      };
+      settingsMap.set("user_personality_profile", localProfileSetting!);
+    } else {
+      // Pick the more recent or more thoroughly analyzed profile
+      const preferRemote =
+        remoteTime > localTime ||
+        (remoteTime === localTime && remoteInteractions > localInteractions);
+
+      profileChanged = true;
+      if (preferRemote) {
+        personalityProfileDiff = {
+          action: "pull_remote",
+          localArchetype: localProfile.archetype,
+          remoteArchetype: remoteProfile.archetype,
+          chosenArchetype: remoteProfile.archetype,
+          localLastUpdated: localTime,
+          remoteLastUpdated: remoteTime,
+          localInteractions,
+          remoteInteractions
+        };
+        settingsMap.set("user_personality_profile", remoteProfileSetting!);
+      } else {
+        personalityProfileDiff = {
+          action: "push_local",
+          localArchetype: localProfile.archetype,
+          remoteArchetype: remoteProfile.archetype,
+          chosenArchetype: localProfile.archetype,
+          localLastUpdated: localTime,
+          remoteLastUpdated: remoteTime,
+          localInteractions,
+          remoteInteractions
+        };
+        settingsMap.set("user_personality_profile", localProfileSetting!);
+      }
+    }
+  } else if (remoteProfile && !localProfile) {
+    profileChanged = true;
+    personalityProfileDiff = {
+      action: "pull_remote",
+      remoteArchetype: remoteProfile.archetype,
+      chosenArchetype: remoteProfile.archetype,
+      remoteLastUpdated: remoteProfile.lastUpdated,
+      remoteInteractions: remoteProfile.interactionCountAnalyzed
+    };
+    settingsMap.set("user_personality_profile", remoteProfileSetting!);
+  } else if (localProfile && !remoteProfile) {
+    profileChanged = true;
+    personalityProfileDiff = {
+      action: "push_local",
+      localArchetype: localProfile.archetype,
+      chosenArchetype: localProfile.archetype,
+      localLastUpdated: localProfile.lastUpdated,
+      localInteractions: localProfile.interactionCountAnalyzed
+    };
+    settingsMap.set("user_personality_profile", localProfileSetting!);
+  }
+
   for (const s of localSettings) {
     if (s && s.key) {
+      if (s.key === "user_personality_profile") {
+        // Already reconciled above
+        continue;
+      }
       if (s.key === "imported_library_ids" && settingsMap.has("imported_library_ids")) {
         const remoteSetting = settingsMap.get("imported_library_ids")!;
         try {
@@ -524,7 +643,8 @@ export function autoMergeLocalAndRemote(
     newRemoteWords.length > 0 ||
     deletedWordsToSync.length > 0 ||
     updatedWords.length > 0 ||
-    statsChanged;
+    statsChanged ||
+    profileChanged;
 
   return {
     mergedData: mergedExportData,
@@ -535,6 +655,8 @@ export function autoMergeLocalAndRemote(
       deletedWordsToSync,
       updatedWords,
       statsChanged,
+      profileChanged,
+      personalityProfileDiff,
       statsSummary: {
         quizzesBeforeLocal: localStats.totalQuizzesTaken || 0,
         quizzesMerged: mergedQuizzesTaken,

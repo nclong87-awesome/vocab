@@ -2119,12 +2119,176 @@ ALSO INCLUDE:
   }
 });
 
+// Helper to validate and normalize Personality Profile payload
+function normalizePersonalityProfile(raw: any, interactionCount: number = 0) {
+  const validArchetypes = [
+    "Pragmatic Professional",
+    "Curious Explorer",
+    "Meticulous Perfectionist",
+    "Casual Conversationalist",
+    "Academic Achiever"
+  ];
+  const archetype = validArchetypes.includes(raw?.archetype)
+    ? raw.archetype
+    : "Curious Explorer";
+
+  const rawPrefs = raw?.learningPreferences || {};
+  const validModalities = ["contextual_examples", "grammar_mechanics", "visual_mnemonics", "etymological_roots"];
+  const validDepths = ["punchy_concise", "deep_nuance", "dialogue_driven"];
+  const validFormalities = ["formal", "business_casual", "relaxed_slang"];
+  const validAttitudes = ["gentle_scaffolding", "direct_critique", "fast_paced_gamified"];
+
+  return {
+    version: 1,
+    lastUpdated: Date.now(),
+    interactionCountAnalyzed: interactionCount,
+    confidenceScore: typeof raw?.confidenceScore === "number" ? Math.min(100, Math.max(10, raw.confidenceScore)) : Math.min(95, Math.max(25, 30 + interactionCount * 3)),
+    archetype,
+    archetypeSummary: raw?.archetypeSummary || raw?.summary || "Dedicated learner developing comprehensive language mastery.",
+    archetypeTraits: Array.isArray(raw?.archetypeTraits) && raw.archetypeTraits.length > 0
+      ? raw.archetypeTraits.slice(0, 5)
+      : ["Context-First", "Curious", "Goal-Oriented"],
+    learningPreferences: {
+      primaryModality: validModalities.includes(rawPrefs.primaryModality) ? rawPrefs.primaryModality : "contextual_examples",
+      explanationDepth: validDepths.includes(rawPrefs.explanationDepth) ? rawPrefs.explanationDepth : "punchy_concise",
+      formalityPreference: validFormalities.includes(rawPrefs.formalityPreference) ? rawPrefs.formalityPreference : "business_casual",
+      challengeAttitude: validAttitudes.includes(rawPrefs.challengeAttitude) ? rawPrefs.challengeAttitude : "fast_paced_gamified"
+    },
+    detectedInterests: Array.isArray(raw?.detectedInterests) && raw.detectedInterests.length > 0
+      ? raw.detectedInterests.slice(0, 6)
+      : ["Everyday Communication", "Vocabulary Expansion"],
+    frequentQuestionTypes: Array.isArray(raw?.frequentQuestionTypes) && raw.frequentQuestionTypes.length > 0
+      ? raw.frequentQuestionTypes.slice(0, 4)
+      : ["nuance_comparison", "collocations"],
+    diagnostics: {
+      strengths: Array.isArray(raw?.diagnostics?.strengths) && raw.diagnostics.strengths.length > 0
+        ? raw.diagnostics.strengths.slice(0, 3)
+        : ["Consistent vocabulary building", "Inquisitive approach to words"],
+      blindSpots: Array.isArray(raw?.diagnostics?.blindSpots) && raw.diagnostics.blindSpots.length > 0
+        ? raw.diagnostics.blindSpots.slice(0, 3)
+        : ["Dependent prepositions and collocations need reinforcement"],
+      actionableAdvice: raw?.diagnostics?.actionableAdvice || "Focus on using new words in full context sentences during daily study."
+    },
+    tailoredSystemPromptPatch: raw?.tailoredSystemPromptPatch || "Provide practical, context-rich examples with natural phrasing and clear formality guidance."
+  };
+}
+
+// 6b. Analyze User Personality & Learner Profile endpoint
+app.post("/api/analyze-personality-profile", async (req, res) => {
+  const controller = new AbortController();
+
+  try {
+    const {
+      activityDigest,
+      inquiries = [],
+      totalWords = 0,
+      quizzesTaken = 0,
+      accuracy = 0,
+      streak = 0,
+      topCategories = [],
+      targetLanguage = "English",
+      nativeLanguage = "Vietnamese",
+      llmConfig
+    } = req.body;
+
+    const inquiriesCount = inquiries.length;
+    let inquiriesContext = "";
+    if (Array.isArray(inquiries) && inquiries.length > 0) {
+      inquiriesContext = inquiries
+        .slice(-25)
+        .map((inq: any, idx: number) => {
+          const origin = inq.source === "ask_ai_dialog" ? `[Ask AI Modal on "${inq.word || 'word'}"]` : "[Main Chat]";
+          const pos = inq.partOfSpeech ? ` (${inq.partOfSpeech})` : "";
+          const cat = inq.category ? ` [Category: ${inq.category}]` : "";
+          return `${idx + 1}. ${origin}${cat}${pos}: "${inq.question}"`;
+        })
+        .join("\n");
+    } else {
+      inquiriesContext = "No prior custom inquiries logged yet.";
+    }
+
+    const categoriesStr = Array.isArray(topCategories) && topCategories.length > 0
+      ? topCategories.map((c: any) => `${c.category} (${c.count} words)`).join(", ")
+      : "General topics";
+
+    const prompt = `You are an expert psycholinguist, cognitive learning scientist, and adaptive language coach.
+Analyze the following student activity records, inquiries (including both Main Chat view and in-situ "Ask AI" word questions), vocabulary collection distributions, and quiz statistics to formulate an accurate, personalized User Personality & Learner Profile.
+
+STUDENT ACTIVITY PROFILE:
+- Target Language: ${targetLanguage}
+- Native / Explanation Language: ${nativeLanguage}
+- Total Vocabulary Words: ${totalWords}
+- Top Vocabulary Themes: ${categoriesStr}
+- Quizzes Completed: ${quizzesTaken}
+- Quiz Accuracy: ${accuracy}%
+- Study Streak: ${streak} days
+
+RECENT INQUIRIES & QUESTIONS LOGGED (Both Main Chat and "Ask AI" modal queries):
+${inquiriesContext}
+
+${activityDigest ? `ADDITIONAL ACTIVITY DIGEST:\n${activityDigest}\n` : ""}
+
+CRITICAL PROFILING INSTRUCTIONS:
+1. Examine the user's specific questions closely:
+   - Do they ask about nuance and subtle differences between synonyms? -> Traits: "Nuance-Seeker", "Meticulous".
+   - Do they ask if phrases can be used in workplace meetings or formal emails? -> Archetype: "Pragmatic Professional".
+   - Do they ask for slang, idioms, or casual conversation flow? -> Archetype: "Casual Conversationalist" or "Curious Explorer".
+   - Do they focus on test preparation, academic writing, or strict rules? -> Archetype: "Academic Achiever".
+2. Determine their preferred explanation depth, modality (contextual_examples, grammar_mechanics, visual_mnemonics, or etymological_roots), and formality preference.
+3. Formulate genuine cognitive strengths and blind spots observed from their inquiries.
+4. Craft a concise "tailoredSystemPromptPatch" (2-3 sentences) that an AI assistant can adopt to converse with this learner in their optimal style.
+5. Provide the "archetypeSummary" and "actionableAdvice" in ${nativeLanguage} (or bilingual with ${targetLanguage}) so it feels natively personal and engaging.`;
+
+    const systemInstruction = `You are an elite psycholinguist and adaptive education researcher. Output strictly valid JSON-only matching the schema below. CRITICAL: Archetype MUST be strictly one of: "Pragmatic Professional", "Curious Explorer", "Meticulous Perfectionist", "Casual Conversationalist", "Academic Achiever". Do not include conversational filler outside the JSON.`;
+
+    const schemaDesc = `{
+  "confidenceScore": 85,
+  "archetype": "Pragmatic Professional | Curious Explorer | Meticulous Perfectionist | Casual Conversationalist | Academic Achiever",
+  "archetypeSummary": "string (1-2 sentence executive summary in ${nativeLanguage})",
+  "archetypeTraits": ["string", "string", "string"],
+  "learningPreferences": {
+    "primaryModality": "contextual_examples | grammar_mechanics | visual_mnemonics | etymological_roots",
+    "explanationDepth": "punchy_concise | deep_nuance | dialogue_driven",
+    "formalityPreference": "formal | business_casual | relaxed_slang",
+    "challengeAttitude": "gentle_scaffolding | direct_critique | fast_paced_gamified"
+  },
+  "detectedInterests": ["string", "string"],
+  "frequentQuestionTypes": ["nuance_comparison | collocations | pronunciation | grammar | formality | usage_context"],
+  "diagnostics": {
+    "strengths": ["string", "string"],
+    "blindSpots": ["string"],
+    "actionableAdvice": "string (Actionable advice for the next 7 days in ${nativeLanguage})"
+  },
+  "tailoredSystemPromptPatch": "string (2-3 sentence directive instructing an AI tutor on how to personalize future answers for this user)"
+}`;
+
+    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
+    const rawParsed = cleanAndParseJson(text);
+    const result = normalizePersonalityProfile(rawParsed, inquiriesCount);
+
+    if (rawParsed.provider) (result as any).provider = rawParsed.provider;
+    if (rawParsed.model) (result as any).model = rawParsed.model;
+    if (rawParsed.responseTimeMs !== undefined) (result as any).responseTimeMs = rawParsed.responseTimeMs;
+
+    res.json(result);
+  } catch (error: any) {
+    console.error("Error analyzing user personality profile:", error);
+    const parsed = parseServerError(error, req.body?.llmConfig?.provider || "gemini");
+    const code = parsed.statusCode >= 400 && parsed.statusCode < 600 ? parsed.statusCode : 500;
+    res.status(code).json({
+      error: parsed.userMessage,
+      statusCode: parsed.statusCode,
+      errorType: parsed.errorType
+    });
+  }
+});
+
 // 7. Interactive Chat Assistant endpoint
 app.post("/api/chat", async (req, res) => {
   const controller = new AbortController();
 
   try {
-    const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig, wordContext, userInquiries } = req.body;
+    const { messages, targetLanguage = "English", nativeLanguage = "Spanish", llmConfig, wordContext, userInquiries, userProfile } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Messages array is required and cannot be empty" });
@@ -2183,11 +2347,25 @@ CRITICAL PERSONALIZATION FOR SUGGESTED ACTIONS:
       }
     }
 
+    let userProfileInstruction = "";
+    if (userProfile && typeof userProfile === "object" && userProfile.archetype) {
+      userProfileInstruction = `\n\nUSER PERSONALITY & LEARNING PROFILE:
+- Learning Archetype: ${userProfile.archetype}
+- Learning Style & Preferences:
+  * Primary Modality: ${userProfile.learningPreferences?.primaryModality || "contextual_examples"}
+  * Preferred Explanation Depth: ${userProfile.learningPreferences?.explanationDepth || "punchy_concise"}
+  * Formality Preference: ${userProfile.learningPreferences?.formalityPreference || "business_casual"}
+  * Challenge Attitude: ${userProfile.learningPreferences?.challengeAttitude || "fast_paced_gamified"}
+- Known Topics of Interest: ${(userProfile.detectedInterests || []).join(", ") || "General Vocabulary"}
+- Adaptive Directive: ${userProfile.tailoredSystemPromptPatch || "Tailor examples and explanations to this learner's habits."}
+(Adopt this persona tone and pacing naturally without explicitly quoting these parameters to the user).`;
+    }
+
     const prompt = `Below is the recent conversation history between the User and you (the Assistant):\n\n${chatHistoryStr}\n\nAssistant, formulate your next helpful response. Ensure to check if the user is interested in practicing or adding words, and attach appropriate suggestedActions.`;
 
     const systemInstruction = `You are an elite, highly encouraging AI Language Coach and Vocabulary Assistant.
 Your mission is to help the user master their target language "${targetLanguage}" from their native language "${nativeLanguage}".
-You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}${userInquiryInstruction}
+You speak in a warm, welcoming, and linguistically precise tone.${wordContextInstruction}${userInquiryInstruction}${userProfileInstruction}
 
 CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 1. **Explain Grammar Rules**:
