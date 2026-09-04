@@ -29,7 +29,7 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "openai/gpt-oss-20b", 
       "openai/gpt-oss-safeguard-20b",
     ],
-    visionModels: ["qwen/qwen3.6-27b"],
+    visionModels: ["qwen/qwen3.8-27b"],
     defaultBaseUrl: "https://groq.nclong87.workers.dev/openai/v1",
     directBaseUrl: "https://api.groq.com/openai/v1",
     requiresKey: false
@@ -43,6 +43,9 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
       "google/gemini-3.5-flash-lite",
       "google/gemini-3.1-flash-lite",
       "google/gemini-3.5-flash",
+      "google/gemini-3.6-flash",
+      "google/gemini-3.7-flash",
+      "google/gemini-3.8-flash",
       "cohere/command-a",
       "cohere/command-a-03-2025"
     ],
@@ -50,23 +53,23 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     directBaseUrl: "https://openrouter.ai/api/v1",
     requiresKey: false
   },
-  {
-    id: "gemini",
-    name: "Google Gemini",
-    tagline: "Fast & highly structured intelligence",
-    defaultModel: "gemini-3.5-flash-lite",
-    models: [
-      "gemini-3.5-flash-lite",
-      "gemini-3.1-flash-lite",
-      "gemini-3.7-flash",
-      "gemini-3.6-flash", 
-      "gemini-3.5-flash"
-    ],
-    tts_models: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
-    defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
-    directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    requiresKey: false
-  },
+  // {
+  //   id: "gemini",
+  //   name: "Google Gemini",
+  //   tagline: "Fast & highly structured intelligence",
+  //   defaultModel: "gemini-3.5-flash-lite",
+  //   models: [
+  //     "gemini-3.5-flash-lite",
+  //     "gemini-3.1-flash-lite",
+  //     "gemini-3.7-flash",
+  //     "gemini-3.6-flash", 
+  //     "gemini-3.5-flash"
+  //   ],
+  //   tts_models: ["gemini-3.5-flash-lite", "gemini-3.6-flash"],
+  //   defaultBaseUrl: "https://gemini.nclong87.workers.dev/v1beta",
+  //   directBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  //   requiresKey: false
+  // },
   {
     id: "ollama",
     name: "Ollama",
@@ -137,13 +140,16 @@ export const RELIABLE_MODELS: string[] = [
   "google/gemini-3.5-flash-lite",
   "google/gemini-3.1-flash-lite",
   "google/gemini-3.5-flash",
+  "google/gemini-3.6-flash",
+  "google/gemini-3.7-flash",
+  "google/gemini-3.8-flash",
   "cohere/command-a",
   "openai/gpt-oss-120b", 
   "openai/gpt-oss-20b", 
-  "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
-  "gemini-3.5-flash",
-  "gemini-3.6-flash",
+  // "gemini-3.5-flash-lite",
+  // "gemini-3.1-flash-lite",
+  // "gemini-3.5-flash",
+  // "gemini-3.6-flash",
   "gpt-oss:20b",
   // "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
