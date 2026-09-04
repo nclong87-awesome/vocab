@@ -1,13 +1,9 @@
-import  { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, useMemo, useEffect } from "react";
 import { 
-  BarChart2, 
-  Brain, 
   CheckCircle2, 
   AlertTriangle, 
   Search, 
   BookOpen, 
-  RefreshCw,
   Calendar,
   Layers,
   Timer,
@@ -15,12 +11,10 @@ import {
   ChevronRight
 } from "lucide-react";
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
-import { analyzePerformanceService, PerformanceAnalysisResult } from "../services/llmClientService";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { getDaysSinceLastReview, isWordEligibleForReview } from "../utils/spacedRepetition";
 import { t } from "../config/i18n";
 
-import AiPerformanceCoachCard from "./analytics/AiPerformanceCoachCard";
 import AiPersonalityProfileCard from "./analytics/AiPersonalityProfileCard";
 import WordAnalyticsCard from "./analytics/WordAnalyticsCard";
 import PracticeTimeline from "./analytics/PracticeTimeline";
@@ -49,11 +43,6 @@ export default function AnalyticsDashboard({
   onNavigateToView: _onNavigateToView,
 }: AnalyticsDashboardProps) {
   const safeWords = Array.isArray(words) ? words : [];
-
-  // AI analysis state
-  const [aiReport, setAiReport] = useState<PerformanceAnalysisResult | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // View Mode: 'breakdown' (Library & Performance) vs 'timeline' (Practice Timeline)
   const [dashboardView, setDashboardView] = useState<'breakdown' | 'timeline'>('breakdown');
@@ -92,22 +81,6 @@ export default function AnalyticsDashboard({
     return safeWords.filter(w => !w.learned && w.strength < 50);
   }, [safeWords]);
 
-  // Words used / reviewed recently (sorted by most recent review)
-  const recentlyUsedWords = useMemo(() => {
-    return safeWords
-      .filter(w => w.lastReviewed !== null || (w.strength ?? 0) > 0)
-      .sort((a, b) => {
-        const dateA = a.lastReviewed ? new Date(a.lastReviewed).getTime() : 0;
-        const dateB = b.lastReviewed ? new Date(b.lastReviewed).getTime() : 0;
-        return dateB - dateA;
-      });
-  }, [safeWords]);
-
-  // Words never used / never reviewed yet
-  const neverUsedWords = useMemo(() => {
-    return safeWords.filter(w => w.lastReviewed === null && (w.strength ?? 0) === 0 && !w.learned);
-  }, [safeWords]);
-
   // Words needing memory refresher (decayed or overdue >= 5 days)
   const decayedWords = useMemo(() => {
     return safeWords.filter(w => {
@@ -124,38 +97,6 @@ export default function AnalyticsDashboard({
 
 
   // Calculate overall accuracy rate
-
-  // Run AI Analysis
-  const handleRunAiAnalysis = async () => {
-    const configToUse = llmConfig;
-    setIsAnalyzing(true);
-    setAnalysisError(null);
-    try {
-      if (!configToUse) {
-        throw new Error("No LLM configuration available.");
-      }
-
-      const result = await analyzePerformanceService({
-        stats,
-        totalWords: totalWordsCount,
-        masteredWords,
-        improvingWords,
-        recentlyUsedWords,
-        neverUsedWords,
-        allWords: safeWords.slice(0, 50),
-        targetLanguage: "English",
-        nativeLanguage: appLanguage,
-        llmConfig: configToUse
-      });
-
-      setAiReport(result);
-    } catch (err: any) {
-      console.error("AI Performance Analysis failed:", err);
-      setAnalysisError(err.message || "Unable to generate AI analysis. Please verify your LLM key or connection.");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
 
   // Speak word TTS
   const handleSpeakWord = (wordText: string, wordId: string, customLang?: string) => {
@@ -233,41 +174,7 @@ export default function AnalyticsDashboard({
   const totalPages = Math.ceil(filteredWords.length / pageSize);
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto" id="analytics-dashboard-root">
-      {/* Top Header Banner */}
-      <div className="bg-stone-900 text-white p-6 sm:p-8 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm overflow-hidden relative">
-        <div className="space-y-2.5">
-          <div className="inline-flex items-center gap-1.5 bg-amber-400 text-stone-950 px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md">
-            <BarChart2 className="w-3.5 h-3.5" />
-            <span>{t("analytics_title", appLanguage)}</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t("analytics_headline", appLanguage)}</h1>
-          <p className="text-xs text-stone-300 font-serif italic max-w-2xl leading-relaxed">
-            {t("analytics_quote", appLanguage)}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => handleRunAiAnalysis()}
-            disabled={isAnalyzing}
-            className="px-5 py-3 bg-stone-800 hover:bg-stone-700 hover:scale-[1.01] active:scale-[0.99] text-stone-100 border border-stone-700 font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer rounded-xl"
-          >
-            {isAnalyzing ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                <span>{t("analytics_analyzing", appLanguage)}</span>
-              </>
-            ) : (
-              <>
-                <Brain className="w-4 h-4 text-amber-400" />
-                <span>{aiReport ? t("analytics_reanalyze", appLanguage) : t("analytics_coach", appLanguage)}</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
+    <div className="space-y-6 max-w-6xl mx-auto" id="analytics-dashboard-root">
       {/* AI LEARNER PERSONALITY & PROFILING CARD */}
       <AiPersonalityProfileCard
         words={safeWords}
@@ -275,29 +182,6 @@ export default function AnalyticsDashboard({
         llmConfig={llmConfig}
         appLanguage={appLanguage}
       />
-
-      {/* AI PERFORMANCE COACH REPORT CARD */}
-      <AnimatePresence>
-        {(aiReport || isAnalyzing || analysisError) && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <AiPerformanceCoachCard
-              aiReport={aiReport}
-              isAnalyzing={isAnalyzing}
-              analysisError={analysisError}
-              words={safeWords}
-              stats={stats}
-              appLanguage={appLanguage}
-              setAiReport={setAiReport}
-              onRunAiAnalysis={handleRunAiAnalysis}
-              onSpeakWord={handleSpeakWord}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Primary View Switcher: Breakdown vs Practice Timeline */}
       <div className="flex items-center justify-between gap-3 border-b border-stone-200/80 pb-2">
@@ -311,7 +195,7 @@ export default function AnalyticsDashboard({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Performance & Library</span>
+            <span>Vocabulary & Library</span>
           </button>
 
           <button
