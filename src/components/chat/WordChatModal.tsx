@@ -487,7 +487,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       </header>
 
       {/* Main Conversation Stream */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 max-w-3xl w-full mx-auto">
+      <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 max-w-4xl w-full mx-auto">
         {messages.map((m, idx) => {
           const isUser = m.role === "user";
           const isLast = idx === messages.length - 1;
@@ -498,13 +498,15 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
             <div
               key={m.id || idx}
               ref={isLast ? latestResponseRef : null}
-              className={`scroll-mt-4 flex flex-col ${isUser ? "items-end" : "items-start"} space-y-1.5`}
+              className={`scroll-mt-4 flex flex-col ${
+                isUser ? "items-end ml-auto max-w-[88%] sm:max-w-[78%]" : "items-stretch w-full"
+              } space-y-1.5`}
             >
               <div
-                className={`relative max-w-[90%] sm:max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                className={`relative rounded-2xl text-sm leading-relaxed ${
                   isUser
-                    ? "bg-stone-900 text-white rounded-tr-xs shadow-2xs"
-                    : "bg-stone-50 text-stone-900 border border-stone-200/80 rounded-tl-xs shadow-2xs"
+                    ? "bg-stone-900 text-white rounded-tr-xs shadow-2xs px-4 py-3"
+                    : "w-full bg-stone-50 text-stone-900 border border-stone-200/80 rounded-tl-xs shadow-2xs px-4 sm:px-5 py-3.5"
                 }`}
               >
                 {isUser ? (
@@ -554,7 +556,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
 
               {/* Action Chips for Assistant responses */}
               {!isUser && hasActions && (
-                <div className="flex flex-col gap-1.5 pt-1.5 max-w-[95%]">
+                <div className="flex flex-col gap-1.5 pt-1.5 w-full">
                   <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-0.5">
                     <div className="flex items-center gap-1.5">
                       <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
@@ -667,8 +669,8 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       </main>
 
       {/* Clean Bottom Input Area */}
-      <footer className="border-t border-stone-200 bg-white px-4 sm:px-6 py-3 shrink-0">
-        <div className="max-w-3xl w-full mx-auto space-y-2">
+      <footer className="border-t border-stone-200 bg-white px-3 sm:px-6 py-3 shrink-0">
+        <div className="max-w-4xl w-full mx-auto space-y-2">
           {/* Quick suggestions scroll */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
             {bottomChips.map((chip, chipIdx) => (

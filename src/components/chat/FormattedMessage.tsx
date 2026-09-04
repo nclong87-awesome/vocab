@@ -9,7 +9,7 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
   let index = 0;
   
   // Combine bolding, code highlights, and italics
-  const tokenRegex = /(\*\*|`|\*)(.*?)\1/g;
+  const tokenRegex = /(\*\*|__|`|\*|_)(.*?)\1/g;
   let match: RegExpExecArray | null;
   
   while ((match = tokenRegex.exec(safeText)) !== null) {
@@ -21,11 +21,11 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
     const type = match[1];
     const content = match[2];
     
-    if (type === "**") {
+    if (type === "**" || type === "__") {
       parts.push(<strong key={match.index} className="font-bold text-stone-950 bg-stone-100/40 px-0.5 rounded">{content}</strong>);
     } else if (type === "`") {
       parts.push(<code key={match.index} className="px-1 py-0.5 bg-stone-100 rounded text-amber-700 font-mono text-xs sm:text-sm font-semibold">{content}</code>);
-    } else if (type === "*") {
+    } else if (type === "*" || type === "_") {
       parts.push(<em key={match.index} className="italic text-stone-700 font-medium not-italic-labels">{content}</em>);
     }
     
@@ -37,6 +37,99 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
   }
   
   return parts.length > 0 ? parts : safeText;
+}
+
+export function renderCellContent(cellText: string): React.ReactNode {
+  if (!cellText) return "";
+  const lines = cellText.split(/<br\s*\/?>/i);
+  if (lines.length === 1) {
+    return parseInlineMarkdown(lines[0]);
+  }
+  return lines.map((sub, sIdx) => (
+    <React.Fragment key={sIdx}>
+      {sIdx > 0 && <br />}
+      {parseInlineMarkdown(sub)}
+    </React.Fragment>
+  ));
+}
+
+export function isTableDelimiter(line: string): boolean {
+  if (!line) return false;
+  const trimmed = line.trim();
+  if (!trimmed.includes("-") || !trimmed.includes("|")) return false;
+  const cleaned = trimmed.replace(/^\|/, "").replace(/\|$/, "").trim();
+  if (!cleaned) return false;
+  const segments = cleaned.split("|");
+  if (segments.length === 0) return false;
+  return segments.every(seg => /^\s*:?-{1,}:?\s*$/.test(seg));
+}
+
+export function isPotentialTableRow(line: string): boolean {
+  if (!line) return false;
+  const trimmed = line.trim();
+  if (!trimmed.includes("|")) return false;
+  if (
+    trimmed.startsWith("#") ||
+    trimmed.startsWith(">") ||
+    trimmed.startsWith("```") ||
+    trimmed.startsWith("- ") ||
+    trimmed.startsWith("* ")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function parseRowCells(rowStr: string): string[] {
+  let trimmed = rowStr.trim();
+  if (trimmed.startsWith("|")) {
+    trimmed = trimmed.substring(1);
+  }
+  if (trimmed.endsWith("|")) {
+    trimmed = trimmed.substring(0, trimmed.length - 1);
+  }
+  const rawCells: string[] = [];
+  let current = "";
+  let inCode = false;
+  let isEscaped = false;
+
+  for (let c = 0; c < trimmed.length; c++) {
+    const char = trimmed[c];
+    if (char === "`" && !isEscaped) {
+      inCode = !inCode;
+      current += char;
+      continue;
+    }
+    if (char === "\\" && !isEscaped) {
+      isEscaped = true;
+      continue;
+    }
+    if (char === "|" && !isEscaped && !inCode) {
+      rawCells.push(current.trim());
+      current = "";
+    } else {
+      if (isEscaped) {
+        current += "\\" + char;
+        isEscaped = false;
+      } else {
+        current += char;
+      }
+    }
+  }
+  rawCells.push(current.trim());
+  return rawCells;
+}
+
+export function getColumnAlignments(delimiterStr: string): ("left" | "center" | "right")[] {
+  const cells = parseRowCells(delimiterStr);
+  return cells.map(cell => {
+    const trimmed = cell.trim();
+    const starts = trimmed.startsWith(":");
+    const ends = trimmed.endsWith(":");
+    if (starts && ends) return "center";
+    if (ends) return "right";
+    return "left";
+  });
 }
 
 export function cleanStringForMatching(s: string): string {
@@ -147,7 +240,12 @@ function FormattedMessage({
 
     let currentSectionWord = globalDetectedWord;
 
-    return lines.map((line, i) => {
+    const blocks: React.ReactNode[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
       // Check if line specifies a new word context
       const wMatch = line.match(/^\s*\*(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)\*:\s*(?:\*\*)?([^*(\n\r]+)/i);
       if (wMatch) {
@@ -159,14 +257,146 @@ function FormattedMessage({
         currentSectionWord = hMatch[1].trim();
       }
 
+      // 1. Handle Markdown Table Detection
+      if (
+        isPotentialTableRow(line) &&
+        !isTableDelimiter(line) &&
+        i + 1 < lines.length &&
+        isTableDelimiter(lines[i + 1])
+      ) {
+        const headerCells = parseRowCells(line);
+        const delimiterLine = lines[i + 1];
+        const alignments = getColumnAlignments(delimiterLine);
+        const dataRows: string[][] = [];
+        const tableStartIndex = i;
 
+        i += 2; // Move past header and delimiter lines
+
+        while (i < lines.length) {
+          const candidateRow = lines[i];
+          if (
+            !candidateRow ||
+            candidateRow.trim() === "" ||
+            !isPotentialTableRow(candidateRow) ||
+            isTableDelimiter(candidateRow)
+          ) {
+            break;
+          }
+          dataRows.push(parseRowCells(candidateRow));
+          i++;
+        }
+
+        const totalCols = Math.max(
+          headerCells.length,
+          ...dataRows.map(r => r.length),
+          1
+        );
+
+        // Normalize header columns
+        const normalizedHeaders = [...headerCells];
+        while (normalizedHeaders.length < totalCols) {
+          normalizedHeaders.push("");
+        }
+
+        // Normalize row columns
+        const normalizedRows = dataRows.map(r => {
+          const rowCopy = [...r];
+          while (rowCopy.length < totalCols) {
+            rowCopy.push("");
+          }
+          return rowCopy;
+        });
+
+        blocks.push(
+          <div
+            key={`table-${tableStartIndex}`}
+            className="w-full my-3 overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-2xs"
+          >
+            <div className="overflow-x-auto overscroll-x-contain scrollbar-thin">
+              <table
+                className={`w-full text-left border-collapse text-xs sm:text-sm ${
+                  totalCols >= 4
+                    ? "min-w-[620px]"
+                    : totalCols === 3
+                    ? "min-w-[480px]"
+                    : "min-w-full"
+                }`}
+              >
+                <thead className="bg-stone-100/90 text-stone-900 border-b border-stone-200">
+                  <tr>
+                    {normalizedHeaders.map((cell, cIdx) => {
+                      const align = alignments[cIdx] || "left";
+                      const alignClass =
+                        align === "center"
+                          ? "text-center"
+                          : align === "right"
+                          ? "text-right"
+                          : "text-left";
+                      return (
+                        <th
+                          key={cIdx}
+                          className={`py-2.5 px-3.5 font-bold tracking-tight text-stone-900 ${alignClass} ${
+                            cIdx === 0 && totalCols > 2 ? "sm:w-1/4" : ""
+                          }`}
+                        >
+                          {renderCellContent(cell)}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-150">
+                  {normalizedRows.map((row, rIdx) => (
+                    <tr
+                      key={rIdx}
+                      className={`transition-colors ${
+                        rIdx % 2 === 0 ? "bg-white" : "bg-stone-50/50"
+                      } hover:bg-amber-50/30`}
+                    >
+                      {row.map((cell, cIdx) => {
+                        const align = alignments[cIdx] || "left";
+                        const alignClass =
+                          align === "center"
+                            ? "text-center"
+                            : align === "right"
+                            ? "text-right"
+                            : "text-left";
+                        const isFirstCol = cIdx === 0 && totalCols > 1;
+                        return (
+                          <td
+                            key={cIdx}
+                            className={`py-2.5 px-3.5 align-top leading-relaxed text-stone-800 ${alignClass} ${
+                              isFirstCol ? "font-semibold text-stone-950" : ""
+                            }`}
+                          >
+                            {renderCellContent(cell)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {totalCols >= 3 && (
+              <div className="sm:hidden px-3 py-1 bg-stone-50/90 border-t border-stone-200/60 flex items-center justify-between text-[10px] text-stone-500 select-none">
+                <span className="flex items-center gap-1 font-medium text-stone-600">
+                  <span>← Swipe horizontally to see all columns →</span>
+                </span>
+                <span className="font-mono text-[9px] text-stone-400">{totalCols} cols</span>
+              </div>
+            )}
+          </div>
+        );
+        continue;
+      }
 
       // Handle Bullet Points
       if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
         const content = line.trim().substring(2);
         const matchingAction = findMatchingAction(content, suggestedActions);
 
-        return (
+        blocks.push(
           <ul key={i} className="list-disc pl-5 my-1 text-stone-800">
             <li className="relative group/bullet">
               <span className="align-middle">{parseInlineMarkdown(content)}</span>
@@ -184,6 +414,8 @@ function FormattedMessage({
             </li>
           </ul>
         );
+        i++;
+        continue;
       }
       
       // Handle Numbered List
@@ -192,7 +424,7 @@ function FormattedMessage({
         const content = numberedMatch[2];
         const matchingAction = findMatchingAction(content, suggestedActions);
 
-        return (
+        blocks.push(
           <ol key={i} className="list-decimal pl-5 my-1 text-stone-800">
             <li value={parseInt(numberedMatch[1], 10)} className="relative group/bullet">
               <span className="align-middle">{parseInlineMarkdown(content)}</span>
@@ -210,21 +442,27 @@ function FormattedMessage({
             </li>
           </ol>
         );
+        i++;
+        continue;
       }
 
       // Handle Blockquotes
       if (line.trim().startsWith("> ")) {
         const content = line.trim().substring(2);
-        return (
+        blocks.push(
           <blockquote key={i} className="border-l-4 border-amber-400 bg-amber-50/70 pl-3 py-2 pr-2 my-2 text-stone-900 font-semibold rounded-r-lg shadow-2xs">
             {parseInlineMarkdown(content)}
           </blockquote>
         );
+        i++;
+        continue;
       }
 
       // Handle Horizontal Rule / Divider (---, ***, ___)
       if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(line.trim())) {
-        return <hr key={i} className="border-t border-stone-200/80 my-1 border-solid" />;
+        blocks.push(<hr key={i} className="border-t border-stone-200/80 my-1 border-solid" />);
+        i++;
+        continue;
       }
 
       // Handle Headers
@@ -244,7 +482,7 @@ function FormattedMessage({
           break;
         }
 
-        return (
+        blocks.push(
           <div key={i} className={`flex items-center gap-2 ${isPrecededByDivider ? "pt-0.5" : "pt-1.5"} pb-0.5 flex-wrap`}>
             <h4 className="text-base font-bold text-stone-900">
               {parseInlineMarkdown(headerContent)}
@@ -262,20 +500,24 @@ function FormattedMessage({
             )}
           </div>
         );
+        i++;
+        continue;
       }
       if (line.trim().startsWith("## ")) {
-        return (
+        blocks.push(
           <h3 key={i} className="text-lg font-bold text-stone-900 pt-2 pb-1 border-b border-stone-100">
             {parseInlineMarkdown(line.trim().substring(3))}
           </h3>
         );
+        i++;
+        continue;
       }
 
       // Handle Sentence line with audio button
       const sentenceLineMatch = line.match(/^\s*\*(?:Sentence|Câu hoàn chỉnh|Câu mẫu|例文|Frase|Vollständiger Satz|完整例句|완성된 문장|Phrase complète)\*:\s*(?:\*\*)?["“]?([^"”\n\r]+)["”]?/i);
       if (sentenceLineMatch && onPlayAudio) {
         const rawSentence = sentenceLineMatch[1].replace(/\*\*/g, "").trim();
-        return (
+        blocks.push(
           <div key={i} className="flex items-center gap-1.5 flex-wrap my-0.5">
             <p className="text-stone-800 m-0">{parseInlineMarkdown(line)}</p>
             {rawSentence && (
@@ -291,21 +533,43 @@ function FormattedMessage({
             )}
           </div>
         );
+        i++;
+        continue;
       }
 
       // Default paragraph or empty line
       if (line.trim() === "") {
         // Skip redundant empty lines: at edges, adjacent to dividers, preceding headers, or stacked
-        if (i === 0 || i === lines.length - 1) return null;
-        if (lines[i - 1]?.trim() === "") return null;
-        if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(lines[i - 1]?.trim() || "")) return null;
-        if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(lines[i + 1]?.trim() || "")) return null;
-        if (lines[i + 1]?.trim().startsWith("### ") || lines[i + 1]?.trim().startsWith("## ")) return null;
-        return <div key={i} className="h-1" />;
+        if (i === 0 || i === lines.length - 1) {
+          i++;
+          continue;
+        }
+        if (lines[i - 1]?.trim() === "") {
+          i++;
+          continue;
+        }
+        if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(lines[i - 1]?.trim() || "")) {
+          i++;
+          continue;
+        }
+        if (/^(?:---|—{3,}|\*\*\*|___)\s*$/.test(lines[i + 1]?.trim() || "")) {
+          i++;
+          continue;
+        }
+        if (lines[i + 1]?.trim().startsWith("### ") || lines[i + 1]?.trim().startsWith("## ")) {
+          i++;
+          continue;
+        }
+        blocks.push(<div key={i} className="h-1" />);
+        i++;
+        continue;
       }
 
-      return <p key={i} className="text-stone-800">{parseInlineMarkdown(line)}</p>;
-    });
+      blocks.push(<p key={i} className="text-stone-800">{parseInlineMarkdown(line)}</p>);
+      i++;
+    }
+
+    return blocks;
   }, [safeText, suggestedActions, onActionClick, appLanguage, onPlayAudio, targetWord]);
 
   return (
