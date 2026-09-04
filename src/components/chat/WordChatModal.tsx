@@ -21,8 +21,7 @@ import {
   recordUserInquiry, 
   getRecentUserInquiries, 
   getPersonalizedInitialActions, 
-  getAdaptiveBottomChips, 
-  analyzeUserInquiryPatterns 
+  getAdaptiveBottomChips
 } from "../../services/userInquiryService";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import FormattedMessage from "./FormattedMessage";
@@ -76,7 +75,6 @@ export default function WordChatModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [isGeneratingAiActions, setIsGeneratingAiActions] = useState(false);
-  const [activeLearningTheme, setActiveLearningTheme] = useState<string | null>(null);
 
   const bottomChips = useMemo(() => {
     if (!word) return [];
@@ -119,32 +117,17 @@ You can ask about its tone, when to use it, or how to adapt it for different peo
 ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage in questions, collocations, or memory tips.`;
       }
 
-      // Personalized Suggested Actions (Zero background token burn: heuristics + JIT history)
-      const personalizedInitial = getPersonalizedInitialActions(word, nativeLanguage);
-
-      const pattern = analyzeUserInquiryPatterns();
-      if (pattern.totalInquiries > 0 && personalizedInitial.themeLabel) {
-        setActiveLearningTheme(personalizedInitial.themeLabel);
-      } else {
-        setActiveLearningTheme(null);
-      }
-
       setMessages([
         {
           id: `welcome-${word.id || word.word}-${Date.now()}`,
           role: "assistant",
           content: welcomeText,
-          timestamp: new Date().toISOString(),
-          suggestedActions: personalizedInitial.actions
+          timestamp: new Date().toISOString()
         }
       ]);
       setInputText("");
       setErrorMsg(null);
       setIsTyping(false);
-
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 250);
     }
   }, [word?.id, word?.word, isOpen, nativeLanguage]);
 
@@ -201,13 +184,16 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
     setIsGeneratingAiActions(true);
     try {
       const recentInquiries = getRecentUserInquiries(8);
-      const aiActions = await generateJitSuggestedActionsService({
+      let aiActions = await generateJitSuggestedActionsService({
         word,
         targetLanguage,
         nativeLanguage,
         llmConfig,
         userInquiries: recentInquiries
       });
+      if (!aiActions || aiActions.length === 0) {
+        aiActions = getPersonalizedInitialActions(word, nativeLanguage).actions;
+      }
       if (aiActions && aiActions.length > 0) {
         setMessages(prev => {
           if (prev.length === 0) return prev;
@@ -221,9 +207,35 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       }
     } catch (err) {
       console.warn("Failed to generate AI actions:", err);
+      const fallbackActions = getPersonalizedInitialActions(word, nativeLanguage).actions;
+      if (fallbackActions.length > 0) {
+        setMessages(prev => {
+          if (prev.length === 0) return prev;
+          const updated = [...prev];
+          updated[0] = {
+            ...updated[0],
+            suggestedActions: fallbackActions
+          };
+          return updated;
+        });
+      }
     } finally {
       setIsGeneratingAiActions(false);
     }
+  };
+
+  const populateInput = (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+    setInputText(cleanText);
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(cleanText.length, cleanText.length);
+        inputRef.current.style.height = "auto";
+        inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+      }
+    }, 50);
   };
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -232,6 +244,9 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
 
     setErrorMsg(null);
     setInputText("");
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
 
     // Record user inquiry immediately to build personalized learning history without background loops
     recordUserInquiry(messageContent, {
@@ -239,11 +254,6 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       category: word.category,
       partOfSpeech: word.partOfSpeech
     });
-
-    const pattern = analyzeUserInquiryPatterns();
-    if (pattern.themeDescription) {
-      setActiveLearningTheme(pattern.themeDescription);
-    }
 
     const userMessage: ChatItem = {
       id: `user-${Date.now()}`,
@@ -331,9 +341,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
   };
 
   const handleActionClick = (action: { label: string; action: string; payload?: any }) => {
-    if (action.action === "send_message" && action.payload?.message) {
-      handleSendMessage(action.payload.message);
-    } else if (action.action === "add_word" && onAddWord && action.payload?.word) {
+    if (action.action === "add_word" && onAddWord && action.payload?.word) {
       onAddWord({
         word: action.payload.word,
         definition: action.payload.definition || "",
@@ -350,8 +358,13 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
           timestamp: new Date().toISOString()
         }
       ]);
-    } else if (action.payload?.message) {
-      handleSendMessage(action.payload.message);
+      return;
+    }
+
+    // Automatically populate the input text box with the option content so the user can review and edit before sending
+    const textToPopulate = action.payload?.message || action.label || "";
+    if (textToPopulate) {
+      populateInput(textToPopulate);
     }
   };
 
@@ -517,40 +530,51 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
                 )}
               </div>
 
+              {/* On-demand topic suggestion button for initial welcome message */}
+              {!isUser && idx === 0 && (!m.suggestedActions || m.suggestedActions.length === 0) && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleGenerateAiActions}
+                    disabled={isGeneratingAiActions || isTyping}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200/80 hover:text-stone-900 border border-stone-200 transition-all cursor-pointer disabled:opacity-50 active:scale-95 shadow-2xs"
+                  >
+                    {isGeneratingAiActions ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 text-indigo-600 animate-spin shrink-0" />
+                        <span>Generating topics based on history...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
+                        <span>Suggest topics based on history</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Action Chips for Assistant responses */}
               {!isUser && Array.isArray(m.suggestedActions) && m.suggestedActions.length > 0 && (
                 <div className="flex flex-col gap-1.5 pt-1.5 max-w-[95%]">
-                  <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
-                      {activeLearningTheme && idx === 0 ? (
-                        <span>Tailored focus: <strong className="text-stone-700 font-semibold">{activeLearningTheme}</strong></span>
-                      ) : (
+                  {idx === 0 && (
+                    <div className="flex items-center justify-between text-[11px] text-stone-500 font-medium px-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />
                         <span>Suggested topics</span>
-                      )}
-                    </div>
-                    {idx === 0 && (
+                      </div>
                       <button
                         type="button"
                         onClick={handleGenerateAiActions}
                         disabled={isGeneratingAiActions || isTyping}
-                        className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 disabled:opacity-50 cursor-pointer font-medium hover:underline transition-colors"
-                        title="Analyze inquiry history with AI to generate fresh smart topics"
+                        className="inline-flex items-center gap-1 text-stone-500 hover:text-stone-800 disabled:opacity-50 cursor-pointer font-medium hover:underline transition-colors"
+                        title="Generate new topics"
                       >
-                        {isGeneratingAiActions ? (
-                          <>
-                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                            <span>Analyzing history...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-2.5 h-2.5" />
-                            <span>Ask AI for custom topics</span>
-                          </>
-                        )}
+                        <RefreshCw className={`w-2.5 h-2.5 ${isGeneratingAiActions ? "animate-spin" : ""}`} />
+                        <span>{isGeneratingAiActions ? "Updating..." : "Refresh"}</span>
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-wrap gap-1.5">
                     {m.suggestedActions.map((act, actIdx) => (
@@ -559,7 +583,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
                         type="button"
                         onClick={() => handleActionClick(act)}
                         disabled={isTyping}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-stone-200 text-stone-700 hover:border-stone-400 hover:bg-stone-50 transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-stone-200 text-stone-700 hover:border-stone-400 hover:bg-stone-50 transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50 text-left"
                       >
                         {act.action === "add_word" ? (
                           <Plus className="w-3 h-3 text-indigo-600 shrink-0" />
@@ -627,9 +651,9 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
               <button
                 key={chipIdx}
                 type="button"
-                onClick={() => handleSendMessage(chip.query)}
+                onClick={() => populateInput(chip.query || chip.label)}
                 disabled={isTyping}
-                className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap flex items-center gap-1.5"
+                className="px-3 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 shrink-0 font-medium transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap flex items-center gap-1.5 active:scale-95"
               >
                 <span>{chip.label}</span>
               </button>
@@ -648,7 +672,11 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
               <textarea
                 ref={inputRef}
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -663,7 +691,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
                     ? `Ask about this reply's tone, nuance, or usage...`
                     : `Ask any question about "${word.word}"...`
                 }
-                className="w-full px-4 py-3 bg-stone-100 border border-transparent focus:border-stone-300 focus:bg-white rounded-2xl text-sm text-stone-900 placeholder:text-stone-400 focus:outline-hidden resize-none transition-all"
+                className="w-full px-4 py-3 bg-stone-100 border border-transparent focus:border-stone-300 focus:bg-white rounded-2xl text-sm text-stone-900 placeholder:text-stone-400 focus:outline-hidden resize-none transition-all max-h-[120px]"
                 disabled={isTyping}
               />
             </div>

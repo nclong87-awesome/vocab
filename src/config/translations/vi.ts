@@ -406,7 +406,7 @@ export const viTranslations: LanguageTranslations = {
     chat_sandwich_warmup_title: "🥪 **Phiên Học Cân Bằng Sandwich (Bước 1/3: Khởi Động Flashcard)**",
     chat_sandwich_warmup_desc: "Khám phá **{count} từ vựng khởi động** trước với phát âm và ví dụ. Tiếp theo, chúng ta sẽ ôn lại từ cũ và kiểm tra tức thì mức độ ghi nhớ!",
     chat_sandwich_start_quiz_action: "🎯 Bắt Đầu Trắc Nghiệm Ôn Tập (Bước 2 & 3) ➔",
-    chat_sandwich_quiz_intro: "🥪 **Phiên Học Cân Bằng: Ôn Tập Cốt Lõi & Kiểm Tra Ngay (Bước 2 & 3)**\n\nKiểm tra **{reviewCount} từ ôn tập** + **{warmupCount} từ khởi động** để tối ưu hóa khả năng ghi nhớ dài hạn!\n\n---\n\n### Câu hỏi 1 / {total} ({qTag}):\n**{question}**",
+    chat_sandwich_quiz_intro: "🥪 **Phiên Học Cân Bằng: Ôn Tập Cốt Lõi & Kiểm Tra Ngay (Bước 2 & 3)**\n\n---\n\n### Câu hỏi 1 / {total} ({qTag}):\n**{question}**",
     chat_sandwich_q_warmup_tag: "Kiểm tra từ mới 🥪",
     chat_sandwich_q_review_tag: "Ôn tập cốt lõi 🔄",
     chat_sandwich_finished_msg: "{feedback}\n\n---\n\n🎉 **Hoàn Thành Phiên Học Cân Bằng Sandwich! (3/3)**\n\nBạn đã hoàn thành trọn vẹn chu trình **Sandwich Loop**:\n1. 🎴 **Khởi động**: Học từ mới qua Flashcard\n2. 🔄 **Ôn tập cốt lõi**: Khôi phục trí nhớ cho từ vựng đến hạn ôn\n3. ⚡ **Kiểm tra tức thì**: Trắc nghiệm ghi nhớ sâu từ mới!\n\n🏆 **Kết quả: {score} / {total} câu đúng** (độ chính xác {accuracy}%)\n\nHệ thống đã cập nhật độ bền trí nhớ và lịch ôn tập lặp lại ngắt quãng (SRS)!",
