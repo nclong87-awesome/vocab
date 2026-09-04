@@ -93,7 +93,15 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "### 🚀 Deploying version \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
 
+      - name: Cache node modules
+        uses: actions/cache@v4
+        id: npm-cache
+        with:
+          path: node_modules
+          key: vocab_node_modules_cache
+
       - name: Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Build
