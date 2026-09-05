@@ -60,7 +60,10 @@ jobs:
             echo "bumped=false" >> $GITHUB_OUTPUT
             echo "Skipping bump – this looks like a version commit"
           else
-            npm version patch -m "🚀 Release v%s [skip ci]"
+            npm version patch --no-git-tag-version
+            VERSION=$(node -p "require('./package.json').version")
+            git add package.json
+            git commit -m "🚀 Release v${VERSION} [skip ci]"
             echo "bumped=true" >> $GITHUB_OUTPUT
           fi
 
