@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, History, Timer, CheckCircle2, MessageSquare } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
@@ -23,7 +23,7 @@ interface WordAnalyticsCardProps {
   onAddWord?: (word: string, hint?: string) => void;
 }
 
-export default function WordAnalyticsCard({
+function WordAnalyticsCard({
   word: initialWord,
   speakingWordId,
   onSpeakWord,
@@ -227,3 +227,5 @@ export default function WordAnalyticsCard({
     </>
   );
 }
+
+export default React.memo(WordAnalyticsCard);

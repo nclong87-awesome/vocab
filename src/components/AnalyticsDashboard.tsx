@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useDeferredValue } from "react";
 import { 
   CheckCircle2, 
   AlertTriangle, 
@@ -99,7 +99,7 @@ export default function AnalyticsDashboard({
   // Calculate overall accuracy rate
 
   // Speak word TTS
-  const handleSpeakWord = (wordText: string, wordId: string, customLang?: string) => {
+  const handleSpeakWord = useCallback((wordText: string, wordId: string, customLang?: string) => {
     setSpeakingWordId(wordId);
     speakTextService(
       wordText,
@@ -109,7 +109,9 @@ export default function AnalyticsDashboard({
       () => setSpeakingWordId(wordId),
       () => setSpeakingWordId(null)
     );
-  };
+  }, [ttsConfig, llmConfig]);
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Filtered Words List according to active tab, search, and sorting
   const filteredWords = useMemo(() => {
@@ -125,8 +127,8 @@ export default function AnalyticsDashboard({
       source = starredWords;
     }
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+    if (deferredSearchQuery.trim()) {
+      const q = deferredSearchQuery.toLowerCase().trim();
       source = source.filter(w => 
         w.word.toLowerCase().includes(q) ||
         w.definition.toLowerCase().includes(q) ||
@@ -158,7 +160,7 @@ export default function AnalyticsDashboard({
       }
       return 0;
     });
-  }, [words, improvingWords, masteredWords, starredWords, decayedWords, activeTab, searchQuery, sortBy]);
+  }, [safeWords, improvingWords, masteredWords, starredWords, decayedWords, activeTab, deferredSearchQuery, sortBy]);
 
   // Overall Mastery Percentage
   const overallMasteryPercent = totalWordsCount > 0 

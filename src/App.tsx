@@ -136,6 +136,10 @@ export default function App() {
     onShowToast: showToast,
   });
 
+  const handleCancelTyping = useCallback(() => {
+    setIsTyping(false);
+  }, [setIsTyping]);
+
   // Global Interaction Listener to unlock audio context and handle user input
   useEffect(() => {
     const handleInteraction = (e: Event) => {
@@ -440,7 +444,7 @@ export default function App() {
                     messages={chatMessages}
                     isTyping={isTyping}
                     activeModelInfo={activeModelInfo}
-                    onCancelTyping={() => setIsTyping(false)}
+                    onCancelTyping={handleCancelTyping}
                     onSendMessage={handleSendChatMessage}
                     onAddWord={handleConversationalAddWordOrPrompt}
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}

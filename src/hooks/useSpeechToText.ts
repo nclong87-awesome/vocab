@@ -123,7 +123,9 @@ export function mergeSpeechResults(results: any): string {
 }
 
 export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
-  const { onTranscript, onError, language, targetLanguage, nativeLanguage } = options;
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -155,7 +157,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
 
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        onError?.("Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.");
+        optionsRef.current.onError?.("Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.");
         return;
       }
 
@@ -173,6 +175,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
 
+        const { language, nativeLanguage, targetLanguage } = optionsRef.current;
         const effectiveLang = langOverride || language || nativeLanguage || targetLanguage || "en-US";
         const langCode = effectiveLang.includes("-") ? effectiveLang : getLanguageCode(effectiveLang);
         recognition.lang = langCode;
@@ -186,9 +189,9 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
 
         recognition.onresult = (event: any) => {
           const combined = mergeSpeechResults(event.results);
-          if (combined && onTranscript) {
+          if (combined && optionsRef.current.onTranscript) {
             const isFinal = event.results?.[event.results.length - 1]?.isFinal ?? false;
-            onTranscript(combined, isFinal);
+            optionsRef.current.onTranscript(combined, isFinal);
           }
         };
 
@@ -197,13 +200,13 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
           setIsListening(false);
 
           if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-            onError?.("Microphone permission was denied. Please allow microphone access in your browser to use voice input.");
+            optionsRef.current.onError?.("Microphone permission was denied. Please allow microphone access in your browser to use voice input.");
           } else if (event.error === "audio-capture") {
-            onError?.("No microphone found. Please connect a microphone and try again.");
+            optionsRef.current.onError?.("No microphone found. Please connect a microphone and try again.");
           } else if (event.error === "network") {
-            onError?.("Network error occurred during speech recognition. Please check your connection.");
+            optionsRef.current.onError?.("Network error occurred during speech recognition. Please check your connection.");
           } else if (event.error !== "no-speech" && event.error !== "aborted") {
-            onError?.(`Voice input error: ${event.error}`);
+            optionsRef.current.onError?.(`Voice input error: ${event.error}`);
           }
         };
 
@@ -217,10 +220,10 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
       } catch (err: any) {
         console.error("Failed to start speech recognition:", err);
         setIsListening(false);
-        onError?.(err?.message || "Failed to start speech recognition.");
+        optionsRef.current.onError?.(err?.message || "Failed to start speech recognition.");
       }
     },
-    [language, nativeLanguage, targetLanguage, onTranscript, onError]
+    []
   );
 
   const toggleListening = useCallback(

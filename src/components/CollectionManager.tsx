@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef, useDeferredValue } from "react";
 import { 
   BookOpen, 
   Search, 
@@ -9,7 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Zap
 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -17,6 +18,7 @@ import { autofillWordService } from "../services/llmClientService";
 
 import WordCard from "./deckManager/WordCard";
 import WordRow from "./deckManager/WordRow";
+import VirtualizedWordCollection from "./deckManager/VirtualizedWordCollection";
 import { t } from "../config/i18n";
 
 interface CollectionManagerProps {
@@ -130,27 +132,25 @@ function CollectionManager({
     }
   }, [llmConfig, targetLanguage, nativeLanguage, onUpdateWords, words, onLlmApiError]);
 
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
+
   const handleSingleWordUpdate = useCallback((updatedWord: Word) => {
     if (onUpdateWords) {
-      const updatedWords = words.map(w => w.id === updatedWord.id ? updatedWord : w);
+      const currentWords = wordsRef.current;
+      const updatedWords = currentWords.map(w => w.id === updatedWord.id ? updatedWord : w);
       onUpdateWords(updatedWords);
     }
-  }, [words, onUpdateWords]);
+  }, [onUpdateWords]);
+
+  const handleCardAddWord = useCallback((wText: string, hint?: string) => {
+    _onAddWord?.({ word: wText, hint: hint || "" } as any);
+  }, [_onAddWord]);
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Filter and sort words by search query and selected sort mode (defaults to newest first)
   const filteredWords = useMemo(() => {
-    // Map words with original array index for fallback ordering
-    let list = words.map((w, originalIndex) => ({ word: w, originalIndex }));
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(({ word: w }) => 
-        w.word.toLowerCase().includes(q) ||
-        w.translation.toLowerCase().includes(q) ||
-        w.definition.toLowerCase().includes(q)
-      );
-    }
-
     const getWordTimestamp = (w: Word, originalIndex: number): number => {
       if (w.createdAt) {
         const t = new Date(w.createdAt).getTime();
@@ -164,9 +164,25 @@ function CollectionManager({
       return originalIndex;
     };
 
+    // Map words with original array index and pre-calculated timestamp
+    let list = words.map((w, originalIndex) => ({
+      word: w,
+      originalIndex,
+      timestamp: getWordTimestamp(w, originalIndex)
+    }));
+
+    if (deferredSearchQuery.trim()) {
+      const q = deferredSearchQuery.toLowerCase().trim();
+      list = list.filter(({ word: w }) => 
+        w.word.toLowerCase().includes(q) ||
+        w.translation.toLowerCase().includes(q) ||
+        w.definition.toLowerCase().includes(q)
+      );
+    }
+
     list.sort((a, b) => {
-      const tA = getWordTimestamp(a.word, a.originalIndex);
-      const tB = getWordTimestamp(b.word, b.originalIndex);
+      const tA = a.timestamp;
+      const tB = b.timestamp;
 
       if (sortBy === "newest") {
         if (tA !== tB) return tB - tA; // Newest timestamp/created first
@@ -187,9 +203,10 @@ function CollectionManager({
     });
 
     return list.map(item => item.word);
-  }, [words, searchQuery, sortBy]);
+  }, [words, deferredSearchQuery, sortBy]);
 
-  // Pagination states
+  // Pagination & Virtualization states
+  const [isVirtualized, setIsVirtualized] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(20);
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -200,15 +217,19 @@ function CollectionManager({
   }, [searchQuery, sortBy, itemsPerPage]);
 
   const totalFiltered = filteredWords.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
+  const isAllContinuous = itemsPerPage >= 999999;
+  const totalPages = isAllContinuous ? 1 : Math.max(1, Math.ceil(totalFiltered / itemsPerPage));
   const validPage = Math.min(Math.max(1, currentPage), totalPages);
 
   const startIndex = totalFiltered === 0 ? 0 : (validPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalFiltered);
+  const endIndex = isAllContinuous ? totalFiltered : Math.min(startIndex + itemsPerPage, totalFiltered);
 
   const paginatedWords = useMemo(() => {
+    if (isAllContinuous) {
+      return filteredWords;
+    }
     return filteredWords.slice(startIndex, endIndex);
-  }, [filteredWords, startIndex, endIndex]);
+  }, [filteredWords, isAllContinuous, startIndex, endIndex]);
 
   const handlePageChange = useCallback((newPage: number) => {
     const boundedPage = Math.min(Math.max(1, newPage), totalPages);
@@ -225,13 +246,29 @@ function CollectionManager({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-stone-50 p-3 border border-stone-200 text-xs my-1">
         {/* Summary Info */}
         <div className="flex items-center gap-2 text-stone-600 font-medium text-xs">
-          <span>
-            {t("col_page_showing", appLanguage, {
-              start: (startIndex + 1).toString(),
-              end: endIndex.toString(),
-              total: totalFiltered.toString(),
-            })}
-          </span>
+          {isAllContinuous ? (
+            <span className="flex items-center gap-1.5 font-semibold text-stone-800">
+              {isVirtualized && <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />}
+              <span>
+                {t("col_page_showing", appLanguage, {
+                  start: "1",
+                  end: totalFiltered.toString(),
+                  total: totalFiltered.toString(),
+                })}
+              </span>
+              <span className="text-stone-500 font-normal">
+                ({isVirtualized ? t("col_virtualized_on", appLanguage) : "Continuous"})
+              </span>
+            </span>
+          ) : (
+            <span>
+              {t("col_page_showing", appLanguage, {
+                start: (startIndex + 1).toString(),
+                end: endIndex.toString(),
+                total: totalFiltered.toString(),
+              })}
+            </span>
+          )}
           {totalFiltered < words.length && (
             <span className="text-stone-400 font-mono text-[11px]">
               ({words.length} total)
@@ -255,64 +292,68 @@ function CollectionManager({
               <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={999999}>{t("col_all_virtual", appLanguage)}</option>
             </select>
           </div>
 
-          {/* Page Nav Buttons */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => handlePageChange(1)}
-              disabled={validPage <= 1}
-              title={t("col_first_page", appLanguage)}
-              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
-            >
-              <ChevronsLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => handlePageChange(validPage - 1)}
-              disabled={validPage <= 1}
-              title={t("col_prev_page", appLanguage)}
-              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Direct Page Select Dropdown */}
-            <div className="flex items-center bg-white border border-stone-200 px-2 py-1">
-              <select
-                value={validPage}
-                onChange={(e) => handlePageChange(Number(e.target.value))}
-                className="text-xs font-bold text-stone-900 bg-transparent outline-none cursor-pointer"
+          {/* Page Nav Buttons (hidden when showing all continuous) */}
+          {!isAllContinuous && totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={validPage <= 1}
+                title={t("col_first_page", appLanguage)}
+                className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
               >
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <option key={p} value={p}>
-                    {p} / {totalPages}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <ChevronsLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => handlePageChange(validPage - 1)}
+                disabled={validPage <= 1}
+                title={t("col_prev_page", appLanguage)}
+                className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
 
-            <button
-              onClick={() => handlePageChange(validPage + 1)}
-              disabled={validPage >= totalPages}
-              title={t("col_next_page", appLanguage)}
-              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => handlePageChange(totalPages)}
-              disabled={validPage >= totalPages}
-              title={t("col_last_page", appLanguage)}
-              className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
-            >
-              <ChevronsRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+              {/* Direct Page Select Dropdown */}
+              <div className="flex items-center bg-white border border-stone-200 px-2 py-1">
+                <select
+                  value={validPage}
+                  onChange={(e) => handlePageChange(Number(e.target.value))}
+                  className="text-xs font-bold text-stone-900 bg-transparent outline-none cursor-pointer"
+                >
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <option key={p} value={p}>
+                      {p} / {totalPages}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() => handlePageChange(validPage + 1)}
+                disabled={validPage >= totalPages}
+                title={t("col_next_page", appLanguage)}
+                className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => handlePageChange(totalPages)}
+                disabled={validPage >= totalPages}
+                title={t("col_last_page", appLanguage)}
+                className="p-1.5 border bg-white border-stone-200 text-stone-700 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-stone-100 transition-colors cursor-pointer"
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
-  }, [totalFiltered, startIndex, endIndex, appLanguage, words.length, itemsPerPage, validPage, totalPages, handlePageChange]);
+  }, [totalFiltered, isAllContinuous, isVirtualized, startIndex, endIndex, appLanguage, words.length, itemsPerPage, totalPages, validPage, handlePageChange]);
 
   return (
     <div className="space-y-8" id="collection-manager-container">
@@ -371,6 +412,19 @@ function CollectionManager({
 
                 <div className="flex items-center gap-1 border-l border-stone-200 pl-2">
                   <button
+                    onClick={() => setIsVirtualized(!isVirtualized)}
+                    className={`px-2 py-1.5 border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isVirtualized
+                        ? "bg-amber-50 text-amber-900 border-amber-300 shadow-3xs"
+                        : "bg-white text-stone-500 border-stone-200 hover:text-stone-900"
+                    }`}
+                    title={isVirtualized ? "react-window virtualized list rendering (peak performance for large vocabulary)" : "Standard DOM rendering"}
+                  >
+                    <Zap className={`w-3.5 h-3.5 ${isVirtualized ? "text-amber-600 fill-amber-500" : "text-stone-400"}`} />
+                    <span className="hidden sm:inline">{isVirtualized ? t("col_virtualized_on", appLanguage) : t("col_virtualized_off", appLanguage)}</span>
+                  </button>
+
+                  <button
                     onClick={() => setViewMode("grid")}
                     className={`p-2 border transition-all cursor-pointer ${
                       viewMode === "grid" 
@@ -396,12 +450,33 @@ function CollectionManager({
               </div>
             </div>
 
-            {/* Words Display Grid/List with Pagination */}
+            {/* Words Display Grid/List with Pagination or Virtualization */}
             {filteredWords.length > 0 ? (
               <div className="space-y-4">
                 {renderPaginationBar()}
 
-                {viewMode === "grid" ? (
+                {isVirtualized ? (
+                  <VirtualizedWordCollection
+                    words={paginatedWords}
+                    viewMode={viewMode}
+                    speakWord={speakWord}
+                    handleRegenerateWord={handleRegenerateWord}
+                    regeneratingWordId={regeneratingWordId}
+                    regeneratedSuccessWordId={regeneratedSuccessWordId}
+                    onToggleStar={onToggleStar}
+                    onToggleLearned={onToggleLearned}
+                    onDeleteWord={onDeleteWord}
+                    brokenImageIds={brokenImageIds}
+                    handleImageError={handleImageError}
+                    onUpdateWord={handleSingleWordUpdate}
+                    llmConfig={llmConfig}
+                    targetLanguage={targetLanguage}
+                    nativeLanguage={nativeLanguage}
+                    ttsConfig={ttsConfig}
+                    allWords={words}
+                    onAddWord={_onAddWord ? handleCardAddWord : undefined}
+                  />
+                ) : viewMode === "grid" ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="words-grid-container">
                     {paginatedWords.map((word) => (
                       <WordCard
@@ -422,7 +497,7 @@ function CollectionManager({
                         nativeLanguage={nativeLanguage}
                         ttsConfig={ttsConfig}
                         words={words}
-                        onAddWord={_onAddWord ? (wText, hint) => _onAddWord({ word: wText, hint: hint || "" } as any) : undefined}
+                        onAddWord={_onAddWord ? handleCardAddWord : undefined}
                       />
                     ))}
                   </div>
@@ -446,13 +521,13 @@ function CollectionManager({
                         nativeLanguage={nativeLanguage}
                         ttsConfig={ttsConfig}
                         words={words}
-                        onAddWord={_onAddWord ? (wText, hint) => _onAddWord({ word: wText, hint: hint || "" } as any) : undefined}
+                        onAddWord={_onAddWord ? handleCardAddWord : undefined}
                       />
                     ))}
                   </div>
                 )}
 
-                {totalPages > 1 && renderPaginationBar()}
+                {!isAllContinuous && totalPages > 1 && renderPaginationBar()}
               </div>
             ) : (
               <div className="p-12 text-center bg-stone-50 border border-stone-200 space-y-3">
