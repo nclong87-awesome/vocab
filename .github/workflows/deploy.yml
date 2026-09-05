@@ -98,7 +98,7 @@ jobs:
         id: npm-cache
         with:
           path: node_modules
-          key: vocab_node_modules_cache
+          key: vocab_node_modules_cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
         if: steps.npm-cache.outputs.cache-hit != 'true'
