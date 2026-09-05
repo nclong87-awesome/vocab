@@ -14,6 +14,37 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
 export function getLanguageCode(langName?: string): string {
   if (!langName) return "en-US";
   const name = langName.toLowerCase().trim();
+  if (name.includes("-") && name.length <= 6) return name;
+
+  const twoLetterMap: Record<string, string> = {
+    en: "en-US",
+    vi: "vi-VN",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    it: "it-IT",
+    pt: "pt-PT",
+    ja: "ja-JP",
+    ko: "ko-KR",
+    zh: "zh-CN",
+    ru: "ru-RU",
+    ar: "ar-SA",
+    nl: "nl-NL",
+    hi: "hi-IN",
+    tr: "tr-TR",
+    pl: "pl-PL",
+    sv: "sv-SE",
+    no: "no-NO",
+    da: "da-DK",
+    fi: "fi-FI",
+    el: "el-GR",
+    he: "he-IL",
+    th: "th-TH",
+    id: "id-ID",
+    tl: "tl-PH",
+  };
+  if (twoLetterMap[name]) return twoLetterMap[name];
+
   const map: Record<string, string> = {
     spanish: "es-ES",
     french: "fr-FR",
@@ -37,12 +68,14 @@ export function getLanguageCode(langName?: string): string {
     finnish: "fi-FI",
     greek: "el-GR",
     hebrew: "he-IL",
+    thailand: "th-TH",
     thai: "th-TH",
     indonesian: "id-ID",
     tagalog: "tl-PH",
+    filipino: "tl-PH",
     english: "en-US",
   };
-  return map[name] || "en-US";
+  return map[name] || name || "en-US";
 }
 
 export function getVoicesForLanguage(langNameOrCode: string, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
@@ -125,6 +158,7 @@ export function waitForVoices(timeoutMs = 2000): Promise<SpeechSynthesisVoice[]>
 }
 
 let currentAudioElement: HTMLAudioElement | null = null;
+let currentBlobUrl: string | null = null;
 
 function getAudioElement(): HTMLAudioElement | null {
   if (typeof window === "undefined") return null;
@@ -181,7 +215,7 @@ function stopSpeechInternal(options?: { bumpToken?: boolean; forceCancel?: boole
     } catch {}
   }
 
-  // Stop HTMLAudio fallback (kept for compatibility with existing cleanup behavior).
+  // Stop HTMLAudio fallback.
   const audio = getAudioElement();
   if (audio) {
     try {
@@ -193,11 +227,123 @@ function stopSpeechInternal(options?: { bumpToken?: boolean; forceCancel?: boole
     } catch {}
   }
 
+  if (currentBlobUrl) {
+    try {
+      URL.revokeObjectURL(currentBlobUrl);
+    } catch {}
+    currentBlobUrl = null;
+  }
+
   activeUtterance = null;
 }
 
 export function stopSpeech(): void {
   stopSpeechInternal({ bumpToken: true, forceCancel: true });
+}
+
+async function playAudioStream(
+  text: string,
+  lang: string,
+  ttsConfig: TTSConfig,
+  token: number,
+  onStart?: () => void,
+  onEnd?: () => void
+): Promise<boolean> {
+  try {
+    const cleanLang = (lang.includes("-") ? lang.split("-")[0] : lang).toLowerCase() || "en";
+    const queryParams = new URLSearchParams({
+      text,
+      lang: cleanLang,
+      engine: ttsConfig.engine || "browser",
+      voice: ttsConfig.voice || "",
+      model: ttsConfig.model || "",
+    });
+
+    const res = await fetch(`/api/tts/stream?${queryParams.toString()}`);
+    if (!res.ok) {
+      return false;
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    if (token !== currentSpeechToken) return false;
+
+    // First try Web Audio context
+    const ctx = getAudioContext();
+    if (ctx) {
+      try {
+        if (ctx.state === "suspended") {
+          await ctx.resume().catch(() => {});
+        }
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        if (token !== currentSpeechToken) return false;
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        currentSourceNode = source;
+
+        let hasFinished = false;
+        const finish = () => {
+          if (!hasFinished) {
+            hasFinished = true;
+            if (currentSourceNode === source) {
+              currentSourceNode = null;
+            }
+            if (token === currentSpeechToken) {
+              onEnd?.();
+            }
+          }
+        };
+
+        source.onended = finish;
+        if (token === currentSpeechToken) {
+          onStart?.();
+        }
+        source.start(0);
+        return true;
+      } catch (decodeErr) {
+        console.warn("Web Audio decode error, trying HTMLAudio fallback:", decodeErr);
+      }
+    }
+
+    // HTMLAudioElement fallback
+    const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
+    const blobUrl = URL.createObjectURL(blob);
+    currentBlobUrl = blobUrl;
+
+    const audio = getAudioElement() || new Audio();
+    audio.src = blobUrl;
+
+    let hasFinished = false;
+    const finish = () => {
+      if (!hasFinished) {
+        hasFinished = true;
+        if (currentBlobUrl === blobUrl) {
+          URL.revokeObjectURL(blobUrl);
+          currentBlobUrl = null;
+        }
+        if (token === currentSpeechToken) {
+          onEnd?.();
+        }
+      }
+    };
+
+    audio.onplay = () => {
+      if (token === currentSpeechToken) {
+        onStart?.();
+      }
+    };
+    audio.onended = finish;
+    audio.onerror = () => {
+      finish();
+    };
+
+    await audio.play();
+    return true;
+  } catch (err) {
+    console.warn("Server TTS playback error:", err);
+    return false;
+  }
 }
 
 let isAudioUnlocked = false;
@@ -353,9 +499,23 @@ export async function speakText(
     return Math.min(2, Math.max(0, n));
   })();
 
+  const bcp47Lang = customLang
+    ? (customLang.includes("-") ? customLang : getLanguageCode(customLang))
+    : "en-US";
+
+  // If engine is not browser (e.g. gemini, openai, custom), use high-fidelity server TTS stream directly
+  if (ttsConfig.engine && ttsConfig.engine !== "browser") {
+    const success = await playAudioStream(normalizedText, bcp47Lang, ttsConfig, myToken, safeOnStart, safeOnEnd);
+    if (!success && myToken === currentSpeechToken) {
+      safeOnEnd();
+    }
+    return;
+  }
+
   const speakWithBrowser = async () => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
-      safeOnEnd();
+      const success = await playAudioStream(normalizedText, bcp47Lang, ttsConfig, myToken, safeOnStart, safeOnEnd);
+      if (!success && myToken === currentSpeechToken) safeOnEnd();
       return;
     }
 
@@ -382,14 +542,13 @@ export async function speakText(
     };
 
     try {
-      // Voices are populated asynchronously; awaiting avoids the empty-list path
-      // that previously forced `lang = ""` (rejected by Android's TTS bridge).
-      const voices = await waitForVoices(isMobile ? 3000 : 1500);
+      // Voices are populated asynchronously; check quickly without introducing heavy delays
+      let voices = synth.getVoices();
+      if (voices.length === 0) {
+        voices = await waitForVoices(isMobile ? 800 : 350);
+      }
       if (myToken !== currentSpeechToken) return;
 
-      // Fallback only: never overrides an already-resolved voice, and never
-      // crosses languages. `localService` is false for nearly every Android
-      // voice, so it is a soft preference rather than a requirement.
       const pickFallbackVoice = (allVoices: SpeechSynthesisVoice[], preferredLang?: string): SpeechSynthesisVoice | undefined => {
         const langPrefix = (preferredLang || "").split("-")[0].toLowerCase();
         if (!langPrefix) return undefined;
@@ -423,7 +582,12 @@ export async function speakText(
             activeUtterance = null;
           }
           (window as any)._activeUtteranceRef = null;
-          if (myToken === currentSpeechToken) safeOnEnd();
+          if (myToken === currentSpeechToken) {
+            // Seamlessly fall back to server audio stream if browser synthesis fails
+            playAudioStream(normalizedText, bcp47Lang, ttsConfig, myToken, safeOnStart, safeOnEnd).then((ok) => {
+              if (!ok && myToken === currentSpeechToken) safeOnEnd();
+            });
+          }
         };
       };
 
@@ -434,10 +598,6 @@ export async function speakText(
       utterance.rate = safeRate;
       utterance.pitch = safePitch;
       utterance.volume = 1;
-
-      const bcp47Lang = customLang
-        ? (customLang.includes("-") ? customLang : getLanguageCode(customLang))
-        : "en-US";
       utterance.lang = bcp47Lang;
 
       if (ttsConfig.voiceURI && voices.length > 0) {
@@ -467,7 +627,6 @@ export async function speakText(
         }
       }
 
-      // Prefer a same-language local voice only when nothing more specific was resolved.
       if (!utterance.voice) {
         const fallbackVoice = pickFallbackVoice(voices, utterance.lang || bcp47Lang);
         if (fallbackVoice) {
@@ -476,9 +635,6 @@ export async function speakText(
         }
       }
 
-      // Last resort: let the engine choose using the language tag alone. Never
-      // assign an unrelated voice, and never assign an empty `lang` — Android
-      // rejects "" as an invalid BCP-47 tag and drops the utterance silently.
       if (!utterance.lang) {
         utterance.lang = bcp47Lang || "en-US";
       }
@@ -486,18 +642,12 @@ export async function speakText(
       bindUtteranceLifecycle(utterance);
       if (myToken !== currentSpeechToken) return;
 
-      // Watchdog. This only releases the caller's "speaking" state; it must never
-      // call cancel()/pause()/resume() as recovery. On Android those calls break
-      // the engine binding for the rest of the page session, and cold-start
-      // latency there routinely exceeds a second, so an aggressive retry turns a
-      // healthy-but-slow request into permanent silence.
-      const watchdogMs = isMobile ? 5000 : 2500;
+      // Watchdog: If synthesis does not start within reasonable window, fallback to server stream
+      const watchdogMs = isMobile ? 3000 : 1500;
       recoveryTimerId = window.setTimeout(() => {
         if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
         if (didStart) return;
 
-        // Some Android engine versions never fire `onstart` even while speaking.
-        // If the queue reports activity, assume it is playing and report started.
         let engineBusy = false;
         try {
           engineBusy = synth.speaking || synth.pending;
@@ -508,13 +658,16 @@ export async function speakText(
           return;
         }
 
-        // Nothing was queued and nothing started: release the UI so the user can retry.
         hasEndedOrErrored = true;
         if (activeUtterance === utterance) {
           activeUtterance = null;
         }
         (window as any)._activeUtteranceRef = null;
-        safeOnEnd();
+
+        // Fallback to server stream
+        playAudioStream(normalizedText, bcp47Lang, ttsConfig, myToken, safeOnStart, safeOnEnd).then((ok) => {
+          if (!ok && myToken === currentSpeechToken) safeOnEnd();
+        });
       }, watchdogMs);
 
       if (myToken !== currentSpeechToken || hasEndedOrErrored) return;
@@ -528,7 +681,11 @@ export async function speakText(
       clearRecoveryTimers();
       activeUtterance = null;
       (window as any)._activeUtteranceRef = null;
-      safeOnEnd();
+      if (myToken === currentSpeechToken) {
+        playAudioStream(normalizedText, bcp47Lang, ttsConfig, myToken, safeOnStart, safeOnEnd).then((ok) => {
+          if (!ok && myToken === currentSpeechToken) safeOnEnd();
+        });
+      }
     }
   };
 

@@ -521,7 +521,6 @@ export function useChat({
           content: `${t("chat_sandwich_warmup_title", currentAppLang)}\n\n${t("chat_sandwich_warmup_desc", currentAppLang, { count: String(cards.length) })}`,
           timestamp: new Date().toISOString(),
           audioWord: primaryCard?.word,
-          quizSpeechText: primaryCard ? `${primaryCard.word}. ${primaryCard.definition}` : undefined,
           imageKeyword: primaryCard?.word,
           flashcardData: {
             cards: cards,
@@ -739,10 +738,10 @@ export function useChat({
           content: t("chat_flashcard_deck_title", currentAppLang, { count: String(cards.length) }),
           timestamp: new Date().toISOString(),
           audioWord: primaryCard?.word,
-          quizSpeechText: primaryCard ? `${primaryCard.word}. ${primaryCard.definition}` : undefined,
           imageKeyword: primaryCard?.word,
           flashcardData: {
             cards: cards,
+            reviewedIndices: [0],
             wordId: primaryCard?.wordId,
             word: primaryCard?.word,
             pronunciation: primaryCard?.pronunciation,
@@ -2646,10 +2645,10 @@ export function useChat({
         content: t("chat_flashcard_deck_title", currentAppLang, { count: String(cards.length) }),
         timestamp: new Date().toISOString(),
         audioWord: primaryCard?.word,
-        quizSpeechText: primaryCard ? `${primaryCard.word}. ${primaryCard.definition}` : undefined,
         imageKeyword: primaryCard?.word,
         flashcardData: {
           cards: cards,
+          reviewedIndices: [0],
           wordId: primaryCard?.wordId,
           word: primaryCard?.word,
           pronunciation: primaryCard?.pronunciation,

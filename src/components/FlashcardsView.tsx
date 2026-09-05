@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../types";
 import { isWordEligibleForReview, isWordLearnedOrStudied, getWordCreationTimestamp } from "../utils/spacedRepetition";
-import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode } from "../utils/ttsService";
+import { speakText as speakTextService, stopSpeech, DEFAULT_TTS_CONFIG, getLanguageCode, unlockAudioElement } from "../utils/ttsService";
 import { t } from "../config/i18n";
 import StrengthHistoryModal from "./analytics/StrengthHistoryModal";
 import WordDetailsModal from "./deckManager/WordDetailsModal";
@@ -201,6 +201,22 @@ export default function FlashcardsView({
     };
   }, []);
 
+  // Auto-play pronunciation for initial card on mount if autoplay is enabled
+  const hasAutoPlayedInitialRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoPlayedInitialRef.current) return;
+    if (sortedWords.length > 0 && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
+      hasAutoPlayedInitialRef.current = true;
+      const initialWord = sortedWords[0]?.word;
+      if (initialWord) {
+        const timer = setTimeout(() => {
+          speakWord(initialWord);
+        }, 350);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [sortedWords, ttsConfig]);
+
   const handleNext = () => {
     setIsFlipped(false);
     setShowExampleTranslation(false);
@@ -210,7 +226,9 @@ export default function FlashcardsView({
       setCurrentIndex(nextIdx);
       const nextWord = sortedWords[nextIdx];
       if (nextWord && nextWord.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
-        speakWord(nextWord.word);
+        setTimeout(() => {
+          speakWord(nextWord.word);
+        }, 50);
       }
       setTimeout(scrollToCardTop, 30);
     }
@@ -221,7 +239,14 @@ export default function FlashcardsView({
     setShowExampleTranslation(false);
     stopSpeech();
     if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
+      const prevIdx = currentIndex - 1;
+      setCurrentIndex(prevIdx);
+      const prevWord = sortedWords[prevIdx];
+      if (prevWord && prevWord.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
+        setTimeout(() => {
+          speakWord(prevWord.word);
+        }, 50);
+      }
       setTimeout(scrollToCardTop, 30);
     }
   };
@@ -233,7 +258,9 @@ export default function FlashcardsView({
   // Modern robust Text-to-Speech using configured TTS service
   const speakWord = (text: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (!text) return;
 
+    unlockAudioElement();
     const code = getLanguageCode(targetLanguage);
 
     speakTextService(

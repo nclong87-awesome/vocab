@@ -293,6 +293,12 @@ function ChatView({
       }
 
       const lastMsg = messages[messages.length - 1];
+
+      // Flashcard decks have dedicated per-card pronunciation handling inside FlashcardMessageCard
+      if (lastMsg.flashcardData) {
+        return;
+      }
+
       const quizSpeechText = lastMsg.quizSpeechText?.trim();
       const nextQuestionText = lastMsg.nextQuestionSpeechText?.trim();
       const fallbackText = lastMsg.audioWord || quizSpeechText;
@@ -327,7 +333,6 @@ function ChatView({
         }, 350);
         return () => {
           clearTimeout(audioTimer);
-          stopSpeech();
         };
       } else if (!autoPlayInChat) {
         stopSpeech();

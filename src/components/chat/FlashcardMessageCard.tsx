@@ -13,7 +13,7 @@ import {
   X
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
-import { speakText, stopSpeech, getLanguageCode } from "../../utils/ttsService";
+import { speakText, stopSpeech, getLanguageCode, unlockAudioElement } from "../../utils/ttsService";
 import { t } from "../../config/i18n";
 import { areWordsEquivalent } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -169,6 +169,7 @@ function FlashcardMessageCard({
   const handleSpeak = (textToSpeak: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!textToSpeak) return;
+    unlockAudioElement();
     const langCode = getLanguageCode(targetLanguage);
     speakText(
       textToSpeak,
@@ -195,6 +196,20 @@ function FlashcardMessageCard({
     onCardReviewed?.(0);
   }, [onCardReviewed]);
 
+  // Auto-play pronunciation for initial card on mount if autoplay is enabled
+  const hasAutoPlayedInitialRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoPlayedInitialRef.current) return;
+    hasAutoPlayedInitialRef.current = true;
+    const shouldAutoPlay = ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true;
+    if (shouldAutoPlay && currentCard?.word) {
+      const timer = setTimeout(() => {
+        handleSpeak(currentCard.word);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [cards, ttsConfig]);
+
   // Stop any playing audio when card unmounts
   useEffect(() => {
     return () => {
@@ -208,6 +223,12 @@ function FlashcardMessageCard({
     const prevIndex = Math.max(0, currentIndex - 1);
     setCurrentIndex(prevIndex);
     onCardReviewed?.(prevIndex);
+    const prevCard = cards[prevIndex];
+    if (prevCard && prevCard.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
+      setTimeout(() => {
+        handleSpeak(prevCard.word);
+      }, 50);
+    }
     setTimeout(scrollToCardTop, 30);
   };
 
@@ -219,7 +240,9 @@ function FlashcardMessageCard({
     onCardReviewed?.(nextIndex);
     const nextCard = cards[nextIndex];
     if (nextCard && nextCard.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
-      handleSpeak(nextCard.word);
+      setTimeout(() => {
+        handleSpeak(nextCard.word);
+      }, 50);
     }
     setTimeout(scrollToCardTop, 30);
   };
@@ -253,6 +276,12 @@ function FlashcardMessageCard({
                           stopSpeech();
                           setCurrentIndex(dotIdx);
                           onCardReviewed?.(dotIdx);
+                          const targetCard = cards[dotIdx];
+                          if (targetCard && targetCard.word && (ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioInQuiz ?? true)) {
+                            setTimeout(() => {
+                              handleSpeak(targetCard.word);
+                            }, 50);
+                          }
                           setTimeout(scrollToCardTop, 30);
                         }}
                         className={`h-1.5 rounded-full transition-all cursor-pointer ${
