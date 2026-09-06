@@ -24,7 +24,7 @@ interface ChatViewProps {
   onGenerateByTopic: () => void;
   startPractice: () => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: () => void;
+  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
   onOpenWordLibrary?: () => void;
   onOpenStudyMethods?: (tab?: string) => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;

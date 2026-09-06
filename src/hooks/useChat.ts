@@ -1478,6 +1478,37 @@ export function useChat({
       return;
     }
 
+    // Check if user is explicitly asking to write or generate a story (e.g. historical story, real person story)
+    const trimmedInput = text.trim();
+    const isExplicitStoryRequest = 
+      /^(?:write|tell|generate|create|kể|tạo|viết)?\s*(?:a\s+|an\s+|me\s+a\s+|bài\s+|một\s+)?(?:story|immersion\s+story|truyện|câu\s+chuyện)\b/i.test(trimmedInput) ||
+      /\b(?:story|truyện|câu\s+chuyện)\s+(?:about|on|regarding|về)\b/i.test(trimmedInput) ||
+      /\b(?:historical|real\s*(?:person|event|history)|non-fiction|tiểu\s+sử|lịch\s+sử)\s+(?:story|truyện)\b/i.test(trimmedInput);
+
+    if (isExplicitStoryRequest && !trimmedInput.toLowerCase().startsWith("why") && !trimmedInput.toLowerCase().startsWith("how")) {
+      let extractedTopic = "Daily Adventure";
+      let genre = "Slice of Life";
+
+      const topicMatch = trimmedInput.match(/(?:about|on|regarding|về)\s+([^.?!]+)/i);
+      if (topicMatch && topicMatch[1]) {
+        extractedTopic = topicMatch[1].trim();
+      } else if (/curie/i.test(trimmedInput)) {
+        extractedTopic = "Marie Curie & Discovery of Radium";
+      } else if (/apollo/i.test(trimmedInput)) {
+        extractedTopic = "Apollo 11 Moon Landing";
+      } else if (/fleming/i.test(trimmedInput)) {
+        extractedTopic = "Alexander Fleming & Penicillin";
+      }
+
+      const isHistorical = /curie|apollo|fleming|einstein|history|historical|war|lincoln|darwin|newton|napoleon|da\s+vinci|churchill|mandela|steve\s+jobs|lịch\s+sử|nhân\s+vật|sự\s+kiện|real\s*(?:person|event)|non-fiction/i.test(trimmedInput);
+      if (isHistorical) {
+        genre = "Historical Non-Fiction (Real Events)";
+      }
+
+      await handleViewFlashcard(configToUse, { topic: extractedTopic, genre, keepHistory: true });
+      return;
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const configForServer = startTypingWithConfig(configToUse);
@@ -2462,11 +2493,16 @@ export function useChat({
     }
   };
 
-  const handleViewFlashcard = async (overrideConfig?: LLMConfig) => {
+  const handleViewFlashcard = async (
+    overrideConfig?: LLMConfig,
+    options?: { topic?: string; genre?: string; difficulty?: "beginner" | "intermediate" | "advanced"; keepHistory?: boolean }
+  ) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
     setConversationalState("none");
-    setChatMessages([]);
+    if (!options?.keepHistory) {
+      setChatMessages([]);
+    }
 
     const activeWords = await getEffectiveWords();
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
@@ -2478,7 +2514,7 @@ export function useChat({
         content: t("chat_empty_collection_flashcard_warning", currentAppLang),
         timestamp: new Date().toISOString(),
       };
-      setChatMessages([noWordsMsg]);
+      setChatMessages((prev) => options?.keepHistory ? [...prev, noWordsMsg] : [noWordsMsg]);
       return;
     }
 
@@ -2495,15 +2531,22 @@ export function useChat({
           { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
         ],
       };
-      setChatMessages([noCandidateMsg]);
+      setChatMessages((prev) => options?.keepHistory ? [...prev, noCandidateMsg] : [noCandidateMsg]);
       return;
     }
 
     const configForServer = startTypingWithConfig(configToUse);
 
     try {
+      const topic = options?.topic || "Daily Adventure";
+      const genre = options?.genre || "Slice of Life";
+      const difficulty = options?.difficulty || "intermediate";
+
       const storyResult = await generateImmersionStoryService({
         targetWords: candidateWords,
+        topic,
+        genre,
+        difficulty,
         targetLanguage,
         nativeLanguage,
         cfg: configForServer,
@@ -2530,25 +2573,31 @@ export function useChat({
         return updatedWords;
       });
 
+      const isHistorical = genre.toLowerCase().includes("historical") || genre.toLowerCase().includes("non-fiction");
+
       const storyMsg: ChatMessage = {
         id: `story-msg-${Date.now()}`,
         role: "assistant",
-        content: `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
+        content: isHistorical
+          ? `### 📜 Historical Non-Fiction Immersion\n\nEnjoy this factual account of **${topic}** recounting real historical events while naturally practicing **${candidateWords.length} candidate words** with Comprehensible Input.`
+          : `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
         timestamp: new Date().toISOString(),
         audioWord: candidateWords[0]?.word,
         storyData: storyResult,
         provider: configForServer?.provider,
         model: configForServer?.model,
         suggestedActions: [
+          { label: "🔬 Marie Curie (Radium)", action: "start_real_person_story", payload: { topic: "Marie Curie & Discovery of Radium" } },
+          { label: "🚀 Apollo 11 Mission", action: "start_real_person_story", payload: { topic: "Apollo 11 Moon Landing" } },
           { label: "📖 Next Story Practice", action: "view_flashcard" },
           { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
         ],
       };
 
-      setChatMessages([storyMsg]);
+      setChatMessages((prev) => options?.keepHistory ? [...prev, storyMsg] : [storyMsg]);
     } catch (e: any) {
       console.error("Error generating immersion story:", e);
-      triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewFlashcard(newConfig), "view-flashcard-error");
+      triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewFlashcard(newConfig, options), "view-flashcard-error");
     } finally {
       setIsTyping(false);
     }

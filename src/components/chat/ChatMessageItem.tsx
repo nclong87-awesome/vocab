@@ -40,7 +40,7 @@ interface ChatMessageItemProps {
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: () => void;
+  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onSuggestCasualReply?: (imageDataUrl: string | null, customPrompt: string) => Promise<void>;
@@ -663,6 +663,11 @@ function ChatMessageItem({
         warmupWordIds = origAction?.payload?.warmupWordIds || warmupMsg?.flashcardData?.cards?.map(c => c.wordId).filter(Boolean);
       }
       startPractice(undefined, "sandwich_quiz", { warmupWordIds });
+    } else if (act.action === "start_real_person_story") {
+      handleRecordActionUse("view_flashcard");
+      const topic = act.payload?.topic || "Marie Curie & Discovery of Radium";
+      const genre = act.payload?.genre || "Historical Non-Fiction (Real Events)";
+      (onViewFlashcard as any)?.(undefined, { topic, genre, keepHistory: true });
     } else if (act.action === "view_flashcard" || act.action === "next_flashcard") {
       handleRecordActionUse("view_flashcard");
       onViewFlashcard?.();

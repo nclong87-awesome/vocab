@@ -9,11 +9,13 @@ import {
   BookmarkCheck, 
   RefreshCw, 
   Trash2,
-  Check
+  Check,
+  Plus
 } from "lucide-react";
 import { Word, ImmersionStory, MinedSentence, ImmersionStoryWord, TTSConfig, LLMConfig } from "../../types";
 import { 
   generateImmersionStoryService, 
+  extractStoryCollocations,
   getStoredMinedSentences, 
   saveMinedSentence, 
   deleteMinedSentence 
@@ -160,6 +162,31 @@ export default function StoryImmersionView({
     speakText(text, ttsConfig, llmConfig, targetLanguage);
   };
 
+  const suggestedWordsList = useMemo(() => {
+    if (currentStory?.suggestedWords && currentStory.suggestedWords.length > 0) {
+      return currentStory.suggestedWords.slice(0, 3);
+    }
+    if (currentStory?.paragraphs && currentStory.paragraphs.length > 0) {
+      return extractStoryCollocations(currentStory.paragraphs, nativeLanguage, targetLanguage);
+    }
+    return [];
+  }, [currentStory, nativeLanguage, targetLanguage]);
+
+  const handleAddSuggestedWord = (sw: ImmersionStoryWord) => {
+    if (onAddWord) {
+      onAddWord({
+        word: sw.word,
+        translation: sw.translation || "",
+        definition: sw.definition || "",
+        partOfSpeech: sw.partOfSpeech || "collocation",
+        pronunciation: sw.pronunciation || undefined,
+        example: `From story "${currentStory?.title || "Story Immersion"}"`,
+        starred: false,
+        learned: false
+      });
+    }
+  };
+
   const handleGenerateStory = async () => {
     setIsGenerating(true);
     setSelectedWordLookup(null);
@@ -278,22 +305,30 @@ export default function StoryImmersionView({
                   type="text"
                   value={selectedTopic}
                   onChange={(e) => setSelectedTopic(e.target.value)}
-                  placeholder="e.g. Travel, Coffee shop, Mystery"
+                  placeholder="e.g. Marie Curie, Apollo 11, Travel, Mystery"
                   className="w-full text-xs px-3 py-2 rounded-lg border border-stone-200 focus:border-stone-900 outline-none"
                 />
                 <div className="flex flex-wrap gap-1 pt-1">
                   {[
+                    "Marie Curie & Discovery of Radium",
+                    "Apollo 11 Moon Landing",
+                    "Alexander Fleming & Penicillin",
                     "Coffee Shop Talk",
                     "Airport Lost Luggage",
-                    "Tech Startup Office",
-                    "Weekend Hiking Trip",
-                    "Cozy Dinner Party"
+                    "Tech Startup Office"
                   ].map((t) => (
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setSelectedTopic(t)}
-                      className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-700 px-2 py-0.5 rounded cursor-pointer"
+                      onClick={() => {
+                        setSelectedTopic(t);
+                        if (t.includes("Curie") || t.includes("Apollo") || t.includes("Fleming")) {
+                          setSelectedGenre("Historical Non-Fiction (Real Events)");
+                        }
+                      }}
+                      className={`text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                        selectedTopic === t ? "bg-stone-900 text-amber-300 font-bold" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+                      }`}
                     >
                       {t}
                     </button>
@@ -310,6 +345,7 @@ export default function StoryImmersionView({
                     onChange={(e) => setSelectedGenre(e.target.value)}
                     className="w-full text-xs p-1.5 rounded-lg border border-stone-200 bg-white"
                   >
+                    <option value="Historical Non-Fiction (Real Events)">📜 Real Events / Biography</option>
                     <option value="Slice of Life">Slice of Life</option>
                     <option value="Mystery">Mystery</option>
                     <option value="Comedy">Comedy</option>
@@ -499,6 +535,81 @@ export default function StoryImmersionView({
                     );
                   })}
                 </div>
+
+                {/* Suggested Collocations (Word + Preposition) from the Story */}
+                {suggestedWordsList.length > 0 && (
+                  <div className="p-4 sm:p-5 rounded-xl border border-sky-200/80 bg-sky-50/30 space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-sky-600" />
+                        <div>
+                          <h4 className="text-xs sm:text-sm font-bold text-stone-900">
+                            Suggested Collocations (Word + Preposition)
+                          </h4>
+                          <p className="text-[11px] text-stone-500 font-sans">
+                            Useful combinations from the story (e.g., <span className="italic font-medium text-stone-700">excited about</span>, <span className="italic font-medium text-stone-700">speak to</span>)
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full shrink-0">
+                        {suggestedWordsList.length} collocations
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {suggestedWordsList.map((sw, idx) => {
+                        const inCollection = words.some(w => w.word.toLowerCase() === sw.word.toLowerCase());
+                        return (
+                          <div
+                            key={sw.word + idx}
+                            className="p-3 bg-white rounded-lg border border-sky-100/90 shadow-2xs flex flex-col justify-between gap-2.5"
+                          >
+                            <div>
+                              <div className="flex items-start justify-between gap-1.5">
+                                <span className="font-bold text-stone-900 text-sm font-serif">{sw.word}</span>
+                                <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 uppercase shrink-0 border border-sky-100">
+                                  {sw.partOfSpeech || "collocation"}
+                                </span>
+                              </div>
+                              {sw.pronunciation && (
+                                <div className="text-[10px] text-stone-400 font-mono mt-0.5">{sw.pronunciation}</div>
+                              )}
+                              <div className="text-xs text-stone-700 font-medium mt-1 leading-snug">
+                                {sw.translation || sw.definition}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1.5 border-t border-stone-100 gap-1">
+                              <button
+                                type="button"
+                                onClick={() => speak(sw.word)}
+                                className="p-1 rounded text-stone-400 hover:text-stone-800 hover:bg-stone-100 transition-colors cursor-pointer"
+                                title="Listen pronunciation"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                              </button>
+                              
+                              {inCollection ? (
+                                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold flex items-center gap-1">
+                                  <Check className="w-3 h-3" /> In Vocab
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddSuggestedWord(sw)}
+                                  className="px-2 py-1 rounded bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                  title="Add collocation to your vocabulary collection"
+                                >
+                                  <Plus className="w-3 h-3" /> Add Collocation
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* AI Metadata Footer */}
                 <LlmResponseMetadata

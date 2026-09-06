@@ -26,7 +26,7 @@ export interface QuickActionItem {
     onAddWord: () => void;
     onSendMessage: (text: string) => void;
     onClearHistory: () => void;
-    onViewFlashcard?: () => void;
+    onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
     onSuggestCasualReplyPrompt?: () => void;
     onOpenWordLibrary?: () => void;
     onOpenStudyMethods?: (tab?: string) => void;

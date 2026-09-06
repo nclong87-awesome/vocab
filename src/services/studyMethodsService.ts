@@ -3,6 +3,8 @@ import {
   LLMConfig, 
   KeywordMnemonic, 
   ImmersionStory, 
+  ImmersionStoryParagraph,
+  ImmersionStoryWord,
   MinedSentence, 
   MemoryPalace, 
   SentenceEvaluation, 
@@ -168,6 +170,158 @@ export function processDistillation(
 /* 2. Contextual Immersion & Dual Reader Service                              */
 /* ========================================================================== */
 
+const COMMON_COLLOCATIONS_DICTIONARY: Array<{
+  pattern: RegExp;
+  word: string;
+  partOfSpeech: string;
+  definition: string;
+  translationMap?: Record<string, string>;
+}> = [
+  {
+    pattern: /\bexcited about\b/i,
+    word: "excited about",
+    partOfSpeech: "adj + prep",
+    definition: "Feeling enthusiastic and eager about something",
+    translationMap: { Vietnamese: "hào hứng, phấn khởi về", Spanish: "entusiasmado por", French: "enthousiaste à propos de" }
+  },
+  {
+    pattern: /\binform(?:ed|ing|s)?\s+(?:[a-zA-Z]+\s+)?about\b/i,
+    word: "inform about",
+    partOfSpeech: "verb + prep",
+    definition: "To give someone facts or details about a topic",
+    translationMap: { Vietnamese: "thông báo, báo tin về", Spanish: "informar sobre", French: "informer de" }
+  },
+  {
+    pattern: /\binterested in\b/i,
+    word: "interested in",
+    partOfSpeech: "adj + prep",
+    definition: "Wanting to know or learn more about something",
+    translationMap: { Vietnamese: "quan tâm, hứng thú với", Spanish: "interesado en", French: "intéressé par" }
+  },
+  {
+    pattern: /\bworr(?:ied|y|ies)\s+about\b/i,
+    word: "worry about",
+    partOfSpeech: "verb + prep",
+    definition: "To feel anxious or concerned regarding something",
+    translationMap: { Vietnamese: "lo lắng về", Spanish: "preocuparse por", French: "s'inquiéter de" }
+  },
+  {
+    pattern: /\b(?:talk|talking|talked|talks)\s+about\b/i,
+    word: "talk about",
+    partOfSpeech: "verb + prep",
+    definition: "To discuss or converse on a subject",
+    translationMap: { Vietnamese: "nói về, thảo luận về", Spanish: "hablar de", French: "parler de" }
+  },
+  {
+    pattern: /\b(?:focus|focused|focusing|focuses)\s+on\b/i,
+    word: "focus on",
+    partOfSpeech: "verb + prep",
+    definition: "To direct attention or effort toward a particular goal",
+    translationMap: { Vietnamese: "tập trung vào", Spanish: "enfocarse en", French: "se concentrer sur" }
+  },
+  {
+    pattern: /\b(?:depend|depended|depending|depends)\s+on\b/i,
+    word: "depend on",
+    partOfSpeech: "verb + prep",
+    definition: "To rely upon or be conditioned by something",
+    translationMap: { Vietnamese: "phụ thuộc vào", Spanish: "depender de", French: "dépendre de" }
+  },
+  {
+    pattern: /\b(?:rely|relied|relying|relies)\s+on\b/i,
+    word: "rely on",
+    partOfSpeech: "verb + prep",
+    definition: "To trust or count on someone or something",
+    translationMap: { Vietnamese: "trông cậy vào", Spanish: "confiar en", French: "compter sur" }
+  },
+  {
+    pattern: /\b(?:listen|listened|listening|listens)\s+to\b/i,
+    word: "listen to",
+    partOfSpeech: "verb + prep",
+    definition: "To pay attentive hearing to sounds or words",
+    translationMap: { Vietnamese: "lắng nghe", Spanish: "escuchar a", French: "écouter" }
+  },
+  {
+    pattern: /\b(?:speak|spoke|spoken|speaking|speaks)\s+to\b/i,
+    word: "speak to",
+    partOfSpeech: "verb + prep",
+    definition: "To communicate verbally with a person",
+    translationMap: { Vietnamese: "nói chuyện với", Spanish: "hablar con", French: "parler à" }
+  },
+  {
+    pattern: /\b(?:wait|waited|waiting|waits)\s+for\b/i,
+    word: "wait for",
+    partOfSpeech: "verb + prep",
+    definition: "To stay expectant until someone or something arrives",
+    translationMap: { Vietnamese: "chờ đợi", Spanish: "esperar a", French: "attendre" }
+  },
+  {
+    pattern: /\b(?:look|looked|looking|looks)\s+for\b/i,
+    word: "look for",
+    partOfSpeech: "verb + prep",
+    definition: "To search for or try to find",
+    translationMap: { Vietnamese: "tìm kiếm", Spanish: "buscar", French: "chercher" }
+  },
+  {
+    pattern: /\b(?:participate|participated|participating|participates)\s+in\b/i,
+    word: "participate in",
+    partOfSpeech: "verb + prep",
+    definition: "To take part or join in an activity",
+    translationMap: { Vietnamese: "tham gia vào", Spanish: "participar en", French: "participer à" }
+  },
+  {
+    pattern: /\b(?:work|worked|working|works)\s+on\b/i,
+    word: "work on",
+    partOfSpeech: "verb + prep",
+    definition: "To spend effort striving to develop or improve something",
+    translationMap: { Vietnamese: "làm việc, nghiên cứu về", Spanish: "trabajar en", French: "travailler sur" }
+  },
+  {
+    pattern: /\b(?:agree|agreed|agreeing|agrees)\s+with\b/i,
+    word: "agree with",
+    partOfSpeech: "verb + prep",
+    definition: "To have the same view or opinion as someone",
+    translationMap: { Vietnamese: "đồng ý với", Spanish: "estar de acuerdo con", French: "être d'accord avec" }
+  },
+  {
+    pattern: /\b(?:care|cared|caring|cares)\s+about\b/i,
+    word: "care about",
+    partOfSpeech: "verb + prep",
+    definition: "To feel concern or deep interest for someone or something",
+    translationMap: { Vietnamese: "quan tâm đến", Spanish: "preocuparse por", French: "se soucier de" }
+  }
+];
+
+export function extractStoryCollocations(
+  paragraphs: ImmersionStoryParagraph[],
+  nativeLanguage: string = "Vietnamese",
+  _targetLanguage: string = "English"
+): ImmersionStoryWord[] {
+  const fullText = (paragraphs || []).map(p => p.targetText || "").join(" ");
+  if (!fullText) return [];
+
+  const found: ImmersionStoryWord[] = [];
+  const added = new Set<string>();
+
+  for (const item of COMMON_COLLOCATIONS_DICTIONARY) {
+    if (found.length >= 3) break;
+    if (item.pattern.test(fullText)) {
+      if (!added.has(item.word.toLowerCase())) {
+        added.add(item.word.toLowerCase());
+        const translation = item.translationMap?.[nativeLanguage] || item.translationMap?.["Vietnamese"] || item.definition;
+        found.push({
+          word: item.word,
+          targetInStory: item.word,
+          translation,
+          definition: item.definition,
+          partOfSpeech: item.partOfSpeech
+        });
+      }
+    }
+  }
+
+  return found;
+}
+
 export async function generateImmersionStoryService(params: {
   targetWords: Word[];
   topic?: string;
@@ -183,7 +337,20 @@ export async function generateImmersionStoryService(params: {
   const candidateSlice = targetWords.slice(0, 5);
   const wordListFormatted = candidateSlice.map(w => `"${w.word}" (${w.translation || w.definition})`).join(", ");
 
-  const prompt = `Write a concise, engaging short story (strictly 2 to 3 short paragraphs, around 80-140 words total) in ${targetLanguage} that naturally integrates the following ${candidateSlice.length} target vocabulary words:
+  const isNonFiction = genre.toLowerCase().includes("non-fiction") || 
+                        genre.toLowerCase().includes("biography") || 
+                        genre.toLowerCase().includes("historical") ||
+                        genre.toLowerCase().includes("real person");
+
+  const nonFictionDirectives = isNonFiction ? `
+NON-FICTION ACCURACY DIRECTIVES (CRITICAL):
+- This story MUST be grounded in REAL, ACCURATELY DOCUMENTED historical events, biographical facts, and real people.
+- DO NOT invent fake historical figures, fictitious events, or counter-factual timelines.
+- Present real actions, milestones, discoveries, or life events (e.g. Marie Curie, Albert Einstein, Amelia Earhart, Nelson Mandela, Apollo 11, the invention of the printing press).
+- Avoid fabricating quotes or private fictional drama; convey genuine biographical narrative non-fiction while naturally integrating the target words.
+` : "";
+
+  const prompt = `Write a concise, engaging short narrative${isNonFiction ? " based on real historical events or a real biographical figure" : " short story"} (strictly 2 to 3 short paragraphs, around 80-140 words total) in ${targetLanguage} that naturally integrates the following ${candidateSlice.length} target vocabulary words:
 Target Vocabulary to emphasize (exactly ${candidateSlice.length} words): [${wordListFormatted}]
 
 Comprehensible Input & Length Constraints:
@@ -193,7 +360,8 @@ Comprehensible Input & Length Constraints:
 - Topic: ${topic}
 - Provide an accurate paragraph-by-paragraph parallel translation in ${nativeLanguage}.
 - Focus on natural repetition and rich context for the target words.
-
+- Also identify and suggest up to three (1-3) natural "word + preposition" collocations or phrases used in this story (excluding the 5 target words above). Strongly prefer high-frequency, highly useful everyday collocations such as adjective + preposition or verb + preposition combinations (for example: "excited about", "speak to", "listen to", "depend on", "wait for", "interested in", "look for", "worry about", "focus on").
+${nonFictionDirectives}
 Return JSON in this EXACT schema:
 {
   "title": "Story title in ${targetLanguage}",
@@ -207,6 +375,17 @@ Return JSON in this EXACT schema:
       "targetInStory": "exact form used in story text",
       "translation": "translation in ${nativeLanguage}",
       "definition": "simple definition in ${targetLanguage}",
+      "partOfSpeech": "noun/verb/adjective/etc",
+      "pronunciation": "/phonetic/"
+    }
+  ],
+  "suggestedWords": [
+    {
+      "word": "word + preposition (e.g. 'excited about' or 'speak to')",
+      "targetInStory": "exact phrase as appeared in the story text",
+      "translation": "translation of this collocation in ${nativeLanguage}",
+      "definition": "brief definition/usage of this word + preposition",
+      "partOfSpeech": "verb + prep or adj + prep",
       "pronunciation": "/phonetic/"
     }
   ],
@@ -219,7 +398,7 @@ Return JSON in this EXACT schema:
   ]
 }`;
 
-  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), and strictly focused on the candidate vocabulary words.`;
+  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), strictly focused on the candidate vocabulary words, and suggest up to 3 useful "word + preposition" collocations (e.g. 'excited about', 'speak to', 'listen to', 'depend on') found in the story.${isNonFiction ? " When writing historical or biographical accounts, remain strictly factual and accurate without fabricating untrue events or characters." : ""}`;
 
   try {
     const rawRes = await sendLlmRequestWithMeta({
@@ -231,6 +410,29 @@ Return JSON in this EXACT schema:
     });
 
     const parsed = cleanAndParseJson(rawRes.text);
+    const paragraphsList: ImmersionStoryParagraph[] = parsed.paragraphs || [
+      {
+        id: "p1",
+        targetText: `A wonderful day began as we explored ${topic}.`,
+        nativeText: `Một ngày tuyệt vời bắt đầu khi chúng tôi khám phá ${topic}.`
+      }
+    ];
+
+    let extractedSuggestions = (parsed.suggestedWords && Array.isArray(parsed.suggestedWords))
+      ? parsed.suggestedWords.slice(0, 3).map((sw: any) => ({
+          word: sw.word || "",
+          targetInStory: sw.targetInStory || sw.word || "",
+          translation: sw.translation || "",
+          definition: sw.definition || "",
+          partOfSpeech: sw.partOfSpeech || "word + prep",
+          pronunciation: sw.pronunciation || undefined
+        })).filter((sw: any) => Boolean(sw.word))
+      : [];
+
+    if (extractedSuggestions.length === 0) {
+      extractedSuggestions = extractStoryCollocations(paragraphsList, nativeLanguage, targetLanguage);
+    }
+
     return {
       id: `story_${Date.now()}`,
       title: parsed.title || "Contextual Immersion Story",
@@ -243,43 +445,40 @@ Return JSON in this EXACT schema:
       targetWords: (parsed.targetWords && Array.isArray(parsed.targetWords) && parsed.targetWords.length > 0)
         ? parsed.targetWords.slice(0, 5)
         : candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
-      paragraphs: parsed.paragraphs || [
-        {
-          id: "p1",
-          targetText: `A wonderful day began as we explored ${topic}.`,
-          nativeText: `Một ngày tuyệt vời bắt đầu khi chúng tôi khám phá ${topic}.`
-        }
-      ],
+      suggestedWords: extractedSuggestions,
+      paragraphs: paragraphsList,
       provider: rawRes.provider,
       model: rawRes.model,
       responseTimeMs: rawRes.responseTimeMs,
       createdAt: new Date().toISOString()
     };
   } catch (error) {
-    console.error("Story generation failed, returning fallback story:", error);
-    // Fallback template
-    return {
-      id: `story_${Date.now()}`,
-      title: `A Day with ${candidateSlice[0]?.word || "New Words"}`,
-      titleTranslation: `Một ngày cùng từ vựng mới`,
-      topic,
-      genre,
-      difficulty,
-      targetLanguage,
-      nativeLanguage,
-      targetWords: candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
-      paragraphs: [
+      console.error("Story generation failed, returning fallback story:", error);
+      // Fallback template
+      const fallbackParagraphs = [
         {
           id: "p1",
-          targetText: `Every morning brings new opportunities to learn. Today we encounter ${candidateSlice.map(w => w.word).join(", ")}. In our daily conversations, using these words opens up vibrant expressions.`,
-          nativeText: `Mỗi buổi sáng mang đến những cơ hội mới để học tập. Hôm nay chúng ta bắt gặp ${candidateSlice.map(w => w.translation || w.word).join(", ")}. Trong giao tiếp hàng ngày, việc sử dụng các từ này mở ra nhiều cách biểu đạt phong phú.`
+          targetText: `Every morning brings new opportunities to learn. Today we encounter ${candidateSlice.map(w => w.word).join(", ")}. In our daily conversations, using these words opens up vibrant expressions. We are excited about discovering new phrases and listen to our peers carefully.`,
+          nativeText: `Mỗi buổi sáng mang đến những cơ hội mới để học tập. Hôm nay chúng ta bắt gặp ${candidateSlice.map(w => w.translation || w.word).join(", ")}. Trong giao tiếp hàng ngày, việc sử dụng các từ này mở ra nhiều cách biểu đạt phong phú. Chúng ta rất hào hứng với việc khám phá các cụm từ mới và lắng nghe bạn bè cẩn thận.`
         }
-      ],
-      provider: cfg?.provider,
-      model: cfg?.model,
-      createdAt: new Date().toISOString()
-    };
-  }
+      ];
+      return {
+        id: `story_${Date.now()}`,
+        title: `A Day with ${candidateSlice[0]?.word || "New Words"}`,
+        titleTranslation: `Một ngày cùng từ vựng mới`,
+        topic,
+        genre,
+        difficulty,
+        targetLanguage,
+        nativeLanguage,
+        targetWords: candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
+        suggestedWords: extractStoryCollocations(fallbackParagraphs, nativeLanguage, targetLanguage),
+        paragraphs: fallbackParagraphs,
+        provider: cfg?.provider,
+        model: cfg?.model,
+        createdAt: new Date().toISOString()
+      };
+    }
 }
 
 // Mined Sentences Local Persistence

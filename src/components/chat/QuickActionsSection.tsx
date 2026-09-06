@@ -25,7 +25,7 @@ interface QuickActionsSectionProps {
   onGenerateByTopic?: () => void;
   startPractice: () => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: () => void;
+  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onOpenWordLibrary?: () => void;
   onOpenStudyMethods?: (tab?: string) => void;

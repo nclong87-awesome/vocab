@@ -23,7 +23,7 @@ interface MessageListProps {
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: () => void;
+  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onSuggestCasualReply?: (imageDataUrl: string | null, customPrompt: string) => Promise<void>;
