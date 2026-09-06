@@ -1483,26 +1483,15 @@ export function useChat({
     const isExplicitStoryRequest = 
       /^(?:write|tell|generate|create|kể|tạo|viết)?\s*(?:a\s+|an\s+|me\s+a\s+|bài\s+|một\s+)?(?:story|immersion\s+story|truyện|câu\s+chuyện)\b/i.test(trimmedInput) ||
       /\b(?:story|truyện|câu\s+chuyện)\s+(?:about|on|regarding|về)\b/i.test(trimmedInput) ||
-      /\b(?:historical|real\s*(?:person|event|history)|non-fiction|tiểu\s+sử|lịch\s+sử)\s+(?:story|truyện)\b/i.test(trimmedInput);
+      /\b(?:historical|real\s*(?:person|event|figure|history)|non-fiction|tiểu\s+sử|lịch\s+sử)\s+(?:story|truyện)\b/i.test(trimmedInput);
 
     if (isExplicitStoryRequest && !trimmedInput.toLowerCase().startsWith("why") && !trimmedInput.toLowerCase().startsWith("how")) {
-      let extractedTopic = "Daily Adventure";
-      let genre = "Slice of Life";
+      let extractedTopic: string | undefined = undefined;
+      const genre = "Historical Non-Fiction (Real Events & Figures)";
 
       const topicMatch = trimmedInput.match(/(?:about|on|regarding|về)\s+([^.?!]+)/i);
       if (topicMatch && topicMatch[1]) {
         extractedTopic = topicMatch[1].trim();
-      } else if (/curie/i.test(trimmedInput)) {
-        extractedTopic = "Marie Curie & Discovery of Radium";
-      } else if (/apollo/i.test(trimmedInput)) {
-        extractedTopic = "Apollo 11 Moon Landing";
-      } else if (/fleming/i.test(trimmedInput)) {
-        extractedTopic = "Alexander Fleming & Penicillin";
-      }
-
-      const isHistorical = /curie|apollo|fleming|einstein|history|historical|war|lincoln|darwin|newton|napoleon|da\s+vinci|churchill|mandela|steve\s+jobs|lịch\s+sử|nhân\s+vật|sự\s+kiện|real\s*(?:person|event)|non-fiction/i.test(trimmedInput);
-      if (isHistorical) {
-        genre = "Historical Non-Fiction (Real Events)";
       }
 
       await handleViewFlashcard(configToUse, { topic: extractedTopic, genre, keepHistory: true });
@@ -2538,8 +2527,8 @@ export function useChat({
     const configForServer = startTypingWithConfig(configToUse);
 
     try {
-      const topic = options?.topic || "Daily Adventure";
-      const genre = options?.genre || "Slice of Life";
+      const topic = options?.topic;
+      const genre = options?.genre || "Historical Non-Fiction (Real Events & Figures)";
       const difficulty = options?.difficulty || "intermediate";
 
       const storyResult = await generateImmersionStoryService({
@@ -2573,13 +2562,14 @@ export function useChat({
         return updatedWords;
       });
 
-      const isHistorical = genre.toLowerCase().includes("historical") || genre.toLowerCase().includes("non-fiction");
+      const resolvedTopic = storyResult.topic || topic || "Real Historical Event";
+      const isHistorical = !genre || genre.toLowerCase().includes("historical") || genre.toLowerCase().includes("non-fiction") || genre.toLowerCase().includes("real");
 
       const storyMsg: ChatMessage = {
         id: `story-msg-${Date.now()}`,
         role: "assistant",
         content: isHistorical
-          ? `### 📜 Historical Non-Fiction Immersion\n\nEnjoy this factual account of **${topic}** recounting real historical events while naturally practicing **${candidateWords.length} candidate words** with Comprehensible Input.`
+          ? `### 📜 Real Event Immersion: ${resolvedTopic}\n\nEnjoy this factual account recounting real events while naturally practicing **${candidateWords.length} candidate words** with Comprehensible Input.`
           : `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
         timestamp: new Date().toISOString(),
         audioWord: candidateWords[0]?.word,
@@ -2587,9 +2577,7 @@ export function useChat({
         provider: configForServer?.provider,
         model: configForServer?.model,
         suggestedActions: [
-          { label: "🔬 Marie Curie (Radium)", action: "start_real_person_story", payload: { topic: "Marie Curie & Discovery of Radium" } },
-          { label: "🚀 Apollo 11 Mission", action: "start_real_person_story", payload: { topic: "Apollo 11 Moon Landing" } },
-          { label: "📖 Next Story Practice", action: "view_flashcard" },
+          { label: "📖 Next Historical Story", action: "view_flashcard" },
           { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
         ],
       };

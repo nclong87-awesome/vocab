@@ -331,33 +331,42 @@ export async function generateImmersionStoryService(params: {
   nativeLanguage: string;
   cfg?: LLMConfig;
 }): Promise<ImmersionStory> {
-  const { targetWords, topic = "Daily Adventure", genre = "Slice of Life", difficulty = "intermediate", targetLanguage, nativeLanguage, cfg } = params;
+  const { 
+    targetWords, 
+    topic, 
+    genre = "Historical Non-Fiction (Real Events & Figures)", 
+    difficulty = "intermediate", 
+    targetLanguage, 
+    nativeLanguage, 
+    cfg 
+  } = params;
 
   // Use strictly 5 candidate words for focused contextual immersion
   const candidateSlice = targetWords.slice(0, 5);
   const wordListFormatted = candidateSlice.map(w => `"${w.word}" (${w.translation || w.definition})`).join(", ");
 
-  const isNonFiction = genre.toLowerCase().includes("non-fiction") || 
-                        genre.toLowerCase().includes("biography") || 
-                        genre.toLowerCase().includes("historical") ||
-                        genre.toLowerCase().includes("real person");
+  const topicDirective = (!topic || topic.trim() === "" || topic.toLowerCase().startsWith("auto"))
+    ? `TOPIC SELECTION DIRECTIVE (AUTONOMOUS):
+- Autonomously choose an engaging, factually documented REAL historical event, milestone, scientific discovery, exploration, or historical figure's life event (e.g. Marie Curie discovering radium, Alexander Fleming discovering penicillin, Apollo 11 moon mission, the Rosetta Stone decipherment, Amelia Earhart's flight, Wright brothers, etc.) that best and most naturally connects with the target vocabulary words.
+- Set the "topic" field in the output JSON to the name of this chosen real historical event or figure.`
+    : `TOPIC DIRECTIVE:
+- Ground the non-fiction narrative accurately in the real historical context of: "${topic}".`;
 
-  const nonFictionDirectives = isNonFiction ? `
+  const nonFictionDirectives = `
 NON-FICTION ACCURACY DIRECTIVES (CRITICAL):
-- This story MUST be grounded in REAL, ACCURATELY DOCUMENTED historical events, biographical facts, and real people.
-- DO NOT invent fake historical figures, fictitious events, or counter-factual timelines.
-- Present real actions, milestones, discoveries, or life events (e.g. Marie Curie, Albert Einstein, Amelia Earhart, Nelson Mandela, Apollo 11, the invention of the printing press).
-- Avoid fabricating quotes or private fictional drama; convey genuine biographical narrative non-fiction while naturally integrating the target words.
-` : "";
+- This narrative MUST be strictly grounded in REAL, ACCURATELY DOCUMENTED historical events, biographical facts, scientific discoveries, or real people.
+- DO NOT invent fake historical characters, fictitious events, or counter-factual timelines.
+- Recount genuine biographical moments, milestones, or discoveries while naturally integrating the target vocabulary words.
+`;
 
-  const prompt = `Write a concise, engaging short narrative${isNonFiction ? " based on real historical events or a real biographical figure" : " short story"} (strictly 2 to 3 short paragraphs, around 80-140 words total) in ${targetLanguage} that naturally integrates the following ${candidateSlice.length} target vocabulary words:
+  const prompt = `Write a concise, engaging narrative based on real historical events or real figures (strictly 2 to 3 short paragraphs, around 80-140 words total) in ${targetLanguage} that naturally integrates the following ${candidateSlice.length} target vocabulary words:
 Target Vocabulary to emphasize (exactly ${candidateSlice.length} words): [${wordListFormatted}]
 
 Comprehensible Input & Length Constraints:
 - Length: Keep the story short, concise, and easy to read (strictly 2 to 3 short paragraphs, 80-140 words total). Avoid overly long or verbose narratives.
 - Difficulty Level: ${difficulty} (aim for ~90-95% comprehensible phrasing with natural syntax).
 - Genre: ${genre}
-- Topic: ${topic}
+${topicDirective}
 - Provide an accurate paragraph-by-paragraph parallel translation in ${nativeLanguage}.
 - Focus on natural repetition and rich context for the target words.
 - Also identify and suggest up to three (1-3) natural "word + preposition" collocations or phrases used in this story (excluding the 5 target words above). Strongly prefer high-frequency, highly useful everyday collocations such as adjective + preposition or verb + preposition combinations (for example: "excited about", "speak to", "listen to", "depend on", "wait for", "interested in", "look for", "worry about", "focus on").
@@ -366,7 +375,7 @@ Return JSON in this EXACT schema:
 {
   "title": "Story title in ${targetLanguage}",
   "titleTranslation": "Story title translated in ${nativeLanguage}",
-  "topic": "${topic}",
+  "topic": "Name of the real historical event or figure chosen",
   "genre": "${genre}",
   "difficulty": "${difficulty}",
   "targetWords": [
@@ -398,7 +407,7 @@ Return JSON in this EXACT schema:
   ]
 }`;
 
-  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), strictly focused on the candidate vocabulary words, and suggest up to 3 useful "word + preposition" collocations (e.g. 'excited about', 'speak to', 'listen to', 'depend on') found in the story.${isNonFiction ? " When writing historical or biographical accounts, remain strictly factual and accurate without fabricating untrue events or characters." : ""}`;
+  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), strictly focused on real historical events/figures and the candidate vocabulary words, and suggest up to 3 useful "word + preposition" collocations (e.g. 'excited about', 'speak to', 'listen to', 'depend on') found in the story. Remain strictly factual and accurate without fabricating untrue events or characters.`;
 
   try {
     const rawRes = await sendLlmRequestWithMeta({
@@ -410,11 +419,12 @@ Return JSON in this EXACT schema:
     });
 
     const parsed = cleanAndParseJson(rawRes.text);
+    const resolvedTopic = parsed.topic || topic || "Historical Discovery";
     const paragraphsList: ImmersionStoryParagraph[] = parsed.paragraphs || [
       {
         id: "p1",
-        targetText: `A wonderful day began as we explored ${topic}.`,
-        nativeText: `Một ngày tuyệt vời bắt đầu khi chúng tôi khám phá ${topic}.`
+        targetText: `A remarkable moment in history unfolded during ${resolvedTopic}.`,
+        nativeText: `Một khoảnh khắc đáng nhớ trong lịch sử đã diễn ra trong ${resolvedTopic}.`
       }
     ];
 
@@ -435,9 +445,9 @@ Return JSON in this EXACT schema:
 
     return {
       id: `story_${Date.now()}`,
-      title: parsed.title || "Contextual Immersion Story",
-      titleTranslation: parsed.titleTranslation || "Truyện ngữ cảnh",
-      topic: parsed.topic || topic,
+      title: parsed.title || "Historical Non-Fiction Story",
+      titleTranslation: parsed.titleTranslation || "Truyện lịch sử có thật",
+      topic: resolvedTopic,
       genre: parsed.genre || genre,
       difficulty: parsed.difficulty || difficulty,
       targetLanguage,
@@ -453,32 +463,37 @@ Return JSON in this EXACT schema:
       createdAt: new Date().toISOString()
     };
   } catch (error) {
-      console.error("Story generation failed, returning fallback story:", error);
-      // Fallback template
-      const fallbackParagraphs = [
-        {
-          id: "p1",
-          targetText: `Every morning brings new opportunities to learn. Today we encounter ${candidateSlice.map(w => w.word).join(", ")}. In our daily conversations, using these words opens up vibrant expressions. We are excited about discovering new phrases and listen to our peers carefully.`,
-          nativeText: `Mỗi buổi sáng mang đến những cơ hội mới để học tập. Hôm nay chúng ta bắt gặp ${candidateSlice.map(w => w.translation || w.word).join(", ")}. Trong giao tiếp hàng ngày, việc sử dụng các từ này mở ra nhiều cách biểu đạt phong phú. Chúng ta rất hào hứng với việc khám phá các cụm từ mới và lắng nghe bạn bè cẩn thận.`
-        }
-      ];
-      return {
-        id: `story_${Date.now()}`,
-        title: `A Day with ${candidateSlice[0]?.word || "New Words"}`,
-        titleTranslation: `Một ngày cùng từ vựng mới`,
-        topic,
-        genre,
-        difficulty,
-        targetLanguage,
-        nativeLanguage,
-        targetWords: candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
-        suggestedWords: extractStoryCollocations(fallbackParagraphs, nativeLanguage, targetLanguage),
-        paragraphs: fallbackParagraphs,
-        provider: cfg?.provider,
-        model: cfg?.model,
-        createdAt: new Date().toISOString()
-      };
-    }
+    console.error("Story generation failed, returning fallback story:", error);
+    // Real event fallback template (Alexander Fleming's Discovery of Penicillin)
+    const fallbackParagraphs: ImmersionStoryParagraph[] = [
+      {
+        id: "p1",
+        targetText: `In 1928, Dr. Alexander Fleming made a breakthrough that transformed medicine forever. While studying bacterial cultures, he began to notice a curious clear zone forming around a stray mold in a petri dish, illustrating how we encounter ${candidateSlice.map(w => w.word).join(", ")}.`,
+        nativeText: `Năm 1928, Tiến sĩ Alexander Fleming đã tạo ra bước đột phá làm thay đổi y học mãi mãi. Khi nghiên cứu các mẻ cấy vi khuẩn, ông bắt đầu nhận thấy một vùng trong suốt kỳ lạ hình thành xung quanh vết nấm mốc trong đĩa thí nghiệm, minh họa cách chúng ta bắt gặp ${candidateSlice.map(w => w.translation || w.word).join(", ")}.`
+      },
+      {
+        id: "p2",
+        targetText: `Scientists were excited about investigating how this mold prevented bacterial growth. Instead of ignoring the anomaly, he decided to listen to what the evidence suggested, leading directly to the discovery of life-saving penicillin.`,
+        nativeText: `Các nhà khoa học đã rất hào hứng tìm hiểu cách loài nấm này ức chế vi khuẩn phát triển. Thay vì bỏ qua hiện tượng bất thường, ông quyết định lắng nghe những gì bằng chứng gợi mở, trực tiếp dẫn đến phát minh penicillin cứu sống hàng triệu người.`
+      }
+    ];
+    return {
+      id: `story_${Date.now()}`,
+      title: "The Discovery of Penicillin",
+      titleTranslation: "Khám phá ra Penicillin",
+      topic: "Alexander Fleming & Discovery of Penicillin",
+      genre: "Historical Non-Fiction (Real Events & Figures)",
+      difficulty,
+      targetLanguage,
+      nativeLanguage,
+      targetWords: candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
+      suggestedWords: extractStoryCollocations(fallbackParagraphs, nativeLanguage, targetLanguage),
+      paragraphs: fallbackParagraphs,
+      provider: cfg?.provider,
+      model: cfg?.model,
+      createdAt: new Date().toISOString()
+    };
+  }
 }
 
 // Mined Sentences Local Persistence

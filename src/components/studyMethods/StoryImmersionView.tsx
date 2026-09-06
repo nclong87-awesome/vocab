@@ -60,8 +60,8 @@ export default function StoryImmersionView({
   const [generationMetadata, setGenerationMetadata] = useState<{ provider?: string; model?: string; responseTimeMs?: number } | null>(null);
 
   // Generation Controls
-  const [selectedTopic, setSelectedTopic] = useState("Daily Coffee Encounter");
-  const [selectedGenre, setSelectedGenre] = useState("Slice of Life");
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState("Historical Non-Fiction (Real Events & Figures)");
   const [selectedDifficulty, setSelectedDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set());
 
@@ -298,42 +298,19 @@ export default function StoryImmersionView({
                 <Sparkles className="w-3.5 h-3.5 text-sky-600" /> Story Parameters
               </h4>
 
-              {/* Topic suggestions */}
+              {/* Topic input */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-stone-700">Topic / Scenario</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-stone-700">Topic / Real Event</label>
+                  <span className="text-[10px] text-stone-500 italic">Auto-decided</span>
+                </div>
                 <input
                   type="text"
                   value={selectedTopic}
                   onChange={(e) => setSelectedTopic(e.target.value)}
-                  placeholder="e.g. Marie Curie, Apollo 11, Travel, Mystery"
+                  placeholder="Auto-decided by AI (or enter specific figure/event)"
                   className="w-full text-xs px-3 py-2 rounded-lg border border-stone-200 focus:border-stone-900 outline-none"
                 />
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {[
-                    "Marie Curie & Discovery of Radium",
-                    "Apollo 11 Moon Landing",
-                    "Alexander Fleming & Penicillin",
-                    "Coffee Shop Talk",
-                    "Airport Lost Luggage",
-                    "Tech Startup Office"
-                  ].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTopic(t);
-                        if (t.includes("Curie") || t.includes("Apollo") || t.includes("Fleming")) {
-                          setSelectedGenre("Historical Non-Fiction (Real Events)");
-                        }
-                      }}
-                      className={`text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                        selectedTopic === t ? "bg-stone-900 text-amber-300 font-bold" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Genre and Difficulty */}
@@ -345,12 +322,10 @@ export default function StoryImmersionView({
                     onChange={(e) => setSelectedGenre(e.target.value)}
                     className="w-full text-xs p-1.5 rounded-lg border border-stone-200 bg-white"
                   >
-                    <option value="Historical Non-Fiction (Real Events)">📜 Real Events / Biography</option>
+                    <option value="Historical Non-Fiction (Real Events & Figures)">📜 Real Events & Non-Fiction</option>
+                    <option value="Biography & Milestones">👤 Biography & True Milestones</option>
                     <option value="Slice of Life">Slice of Life</option>
                     <option value="Mystery">Mystery</option>
-                    <option value="Comedy">Comedy</option>
-                    <option value="Sci-Fi Adventure">Sci-Fi</option>
-                    <option value="Workplace Drama">Workplace</option>
                   </select>
                 </div>
                 <div>

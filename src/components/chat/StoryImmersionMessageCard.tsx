@@ -85,8 +85,8 @@ export default function StoryImmersionMessageCard({
   }, [initialStory, provider, model, responseTimeMs]);
 
   // Generation Controls for Regeneration
-  const [selectedTopic, setSelectedTopic] = useState(initialStory.topic || "Daily Coffee Encounter");
-  const [selectedGenre, setSelectedGenre] = useState(initialStory.genre || "Slice of Life");
+  const [selectedTopic, setSelectedTopic] = useState(initialStory.topic || "");
+  const [selectedGenre, setSelectedGenre] = useState(initialStory.genre || "Historical Non-Fiction (Real Events & Figures)");
   const [selectedDifficulty, setSelectedDifficulty] = useState<"beginner" | "intermediate" | "advanced">(
     (initialStory.difficulty as any) || "intermediate"
   );
@@ -202,39 +202,6 @@ export default function StoryImmersionMessageCard({
     }
     return [];
   }, [currentStory, nativeLanguage, targetLanguage]);
-
-  const handleQuickGenerateHistory = async (topic: string) => {
-    setSelectedTopic(topic);
-    setSelectedGenre("Historical Non-Fiction (Real Events)");
-    setIsGenerating(true);
-    setSelectedWordLookup(null);
-    const startTime = performance.now();
-    try {
-      const targetWordsObj = words.filter(w => selectedWordIds.has(w.id));
-      const effectiveConfig = getOverrideConfig(llmConfig);
-      const newStory = await generateImmersionStoryService({
-        targetWords: targetWordsObj.length > 0 ? targetWordsObj : words.slice(0, 5),
-        topic,
-        genre: "Historical Non-Fiction (Real Events)",
-        difficulty: selectedDifficulty,
-        targetLanguage,
-        nativeLanguage,
-        cfg: effectiveConfig
-      });
-      const durationMs = newStory.responseTimeMs || Math.round(performance.now() - startTime);
-      setCurrentStory(newStory);
-      setCurrentProvider(newStory.provider || effectiveConfig?.provider);
-      setCurrentModel(newStory.model || effectiveConfig?.model);
-      setCurrentResponseTimeMs(durationMs);
-      setShowParameters(false);
-      showToast?.(`Generated historical non-fiction account: "${topic}"!`);
-    } catch (e) {
-      console.error("Historical story generation failed:", e);
-      showToast?.("Failed to generate historical story. Please try again.");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   const handleAddSuggestedWord = (sw: ImmersionStoryWord) => {
     if (onAddWord) {
@@ -359,65 +326,6 @@ export default function StoryImmersionMessageCard({
         </div>
       </div>
 
-      {/* Real Historical Presets Quick Bar */}
-      <div className="bg-amber-50/75 border-b border-amber-200/80 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2">
-          <span className="text-base leading-none">📜</span>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-amber-950">Real Event / Non-Fiction Story:</span>
-              <span className="text-[10px] bg-amber-200/70 text-amber-900 font-semibold px-1.5 py-0.2 rounded">1-Click</span>
-            </div>
-            <p className="text-[11px] text-amber-800/80 hidden sm:block">
-              Generates genuine, factually accurate accounts of real figures & milestones
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            disabled={isGenerating}
-            onClick={() => handleQuickGenerateHistory("Marie Curie & Discovery of Radium")}
-            className="text-xs px-2.5 py-1 rounded-md bg-white hover:bg-amber-100 border border-amber-300 text-stone-900 font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-3xs hover:border-amber-500 disabled:opacity-50"
-            title="Fact-based historical story about Marie Curie"
-          >
-            <span>🔬</span>
-            <span>Marie Curie</span>
-          </button>
-          <button
-            type="button"
-            disabled={isGenerating}
-            onClick={() => handleQuickGenerateHistory("Apollo 11 Moon Landing")}
-            className="text-xs px-2.5 py-1 rounded-md bg-white hover:bg-amber-100 border border-amber-300 text-stone-900 font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-3xs hover:border-amber-500 disabled:opacity-50"
-            title="Fact-based historical story about the Apollo 11 moon mission"
-          >
-            <span>🚀</span>
-            <span>Apollo 11</span>
-          </button>
-          <button
-            type="button"
-            disabled={isGenerating}
-            onClick={() => handleQuickGenerateHistory("Alexander Fleming & Penicillin")}
-            className="text-xs px-2.5 py-1 rounded-md bg-white hover:bg-amber-100 border border-amber-300 text-stone-900 font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-3xs hover:border-amber-500 disabled:opacity-50"
-            title="Fact-based historical story about Alexander Fleming discovering penicillin"
-          >
-            <span>💊</span>
-            <span>Fleming</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedGenre("Historical Non-Fiction (Real Events)");
-              setShowParameters(true);
-            }}
-            className="text-xs px-2.5 py-1 rounded-md bg-amber-900 hover:bg-black text-amber-100 font-bold transition-all cursor-pointer flex items-center gap-1 shadow-3xs"
-          >
-            <Sparkles className="w-3 h-3 text-amber-300" />
-            <span>More Historical Figures...</span>
-          </button>
-        </div>
-      </div>
-
       {/* Story Parameters Toggle Bar */}
       <div className="bg-stone-50/70 border-b border-stone-200/80 px-4 py-2 flex items-center justify-between">
         <button
@@ -453,40 +361,17 @@ export default function StoryImmersionMessageCard({
             <div className="max-w-2xl space-y-4">
               {/* Topic suggestions */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-stone-700">Topic / Scenario</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-stone-700">Topic / Real Event</label>
+                  <span className="text-[11px] text-stone-500 italic">Leave blank for AI to pick the best real historical event</span>
+                </div>
                 <input
                   type="text"
                   value={selectedTopic}
                   onChange={(e) => setSelectedTopic(e.target.value)}
-                  placeholder="e.g. Marie Curie, Apollo 11, Tech Office, Coffee Shop"
+                  placeholder="Auto-decided by AI based on vocabulary (or enter specific figure/event)"
                   className="w-full text-xs px-3 py-2 rounded-lg border border-stone-200 focus:border-stone-900 outline-none"
                 />
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {[
-                    "Marie Curie & Discovery of Radium",
-                    "Apollo 11 Moon Landing",
-                    "Alexander Fleming & Penicillin",
-                    "Daily Coffee Encounter",
-                    "Airport Lost Luggage",
-                    "Tech Startup Office"
-                  ].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTopic(t);
-                        if (t.includes("Curie") || t.includes("Apollo") || t.includes("Fleming")) {
-                          setSelectedGenre("Historical Non-Fiction (Real Events)");
-                        }
-                      }}
-                      className={`text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                        selectedTopic === t ? "bg-stone-900 text-amber-300 font-bold" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Genre and Difficulty */}
@@ -498,12 +383,10 @@ export default function StoryImmersionMessageCard({
                     onChange={(e) => setSelectedGenre(e.target.value)}
                     className="w-full text-xs p-2 rounded-lg border border-stone-200 bg-white"
                   >
-                    <option value="Historical Non-Fiction (Real Events)">📜 Real Events / Biography</option>
+                    <option value="Historical Non-Fiction (Real Events & Figures)">📜 Real Events & Non-Fiction (Default)</option>
+                    <option value="Biography & Milestones">👤 Biography & True Milestones</option>
                     <option value="Slice of Life">Slice of Life</option>
                     <option value="Mystery">Mystery</option>
-                    <option value="Comedy">Comedy</option>
-                    <option value="Sci-Fi Adventure">Sci-Fi</option>
-                    <option value="Workplace Drama">Workplace</option>
                   </select>
                 </div>
                 <div>
