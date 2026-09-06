@@ -396,6 +396,9 @@ export interface ImmersionStory {
   nativeLanguage: string;
   targetWords: ImmersionStoryWord[];
   paragraphs: ImmersionStoryParagraph[];
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
   createdAt: string;
 }
 

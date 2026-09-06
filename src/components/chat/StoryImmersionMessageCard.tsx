@@ -70,15 +70,17 @@ export default function StoryImmersionMessageCard({
   const [showParameters, setShowParameters] = useState(false);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
-  const [currentProvider, setCurrentProvider] = useState<string | undefined>(provider);
-  const [currentModel, setCurrentModel] = useState<string | undefined>(model);
-  const [currentResponseTimeMs, setCurrentResponseTimeMs] = useState<number | undefined>(responseTimeMs);
+  const [currentProvider, setCurrentProvider] = useState<string | undefined>(initialStory.provider || provider);
+  const [currentModel, setCurrentModel] = useState<string | undefined>(initialStory.model || model);
+  const [currentResponseTimeMs, setCurrentResponseTimeMs] = useState<number | undefined>(initialStory.responseTimeMs ?? responseTimeMs);
 
   useEffect(() => {
-    if (provider !== undefined) setCurrentProvider(provider);
-    if (model !== undefined) setCurrentModel(model);
-    if (responseTimeMs !== undefined) setCurrentResponseTimeMs(responseTimeMs);
-  }, [provider, model, responseTimeMs]);
+    if (initialStory.provider || provider !== undefined) setCurrentProvider(initialStory.provider || provider);
+    if (initialStory.model || model !== undefined) setCurrentModel(initialStory.model || model);
+    if (initialStory.responseTimeMs !== undefined || responseTimeMs !== undefined) {
+      setCurrentResponseTimeMs(initialStory.responseTimeMs ?? responseTimeMs);
+    }
+  }, [initialStory, provider, model, responseTimeMs]);
 
   // Generation Controls for Regeneration
   const [selectedTopic, setSelectedTopic] = useState(initialStory.topic || "Daily Coffee Encounter");
@@ -197,7 +199,7 @@ export default function StoryImmersionMessageCard({
       const targetWordsObj = words.filter(w => selectedWordIds.has(w.id));
       const effectiveConfig = getOverrideConfig(llmConfig);
       const newStory = await generateImmersionStoryService({
-        targetWords: targetWordsObj.length > 0 ? targetWordsObj : words.slice(0, 6),
+        targetWords: targetWordsObj.length > 0 ? targetWordsObj : words.slice(0, 5),
         topic: selectedTopic,
         genre: selectedGenre,
         difficulty: selectedDifficulty,
@@ -205,10 +207,10 @@ export default function StoryImmersionMessageCard({
         nativeLanguage,
         cfg: effectiveConfig
       });
-      const durationMs = Math.round(performance.now() - startTime);
+      const durationMs = newStory.responseTimeMs || Math.round(performance.now() - startTime);
       setCurrentStory(newStory);
-      if (effectiveConfig?.provider) setCurrentProvider(effectiveConfig.provider);
-      if (effectiveConfig?.model) setCurrentModel(effectiveConfig.model);
+      setCurrentProvider(newStory.provider || effectiveConfig?.provider);
+      setCurrentModel(newStory.model || effectiveConfig?.model);
       setCurrentResponseTimeMs(durationMs);
       setShowParameters(false);
       showToast?.("New immersion story generated successfully!");
@@ -399,12 +401,12 @@ export default function StoryImmersionMessageCard({
                   <button
                     type="button"
                     onClick={() => {
-                      const next = words.filter(w => !w.learned || w.starred).slice(0, 6);
+                      const next = words.filter(w => !w.learned || w.starred).slice(0, 5);
                       setSelectedWordIds(new Set(next.map(w => w.id)));
                     }}
                     className="text-[10px] text-sky-700 font-bold hover:underline cursor-pointer"
                   >
-                    Auto-Pick 6
+                    Auto-Pick 5
                   </button>
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1 border border-stone-100 rounded-lg p-1.5 text-xs">

@@ -13,10 +13,37 @@ import {
   GoldlistDistillationTier 
 } from "../types";
 import { cleanAndParseJson } from "../utils/jsonSanitizer";
-import { callLLMClientSide, getOverrideConfig } from "./llmClientService";
+import { callLLMClientSideWithMeta, getOverrideConfig } from "./llmClientService";
 import { notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 
-// Helper for LLM prompt completions
+// Helper for LLM prompt completions with metadata
+async function sendLlmRequestWithMeta(params: {
+  prompt: string;
+  systemInstruction?: string;
+  schemaDescription?: string;
+  llmConfig?: LLMConfig;
+  action?: string;
+}): Promise<{ text: string; provider: string; model: string; responseTimeMs: number }> {
+  const effectiveConfig = getOverrideConfig(params.llmConfig);
+  notifyLlmRequestStartFromConfig(effectiveConfig);
+  const startTime = performance.now();
+  const res = await callLLMClientSideWithMeta(
+    params.prompt,
+    params.systemInstruction || "You are an expert language learning assistant.",
+    params.schemaDescription || "JSON object",
+    effectiveConfig,
+    undefined,
+    { action: params.action }
+  );
+  const duration = res.responseTimeMs || Math.round(performance.now() - startTime);
+  return {
+    text: res.text,
+    provider: res.provider,
+    model: res.model,
+    responseTimeMs: duration
+  };
+}
+
 async function sendLlmRequest(params: {
   prompt: string;
   systemInstruction?: string;
@@ -24,14 +51,8 @@ async function sendLlmRequest(params: {
   llmConfig?: LLMConfig;
   action?: string;
 }): Promise<string> {
-  const effectiveConfig = getOverrideConfig(params.llmConfig);
-  notifyLlmRequestStartFromConfig(effectiveConfig);
-  return await callLLMClientSide(
-    params.prompt,
-    params.systemInstruction || "You are an expert language learning assistant.",
-    params.schemaDescription || "JSON object",
-    effectiveConfig
-  );
+  const res = await sendLlmRequestWithMeta(params);
+  return res.text;
 }
 
 // LocalStorage Keys
@@ -158,17 +179,20 @@ export async function generateImmersionStoryService(params: {
 }): Promise<ImmersionStory> {
   const { targetWords, topic = "Daily Adventure", genre = "Slice of Life", difficulty = "intermediate", targetLanguage, nativeLanguage, cfg } = params;
 
-  const wordListFormatted = targetWords.slice(0, 10).map(w => `"${w.word}" (${w.translation || w.definition})`).join(", ");
+  // Use strictly 5 candidate words for focused contextual immersion
+  const candidateSlice = targetWords.slice(0, 5);
+  const wordListFormatted = candidateSlice.map(w => `"${w.word}" (${w.translation || w.definition})`).join(", ");
 
-  const prompt = `Write an engaging, cohesive short story (3 to 4 paragraphs) in ${targetLanguage} that naturally integrates the following target vocabulary words:
-Target Vocabulary to emphasize: [${wordListFormatted}]
+  const prompt = `Write a concise, engaging short story (strictly 2 to 3 short paragraphs, around 80-140 words total) in ${targetLanguage} that naturally integrates the following ${candidateSlice.length} target vocabulary words:
+Target Vocabulary to emphasize (exactly ${candidateSlice.length} words): [${wordListFormatted}]
 
-Comprehensible Input Guidelines:
+Comprehensible Input & Length Constraints:
+- Length: Keep the story short, concise, and easy to read (strictly 2 to 3 short paragraphs, 80-140 words total). Avoid overly long or verbose narratives.
 - Difficulty Level: ${difficulty} (aim for ~90-95% comprehensible phrasing with natural syntax).
 - Genre: ${genre}
 - Topic: ${topic}
 - Provide an accurate paragraph-by-paragraph parallel translation in ${nativeLanguage}.
-- Make the story vivid and enjoyable to read.
+- Focus on natural repetition and rich context for the target words.
 
 Return JSON in this EXACT schema:
 {
@@ -195,10 +219,10 @@ Return JSON in this EXACT schema:
   ]
 }`;
 
-  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema.`;
+  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), and strictly focused on the candidate vocabulary words.`;
 
   try {
-    const rawRes = await sendLlmRequest({
+    const rawRes = await sendLlmRequestWithMeta({
       prompt,
       systemInstruction,
       schemaDescription: "ImmersionStory JSON",
@@ -206,7 +230,7 @@ Return JSON in this EXACT schema:
       action: "Generate Immersion Story"
     });
 
-    const parsed = cleanAndParseJson(rawRes);
+    const parsed = cleanAndParseJson(rawRes.text);
     return {
       id: `story_${Date.now()}`,
       title: parsed.title || "Contextual Immersion Story",
@@ -216,7 +240,9 @@ Return JSON in this EXACT schema:
       difficulty: parsed.difficulty || difficulty,
       targetLanguage,
       nativeLanguage,
-      targetWords: parsed.targetWords || targetWords.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
+      targetWords: (parsed.targetWords && Array.isArray(parsed.targetWords) && parsed.targetWords.length > 0)
+        ? parsed.targetWords.slice(0, 5)
+        : candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
       paragraphs: parsed.paragraphs || [
         {
           id: "p1",
@@ -224,6 +250,9 @@ Return JSON in this EXACT schema:
           nativeText: `Một ngày tuyệt vời bắt đầu khi chúng tôi khám phá ${topic}.`
         }
       ],
+      provider: rawRes.provider,
+      model: rawRes.model,
+      responseTimeMs: rawRes.responseTimeMs,
       createdAt: new Date().toISOString()
     };
   } catch (error) {
@@ -231,21 +260,23 @@ Return JSON in this EXACT schema:
     // Fallback template
     return {
       id: `story_${Date.now()}`,
-      title: `A Day with ${targetWords[0]?.word || "New Words"}`,
+      title: `A Day with ${candidateSlice[0]?.word || "New Words"}`,
       titleTranslation: `Một ngày cùng từ vựng mới`,
       topic,
       genre,
       difficulty,
       targetLanguage,
       nativeLanguage,
-      targetWords: targetWords.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
+      targetWords: candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
       paragraphs: [
         {
           id: "p1",
-          targetText: `Every morning brings new opportunities to learn. Today we encounter ${targetWords.map(w => w.word).join(", ")}. In our daily conversations, using these words opens up vibrant expressions.`,
-          nativeText: `Mỗi buổi sáng mang đến những cơ hội mới để học tập. Hôm nay chúng ta bắt gặp ${targetWords.map(w => w.translation || w.word).join(", ")}. Trong giao tiếp hàng ngày, việc sử dụng các từ này mở ra nhiều cách biểu đạt phong phú.`
+          targetText: `Every morning brings new opportunities to learn. Today we encounter ${candidateSlice.map(w => w.word).join(", ")}. In our daily conversations, using these words opens up vibrant expressions.`,
+          nativeText: `Mỗi buổi sáng mang đến những cơ hội mới để học tập. Hôm nay chúng ta bắt gặp ${candidateSlice.map(w => w.translation || w.word).join(", ")}. Trong giao tiếp hàng ngày, việc sử dụng các từ này mở ra nhiều cách biểu đạt phong phú.`
         }
       ],
+      provider: cfg?.provider,
+      model: cfg?.model,
       createdAt: new Date().toISOString()
     };
   }

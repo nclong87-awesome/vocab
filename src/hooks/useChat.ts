@@ -451,11 +451,11 @@ export function useChat({
       let warmupCandidates: Word[] = [];
 
       if (unstudiedWords.length > 0) {
-        warmupCandidates = unstudiedWords.slice(0, 6);
+        warmupCandidates = unstudiedWords.slice(0, 5);
       } else if (flashcardCandidates.length > 0) {
-        warmupCandidates = flashcardCandidates.slice(0, 6);
+        warmupCandidates = flashcardCandidates.slice(0, 5);
       } else {
-        warmupCandidates = activeWords.slice(0, 6);
+        warmupCandidates = activeWords.slice(0, 5);
       }
 
       const controller = new AbortController();
@@ -479,9 +479,9 @@ export function useChat({
               const calcNewStrength = Math.min(100, prevStrength + 10);
               const strengthGained = calcNewStrength - prevStrength;
               return recordStrengthHistory(
-                w,
-                calcNewStrength,
-                'immersion_review',
+                w, 
+                calcNewStrength, 
+                'immersion_review', 
                 `Studied Contextual Story Immersion (+${strengthGained}% strength gained)`
               );
             }
@@ -516,8 +516,9 @@ export function useChat({
           timestamp: new Date().toISOString(),
           audioWord: warmupCandidates[0]?.word,
           storyData: storyResult,
-          provider: configForServer?.provider,
-          model: configForServer?.model,
+          provider: storyResult.provider || configForServer?.provider,
+          model: storyResult.model || configForServer?.model,
+          responseTimeMs: storyResult.responseTimeMs,
           suggestedActions: sessionNextActions,
         };
 
@@ -614,16 +615,16 @@ export function useChat({
     }
 
     // Step 2: Search for candidate words for Story Immersion (for flashcards_new mode)
-    let batchStoryCandidates = getCandidateWordsForFlashcards(activeWords, 6);
+    let batchStoryCandidates = getCandidateWordsForFlashcards(activeWords, 5);
     if (practiceMode === "flashcards_new" || unstudiedWords.length > 0) {
       if (unstudiedWords.length > 0) {
-        batchStoryCandidates = unstudiedWords.slice(0, 6);
+        batchStoryCandidates = unstudiedWords.slice(0, 5);
       } else if (flashcardCandidates.length > 0) {
-        batchStoryCandidates = flashcardCandidates.slice(0, 6);
+        batchStoryCandidates = flashcardCandidates.slice(0, 5);
       }
     }
     if (batchStoryCandidates.length === 0 && activeWords.length > 0) {
-      batchStoryCandidates = activeWords.slice(0, 6);
+      batchStoryCandidates = activeWords.slice(0, 5);
     }
     if (batchStoryCandidates.length > 0) {
       const controller = new AbortController();
@@ -666,8 +667,9 @@ export function useChat({
           timestamp: new Date().toISOString(),
           audioWord: batchStoryCandidates[0]?.word,
           storyData: storyResult,
-          provider: configForServer?.provider,
-          model: configForServer?.model,
+          provider: storyResult.provider || configForServer?.provider,
+          model: storyResult.model || configForServer?.model,
+          responseTimeMs: storyResult.responseTimeMs,
           suggestedActions: [
             { label: "📖 Next Story Practice", action: "view_flashcard" },
             { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },

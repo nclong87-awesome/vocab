@@ -752,9 +752,9 @@ function ChatMessageItem({
               appLanguage={currentAppLang}
               ttsConfig={ttsConfig}
               llmConfig={llmConfig}
-              provider={msg.provider}
-              model={msg.model}
-              responseTimeMs={msg.responseTimeMs}
+              provider={msg.storyData?.provider || msg.provider}
+              model={msg.storyData?.model || msg.model}
+              responseTimeMs={msg.storyData?.responseTimeMs ?? msg.responseTimeMs}
               words={words}
               onUpdateWords={onUpdateWords}
               onAddWord={onAddWord}

@@ -149,7 +149,7 @@ export default function StoryImmersionView({
   // Initialize selected target words with unstudied or starred words
   useEffect(() => {
     if (words.length > 0 && selectedWordIds.size === 0) {
-      const candidates = words.filter(w => !w.learned || w.starred).slice(0, 6);
+      const candidates = words.filter(w => !w.learned || w.starred).slice(0, 5);
       setSelectedWordIds(new Set(candidates.map(w => w.id)));
     }
   }, [words, selectedWordIds.size]);
@@ -168,7 +168,7 @@ export default function StoryImmersionView({
       const targetWordsObj = words.filter(w => selectedWordIds.has(w.id));
       const effectiveConfig = getOverrideConfig(llmConfig);
       const story = await generateImmersionStoryService({
-        targetWords: targetWordsObj.length > 0 ? targetWordsObj : words.slice(0, 6),
+        targetWords: targetWordsObj.length > 0 ? targetWordsObj : words.slice(0, 5),
         topic: selectedTopic,
         genre: selectedGenre,
         difficulty: selectedDifficulty,
@@ -176,11 +176,11 @@ export default function StoryImmersionView({
         nativeLanguage,
         cfg: effectiveConfig
       });
-      const durationMs = Math.round(performance.now() - startTime);
+      const durationMs = story.responseTimeMs || Math.round(performance.now() - startTime);
       setCurrentStory(story);
       setGenerationMetadata({
-        provider: effectiveConfig?.provider,
-        model: effectiveConfig?.model,
+        provider: story.provider || effectiveConfig?.provider,
+        model: story.model || effectiveConfig?.model,
         responseTimeMs: durationMs
       });
     } catch (e) {
@@ -338,12 +338,12 @@ export default function StoryImmersionView({
                   <button
                     type="button"
                     onClick={() => {
-                      const next = words.filter(w => !w.learned || w.starred).slice(0, 6);
+                      const next = words.filter(w => !w.learned || w.starred).slice(0, 5);
                       setSelectedWordIds(new Set(next.map(w => w.id)));
                     }}
                     className="text-[10px] text-sky-700 font-bold hover:underline"
                   >
-                    Auto-Pick 6
+                    Auto-Pick 5
                   </button>
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1 border border-stone-100 rounded-lg p-1.5 text-xs">
