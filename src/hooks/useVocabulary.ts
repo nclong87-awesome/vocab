@@ -8,7 +8,7 @@ import {
   saveStatsToDB 
 } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
-import { speakText as speakTextService } from "../utils/ttsService";
+import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
 import { isWordInCollection } from "../utils/wordNormalization";
 import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 
@@ -101,12 +101,13 @@ export function useVocabulary() {
       // Auto-play audio if autoPlayAudioInChat setting is enabled
       const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioOnWordAdded ?? true;
       if (ttsConfig && isAutoPlayEnabled && newWord.word) {
-        setTimeout(() => {
+        const timerId = window.setTimeout(() => {
           const textToSpeak = newWord.definition && newWord.definition.trim()
             ? `${newWord.word}. ${newWord.definition}`
             : (newWord.translation && newWord.translation.trim() ? `${newWord.word}. ${newWord.translation}` : newWord.word);
           speakTextService(textToSpeak, ttsConfig, llmConfig, targetLanguage || "English");
         }, 150);
+        registerSpeechTimer(timerId);
       }
 
       return updated;

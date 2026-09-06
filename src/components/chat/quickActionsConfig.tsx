@@ -125,8 +125,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       description: t("qa_add_word_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
       defaultIndex: 0,
-      getAction: ({ onAddWord, onClearHistory }) => {
-        onClearHistory();
+      getAction: ({ onAddWord }) => {
         onAddWord();
       }
     },

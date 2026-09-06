@@ -28,7 +28,7 @@ import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
-import { speakText as speakTextService } from "../utils/ttsService";
+import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection } from "../utils/wordNormalization";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 
@@ -1870,12 +1870,13 @@ export function useChat({
       // Auto-play audio if autoPlayAudioInChat setting is enabled
       const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioOnWordAdded ?? true;
       if (ttsConfig && isAutoPlayEnabled && addedWord.word) {
-        setTimeout(() => {
+        const timerId = window.setTimeout(() => {
           const textToSpeak = addedWord.definition && addedWord.definition.trim()
             ? `${addedWord.word}. ${addedWord.definition}`
             : (addedWord.translation && addedWord.translation.trim() ? `${addedWord.word}. ${addedWord.translation}` : addedWord.word);
           speakTextService(textToSpeak, ttsConfig, llmConfig, targetLanguage || "English");
         }, 150);
+        registerSpeechTimer(timerId);
       }
 
       const rawSuggested = Array.isArray(addedWord.suggestedWords) ? addedWord.suggestedWords : [];

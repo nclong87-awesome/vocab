@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
-import { ChatMessage, LLMConfig } from "./types";
+import { ChatMessage, LLMConfig, Word } from "./types";
 import { stopSpeech, unlockAudioElement } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay } from "./utils/spacedRepetition";
 import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
@@ -24,6 +24,7 @@ import SettingsView from "./components/SettingsView";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
 import OnboardingModal from "./components/OnboardingModal";
+import WordAddModal from "./components/chat/WordAddModal";
 
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
@@ -99,6 +100,31 @@ export default function App() {
     return () => window.removeEventListener("vocab-show-toast", handleToastEvent);
   }, [showToast]);
 
+  // Word Add Modal State
+  const [isAddWordModalOpen, setIsAddWordModalOpen] = useState(false);
+  const [addWordParams, setAddWordParams] = useState<{
+    word?: string;
+    hint?: string;
+    initialData?: Partial<Word>;
+  }>({});
+
+  const handleOpenAddWordModal = useCallback((wordOrData?: string | any, hint?: string, initialData?: Partial<Word>) => {
+    if (typeof wordOrData === "object" && wordOrData !== null) {
+      setAddWordParams({
+        word: wordOrData.word,
+        hint: hint || wordOrData.hint || wordOrData.context || wordOrData.definition || wordOrData.translation,
+        initialData: wordOrData,
+      });
+    } else {
+      setAddWordParams({
+        word: wordOrData,
+        hint,
+        initialData,
+      });
+    }
+    setIsAddWordModalOpen(true);
+  }, []);
+
   const {
     chatMessages,
     setChatMessages,
@@ -109,7 +135,6 @@ export default function App() {
     startPractice,
     handleSendChatMessage,
     handleSelectDefinition,
-    handleConversationalAddWordOrPrompt,
     handleConversationalGenerateWordsPrompt,
     handlePromptSuggestCasualReply,
     handleSuggestCasualReply,
@@ -358,7 +383,7 @@ export default function App() {
               words={words}
               llmConfig={llmConfig}
               ttsConfig={ttsConfig}
-              onAddWord={handleAddCustomWord}
+              onAddWord={handleOpenAddWordModal}
               onDeleteWord={handleDeleteWord}
               onToggleStar={handleToggleStar}
               onToggleLearned={handleToggleLearned}
@@ -446,7 +471,7 @@ export default function App() {
                     activeModelInfo={activeModelInfo}
                     onCancelTyping={handleCancelTyping}
                     onSendMessage={handleSendChatMessage}
-                    onAddWord={handleConversationalAddWordOrPrompt}
+                    onAddWord={handleOpenAddWordModal}
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
                     startPractice={startPractice}
                     onFixGrammar={handlePromptFixGrammar}
@@ -518,6 +543,29 @@ export default function App() {
         llmConfig={llmConfig}
         onConfirmSwitchAndRetry={handleConfirmSwitchAndRetry}
         onClose={() => setAiErrorModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Word Add Modal Dialog */}
+      <WordAddModal
+        isOpen={isAddWordModalOpen}
+        onClose={() => {
+          stopSpeech();
+          setIsAddWordModalOpen(false);
+          setAddWordParams({});
+        }}
+        initialWord={addWordParams.word}
+        initialHint={addWordParams.hint}
+        initialData={addWordParams.initialData}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
+        llmConfig={llmConfig}
+        ttsConfig={ttsConfig}
+        words={words}
+        onWordAdded={(newWord) => {
+          handleAddCustomWord(newWord, ttsConfig, llmConfig, targetLanguage);
+        }}
+        showToast={showToast}
       />
 
       {/* Global Toast Notification */}

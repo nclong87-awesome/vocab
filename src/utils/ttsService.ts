@@ -187,8 +187,24 @@ function getAudioContext(): AudioContext | null {
 
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 let currentSpeechToken = 0;
+let pendingSpeechTimerId: number | null = null;
+
+export function clearPendingSpeechTimers(): void {
+  if (pendingSpeechTimerId !== null) {
+    if (typeof window !== "undefined") {
+      window.clearTimeout(pendingSpeechTimerId);
+    }
+    pendingSpeechTimerId = null;
+  }
+}
+
+export function registerSpeechTimer(timerId: number): void {
+  clearPendingSpeechTimers();
+  pendingSpeechTimerId = timerId;
+}
 
 function stopSpeechInternal(options?: { bumpToken?: boolean; forceCancel?: boolean }): void {
+  clearPendingSpeechTimers();
   const bumpToken = options?.bumpToken ?? true;
   const forceCancel = options?.forceCancel ?? true;
 

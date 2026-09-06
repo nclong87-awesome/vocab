@@ -518,6 +518,7 @@ async function callLLMSingle(
       { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
       { role: "user", content: prompt }
     ],
+    max_tokens: 2500,
     stream: false
   };
 

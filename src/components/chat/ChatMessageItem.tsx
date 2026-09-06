@@ -53,6 +53,7 @@ interface ChatMessageItemProps {
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
   onCardReviewed?: (msgId: string, cardIndex: number | "all") => void;
+  hideAskAiButton?: boolean;
 }
 
 const createAdHocWord = (overrides: Partial<Word> & { word: string }): Word => ({
@@ -168,6 +169,7 @@ function ChatMessageItem({
   onRetryErrorMessage,
   onCancelErrorMessage,
   onCardReviewed,
+  hideAskAiButton,
 }: ChatMessageItemProps) {
   if (msg.isError) {
     return (
@@ -772,28 +774,30 @@ function ChatMessageItem({
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedChatWord(createAdHocWord({
-                          id: `sentence-fixed-${msg.id}`,
-                          word: msg.fixedSentence!,
-                          definition: `Polished sentence in ${targetLanguage}`,
-                          translation: "",
-                          category: "Grammar & Expression",
-                          context: `Polished sentence from chat session`,
-                          strength: 100,
-                          learned: true,
-                          createdAt: new Date().toISOString(),
-                          lastReviewed: null
-                        }));
-                      }}
-                      className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
-                      title="Ask AI about this sentence"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Ask AI</span>
-                    </button>
+                    {!hideAskAiButton && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedChatWord(createAdHocWord({
+                            id: `sentence-fixed-${msg.id}`,
+                            word: msg.fixedSentence!,
+                            definition: `Polished sentence in ${targetLanguage}`,
+                            translation: "",
+                            category: "Grammar & Expression",
+                            context: `Polished sentence from chat session`,
+                            strength: 100,
+                            learned: true,
+                            createdAt: new Date().toISOString(),
+                            lastReviewed: null
+                          }));
+                        }}
+                        className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
+                        title="Ask AI about this sentence"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Ask AI</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleCopy(msg.fixedSentence!, `fixed-${msg.id}`, t("toast_copied_fixed_sentence", currentAppLang))}
@@ -847,15 +851,17 @@ function ChatMessageItem({
                       <Volume2 className="w-3.5 h-3.5 text-amber-700" />
                       <span className="hidden sm:inline">Audio</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedChatWord(answeredWord)}
-                      className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-indigo-700 hover:text-indigo-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
-                      title={`Ask AI about "${answeredWord.word}"`}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-                      <span className="hidden sm:inline">Ask AI</span>
-                    </button>
+                    {!hideAskAiButton && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChatWord(answeredWord)}
+                        className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-indigo-700 hover:text-indigo-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
+                        title={`Ask AI about "${answeredWord.word}"`}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                        <span className="hidden sm:inline">Ask AI</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setSelectedHistoryWord(answeredWord)}
@@ -932,6 +938,7 @@ function ChatMessageItem({
                                 )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                {!hideAskAiButton && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -954,6 +961,7 @@ function ChatMessageItem({
                                 >
                                   <MessageSquare className="w-3.5 h-3.5" />
                                 </button>
+                                )}
                                 {isAlreadyInWords && (() => {
                                   const matched = words ? findWordInCollection(words, sw.word) : undefined;
                                   if (matched) {
@@ -1083,28 +1091,30 @@ function ChatMessageItem({
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedChatWord(createAdHocWord({
-                                  id: `reply-${msg.id}-${idx}`,
-                                  word: rep.reply,
-                                  definition: rep.explanation || rep.translation || `Suggested reply in ${targetLanguage}`,
-                                  translation: rep.translation || "",
-                                  category: "Conversation Reply",
-                                  context: rep.tone ? `Tone: ${rep.tone}` : undefined,
-                                  strength: 100,
-                                  learned: true,
-                                  createdAt: new Date().toISOString(),
-                                  lastReviewed: null
-                                }));
-                              }}
-                              className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
-                              title="Ask AI about this reply"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Ask AI</span>
-                            </button>
+                            {!hideAskAiButton && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedChatWord(createAdHocWord({
+                                    id: `reply-${msg.id}-${idx}`,
+                                    word: rep.reply,
+                                    definition: rep.explanation || rep.translation || `Suggested reply in ${targetLanguage}`,
+                                    translation: rep.translation || "",
+                                    category: "Conversation Reply",
+                                    context: rep.tone ? `Tone: ${rep.tone}` : undefined,
+                                    strength: 100,
+                                    learned: true,
+                                    createdAt: new Date().toISOString(),
+                                    lastReviewed: null
+                                  }));
+                                }}
+                                className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
+                                title="Ask AI about this reply"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Ask AI</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleCopy(rep.reply, repKey, "📋 Copied suggestion to clipboard!")}
@@ -1378,29 +1388,31 @@ function ChatMessageItem({
                           <span className="text-[10px] text-amber-600 group-hover:text-amber-300 font-medium">
                             Tap card to select sense
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedChatWord(createAdHocWord({
-                                id: `sense-${act.payload.word}-${Date.now()}`,
-                                word: act.payload.targetWord || act.payload.word,
-                                partOfSpeech: act.payload.partOfSpeech || "expression",
-                                definition: act.payload.definition,
-                                translation: act.payload.translation || "",
-                                example: act.payload.example,
-                                strength: 0,
-                                learned: false,
-                                createdAt: new Date().toISOString(),
-                                lastReviewed: null
-                              }));
-                            }}
-                            className="px-2 py-0.5 rounded bg-stone-100 group-hover:bg-stone-800 text-stone-700 group-hover:text-stone-200 hover:bg-indigo-50 hover:text-indigo-700 border border-stone-200 group-hover:border-stone-700 transition-colors flex items-center gap-1 text-[10px] font-semibold cursor-pointer z-10"
-                            title="Ask AI about this specific word sense"
-                          >
-                            <MessageSquare className="w-3 h-3 text-indigo-500" />
-                            <span>Ask AI</span>
-                          </button>
+                          {!hideAskAiButton && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedChatWord(createAdHocWord({
+                                  id: `sense-${act.payload.word}-${Date.now()}`,
+                                  word: act.payload.targetWord || act.payload.word,
+                                  partOfSpeech: act.payload.partOfSpeech || "expression",
+                                  definition: act.payload.definition,
+                                  translation: act.payload.translation || "",
+                                  example: act.payload.example,
+                                  strength: 0,
+                                  learned: false,
+                                  createdAt: new Date().toISOString(),
+                                  lastReviewed: null
+                                }));
+                              }}
+                              className="px-2 py-0.5 rounded bg-stone-100 group-hover:bg-stone-800 text-stone-700 group-hover:text-stone-200 hover:bg-indigo-50 hover:text-indigo-700 border border-stone-200 group-hover:border-stone-700 transition-colors flex items-center gap-1 text-[10px] font-semibold cursor-pointer z-10"
+                              title="Ask AI about this specific word sense"
+                            >
+                              <MessageSquare className="w-3 h-3 text-indigo-500" />
+                              <span>Ask AI</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ) : (

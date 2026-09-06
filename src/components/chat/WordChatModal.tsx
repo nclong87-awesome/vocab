@@ -15,7 +15,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../../types";
-import { speakText, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
+import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
 import { sendChatMessageService, generateJitSuggestedActionsService, ChatMessageResult } from "../../services/llmClientService";
 import { 
   recordUserInquiry, 
@@ -70,7 +70,22 @@ export default function WordChatModal({
   appLanguage = "vi",
   onAddWord
 }: WordChatModalProps) {
-  useModalBackNavigation(Boolean(isOpen && word), onClose);
+  const handleCloseModal = React.useCallback(() => {
+    stopSpeech();
+    onClose();
+  }, [onClose]);
+
+  useModalBackNavigation(Boolean(isOpen && word), handleCloseModal);
+
+  // Stop any active speech/audio when modal is closed or unmounted
+  useEffect(() => {
+    if (!isOpen) {
+      stopSpeech();
+    }
+    return () => {
+      stopSpeech();
+    };
+  }, [isOpen]);
 
   const [messages, setMessages] = useState<ChatItem[]>([]);
   const [inputText, setInputText] = useState("");
@@ -162,12 +177,12 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        handleCloseModal();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [handleCloseModal]);
 
   if (!isOpen || !word) return null;
 
@@ -430,7 +445,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseModal}
             className="p-2 -ml-1 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
             aria-label="Back"
             title="Close"
@@ -490,7 +505,7 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleCloseModal}
             className="hidden sm:inline-flex p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
             title="Close"
           >
