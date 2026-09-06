@@ -52,7 +52,7 @@ export default function GoldlistMethodView({
   const refreshNotebooks = useCallback(() => {
     const list = getStoredGoldlistNotebooks();
     setNotebooks(list);
-    if (list.length > 0 && !activeNotebookId) {
+    if (list && list.length > 0 && !activeNotebookId && list[0]?.id) {
       setActiveNotebookId(list[0].id);
     }
   }, [activeNotebookId]);
@@ -62,7 +62,7 @@ export default function GoldlistMethodView({
   }, [refreshNotebooks]);
 
   const activeNotebook = useMemo(() => {
-    return notebooks.find(n => n.id === activeNotebookId) || notebooks[0] || null;
+    return (notebooks && notebooks.find(n => n.id === activeNotebookId)) || notebooks?.[0] || null;
   }, [notebooks, activeNotebookId]);
 
   // Words available to add to a new Headlist (unstudied or starred words)

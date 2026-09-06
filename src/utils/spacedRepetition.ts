@@ -19,13 +19,15 @@ export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
   );
 
   if (practiceEntries.length > 0) {
-    const sorted = [...practiceEntries].sort((a, b) => a[0] - b[0]);
+    const sorted = [...practiceEntries].sort((a, b) => (a?.[0] ?? 0) - (b?.[0] ?? 0));
     const lastPractice = sorted[sorted.length - 1];
-    const ms = lastPractice[0] > 1e11 ? lastPractice[0] : lastPractice[0] * 1000;
-    return {
-      baselineStrength: lastPractice[1],
-      lastPracticeDate: new Date(ms).toISOString()
-    };
+    if (lastPractice && lastPractice.length >= 2) {
+      const ms = lastPractice[0] > 1e11 ? lastPractice[0] : lastPractice[0] * 1000;
+      return {
+        baselineStrength: lastPractice[1],
+        lastPracticeDate: new Date(ms).toISOString()
+      };
+    }
   }
 
   // Fallback if no practice history exists yet:

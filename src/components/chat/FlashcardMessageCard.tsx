@@ -153,8 +153,8 @@ function FlashcardMessageCard({
         partOfSpeech: data.partOfSpeech,
         definition: data.definition || "",
         translation: data.translation || "",
-        example: data.example || (data.extraExampleSentences && data.extraExampleSentences[0]?.sentence) || "",
-        exampleTranslation: data.exampleTranslation || (data.extraExampleSentences && data.extraExampleSentences[0]?.translation) || "",
+        example: data.example || data.extraExampleSentences?.[0]?.sentence || "",
+        exampleTranslation: data.exampleTranslation || data.extraExampleSentences?.[0]?.translation || "",
         category: data.category,
         context: data.context,
         suggestedWords: topSuggested
@@ -165,7 +165,7 @@ function FlashcardMessageCard({
 
   if (!cards || cards.length === 0) return null;
 
-  const currentCard = cards[Math.min(currentIndex, cards.length - 1)] || cards[0];
+  const currentCard = cards[Math.min(currentIndex, cards.length - 1)] || cards?.[0];
 
   const handleSpeak = (textToSpeak: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();

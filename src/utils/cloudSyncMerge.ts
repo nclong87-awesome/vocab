@@ -247,7 +247,7 @@ export function autoMergeLocalAndRemote(
 
       const historyMap = new Map<string, StrengthHistoryTuple>();
       for (const tuple of [...localHistory, ...remoteHistory]) {
-        if (tuple) {
+        if (tuple && tuple.length >= 3) {
           const key = `${tuple[0]}-${tuple[2]}`;
           const existing = historyMap.get(key);
           if (!existing) {
@@ -258,7 +258,7 @@ export function autoMergeLocalAndRemote(
         }
       }
 
-      const rawMergedHistory = Array.from(historyMap.values()).sort((a, b) => a[0] - b[0]);
+      const rawMergedHistory = Array.from(historyMap.values()).sort((a, b) => (a?.[0] ?? 0) - (b?.[0] ?? 0));
 
       // Deduplicate adjacent memory_decay entries with identical strength
       const mergedHistoryList: StrengthHistoryTuple[] = [];

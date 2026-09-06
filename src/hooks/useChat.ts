@@ -1760,7 +1760,7 @@ export function useChat({
         lastReviewed: null,
         strength: 0,
         imageUrls: defaultImageUrls,
-        imageUrl: c.imageUrl || defaultImageUrls[0] || undefined,
+        imageUrl: c.imageUrl || defaultImageUrls?.[0] || undefined,
       };
 
       newWordsToAdd.push(wordObj);

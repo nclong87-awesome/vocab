@@ -84,7 +84,7 @@ export function useVocabulary() {
         {
           ...wordData,
           imageUrls: defaultUrls,
-          imageUrl: wordData.imageUrl || defaultUrls[0] || undefined,
+          imageUrl: wordData.imageUrl || defaultUrls?.[0] || undefined,
           id: `manual-word-${Date.now()}`,
           learned: false,
           starred: wordData.starred || false,

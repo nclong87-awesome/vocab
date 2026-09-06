@@ -1238,7 +1238,7 @@ function ChatMessageItem({
                           [aIdx]: {
                             ...currentPayload,
                             imageUrls: updatedUrls,
-                            imageUrl: updatedUrls[0] || undefined,
+                            imageUrl: updatedUrls?.[0] || undefined,
                           },
                         }));
                       }}

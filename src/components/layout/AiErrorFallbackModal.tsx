@@ -36,7 +36,7 @@ export default function AiErrorFallbackModal({
 
   // Default selected provider to the first available alternative
   const [selectedProvider, setSelectedProvider] = useState<LLMProvider>(() => {
-    return alternativeProviders[0]?.id || "groq";
+    return alternativeProviders?.[0]?.id || "groq";
   });
 
   // Whenever modal opens or currentProvider changes, reset selectedProvider to first available option
@@ -47,7 +47,7 @@ export default function AiErrorFallbackModal({
         if (p.id === "auto") return true;
         return p.models.some(m => !isModelLocked(p.id, m));
       });
-      if (filtered.length > 0) {
+      if (filtered && filtered.length > 0 && filtered[0]?.id) {
         setSelectedProvider(filtered[0].id);
       }
     }

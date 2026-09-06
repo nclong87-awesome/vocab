@@ -22,7 +22,7 @@ export function getFastestModelForProvider(provider: string, llmConfig?: LLMConf
   try {
     const statuses = getAllModelStatuses(llmConfig);
     const healthy = statuses.filter(s => s.provider === provider && s.status !== 'offline');
-    if (healthy.length > 0) {
+    if (healthy && healthy.length > 0 && healthy[0]?.model) {
       return healthy[0].model;
     }
   } catch (e) {
@@ -1004,7 +1004,7 @@ async function parseOpenAiStyleResponse(res: Response): Promise<string> {
 
       // Detect if choices exist but content was empty / only contained reasoning thoughts without output
       if (data.choices?.[0]) {
-        const msg = data.choices[0].message || data.choices[0].delta || {};
+        const msg = data.choices[0]?.message || data.choices[0]?.delta || {};
         const reasoningText = msg.reasoning || msg.reasoning_content || "";
         if (reasoningText) {
           throw new Error("Empty content from model (model generated reasoning thoughts but no final output content).");
@@ -2480,9 +2480,9 @@ Output MUST be strictly valid JSON matching this schema:
 
       // Guarantee at least one picture or image-based question in the generated quiz
       const hasPictureQuestion = validQuestions.some(q => q.type === 'picture');
-      if (!hasPictureQuestion && validQuestions.length > 0) {
+      if (!hasPictureQuestion && validQuestions.length > 0 && validQuestions[0]) {
         const targetQ = validQuestions[0];
-        const matchingWord = words.find(w => w.id === targetQ.wordId || w.word.toLowerCase() === targetQ.word.toLowerCase()) || words[0];
+        const matchingWord = (words && (words.find(w => w.id === targetQ.wordId || w.word.toLowerCase() === targetQ.word.toLowerCase()) || words[0])) || { word: "Vocabulary", pronunciation: "" } as Word;
         targetQ.type = 'picture';
         targetQ.question = "Which word matches the visual concept shown below?";
         targetQ.imageKeyword = getImageKeyword(matchingWord);
@@ -3011,7 +3011,7 @@ export async function generateFlashcardContentService(
     signal
   });
 
-  const card = batchRes.cards[0] || {
+  const card = batchRes?.cards?.[0] || {
     word: word.word,
     pronunciation: word.pronunciation,
     partOfSpeech: word.partOfSpeech || "noun",

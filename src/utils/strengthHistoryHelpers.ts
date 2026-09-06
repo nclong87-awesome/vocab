@@ -72,7 +72,7 @@ export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] 
     (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
   );
 
-  let sortedTuples = [...tuples].sort((a, b) => a[0] - b[0]);
+  let sortedTuples = [...tuples].sort((a, b) => (a?.[0] ?? 0) - (b?.[0] ?? 0));
 
   if (sortedTuples.length === 0) {
     const createdAtSec = toTimestampSec(word.createdAt);
@@ -199,7 +199,7 @@ export function recordStrengthHistory(
     };
   }
 
-  const sortedTuples = [...existingTuples].sort((a, b) => a[0] - b[0]);
+  const sortedTuples = [...existingTuples].sort((a, b) => (a?.[0] ?? 0) - (b?.[0] ?? 0));
   const lastTuple = sortedTuples[sortedTuples.length - 1];
 
   // Prevent duplicate decay entries if the last entry is already a memory_decay entry with the exact same strength

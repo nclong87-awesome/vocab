@@ -139,7 +139,7 @@ export function analyzeUserInquiryPatterns(): InquiryProfile {
 
   // Find top theme
   const sortedThemes = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  const [topKey, topScore] = sortedThemes[0];
+  const [topKey, topScore] = (sortedThemes && sortedThemes[0]) || ["balanced", 0];
 
   if (topScore === 0) {
     return {

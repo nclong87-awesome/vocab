@@ -69,7 +69,7 @@ function WordCard({
     const updatedWord: Word = {
       ...word,
       imageUrls: updatedUrls,
-      imageUrl: updatedUrls[0] || undefined,
+      imageUrl: updatedUrls?.[0] || undefined,
     };
     handleModalWordUpdate(updatedWord);
   };

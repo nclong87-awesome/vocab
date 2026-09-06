@@ -27,7 +27,8 @@ interface QuickAiSwitcherProps {
   compact?: boolean;
 }
 
-function getShortProviderName(name: string): string {
+function getShortProviderName(name?: string): string {
+  if (!name) return "AI";
   if (name.includes("Auto")) return "Auto";
   if (name.includes("Cloudflare")) return "Cloudflare";
   if (name.includes("Gemini")) return "Gemini";
@@ -37,7 +38,7 @@ function getShortProviderName(name: string): string {
   if (name.includes("Groq")) return "Groq";
   if (name.includes("OpenRouter")) return "OpenRouter";
   if (name.includes("9Flare")) return "9Flare";
-  return name.split(" ")[0];
+  return name.split(" ")?.[0] || name;
 }
 
 export default function QuickAiSwitcher({
@@ -54,7 +55,7 @@ export default function QuickAiSwitcher({
 
   useModalBackNavigation(isOpen, () => setIsOpen(false));
 
-  const activeProviderMeta = PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider) || PROVIDER_OPTIONS[0];
+  const activeProviderMeta = (PROVIDER_OPTIONS && PROVIDER_OPTIONS.find(p => p.id === llmConfig.provider)) || PROVIDER_OPTIONS[0];
   const savedMap = getSavedProvidersMap(llmConfig);
 
   // Close popover when clicking outside
@@ -73,7 +74,7 @@ export default function QuickAiSwitcher({
   }, [isOpen]);
 
   const handleProviderClick = (pId: LLMProvider) => {
-    const targetMeta = PROVIDER_OPTIONS.find(p => p.id === pId) || PROVIDER_OPTIONS[0];
+    const targetMeta = (PROVIDER_OPTIONS && PROVIDER_OPTIONS.find(p => p.id === pId)) || PROVIDER_OPTIONS[0];
     const saved = savedMap[pId];
 
     onSwitchProvider(pId);
@@ -233,7 +234,7 @@ export default function QuickAiSwitcher({
                     </label>
                     {unlockedModels.length > 0 ? (
                       <select
-                        value={unlockedModels.includes(llmConfig.model) ? llmConfig.model : unlockedModels[0]}
+                        value={unlockedModels.includes(llmConfig.model) ? llmConfig.model : (unlockedModels[0] || "")}
                         onChange={(e) => handleModelSelect(e.target.value)}
                         className="w-full bg-stone-800/90 text-white border border-stone-700 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
                       >

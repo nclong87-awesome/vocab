@@ -61,8 +61,8 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
     let isMounted = true;
     setIsInitialLoading(true);
 
-    const keyword = getImageKeyword(word.word) || word.word;
-    const cleanKey = keyword.includes(",") ? keyword.split(",")[0].trim() : keyword.trim();
+    const keyword = (word && (getImageKeyword(word.word) || word.word)) || "";
+    const cleanKey = keyword && keyword.includes(",") ? keyword.split(",")[0].trim() : (keyword ? keyword.trim() : "");
 
     const queries = [
       cleanKey,

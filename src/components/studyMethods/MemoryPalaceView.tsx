@@ -49,12 +49,12 @@ export default function MemoryPalaceView({
   useEffect(() => {
     const list = getStoredMemoryPalaces();
     setPalaces(list);
-    if (list.length > 0 && !activePalaceId) {
+    if (list && list.length > 0 && !activePalaceId && list[0]?.id) {
       setActivePalaceId(list[0].id);
     }
   }, [activePalaceId]);
 
-  const activePalace = palaces.find(p => p.id === activePalaceId) || palaces[0] || null;
+  const activePalace = (palaces && palaces.find(p => p.id === activePalaceId)) || palaces?.[0] || null;
 
   const speak = (text: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -67,7 +67,7 @@ export default function MemoryPalaceView({
     setIsAssigningWord(true);
     // Suggest first unassigned or starred word
     const assignedIds = new Set(activePalace?.stations.map(s => s.wordId).filter(Boolean));
-    const firstFree = words.find(w => !assignedIds.has(w.id)) || words[0] || null;
+    const firstFree = (words && words.find(w => !assignedIds.has(w.id))) || words?.[0] || null;
     setWordToAssign(firstFree);
   };
 

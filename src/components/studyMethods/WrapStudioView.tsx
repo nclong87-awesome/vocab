@@ -61,13 +61,13 @@ export default function WrapStudioView({
   const [missionUserInput, setMissionUserInput] = useState("");
 
   useEffect(() => {
-    if (words.length > 0 && !sentenceWord) {
+    if (words && words.length > 0 && !sentenceWord) {
       const candidate = words.find(w => !w.learned || w.starred) || words[0];
       setSentenceWord(candidate);
     }
   }, [words, sentenceWord]);
 
-  const currentWrapWord = words[currentWrapWordIndex] || words[0] || null;
+  const currentWrapWord = (words && words[currentWrapWordIndex]) || words?.[0] || null;
 
   const speak = (text: string) => {
     if (!text) return;
