@@ -37,6 +37,7 @@ interface FlashcardsViewProps {
   onToggleLearned: (wordId: string) => void;
   onGoBack: () => void;
   startPractice: () => void;
+  onNavigateToStudyMethods?: (tab?: string) => void;
   ttsConfig?: TTSConfig;
   llmConfig?: LLMConfig;
   targetLanguage?: string;
@@ -51,6 +52,7 @@ export default function FlashcardsView({
   onToggleLearned,
   onGoBack,
   startPractice,
+  onNavigateToStudyMethods,
   ttsConfig = DEFAULT_TTS_CONFIG,
   llmConfig,
   targetLanguage = "English",
@@ -316,6 +318,45 @@ export default function FlashcardsView({
           </button>
         </div>
       </div>
+
+      {/* Alternative Learning Methods Banner (For learners feeling flashcards are boring) */}
+      {onNavigateToStudyMethods && (
+        <div className="p-3 sm:p-4 rounded-xl bg-gradient-to-r from-amber-50/90 via-sky-50/70 to-emerald-50/90 border border-amber-200/80 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="text-xs font-bold text-stone-900">
+                Tired of standard flashcard flipping? Explore 5 Science-Backed Methods:
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateToStudyMethods("goldlist")}
+              className="text-[11px] font-bold text-amber-900 hover:underline cursor-pointer"
+            >
+              Open Vocab Lab →
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {[
+              { id: "goldlist", label: "📔 Goldlist (Subconscious Notebook)" },
+              { id: "immersion", label: "📖 Graded Story Immersion" },
+              { id: "palace", label: "🏰 Memory Palace & Mnemonics" },
+              { id: "wrap", label: "✍️ WRAP & Personal Sentences" },
+              { id: "physical", label: "🏷️ Physical Sticky Notes" }
+            ].map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onNavigateToStudyMethods(m.id)}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/90 hover:bg-white border border-stone-200 text-stone-800 shadow-2xs transition-transform hover:scale-102 cursor-pointer"
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Category Filter Pills and Sort Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-stone-100" id="flashcard-filter-tabs">

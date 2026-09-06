@@ -3,6 +3,7 @@ import { LanguageTranslations } from "../i18n";
 export const viTranslations: LanguageTranslations = {
     app_title: "Học Từ Vựng AI",
     nav_collection: "Bộ Từ Vựng",
+    nav_methods: "Phương Pháp Học",
     nav_analytics: "Phân Tích",
     nav_settings: "Cài Đặt",
     nav_dashboard: "Trang Chủ",

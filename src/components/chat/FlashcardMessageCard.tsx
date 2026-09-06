@@ -10,6 +10,7 @@ import {
   Languages,
   BookOpen,
   MessageSquare,
+  Sparkles,
   X
 } from "lucide-react";
 import { FlashcardData, FlashcardItem, SuggestedPairedWord, TTSConfig, LLMConfig, Word } from "../../types";
@@ -331,6 +332,20 @@ function FlashcardMessageCard({
           >
             <LayoutGrid className="w-3.5 h-3.5" />
             <span>All ({cards.length})</span>
+          </button>
+
+          <div className="w-[1px] h-4 bg-stone-700 mx-0.5" />
+
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("vocab-open-methods"));
+            }}
+            className="px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition-colors text-amber-300 hover:text-amber-200 hover:bg-stone-700/60 cursor-pointer"
+            title="Open Vocab Lab: Goldlist, Stories, Memory Palace, WRAP & Real-World Utility"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Lab</span>
           </button>
         </div>
       </div>

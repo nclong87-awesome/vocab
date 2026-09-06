@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sliders } from "lucide-react";
+import { Sliders, Sparkles } from "lucide-react";
 import { LLMConfig, LLMProvider, UserStats } from "../../types";
 import QuickAiSwitcher from "./QuickAiSwitcher";
 import QuickLanguageSwitcher from "./QuickLanguageSwitcher";
@@ -7,8 +7,8 @@ import QuickCloudSync from "./QuickCloudSync";
 import { t } from "../../config/i18n";
 
 interface AppHeaderProps {
-  currentView: "chatview" | "manage" | "analytics" | "settings";
-  setCurrentView: (view: "chatview" | "manage" | "analytics" | "settings") => void;
+  currentView: "chatview" | "manage" | "methods" | "analytics" | "settings";
+  setCurrentView: (view: "chatview" | "manage" | "methods" | "analytics" | "settings") => void;
   setIsLlmModalOpen: (open: boolean) => void;
   llmConfig: LLMConfig;
   stats: UserStats;
@@ -19,7 +19,7 @@ interface AppHeaderProps {
   appLanguage?: string;
   onSelectLanguages?: (targetLang: string, nativeLang: string, appLang?: string) => void;
   onReloadData?: () => Promise<void>;
-  sidePanelTab?: "collection" | "analytics" | "settings";
+  sidePanelTab?: "collection" | "methods" | "analytics" | "settings";
   isSidePanelOpen?: boolean;
 }
 
@@ -117,7 +117,7 @@ export default function AppHeader({
   );
 
   const renderNavLinks = () => (
-    <div className="flex items-center gap-4 sm:gap-8">
+    <div className="flex items-center gap-4 sm:gap-7">
       <button
         onClick={() => {
           setCurrentView("manage");
@@ -127,6 +127,19 @@ export default function AppHeader({
         }`}
       >
         {t("nav_collection", appLanguage)}
+      </button>
+
+      <button
+        onClick={() => {
+          setCurrentView("methods");
+        }}
+        className={`transition-colors cursor-pointer flex items-center gap-1 font-semibold ${
+          isSidePanelOpen && sidePanelTab === "methods" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
+        }`}
+        id="nav-methods-btn"
+      >
+        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+        <span>{t("nav_methods", appLanguage) || "Vocab Lab"}</span>
       </button>
 
       <button

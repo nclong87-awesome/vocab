@@ -44,7 +44,13 @@ export default function MobileSideDrawer({
               <div className="flex items-center gap-2">
                 <span className="p-1.5 bg-stone-900 text-white font-black text-xs">V</span>
                 <span className="font-bold text-sm tracking-tight capitalize">
-                  {title === "collection" ? "My Collection" : title}
+                  {title === "collection"
+                    ? "My Collection"
+                    : title === "methods"
+                    ? "Vocab Lab (Modern Methods)"
+                    : title === "analytics"
+                    ? "Learning Analytics"
+                    : title}
                 </span>
               </div>
               <button

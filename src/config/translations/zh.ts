@@ -3,6 +3,7 @@ import { LanguageTranslations } from "../i18n";
 export const zhTranslations: LanguageTranslations = {
     app_title: "AI 词汇学堂",
     nav_collection: "词汇本",
+    nav_methods: "学习方法",
     nav_analytics: "数据分析",
     nav_settings: "应用设置",
     nav_dashboard: "首页",

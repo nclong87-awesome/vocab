@@ -3,6 +3,7 @@ import { LanguageTranslations } from "../i18n";
 export const esTranslations: LanguageTranslations = {
     app_title: "Aprende Vocabulario AI",
     nav_collection: "Colección",
+    nav_methods: "Métodos de Aprendizaje",
     nav_analytics: "Análisis",
     nav_settings: "Ajustes",
     nav_dashboard: "Inicio",

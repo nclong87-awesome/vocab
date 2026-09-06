@@ -29,6 +29,7 @@ export interface QuickActionItem {
     onViewFlashcard?: () => void;
     onSuggestCasualReplyPrompt?: () => void;
     onOpenWordLibrary?: () => void;
+    onOpenStudyMethods?: (tab?: string) => void;
   }) => void;
 }
 
@@ -274,6 +275,20 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       }
     },
     {
+      id: "study_methods_hub",
+      label: "🌟 Vocab Lab (5 Modern Methods)",
+      category: "study",
+      categoryLabel: t("qa_cat_study", appLanguage),
+      icon: <Sparkles className="w-4 h-4 text-amber-500" />,
+      title: "Science-Backed Learning Methods",
+      description: "Explore Goldlist, Contextual Stories, Memory Palace, WRAP, and Physical Sticky Notes.",
+      className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 10,
+      getAction: ({ onOpenStudyMethods }) => {
+        onOpenStudyMethods?.("goldlist");
+      }
+    },
+    {
       id: "new_chat",
       label: t("qa_new_chat_label", appLanguage),
       category: "chat",
@@ -282,7 +297,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_new_chat_title", appLanguage),
       description: t("qa_new_chat_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 10,
+      defaultIndex: 11,
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];

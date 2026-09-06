@@ -3,6 +3,7 @@ import { LanguageTranslations } from "../i18n";
 export const koTranslations: LanguageTranslations = {
     app_title: "AI 어휘 학습기",
     nav_collection: "단어장",
+    nav_methods: "학습 방법",
     nav_analytics: "학습 분석",
     nav_settings: "설정",
     nav_dashboard: "홈",

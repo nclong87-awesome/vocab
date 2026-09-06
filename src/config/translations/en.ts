@@ -3,6 +3,7 @@ import { LanguageTranslations } from "../i18n";
 export const enTranslations: LanguageTranslations = {
     app_title: "Vocab Learner",
     nav_collection: "Collection",
+    nav_methods: "Vocab Lab",
     nav_analytics: "Analytics",
     nav_settings: "Settings",
     nav_dashboard: "Dashboard",
