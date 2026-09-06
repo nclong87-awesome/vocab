@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, FlashcardItem, QuizSuggestedWord } from "../types";
+import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, QuizSuggestedWord } from "../types";
 import {
   sendChatMessageService,
   checkWordDefinitionsService,
@@ -7,9 +7,9 @@ import {
   generateAiQuizQuestionsService,
   fixGrammarService,
   analyzeImageVocabService,
-  generateBatchFlashcardsService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
+import { generateImmersionStoryService } from "../services/studyMethodsService";
 import {
   getQuizCandidateWords,
   getCandidateWordsForFlashcards,
@@ -317,7 +317,7 @@ export function useChat({
 
       if (flashcardCount > 0) {
         actions.push({
-          label: `🎴 Study Flashcards (${flashcardCount} ${flashcardCount === 1 ? "word" : "words"})`,
+          label: `📖 Story Immersion (${flashcardCount} ${flashcardCount === 1 ? "word" : "words"})`,
           action: "start_practice_flashcards_new",
         });
       }
@@ -444,18 +444,18 @@ export function useChat({
       return;
     }
 
-    // --- SANDWICH LOOP STEP 1: Warm-up Flashcards ---
+    // --- SANDWICH LOOP STEP 1: Warm-up Story Immersion & Dual Reader ---
     if (practiceMode === "balanced") {
       const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
       const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
       let warmupCandidates: Word[] = [];
 
       if (unstudiedWords.length > 0) {
-        warmupCandidates = unstudiedWords.slice(0, 3);
+        warmupCandidates = unstudiedWords.slice(0, 6);
       } else if (flashcardCandidates.length > 0) {
-        warmupCandidates = flashcardCandidates.slice(0, 3);
+        warmupCandidates = flashcardCandidates.slice(0, 6);
       } else {
-        warmupCandidates = activeWords.slice(0, 3);
+        warmupCandidates = activeWords.slice(0, 6);
       }
 
       const controller = new AbortController();
@@ -463,15 +463,12 @@ export function useChat({
       const configForServer = startTypingWithConfig(configToUse);
 
       try {
-        const batchResult = await generateBatchFlashcardsService({
-          words: warmupCandidates,
+        const storyResult = await generateImmersionStoryService({
+          targetWords: warmupCandidates,
           targetLanguage,
           nativeLanguage,
-          llmConfig: configForServer,
-          signal: controller.signal,
+          cfg: configForServer,
         });
-
-        const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
 
         // Update strength and review history for all studied words
         const candidateIds = new Set(warmupCandidates.map((w) => w.id));
@@ -484,95 +481,49 @@ export function useChat({
               return recordStrengthHistory(
                 w,
                 calcNewStrength,
-                'flashcard_review',
-                `Studied Warm-up Flashcard (+${strengthGained}% strength gained)`
+                'immersion_review',
+                `Studied Contextual Story Immersion (+${strengthGained}% strength gained)`
               );
             }
             return w;
           });
-          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB flashcard word save error:", e));
+          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB story word save error:", e));
           return updatedWords;
         });
 
-        // Collect companion words suggestions
-        const seenSuggested = new Set<string>();
-        const top3SuggestedActions: { label: string; action: string; payload: { word: string; hint?: string } }[] = [];
-        cards.forEach((c) => {
-          (c.suggestedWords || []).forEach((sw: any) => {
-            const swWord = typeof sw === "string" ? sw.trim() : (sw?.word || "").trim();
-            const swHint = typeof sw === "object" ? (sw?.hint || sw?.relationship || sw?.translation || "") : "";
-            if (swWord && !seenSuggested.has(swWord.toLowerCase())) {
-              seenSuggested.add(swWord.toLowerCase());
-              if (top3SuggestedActions.length < 3) {
-                top3SuggestedActions.push({
-                  label: `+ ${swWord}`,
-                  action: "add_word",
-                  payload: { word: swWord, hint: swHint || undefined },
-                });
-              }
-            }
+        const warmupIds = new Set(warmupCandidates.map((w) => w.id));
+        const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
+        const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
+        const hasQuizEligibleWords = quizCandidates.length > 0 || getQuizCandidates(activeWords).length > 0;
+
+        const sessionNextActions: any[] = [];
+        if (hasQuizEligibleWords) {
+          sessionNextActions.push({
+            label: t("chat_sandwich_start_quiz_action", currentAppLang),
+            action: "start_sandwich_quiz",
+            payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
           });
+        }
+        sessionNextActions.push({
+          label: "📖 Next Story Practice",
+          action: "view_flashcard",
         });
 
-        const primaryCard: FlashcardItem | undefined = cards[0];
-        const flashcardMsg: ChatMessage = {
-          id: `sandwich-warmup-msg-${Date.now()}`,
+        const storyMsg: ChatMessage = {
+          id: `sandwich-warmup-story-${Date.now()}`,
           role: "assistant",
-          content: `${t("chat_sandwich_warmup_title", currentAppLang)}\n\n${t("chat_sandwich_warmup_desc", currentAppLang, { count: String(cards.length) })}`,
+          content: `### 🥪 Step 1 Warm-up: Contextual Story Immersion\n\nRead through the graded story below to acquire **${warmupCandidates.length} target words** naturally in rich context with dual translation and one-click sentence mining.`,
           timestamp: new Date().toISOString(),
-          audioWord: primaryCard?.word,
-          imageKeyword: primaryCard?.word,
-          flashcardData: {
-            cards: cards,
-            reviewedIndices: [0],
-            wordId: primaryCard?.wordId,
-            word: primaryCard?.word,
-            pronunciation: primaryCard?.pronunciation,
-            partOfSpeech: primaryCard?.partOfSpeech,
-            definition: primaryCard?.definition,
-            translation: primaryCard?.translation,
-            example: primaryCard?.example,
-            exampleTranslation: primaryCard?.exampleTranslation,
-            category: primaryCard?.category,
-            context: primaryCard?.context,
-            suggestedWords: primaryCard?.suggestedWords,
-          },
-          provider: batchResult.provider,
-          model: batchResult.model,
-          responseTimeMs: batchResult.responseTimeMs,
-          suggestedActions: (() => {
-            const warmupIds = new Set(warmupCandidates.map((w) => w.id));
-            const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
-            
-            // Check if there are words eligible for quiz review
-            const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
-            const hasQuizEligibleWords = quizCandidates.length > 0 || getQuizCandidates(activeWords).length > 0;
-
-            // Check if there are words eligible for flashcard review
-            const flashcardCandidates = getCandidateWordsForFlashcards(nonWarmupWords, 3);
-            const hasFlashcardEligibleWords = flashcardCandidates.length > 0 || getCandidateWordsForFlashcards(activeWords, 3).length > 0;
-
-            const sessionNextActions: any[] = [];
-            if (hasQuizEligibleWords) {
-              sessionNextActions.push({
-                label: t("chat_sandwich_start_quiz_action", currentAppLang),
-                action: "start_sandwich_quiz",
-                payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
-              });
-            } else if (hasFlashcardEligibleWords) {
-              sessionNextActions.push({
-                label: t("action_next_flashcard", currentAppLang),
-                action: "view_flashcard",
-              });
-            }
-
-            return [...sessionNextActions, ...top3SuggestedActions];
-          })(),
+          audioWord: warmupCandidates[0]?.word,
+          storyData: storyResult,
+          provider: configForServer?.provider,
+          model: configForServer?.model,
+          suggestedActions: sessionNextActions,
         };
 
-        setChatMessages([flashcardMsg]);
+        setChatMessages([storyMsg]);
       } catch (e: any) {
-        console.error("Error generating sandwich warm-up cards:", e);
+        console.error("Error generating sandwich warm-up story:", e);
         triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "flashcard-error");
       } finally {
         setIsTyping(false);
@@ -662,36 +613,33 @@ export function useChat({
       return;
     }
 
-    // Step 2: Search for candidate words for Flashcards (for flashcards_new mode)
-    let batchFlashcardCandidates = getCandidateWordsForFlashcards(activeWords, 3);
+    // Step 2: Search for candidate words for Story Immersion (for flashcards_new mode)
+    let batchStoryCandidates = getCandidateWordsForFlashcards(activeWords, 6);
     if (practiceMode === "flashcards_new" || unstudiedWords.length > 0) {
       if (unstudiedWords.length > 0) {
-        batchFlashcardCandidates = unstudiedWords.slice(0, 3);
+        batchStoryCandidates = unstudiedWords.slice(0, 6);
       } else if (flashcardCandidates.length > 0) {
-        batchFlashcardCandidates = flashcardCandidates.slice(0, 3);
+        batchStoryCandidates = flashcardCandidates.slice(0, 6);
       }
     }
-    if (batchFlashcardCandidates.length === 0 && activeWords.length > 0) {
-      batchFlashcardCandidates = activeWords.slice(0, 3);
+    if (batchStoryCandidates.length === 0 && activeWords.length > 0) {
+      batchStoryCandidates = activeWords.slice(0, 6);
     }
-    if (batchFlashcardCandidates.length > 0) {
+    if (batchStoryCandidates.length > 0) {
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const configForServer = startTypingWithConfig(configToUse);
 
       try {
-        const batchResult = await generateBatchFlashcardsService({
-          words: batchFlashcardCandidates,
+        const storyResult = await generateImmersionStoryService({
+          targetWords: batchStoryCandidates,
           targetLanguage,
           nativeLanguage,
-          llmConfig: configForServer,
-          signal: controller.signal,
+          cfg: configForServer,
         });
 
-        const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
-
         // Update strength and review history for all studied words
-        const candidateIds = new Set(batchFlashcardCandidates.map((w) => w.id));
+        const candidateIds = new Set(batchStoryCandidates.map((w) => w.id));
         setWords((prevWords) => {
           const updatedWords = prevWords.map((w) => {
             if (candidateIds.has(w.id)) {
@@ -701,71 +649,34 @@ export function useChat({
               return recordStrengthHistory(
                 w, 
                 calcNewStrength, 
-                'flashcard_review', 
-                `Studied Flashcard (+${strengthGained}% strength gained)`
+                'immersion_review', 
+                `Studied Story Immersion (+${strengthGained}% strength gained)`
               );
             }
             return w;
           });
-          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB flashcard word save error:", e));
+          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB story word save error:", e));
           return updatedWords;
         });
 
-        // Aggregate top 3 unique suggested words across all flashcard cards in the deck
-        const seenSuggested = new Set<string>();
-        const top3SuggestedActions: { label: string; action: string; payload: { word: string; hint?: string } }[] = [];
-        cards.forEach((c) => {
-          (c.suggestedWords || []).forEach((sw: any) => {
-            const swWord = typeof sw === "string" ? sw.trim() : (sw?.word || "").trim();
-            const swHint = typeof sw === "object" ? (sw?.hint || sw?.relationship || sw?.translation || "") : "";
-            if (swWord && !seenSuggested.has(swWord.toLowerCase())) {
-              seenSuggested.add(swWord.toLowerCase());
-              if (top3SuggestedActions.length < 3) {
-                top3SuggestedActions.push({
-                  label: `+ ${swWord}`,
-                  action: "add_word",
-                  payload: { word: swWord, hint: swHint || undefined }
-                });
-              }
-            }
-          });
-        });
-
-        const primaryCard: FlashcardItem | undefined = cards[0];
-        const flashcardMsg: ChatMessage = {
-          id: `flashcard-msg-${Date.now()}`,
+        const storyMsg: ChatMessage = {
+          id: `story-msg-${Date.now()}`,
           role: "assistant",
-          content: t("chat_flashcard_deck_title", currentAppLang, { count: String(cards.length) }),
+          content: `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${batchStoryCandidates.length} candidate words** with Comprehensible Input.`,
           timestamp: new Date().toISOString(),
-          audioWord: primaryCard?.word,
-          imageKeyword: primaryCard?.word,
-          flashcardData: {
-            cards: cards,
-            reviewedIndices: [0],
-            wordId: primaryCard?.wordId,
-            word: primaryCard?.word,
-            pronunciation: primaryCard?.pronunciation,
-            partOfSpeech: primaryCard?.partOfSpeech,
-            definition: primaryCard?.definition,
-            translation: primaryCard?.translation,
-            example: primaryCard?.example,
-            exampleTranslation: primaryCard?.exampleTranslation,
-            category: primaryCard?.category,
-            context: primaryCard?.context,
-            suggestedWords: primaryCard?.suggestedWords,
-          },
-          provider: batchResult.provider,
-          model: batchResult.model,
-          responseTimeMs: batchResult.responseTimeMs,
+          audioWord: batchStoryCandidates[0]?.word,
+          storyData: storyResult,
+          provider: configForServer?.provider,
+          model: configForServer?.model,
           suggestedActions: [
-            ...top3SuggestedActions,
-            { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" },
+            { label: "📖 Next Story Practice", action: "view_flashcard" },
+            { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
           ],
         };
 
-        setChatMessages([flashcardMsg]);
+        setChatMessages([storyMsg]);
       } catch (e: any) {
-        console.error("Error generating flash card deck:", e);
+        console.error("Error generating immersion story:", e);
         triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "flashcard-error");
       } finally {
         setIsTyping(false);
@@ -2569,7 +2480,7 @@ export function useChat({
       return;
     }
 
-    const candidateWords = getCandidateWordsForFlashcards(activeWords, 5);
+    const candidateWords = getCandidateWordsForFlashcards(activeWords, 6);
     if (candidateWords.length === 0) {
       const noCandidateMsg: ChatMessage = {
         id: `flashcard-no-candidates-${Date.now()}`,
@@ -2589,14 +2500,12 @@ export function useChat({
     const configForServer = startTypingWithConfig(configToUse);
 
     try {
-      const batchResult = await generateBatchFlashcardsService({
-        words: candidateWords,
+      const storyResult = await generateImmersionStoryService({
+        targetWords: candidateWords,
         targetLanguage,
         nativeLanguage,
-        llmConfig: configForServer,
+        cfg: configForServer,
       });
-
-      const cards = batchResult.cards && batchResult.cards.length > 0 ? batchResult.cards : [];
 
       // Update strength and review history for all studied words
       const candidateIds = new Set(candidateWords.map((w) => w.id));
@@ -2609,71 +2518,34 @@ export function useChat({
             return recordStrengthHistory(
               w, 
               calcNewStrength, 
-              'flashcard_review', 
-              `Studied Flashcard (+${strengthGained}% strength gained)`
+              'immersion_review', 
+              `Studied Contextual Story Immersion (+${strengthGained}% strength gained)`
             );
           }
           return w;
         });
-        saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB flashcard word save error:", e));
+        saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB story word save error:", e));
         return updatedWords;
       });
 
-      // Aggregate top 3 unique suggested words across all flashcard cards in the deck
-      const seenSuggested = new Set<string>();
-      const top3SuggestedActions: { label: string; action: string; payload: { word: string; hint?: string } }[] = [];
-      cards.forEach((c) => {
-        (c.suggestedWords || []).forEach((sw: any) => {
-          const swWord = typeof sw === "string" ? sw.trim() : (sw?.word || "").trim();
-          const swHint = typeof sw === "object" ? (sw?.hint || sw?.relationship || sw?.translation || "") : "";
-          if (swWord && !seenSuggested.has(swWord.toLowerCase())) {
-            seenSuggested.add(swWord.toLowerCase());
-            if (top3SuggestedActions.length < 3) {
-              top3SuggestedActions.push({
-                label: `+ ${swWord}`,
-                action: "add_word",
-                payload: { word: swWord, hint: swHint || undefined }
-              });
-            }
-          }
-        });
-      });
-
-      const primaryCard: FlashcardItem | undefined = cards[0];
-      const flashcardMsg: ChatMessage = {
-        id: `flashcard-msg-${Date.now()}`,
+      const storyMsg: ChatMessage = {
+        id: `story-msg-${Date.now()}`,
         role: "assistant",
-        content: t("chat_flashcard_deck_title", currentAppLang, { count: String(cards.length) }),
+        content: `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
         timestamp: new Date().toISOString(),
-        audioWord: primaryCard?.word,
-        imageKeyword: primaryCard?.word,
-        flashcardData: {
-          cards: cards,
-          reviewedIndices: [0],
-          wordId: primaryCard?.wordId,
-          word: primaryCard?.word,
-          pronunciation: primaryCard?.pronunciation,
-          partOfSpeech: primaryCard?.partOfSpeech,
-          definition: primaryCard?.definition,
-          translation: primaryCard?.translation,
-          example: primaryCard?.example,
-          exampleTranslation: primaryCard?.exampleTranslation,
-          category: primaryCard?.category,
-          context: primaryCard?.context,
-          suggestedWords: primaryCard?.suggestedWords,
-        },
-        provider: batchResult.provider,
-        model: batchResult.model,
-        responseTimeMs: batchResult.responseTimeMs,
+        audioWord: candidateWords[0]?.word,
+        storyData: storyResult,
+        provider: configForServer?.provider,
+        model: configForServer?.model,
         suggestedActions: [
-          ...top3SuggestedActions,
-          { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" }
+          { label: "📖 Next Story Practice", action: "view_flashcard" },
+          { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
         ],
       };
 
-      setChatMessages([flashcardMsg]);
+      setChatMessages([storyMsg]);
     } catch (e: any) {
-      console.error("Error generating flash card deck:", e);
+      console.error("Error generating immersion story:", e);
       triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewFlashcard(newConfig), "view-flashcard-error");
     } finally {
       setIsTyping(false);

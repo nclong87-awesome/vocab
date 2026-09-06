@@ -9,6 +9,7 @@ import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import QuizImage from "../quiz/QuizImage";
 import FlashcardMessageCard from "./FlashcardMessageCard";
+import StoryImmersionMessageCard from "./StoryImmersionMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
@@ -18,6 +19,7 @@ import { isWordInCollection, findWordInCollection } from "../../utils/wordNormal
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
+import WordReviewedBanner from "./WordReviewedBanner";
 
 interface ChatMessageItemProps {
   msg: ChatMessage;
@@ -401,8 +403,8 @@ function ChatMessageItem({
         }
       }
 
-      // On the latest message, if no quiz options and not flashcard, extract or generate topic choices
-      if (isLatestMessage && !hasQuizOptions && !msg.flashcardData) {
+      // On the latest message, if no quiz options and not flashcard/story, extract or generate topic choices
+      if (isLatestMessage && !hasQuizOptions && !msg.flashcardData && !msg.storyData) {
         const content = safeMsgContent;
         const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
 
@@ -719,7 +721,7 @@ function ChatMessageItem({
       <div className="space-y-2 w-full flex flex-col">
         <div 
           className={
-            msg.flashcardData 
+            msg.flashcardData || msg.storyData
               ? "w-full"
               : `p-4 rounded-2xl w-full ${
                   isUser 
@@ -742,6 +744,23 @@ function ChatMessageItem({
                 </div>
               )}
             </div>
+          ) : msg.storyData ? (
+            <StoryImmersionMessageCard
+              story={msg.storyData}
+              targetLanguage={targetLanguage}
+              nativeLanguage={nativeLanguage}
+              appLanguage={currentAppLang}
+              ttsConfig={ttsConfig}
+              llmConfig={llmConfig}
+              provider={msg.provider}
+              model={msg.model}
+              responseTimeMs={msg.responseTimeMs}
+              words={words}
+              onUpdateWords={onUpdateWords}
+              onAddWord={onAddWord}
+              onAddMultipleWords={onAddMultipleWords}
+              showToast={showToast}
+            />
           ) : msg.flashcardData ? (
             <FlashcardMessageCard
               data={msg.flashcardData}
@@ -822,57 +841,12 @@ function ChatMessageItem({
 
               {/* Word Strength History banner shown AFTER user answers the quiz question (placed between feedback and next question) */}
               {answeredWord && (
-                <div className="my-2.5 p-2 px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
-                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
-                      Word Reviewed:
-                    </span>
-                    <span className="text-xs font-bold text-stone-900 font-serif">
-                      {answeredWord.word}
-                    </span>
-                    {answeredWord.partOfSpeech && (
-                      <span className="text-[9px] font-bold uppercase bg-amber-200/70 text-amber-950 px-1.5 py-0.2 rounded font-mono">
-                        {answeredWord.partOfSpeech}
-                      </span>
-                    )}
-                    {answeredWord.strength !== undefined && (
-                      <span className="text-[10px] font-mono font-bold bg-white text-stone-700 px-1.5 py-0.2 rounded border border-amber-200/70">
-                        {answeredWord.strength}% strength
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => speakText(answeredWord.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                      className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
-                      title={`Play audio for "${answeredWord.word}"`}
-                    >
-                      <Volume2 className="w-3.5 h-3.5 text-amber-700" />
-                      <span className="hidden sm:inline">Audio</span>
-                    </button>
-                    {!hideAskAiButton && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedChatWord(answeredWord)}
-                        className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-indigo-700 hover:text-indigo-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
-                        title={`Ask AI about "${answeredWord.word}"`}
-                      >
-                        <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-                        <span className="hidden sm:inline">Ask AI</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedHistoryWord(answeredWord)}
-                      className="p-1.5 px-2 bg-white hover:bg-amber-100 hover:border-amber-400 text-amber-800 hover:text-amber-950 rounded-lg border border-amber-200/80 transition-all flex items-center gap-1 text-[11px] font-semibold cursor-pointer shadow-3xs hover:scale-105"
-                      title={`View Strength History for "${answeredWord.word}"`}
-                    >
-                      <History className="w-3.5 h-3.5 text-amber-600" />
-                      <span className="hidden sm:inline">Strength History</span>
-                    </button>
-                  </div>
-                </div>
+                <WordReviewedBanner
+                  word={answeredWord}
+                  onPlayAudio={(text) => speakText(text, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                  onAskAi={!hideAskAiButton ? (w) => setSelectedChatWord(w) : undefined}
+                  onViewHistory={(w) => setSelectedHistoryWord(w)}
+                />
               )}
 
               {nextQuestionPart && (

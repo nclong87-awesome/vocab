@@ -61,7 +61,9 @@ export type StrengthHistoryReason =
   | 'unmastered' 
   | 'memory_decay' 
   | 'manual_adjust' 
-  | 'flashcard_review';
+  | 'flashcard_review'
+  | 'immersion_review'
+  | 'study_method';
 
 /**
  * Compact tuple representation for persistent storage and cloud sync:
@@ -272,6 +274,7 @@ export interface ChatMessage {
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
   flashcardData?: FlashcardData;
+  storyData?: ImmersionStory;
   quizFinishedData?: QuizFinishedData;
   wordLibraries?: boolean;
   answeredQuizWordId?: string;

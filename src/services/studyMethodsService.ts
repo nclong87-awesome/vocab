@@ -13,7 +13,8 @@ import {
   GoldlistDistillationTier 
 } from "../types";
 import { cleanAndParseJson } from "../utils/jsonSanitizer";
-import { callLLMClientSide } from "./llmClientService";
+import { callLLMClientSide, getOverrideConfig } from "./llmClientService";
+import { notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 
 // Helper for LLM prompt completions
 async function sendLlmRequest(params: {
@@ -23,11 +24,13 @@ async function sendLlmRequest(params: {
   llmConfig?: LLMConfig;
   action?: string;
 }): Promise<string> {
+  const effectiveConfig = getOverrideConfig(params.llmConfig);
+  notifyLlmRequestStartFromConfig(effectiveConfig);
   return await callLLMClientSide(
     params.prompt,
     params.systemInstruction || "You are an expert language learning assistant.",
     params.schemaDescription || "JSON object",
-    params.llmConfig
+    effectiveConfig
   );
 }
 
