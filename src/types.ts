@@ -61,7 +61,6 @@ export type StrengthHistoryReason =
   | 'unmastered' 
   | 'memory_decay' 
   | 'manual_adjust' 
-  | 'flashcard_review'
   | 'immersion_review'
   | 'study_method';
 
@@ -195,55 +194,6 @@ export interface SuggestedPairedWord {
   phrase?: string;
 }
 
-export interface FlashcardItem {
-  wordId?: string;
-  word: string;
-  pronunciation?: string;
-  partOfSpeech?: string;
-  definition: string;
-  translation: string;
-  example?: string;
-  exampleTranslation?: string;
-  category?: string;
-  context?: string;
-  suggestedWords?: SuggestedPairedWord[];
-  imageKeyword?: string;
-  imageUrl?: string;
-  imageUrls?: string[];
-  previousStrength?: number;
-  newStrength?: number;
-  strengthGained?: number;
-}
-
-export interface FlashcardData {
-  cards?: FlashcardItem[];
-  reviewedIndices?: number[];
-  wordId?: string;
-  word?: string;
-  pronunciation?: string;
-  partOfSpeech?: string;
-  definition?: string;
-  translation?: string;
-  category?: string;
-  context?: string;
-  example?: string;
-  exampleTranslation?: string;
-  extraExampleSentences?: {
-    sentence: string;
-    translation: string;
-    contextCategoryNote?: string;
-  }[];
-  usageNotes?: string;
-  imageUrl?: string;
-  imageUrls?: string[];
-  imageKeyword?: string;
-  suggestedVocabulary?: SuggestedVocabularyWord[];
-  suggestedWords?: (string | SuggestedPairedWord)[];
-  previousStrength?: number;
-  newStrength?: number;
-  strengthGained?: number;
-}
-
 export interface ApiRequestLog {
   id: string;
   timestamp: string; // ISO string
@@ -273,7 +223,6 @@ export interface ChatMessage {
   quizSpeechText?: string;
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
-  flashcardData?: FlashcardData;
   storyData?: ImmersionStory;
   quizFinishedData?: QuizFinishedData;
   wordLibraries?: boolean;

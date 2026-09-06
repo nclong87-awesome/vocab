@@ -1072,7 +1072,7 @@ export default function SettingsView({
               Chat & Practice Audio
             </h3>
             <p className="text-xs text-stone-500 mt-1">
-              Automatically pronounce questions, flashcards, words added, and messages in chat and practice sessions
+              Automatically pronounce questions, study sessions, words added, and messages in chat and practice sessions
             </p>
           </div>
 

@@ -25,7 +25,7 @@ interface QuickActionsSectionProps {
   onGenerateByTopic?: () => void;
   startPractice: () => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
+  onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onOpenWordLibrary?: () => void;
   onOpenStudyMethods?: (tab?: string) => void;
@@ -64,7 +64,7 @@ function QuickActionsSection({
   onGenerateByTopic,
   startPractice,
   onFixGrammar,
-  onViewFlashcard,
+  onViewStoryImmersion,
   onSuggestCasualReplyPrompt,
   onOpenWordLibrary,
   onOpenStudyMethods,
@@ -105,7 +105,7 @@ function QuickActionsSection({
     onGenerateByTopic,
     startPractice,
     onFixGrammar,
-    onViewFlashcard,
+    onViewStoryImmersion,
     onSuggestCasualReplyPrompt,
     onOpenWordLibrary,
     onOpenStudyMethods,
@@ -130,7 +130,7 @@ function QuickActionsSection({
       onGenerateByTopic,
       startPractice,
       onFixGrammar,
-      onViewFlashcard,
+      onViewStoryImmersion,
       onSuggestCasualReplyPrompt,
       onOpenWordLibrary,
       onOpenStudyMethods,
@@ -166,7 +166,7 @@ function QuickActionsSection({
           onAddWord: p.onAddWord,
           onSendMessage: p.onSendMessage,
           onClearHistory: p.onClearHistory,
-          onViewFlashcard: p.onViewFlashcard,
+
           onSuggestCasualReplyPrompt: () => {
             p.setIsPhotoModalOpen(true);
             p.onSuggestCasualReplyPrompt?.();

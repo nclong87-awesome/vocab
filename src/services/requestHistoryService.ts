@@ -37,20 +37,7 @@ export function detectActionCategory(
     return "Connection Test";
   }
 
-  // 2. Flashcards (prioritized above generic dictionary/vocab matching)
-  if (
-    combined.includes("flashcard") || 
-    combined.includes("flashcards") || 
-    combined.includes("generate interactive study flashcards") ||
-    combined.includes("study flashcard") ||
-    combined.includes("study card for") ||
-    combined.includes("/api/generate-flashcard") ||
-    combined.includes("/api/generate-flashcards")
-  ) {
-    return "Flashcards";
-  }
-
-  // 3. AI Quiz
+  // 2. AI Quiz
   if (
     combined.includes("generate-quiz") ||
     combined.includes("/api/generate-quiz") ||

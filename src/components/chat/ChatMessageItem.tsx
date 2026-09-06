@@ -8,7 +8,6 @@ import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import QuizImage from "../quiz/QuizImage";
-import FlashcardMessageCard from "./FlashcardMessageCard";
 import StoryImmersionMessageCard from "./StoryImmersionMessageCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
@@ -36,11 +35,10 @@ interface ChatMessageItemProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "flashcards_new" | "quiz_only" | "balanced" | "sandwich_quiz",
+    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz",
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onSuggestCasualReply?: (imageDataUrl: string | null, customPrompt: string) => Promise<void>;
@@ -54,7 +52,6 @@ interface ChatMessageItemProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
-  onCardReviewed?: (msgId: string, cardIndex: number | "all") => void;
   hideAskAiButton?: boolean;
 }
 
@@ -83,10 +80,6 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
   const rawLabel = String(act.label).trim();
 
   const lower = rawLabel.toLowerCase();
-
-  if (act.action === "view_flashcard" || act.action === "next_flashcard" || lower === "next flashcard" || lower === "🃏 next flashcard") {
-    return t("action_next_flashcard", currentAppLang);
-  }
 
   if (act.action === "next_quiz" || lower === "next quiz" || lower === "🏆 next quiz") {
     return t("action_next_quiz", currentAppLang);
@@ -156,7 +149,6 @@ function ChatMessageItem({
   onGenerateByTopic,
   startPractice,
   onFixGrammar,
-  onViewFlashcard,
   onAnalyzeImageVocab,
   onSuggestCasualReplyPrompt,
   onSuggestCasualReply,
@@ -170,7 +162,6 @@ function ChatMessageItem({
   onUpdateWords,
   onRetryErrorMessage,
   onCancelErrorMessage,
-  onCardReviewed,
   hideAskAiButton,
 }: ChatMessageItemProps) {
   if (msg.isError) {
@@ -255,27 +246,7 @@ function ChatMessageItem({
   }, [messages]);
 
   const { totalWarmupCards, reviewedWarmupCount, isAllWarmupReviewed, remainingWarmupToReview } = useMemo(() => {
-    if (!activeSandwichWarmupMsg) {
-      return { totalWarmupCards: 1, reviewedWarmupCount: 1, isAllWarmupReviewed: true, remainingWarmupToReview: 0 };
-    }
-    const cardsList =
-      activeSandwichWarmupMsg.flashcardData?.cards &&
-      Array.isArray(activeSandwichWarmupMsg.flashcardData.cards) &&
-      activeSandwichWarmupMsg.flashcardData.cards.length > 0
-        ? activeSandwichWarmupMsg.flashcardData.cards
-        : activeSandwichWarmupMsg.flashcardData?.word
-        ? [activeSandwichWarmupMsg.flashcardData]
-        : [];
-    const total = Math.max(1, cardsList.length);
-    const reviewedSet = new Set(activeSandwichWarmupMsg.flashcardData?.reviewedIndices || [0]);
-    const reviewedCount = Math.min(total, reviewedSet.size);
-    const isAll = reviewedCount >= total;
-    return {
-      totalWarmupCards: total,
-      reviewedWarmupCount: reviewedCount,
-      isAllWarmupReviewed: isAll,
-      remainingWarmupToReview: Math.max(0, total - reviewedCount),
-    };
+    return { totalWarmupCards: 1, reviewedWarmupCount: 1, isAllWarmupReviewed: true, remainingWarmupToReview: 0 };
   }, [activeSandwichWarmupMsg]);
 
   const practiceCandidates = useMemo(() => {
@@ -319,72 +290,7 @@ function ChatMessageItem({
     if (!isUser) {
       const hasQuizOptions = parsedQuizOptions.length >= 2 && parsedQuizOptions.length <= 5;
       
-      if (msg.flashcardData) {
-        // Flashcard message: strictly top 3 suggested words across the whole deck, plus standard deck navigation actions
-        const cardsList = msg.flashcardData.cards && Array.isArray(msg.flashcardData.cards) && msg.flashcardData.cards.length > 0
-          ? msg.flashcardData.cards
-          : (msg.flashcardData.word ? [msg.flashcardData] : []);
-
-        const top3Suggested: { word: string; hint?: string; translation?: string }[] = [];
-        const seenWords = new Set<string>();
-
-        for (const card of cardsList) {
-          const suggList = card.suggestedWords || [];
-          for (const item of suggList) {
-            const wordStr = typeof item === "string" ? item.trim() : (item?.word || "").trim();
-            const hintStr = typeof item === "object" ? (item?.hint || item?.relationship || item?.translation || "") : "";
-            const transStr = typeof item === "object" ? (item?.translation || "") : "";
-            const lower = wordStr.toLowerCase();
-            if (wordStr && !seenWords.has(lower)) {
-              seenWords.add(lower);
-              const isAlreadyInCollection = words && Array.isArray(words) && isWordInCollection(words, wordStr);
-              if (!isAlreadyInCollection) {
-                top3Suggested.push({
-                  word: wordStr,
-                  hint: hintStr || transStr || undefined,
-                  translation: transStr || undefined,
-                });
-                if (top3Suggested.length >= 3) break;
-              }
-            }
-          }
-          if (top3Suggested.length >= 3) break;
-        }
-
-        const flashcardWordActions = top3Suggested.map(s => ({
-          label: `+ ${s.word}`,
-          action: "add_word",
-          payload: {
-            word: s.word,
-            hint: s.hint || s.translation
-          }
-        }));
-
-        // Keep non-word actions from msg.suggestedActions (e.g. view_flashcard)
-        const nonWordActions = (msg.suggestedActions || [])
-          .filter(
-            a => a && a.action !== "add_word" && a.action !== "confirm_save_word" && a.action !== "add_multiplewords"
-          )
-          .map(a => {
-            if (a.action === "start_practice" || a.action === "view_flashcard" || a.action === "next_flashcard") {
-              return {
-                ...a,
-                action: "view_flashcard",
-                label: t("action_next_flashcard", currentAppLang)
-              };
-            }
-            return a;
-          });
-
-        if (nonWordActions.length === 0) {
-          nonWordActions.push({
-            label: t("action_next_flashcard", currentAppLang),
-            action: "view_flashcard"
-          });
-        }
-
-        rawActions = [...flashcardWordActions, ...nonWordActions];
-      } else if (hasQuizOptions) {
+      if (hasQuizOptions) {
         rawActions = [...parsedQuizOptions];
       } else if (msg.suggestedActions && msg.suggestedActions.length > 0) {
         if (msg.quizFinishedData) {
@@ -403,8 +309,8 @@ function ChatMessageItem({
         }
       }
 
-      // On the latest message, if no quiz options and not flashcard/story, extract or generate topic choices
-      if (isLatestMessage && !hasQuizOptions && !msg.flashcardData && !msg.storyData) {
+      // On the latest message, if no quiz options and not story, extract or generate topic choices
+      if (isLatestMessage && !hasQuizOptions && !msg.storyData) {
         const content = safeMsgContent;
         const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
 
@@ -468,14 +374,12 @@ function ChatMessageItem({
             a.action === "start_practice_balanced" ||
             a.action === "start_practice_quiz_only" ||
             a.action === "start_practice" ||
-            a.action === "view_flashcard" ||
-            a.action === "next_flashcard" ||
             a.action === "next_quiz"
         );
       }
 
-      // During a smart balanced flashcard review session, when a new word is added or thread advances,
-      // consistently move the "Start practice Quiz (Step 2 & 3)" button to appear after the final message.
+      // During a smart balanced review session, when a new word is added or thread advances,
+      // consistently move the "Start practice Quiz" button to appear after the final message.
       const sandwichWarmupMsg = messages.find(
         m =>
           (m.id.startsWith("sandwich-warmup-msg-") ||
@@ -487,31 +391,21 @@ function ChatMessageItem({
         const origQuizAction = sandwichWarmupMsg.suggestedActions?.find(
           a => a && a.action === "start_sandwich_quiz"
         );
-        const fallbackWarmupWordIds = sandwichWarmupMsg.flashcardData?.cards?.map(c => c.wordId).filter(Boolean);
         const quizPayload = origQuizAction?.payload?.warmupWordIds
           ? origQuizAction.payload
-          : { warmupWordIds: fallbackWarmupWordIds };
+          : { warmupWordIds: [] };
 
         const sandwichQuizAction = {
-          label: origQuizAction?.label || t("chat_sandwich_start_quiz_action", currentAppLang),
+          label: t("chat_sandwich_start_quiz_action", currentAppLang),
           action: "start_sandwich_quiz",
           payload: quizPayload,
         };
 
-        const isFinalAssistantMsg = !isUser && (() => {
-          if (isLatestMessage) return true;
-          const currentIdx = messages.indexOf(msg);
-          if (currentIdx === -1) return false;
-          return !messages.slice(currentIdx + 1).some(m => m.role !== "user");
-        })();
-
-        if (!isFinalAssistantMsg) {
-          // Never leave the quiz button on older messages; it moves to appear after the final message
-          rawActions = rawActions.filter(a => a && a.action !== "start_sandwich_quiz");
+        const existingIdx = rawActions.findIndex(a => a && a.action === "start_sandwich_quiz");
+        if (existingIdx >= 0) {
+          rawActions[existingIdx] = sandwichQuizAction;
         } else {
-          // On the final message, ensure the quiz button is placed at the end of the action list
-          const withoutQuiz = rawActions.filter(a => a && a.action !== "start_sandwich_quiz");
-          rawActions = [...withoutQuiz, sandwichQuizAction];
+          rawActions.push(sandwichQuizAction);
         }
       }
     }
@@ -574,7 +468,20 @@ function ChatMessageItem({
         }
         return cleaned;
       });
-  }, [isUser, parsedQuizOptions, msg.suggestedActions, isLatestMessage, safeMsgContent, messages, targetLanguage, nativeLanguage, words, currentAppLang]);
+  }, [
+    isUser,
+    parsedQuizOptions,
+    msg.suggestedActions,
+    msg.quizFinishedData,
+    isLatestMessage,
+    msg.storyData,
+    safeMsgContent,
+    messages,
+    targetLanguage,
+    nativeLanguage,
+    words,
+    currentAppLang
+  ]);
 
   const effectiveActions = useMemo(() => {
     const lines = (displayContent || "").split("\n");
@@ -636,9 +543,6 @@ function ChatMessageItem({
     } else if (act.action === "start_practice") {
       handleRecordActionUse("start_practice");
       startPractice();
-    } else if (act.action === "start_practice_flashcards_new") {
-      handleRecordActionUse("start_practice");
-      startPractice(undefined, "flashcards_new");
     } else if (act.action === "start_practice_quiz_only" || act.action === "next_quiz") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "quiz_only");
@@ -646,31 +550,14 @@ function ChatMessageItem({
       handleRecordActionUse("start_practice");
       startPractice(undefined, "balanced");
     } else if (act.action === "start_sandwich_quiz") {
-      if (!isAllWarmupReviewed) {
-        showToast(
-          t("chat_sandwich_review_all_cards_toast", currentAppLang, {
-            total: String(totalWarmupCards),
-            remaining: String(remainingWarmupToReview),
-          })
-        );
-        return;
-      }
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
       if (!warmupWordIds || !Array.isArray(warmupWordIds) || warmupWordIds.length === 0) {
         const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-"));
         const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_quiz");
-        warmupWordIds = origAction?.payload?.warmupWordIds || warmupMsg?.flashcardData?.cards?.map(c => c.wordId).filter(Boolean);
+        warmupWordIds = origAction?.payload?.warmupWordIds || [];
       }
       startPractice(undefined, "sandwich_quiz", { warmupWordIds });
-    } else if (act.action === "start_real_person_story") {
-      handleRecordActionUse("view_flashcard");
-      const topic = act.payload?.topic || "Marie Curie & Discovery of Radium";
-      const genre = act.payload?.genre || "Historical Non-Fiction (Real Events)";
-      (onViewFlashcard as any)?.(undefined, { topic, genre, keepHistory: true });
-    } else if (act.action === "view_flashcard" || act.action === "next_flashcard") {
-      handleRecordActionUse("view_flashcard");
-      onViewFlashcard?.();
     } else if (act.action === "quiz_answer" && act.payload?.answer) {
       onSendMessage(act.payload.answer);
     } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
@@ -722,11 +609,10 @@ function ChatMessageItem({
   return (
     <div className={`${className} animate-chat-msg`}>
       {/* Message Content Bubble */}
-      {/* Message Content Bubble */}
       <div className="space-y-2 w-full flex flex-col">
         <div 
           className={
-            msg.flashcardData || msg.storyData
+            msg.storyData
               ? "w-full"
               : `p-4 rounded-2xl w-full ${
                   isUser 
@@ -765,24 +651,6 @@ function ChatMessageItem({
               onAddWord={onAddWord}
               onAddMultipleWords={onAddMultipleWords}
               showToast={showToast}
-            />
-          ) : msg.flashcardData ? (
-            <FlashcardMessageCard
-              data={msg.flashcardData}
-              targetLanguage={targetLanguage}
-              nativeLanguage={nativeLanguage}
-              appLanguage={currentAppLang}
-              ttsConfig={ttsConfig}
-              llmConfig={llmConfig}
-              provider={msg.provider}
-              model={msg.model}
-              responseTimeMs={msg.responseTimeMs}
-              words={words}
-              onUpdateWords={onUpdateWords}
-              onAddWord={onAddWord}
-              onAddMultipleWords={onAddMultipleWords}
-              showToast={showToast}
-              onCardReviewed={(index) => onCardReviewed?.(msg.id, index)}
             />
           ) : (
             <>

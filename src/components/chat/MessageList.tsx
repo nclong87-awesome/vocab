@@ -19,11 +19,11 @@ interface MessageListProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "flashcards_new" | "quiz_only" | "balanced" | "sandwich_quiz",
+    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz",
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
+
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onSuggestCasualReply?: (imageDataUrl: string | null, customPrompt: string) => Promise<void>;
@@ -39,7 +39,6 @@ interface MessageListProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
-  onCardReviewed?: (msgId: string, cardIndex: number | "all") => void;
 }
 
 function MessageList({
@@ -58,7 +57,6 @@ function MessageList({
   onGenerateByTopic,
   startPractice,
   onFixGrammar,
-  onViewFlashcard,
   onAnalyzeImageVocab,
   onSuggestCasualReplyPrompt,
   onSuggestCasualReply,
@@ -74,7 +72,6 @@ function MessageList({
   onUpdateWords,
   onRetryErrorMessage,
   onCancelErrorMessage,
-  onCardReviewed,
 }: MessageListProps) {
   return (
     <div 
@@ -103,7 +100,6 @@ function MessageList({
               onGenerateByTopic={onGenerateByTopic}
               startPractice={startPractice}
               onFixGrammar={onFixGrammar}
-              onViewFlashcard={onViewFlashcard}
               onAnalyzeImageVocab={onAnalyzeImageVocab}
               onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
               onSuggestCasualReply={onSuggestCasualReply}
@@ -117,7 +113,6 @@ function MessageList({
               onUpdateWords={onUpdateWords}
               onRetryErrorMessage={onRetryErrorMessage}
               onCancelErrorMessage={onCancelErrorMessage}
-              onCardReviewed={onCardReviewed}
             />
           </Fragment>
         );

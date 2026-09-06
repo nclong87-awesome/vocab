@@ -19,8 +19,10 @@ export function getReasonDefaultNote(reason: StrengthHistoryReason, delta: numbe
       return "Marked as Learning (0%)";
     case "memory_decay":
       return `Memory strength decayed over time (${sign}%)`;
-    case "flashcard_review":
-      return `Studied flashcard (${sign}%)`;
+    case "immersion_review":
+      return `Contextual immersion review (${sign}%)`;
+    case "study_method":
+      return `Studied with cognitive method (${sign}%)`;
     case "manual_adjust":
       return `Manually updated strength (${sign}%)`;
     default:

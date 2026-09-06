@@ -360,7 +360,7 @@ export default function RequestHistoryModal({
                   <h4 className="text-sm font-semibold text-stone-800">No requests found</h4>
                   <p className="text-xs text-stone-500 mt-1 max-w-xs">
                     {logs.length === 0 
-                      ? "Invocations from Chat, Flashcards, AI Quizzes, and Vocabulary lookups will be logged here automatically."
+                      ? "Invocations from Chat, Vocabulary Studies, AI Quizzes, and Vocabulary lookups will be logged here automatically."
                       : "No requests match the active filter or search query."}
                   </p>
                 </div>

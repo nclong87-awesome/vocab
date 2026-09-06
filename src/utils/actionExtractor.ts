@@ -74,8 +74,8 @@ export function getRemainingWordActions(
           a.action === "start_practice_balanced" ||
           a.action === "start_practice_quiz_only" ||
           a.action === "start_practice" ||
-          a.action === "view_flashcard" ||
-          a.action === "next_flashcard" ||
+          a.action === "start_story_immersion" ||
+          a.action === "next_story" ||
           a.action === "next_quiz")
     )
   );
@@ -89,8 +89,8 @@ export function getRemainingWordActions(
             a.action === "start_practice_balanced" ||
             a.action === "start_practice_quiz_only" ||
             a.action === "start_practice" ||
-            a.action === "view_flashcard" ||
-            a.action === "next_flashcard" ||
+            a.action === "start_story_immersion" ||
+            a.action === "next_story" ||
             a.action === "next_quiz")
       )
     : [];

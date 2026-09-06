@@ -147,14 +147,13 @@ export default function App() {
     handlePromptSuggestCasualReply,
     handleSuggestCasualReply,
     handlePromptFixGrammar,
-    handleViewFlashcard,
+    handleViewStoryImmersion,
     handleShowWordLibraries,
     handleClearChatHistory,
     handleAnalyzeImageVocab,
     handleAddMultipleWords,
     handleRetryErrorMessage,
     handleCancelErrorMessage,
-    handleCardReviewed,
   } = useChat({
     words,
     setWords,
@@ -499,7 +498,7 @@ export default function App() {
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
                     startPractice={startPractice}
                     onFixGrammar={handlePromptFixGrammar}
-                    onViewFlashcard={handleViewFlashcard}
+                    onViewStoryImmersion={handleViewStoryImmersion}
                     onOpenWordLibrary={handleShowWordLibraries}
                     onOpenStudyMethods={(_tab) => handleSetView("methods")}
                     onSelectDefinition={handleSelectDefinition}
@@ -521,7 +520,7 @@ export default function App() {
                     onToast={showToast}
                     onRetryErrorMessage={handleRetryErrorMessage}
                     onCancelErrorMessage={handleCancelErrorMessage}
-                    onCardReviewed={handleCardReviewed}
+
                   />
                 )}
               </motion.div>

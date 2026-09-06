@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, QuizSuggestedWord } from "../types";
 import {
   sendChatMessageService,
@@ -12,16 +12,15 @@ import {
 import { generateImmersionStoryService } from "../services/studyMethodsService";
 import {
   getQuizCandidateWords,
-  getCandidateWordsForFlashcards,
+  getCandidateWordsForImmersion,
   getQuizCandidates,
-  getFlashcardCandidates,
+  getImmersionCandidates,
   isWordLearnedOrStudied,
   sortUnstudiedWordsOldestFirst,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB, getUserPersonalityProfileFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
-import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
@@ -243,10 +242,10 @@ export function useChat({
     );
   };
 
-  // Start the unified Practice flow: checks Quiz candidates first, then Flashcard candidates, or displays no-words message
+  // Start the unified Practice flow: checks Quiz candidates first, then Immersion candidates, or displays no-words message
   const startPractice = async (
     overrideConfig?: LLMConfig,
-    practiceMode: "auto" | "flashcards_new" | "quiz_only" | "balanced" | "sandwich_quiz" = "auto",
+    practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" = "auto",
     options?: { warmupWordIds?: string[] }
   ) => {
     const configToUse = overrideConfig || llmConfig;
@@ -274,10 +273,10 @@ export function useChat({
       return;
     }
 
-    const flashcardCandidates = getFlashcardCandidates(activeWords);
+    const immersionCandidates = getImmersionCandidates(activeWords);
     const dueQuizCandidates = getQuizCandidates(activeWords);
 
-    if (flashcardCandidates.length === 0 && dueQuizCandidates.length === 0) {
+    if (immersionCandidates.length === 0 && dueQuizCandidates.length === 0) {
       const noCandidateMsg: ChatMessage = {
         id: `practice-no-candidates-${Date.now()}`,
         role: "assistant",
@@ -294,9 +293,9 @@ export function useChat({
 
     // When practiceMode is 'auto', present practice session starter overview with details & choice
     if (practiceMode === "auto") {
-      const flashcardCount = flashcardCandidates.length;
+      const immersionCount = immersionCandidates.length;
       const quizCount = dueQuizCandidates.length;
-      const newUnstudiedCount = flashcardCandidates.filter((w) => !isWordLearnedOrStudied(w)).length;
+      const newUnstudiedCount = immersionCandidates.filter((w) => !isWordLearnedOrStudied(w)).length;
 
       const actions: { label: string; action: string }[] = [];
 
@@ -315,10 +314,10 @@ export function useChat({
         });
       }
 
-      if (flashcardCount > 0) {
+      if (immersionCount > 0) {
         actions.push({
-          label: `📖 Story Immersion (${flashcardCount} ${flashcardCount === 1 ? "word" : "words"})`,
-          action: "start_practice_flashcards_new",
+          label: `📖 Story Immersion (${immersionCount} ${immersionCount === 1 ? "word" : "words"})`,
+          action: "start_practice_story_immersion",
         });
       }
 
@@ -332,7 +331,7 @@ export function useChat({
       const choiceMsg: ChatMessage = {
         id: `practice-mode-choice-${Date.now()}`,
         role: "assistant",
-        content: `### 🎯 Practice Session Overview\n\nYou have **${flashcardCount} word(s)** ready for practice${breakdownText}.\n\nHow would you like to practice?`,
+        content: `### 🎯 Practice Session Overview\n\nYou have **${immersionCount} word(s)** ready for practice${breakdownText}.\n\nHow would you like to practice?`,
         timestamp: new Date().toISOString(),
         suggestedActions: actions,
       };
@@ -357,7 +356,7 @@ export function useChat({
         ? coreReviewWords 
         : (studiedNonWarmup.length > 0 ? studiedNonWarmup.slice(0, 3) : nonWarmupWords.slice(0, 3));
 
-      // Prioritize non-warmup words so the practice quiz tests DIFFERENT words from Step 1 flashcard review.
+      // Prioritize non-warmup words so the practice quiz tests DIFFERENT words from initial study review.
       // Fall back to warmupWords ONLY if no other words exist in the user's collection.
       const effectiveQuizWords = fallbackReviewWords.length > 0
         ? fallbackReviewWords
@@ -452,8 +451,8 @@ export function useChat({
 
       if (unstudiedWords.length > 0) {
         warmupCandidates = unstudiedWords.slice(0, 5);
-      } else if (flashcardCandidates.length > 0) {
-        warmupCandidates = flashcardCandidates.slice(0, 5);
+      } else if (immersionCandidates.length > 0) {
+        warmupCandidates = immersionCandidates.slice(0, 5);
       } else {
         warmupCandidates = activeWords.slice(0, 5);
       }
@@ -506,7 +505,7 @@ export function useChat({
         }
         sessionNextActions.push({
           label: "📖 Next Story Practice",
-          action: "view_flashcard",
+          action: "start_practice_story_immersion",
         });
 
         const storyMsg: ChatMessage = {
@@ -525,7 +524,7 @@ export function useChat({
         setChatMessages([storyMsg]);
       } catch (e: any) {
         console.error("Error generating sandwich warm-up story:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "flashcard-error");
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
       } finally {
         setIsTyping(false);
       }
@@ -614,13 +613,13 @@ export function useChat({
       return;
     }
 
-    // Step 2: Search for candidate words for Story Immersion (for flashcards_new mode)
-    let batchStoryCandidates = getCandidateWordsForFlashcards(activeWords, 5);
-    if (practiceMode === "flashcards_new" || unstudiedWords.length > 0) {
+    // Step 2: Search for candidate words for Story Immersion (for story_immersion mode)
+    let batchStoryCandidates = getCandidateWordsForImmersion(activeWords, 5);
+    if (practiceMode === "story_immersion" || unstudiedWords.length > 0) {
       if (unstudiedWords.length > 0) {
         batchStoryCandidates = unstudiedWords.slice(0, 5);
-      } else if (flashcardCandidates.length > 0) {
-        batchStoryCandidates = flashcardCandidates.slice(0, 5);
+      } else if (immersionCandidates.length > 0) {
+        batchStoryCandidates = immersionCandidates.slice(0, 5);
       }
     }
     if (batchStoryCandidates.length === 0 && activeWords.length > 0) {
@@ -671,7 +670,7 @@ export function useChat({
           model: storyResult.model || configForServer?.model,
           responseTimeMs: storyResult.responseTimeMs,
           suggestedActions: [
-            { label: "📖 Next Story Practice", action: "view_flashcard" },
+            { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
             { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
           ],
         };
@@ -679,7 +678,7 @@ export function useChat({
         setChatMessages([storyMsg]);
       } catch (e: any) {
         console.error("Error generating immersion story:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "flashcard-error");
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
       } finally {
         setIsTyping(false);
       }
@@ -979,7 +978,7 @@ export function useChat({
         ? [
             { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
-            { label: t("action_next_flashcard", currentAppLang), action: "view_flashcard" },
+            { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
           ]
         : [
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
@@ -1494,7 +1493,7 @@ export function useChat({
         extractedTopic = topicMatch[1].trim();
       }
 
-      await handleViewFlashcard(configToUse, { topic: extractedTopic, genre, keepHistory: true });
+      await handleViewStoryImmersion(configToUse, { topic: extractedTopic, genre, keepHistory: true });
       return;
     }
 
@@ -2482,7 +2481,7 @@ export function useChat({
     }
   };
 
-  const handleViewFlashcard = async (
+  const handleViewStoryImmersion = async (
     overrideConfig?: LLMConfig,
     options?: { topic?: string; genre?: string; difficulty?: "beginner" | "intermediate" | "advanced"; keepHistory?: boolean }
   ) => {
@@ -2498,21 +2497,21 @@ export function useChat({
 
     if (activeWords.length === 0) {
       const noWordsMsg: ChatMessage = {
-        id: `flashcard-no-words-${Date.now()}`,
+        id: `immersion-no-words-${Date.now()}`,
         role: "assistant",
-        content: t("chat_empty_collection_flashcard_warning", currentAppLang),
+        content: t("chat_quiz_no_words_warning", currentAppLang),
         timestamp: new Date().toISOString(),
       };
       setChatMessages((prev) => options?.keepHistory ? [...prev, noWordsMsg] : [noWordsMsg]);
       return;
     }
 
-    const candidateWords = getCandidateWordsForFlashcards(activeWords, 6);
+    const candidateWords = getCandidateWordsForImmersion(activeWords, 6);
     if (candidateWords.length === 0) {
       const noCandidateMsg: ChatMessage = {
-        id: `flashcard-no-candidates-${Date.now()}`,
+        id: `immersion-no-candidates-${Date.now()}`,
         role: "assistant",
-        content: t("chat_no_words_found_flashcard_warning", currentAppLang),
+        content: t("chat_quiz_no_candidates_warning", currentAppLang),
         timestamp: new Date().toISOString(),
         suggestedActions: [
           { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
@@ -2577,7 +2576,7 @@ export function useChat({
         provider: configForServer?.provider,
         model: configForServer?.model,
         suggestedActions: [
-          { label: "📖 Next Historical Story", action: "view_flashcard" },
+          { label: "📖 Next Historical Story", action: "start_practice_story_immersion" },
           { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
         ],
       };
@@ -2585,7 +2584,7 @@ export function useChat({
       setChatMessages((prev) => options?.keepHistory ? [...prev, storyMsg] : [storyMsg]);
     } catch (e: any) {
       console.error("Error generating immersion story:", e);
-      triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewFlashcard(newConfig, options), "view-flashcard-error");
+      triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewStoryImmersion(newConfig, options), "view-immersion-error");
     } finally {
       setIsTyping(false);
     }
@@ -2627,39 +2626,9 @@ export function useChat({
     setChatMessages([libMsg]);
   };
 
-  const handleCardReviewed = useCallback((msgId: string, cardIndex: number | "all") => {
-    setChatMessages((prev) =>
-      prev.map((m) => {
-        if (m.id === msgId && m.flashcardData) {
-          const totalCards = m.flashcardData.cards?.length || 1;
-          const currentReviewed = new Set(m.flashcardData.reviewedIndices || [0]);
-          if (cardIndex === "all") {
-            for (let i = 0; i < totalCards; i++) {
-              currentReviewed.add(i);
-            }
-          } else if (typeof cardIndex === "number" && cardIndex >= 0 && cardIndex < totalCards) {
-            currentReviewed.add(cardIndex);
-          }
-          if (currentReviewed.size !== (m.flashcardData.reviewedIndices?.length || 0)) {
-            recordLearningInteraction("flashcard_review", { msgId, cardIndex });
-            return {
-              ...m,
-              flashcardData: {
-                ...m.flashcardData,
-                reviewedIndices: Array.from(currentReviewed).sort((a, b) => a - b),
-              },
-            };
-          }
-        }
-        return m;
-      })
-    );
-  }, []);
-
   return {
     chatMessages,
     setChatMessages,
-    handleCardReviewed,
     isTyping,
     activeModelInfo,
     setIsTyping,
@@ -2687,7 +2656,7 @@ export function useChat({
     handleSuggestCasualReply,
     handlePromptFixGrammar,
     handleConversationalFixGrammar,
-    handleViewFlashcard,
+    handleViewStoryImmersion,
     handleShowWordLibraries,
     handleClearChatHistory,
     handleRetryErrorMessage,

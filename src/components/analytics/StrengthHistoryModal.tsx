@@ -111,7 +111,7 @@ export default function StrengthHistoryModal({
         return <span className="bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Memory Decay</span>;
       case "flashcard_review":
       case "flashcard":
-        return <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Flashcard</span>;
+        return <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Study Review</span>;
       case "manual_adjust":
       default:
         return <span className="bg-stone-100 text-stone-700 border border-stone-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Updated</span>;

@@ -24,7 +24,7 @@ interface ChatViewProps {
   onGenerateByTopic: () => void;
   startPractice: () => void;
   onFixGrammar: () => void;
-  onViewFlashcard?: (overrideConfig?: any, options?: any) => void;
+  onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onOpenWordLibrary?: () => void;
   onOpenStudyMethods?: (tab?: string) => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
@@ -41,7 +41,6 @@ interface ChatViewProps {
   onToast?: (msg: string) => void;
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
-  onCardReviewed?: (msgId: string, cardIndex: number | "all") => void;
 }
 
 function ChatView({
@@ -59,7 +58,7 @@ function ChatView({
   onGenerateByTopic,
   startPractice,
   onFixGrammar,
-  onViewFlashcard,
+  onViewStoryImmersion,
   onOpenWordLibrary,
   onOpenStudyMethods,
   onAnalyzeImageVocab,
@@ -76,7 +75,6 @@ function ChatView({
   onToast: onExternalToast,
   onRetryErrorMessage,
   onCancelErrorMessage,
-  onCardReviewed,
 }: ChatViewProps) {
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
@@ -296,10 +294,6 @@ function ChatView({
 
       const lastMsg = messages[messages.length - 1];
 
-      // Flashcard decks have dedicated per-card pronunciation handling inside FlashcardMessageCard
-      if (lastMsg.flashcardData) {
-        return;
-      }
 
       const quizSpeechText = lastMsg.quizSpeechText?.trim();
       const nextQuestionText = lastMsg.nextQuestionSpeechText?.trim();
@@ -453,7 +447,6 @@ function ChatView({
         onGenerateByTopic={onGenerateByTopic}
         startPractice={startPractice}
         onFixGrammar={onFixGrammar}
-        onViewFlashcard={onViewFlashcard}
         onAnalyzeImageVocab={onAnalyzeImageVocab}
         onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
         onSuggestCasualReply={onSuggestCasualReply}
@@ -469,7 +462,6 @@ function ChatView({
         onUpdateWords={onUpdateWords}
         onRetryErrorMessage={onRetryErrorMessage}
         onCancelErrorMessage={onCancelErrorMessage}
-        onCardReviewed={onCardReviewed}
       />
 
       {/* Quick Actions Component */}
@@ -486,7 +478,7 @@ function ChatView({
         onGenerateByTopic={onGenerateByTopic}
         startPractice={startPractice}
         onFixGrammar={onFixGrammar}
-        onViewFlashcard={onViewFlashcard}
+        onViewStoryImmersion={onViewStoryImmersion}
         onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
         onOpenWordLibrary={onOpenWordLibrary}
         onOpenStudyMethods={onOpenStudyMethods}

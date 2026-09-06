@@ -327,10 +327,10 @@ export function isMilestoneRefreshInProgress(): boolean {
   return isAutoRefreshingInProgress;
 }
 
-export type LearningInteractionType = "inquiry" | "quiz" | "word_learned" | "flashcard_review";
+export type LearningInteractionType = "inquiry" | "quiz" | "word_learned" | "study_review";
 
 /**
- * Records a learning interaction (question, quiz completion, word mastered, flashcard review).
+ * Records a learning interaction (question, quiz completion, word mastered, study review).
  * Automatically evaluates the 15-interaction threshold and triggers non-blocking background profiling.
  */
 export function recordLearningInteraction(

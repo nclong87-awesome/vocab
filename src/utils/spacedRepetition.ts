@@ -102,13 +102,13 @@ export function calculateNextReviewIntervalHours(
     if (reason === "quiz_incorrect" || reason === "unmastered") {
       break;
     }
-    if (reason === "quiz_correct" || reason === "flashcard_review" || reason === "mastered") {
+    if (reason === "quiz_correct" || reason === "mastered") {
       consecutiveSuccesses++;
     }
   }
 
   // If calculating for a new correct practice event right now, count it
-  if (overrideReason === "quiz_correct" || overrideReason === "flashcard_review" || overrideReason === "mastered") {
+  if (overrideReason === "quiz_correct" || overrideReason === "mastered") {
     if (lastEntry?.[2] === "quiz_incorrect") {
       consecutiveSuccesses = 1;
     }
@@ -338,7 +338,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   // 2. Filter for words whose dynamic nextReviewDate is reached/due
   const eligibleWords = learnedWords.filter(word => isWordEligibleForReview(word, now));
 
-  // If no eligible words, return [] to allow falling back to flashcard study / word addition
+  // If no eligible words, return [] to allow falling back to study / word addition
   if (eligibleWords.length < 1) {
     return [];
   }
@@ -523,13 +523,13 @@ export function isNewUnstudiedWord(word: Word): boolean {
 }
 
 /**
- * Determines whether a word is eligible as a candidate for flashcard study:
+ * Determines whether a word is eligible as a candidate for immersion/reading study:
  * 1. Unstudied / new words (!isWordLearnedOrStudied) -> ALWAYS eligible immediately.
  * 2. Words with prior study -> eligible when their scheduled review date is reached (isWordEligibleForReview)
  *    or when custom cooldown hours (if specified) have elapsed.
  */
-export function isFlashcardCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
-  // 1. Never studied / brand new words are immediately eligible for initial flashcard introduction
+export function isImmersionCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
+  // 1. Never studied / brand new words are immediately eligible for initial immersion introduction
   if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
     return true;
   }
@@ -545,11 +545,11 @@ export function isFlashcardCandidate(word: Word, now: Date = new Date(), customC
 }
 
 /**
- * Selects candidate words for flashcard study (default up to 3) strictly from words meeting
+ * Selects candidate words for immersion study (default up to 3) strictly from words meeting
  * the dynamic candidate criteria (scheduled date reached, never learned, unresolved quiz mistake, or idle > 7 days).
  * Returns empty array if no words meet the conditions.
  */
-export function getCandidateWordsForFlashcards(
+export function getCandidateWordsForImmersion(
   words: Word[],
   count: number = 3,
   now: Date = new Date(),
@@ -558,7 +558,7 @@ export function getCandidateWordsForFlashcards(
   if (!words || words.length === 0) return [];
 
   // Filter ONLY words that meet the candidate criteria
-  const eligibleWords = words.filter(word => isFlashcardCandidate(word, now, customCooldownHours));
+  const eligibleWords = words.filter(word => isImmersionCandidate(word, now, customCooldownHours));
 
   if (eligibleWords.length === 0) {
     return [];
@@ -594,11 +594,11 @@ export function getCandidateWordsForFlashcards(
 }
 
 /**
- * Selects a candidate word for flashcard viewing strictly from eligible words.
+ * Selects a candidate word for immersion viewing strictly from eligible words.
  */
-export function getCandidateWordForFlashcard(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word | null {
+export function getCandidateWordForImmersion(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word | null {
   if (!words || words.length === 0) return null;
-  const candidates = getCandidateWordsForFlashcards(words, 1, now, customCooldownHours);
+  const candidates = getCandidateWordsForImmersion(words, 1, now, customCooldownHours);
   return candidates[0] || null;
 }
 
@@ -628,15 +628,15 @@ export function getQuizCandidates(words: Word[], now: Date = new Date(), customC
 }
 
 /**
- * Gets all words that are potential candidates for flashcards.
+ * Gets all words that are potential candidates for immersion study.
  */
-export function getFlashcardCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
+export function getImmersionCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  return words.filter(word => isFlashcardCandidate(word, now, customCooldownHours));
+  return words.filter(word => isImmersionCandidate(word, now, customCooldownHours));
 }
 
 /**
- * Gets all unique words that are ready for practice (both Quiz review + Flashcard study).
+ * Gets all unique words that are ready for practice (both Quiz review + Immersion study).
  */
 export function getAllPracticeCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
@@ -647,8 +647,8 @@ export function getAllPracticeCandidates(words: Word[], now: Date = new Date(), 
     practiceMap.set(w.id || w.word, w);
   }
 
-  const flashcardList = getFlashcardCandidates(words, now, customCooldownHours);
-  for (const w of flashcardList) {
+  const immersionList = getImmersionCandidates(words, now, customCooldownHours);
+  for (const w of immersionList) {
     practiceMap.set(w.id || w.word, w);
   }
 

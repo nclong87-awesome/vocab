@@ -60,10 +60,6 @@ main {
   background-color: #fff;
 }
 
-.flashcard-message-card {
-  padding: 0;
-}
-
 @keyframes chatMessageFadeIn {
   from {
     opacity: 0;

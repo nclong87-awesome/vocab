@@ -76,13 +76,13 @@ export default function MethodsOverviewBanner({
             <span className="px-2 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-bold uppercase tracking-wider font-mono">
               Science-Backed Learning
             </span>
-            <span className="text-xs text-stone-300 font-medium">Beyond Brute-Force Flashcards</span>
+            <span className="text-xs text-stone-300 font-medium">Beyond Brute-Force Drilling</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
             <span>Modern Vocabulary Mastery Lab</span>
           </h2>
           <p className="text-xs sm:text-sm text-stone-300 max-w-2xl leading-relaxed">
-            Flashcard drilling isolates words and can induce testing fatigue. Choose any of these 5 evidence-based cognitive strategies to encode words into deep, permanent memory.
+            Rote drilling isolates words and can induce testing fatigue. Choose any of these 5 evidence-based cognitive strategies to encode words into deep, permanent memory.
           </p>
         </div>
 
@@ -142,7 +142,7 @@ export default function MethodsOverviewBanner({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-3.5 border border-stone-200 rounded-lg space-y-1.5">
               <h5 className="font-bold text-stone-900 flex items-center gap-1.5 text-xs">
-                <Brain className="w-4 h-4 text-amber-600" /> Why Flashcards Feel Boring
+                <Brain className="w-4 h-4 text-amber-600" /> Why Rote Drills Feel Boring
               </h5>
               <p className="text-stone-600 leading-relaxed">
                 Brute-force testing triggers evaluation anxiety and relies on shallow rote recall. Without rich contextual, emotional, or spatial anchors, words feel isolated and quickly slip from memory.

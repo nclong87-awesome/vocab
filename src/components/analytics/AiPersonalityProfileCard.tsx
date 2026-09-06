@@ -299,7 +299,7 @@ export default function AiPersonalityProfileCard({
                   )}
                 </div>
                 <p className="text-[11px] text-stone-600 mt-0.5">
-                  Tracks inquiries, quiz completions, and flashcard reviews to continuously update your persona in the background without manual intervention.
+                  Tracks inquiries, quiz completions, and vocabulary reviews to continuously update your persona in the background without manual intervention.
                 </p>
               </div>
             </div>
