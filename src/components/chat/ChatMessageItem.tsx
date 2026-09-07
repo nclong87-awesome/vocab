@@ -1067,8 +1067,8 @@ function ChatMessageItem({
                 </div>
               )}
 
-              {/* Audio clip player card for listening questions */}
-              {msg.audioWord && (
+              {/* Audio clip player card for listening questions (hidden if WordReviewedBanner is shown) */}
+              {msg.audioWord && !answeredWord && (
                 <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 sm:p-3.5 my-2.5 flex items-center justify-between gap-3 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <button

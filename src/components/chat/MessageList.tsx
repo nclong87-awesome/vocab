@@ -75,12 +75,6 @@ function MessageList({
 }: MessageListProps) {
   const targetScrollIndex = React.useMemo(() => {
     if (messages.length === 0) return -1;
-    if (messages.length >= 2) {
-      const secondLast = messages[messages.length - 2];
-      if (secondLast.id.startsWith("quiz-feedback-") || secondLast.answeredQuizWordId) {
-        return messages.length - 2;
-      }
-    }
     return messages.length - 1;
   }, [messages]);
 
