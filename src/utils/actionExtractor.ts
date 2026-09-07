@@ -54,7 +54,8 @@ export function getRemainingWordActions(
           a.action === "select_definition" ||
           a.action === "add_multiplewords" ||
           a.action === "start_sandwich_quiz" ||
-          a.action === "start_practice_balanced")
+          a.action === "start_practice_balanced" ||
+          a.action === "start_practice_confuser_duel")
     )
   );
 
@@ -73,6 +74,7 @@ export function getRemainingWordActions(
         (a.action === "start_sandwich_quiz" ||
           a.action === "start_practice_balanced" ||
           a.action === "start_practice_quiz_only" ||
+          a.action === "start_practice_confuser_duel" ||
           a.action === "start_practice" ||
           a.action === "start_story_immersion" ||
           a.action === "next_story" ||
@@ -88,6 +90,7 @@ export function getRemainingWordActions(
           (a.action === "start_sandwich_quiz" ||
             a.action === "start_practice_balanced" ||
             a.action === "start_practice_quiz_only" ||
+            a.action === "start_practice_confuser_duel" ||
             a.action === "start_practice" ||
             a.action === "start_story_immersion" ||
             a.action === "next_story" ||

@@ -150,7 +150,7 @@ export interface QuizQuestion {
   id: string;
   wordId: string;
   word: string;
-  type: 'definition' | 'translation' | 'sentence' | 'spelling' | 'listening' | 'picture';
+  type: 'definition' | 'translation' | 'sentence' | 'spelling' | 'listening' | 'picture' | 'duel';
   question: string;
   options?: string[]; // For multiple choice
   correctAnswer: string;
@@ -161,6 +161,8 @@ export interface QuizQuestion {
   imageUrl?: string;
   imageUrls?: string[];
   suggestedWords?: (string | QuizSuggestedWord | SuggestedPairedWord)[];
+  confuserWord?: string; // The rival/confuser word being pitted against (for Confuser Duel)
+  contrastRule?: string; // Quick contrast rule/mnemonic explaining the difference
 }
 
 export interface Streak {
@@ -227,6 +229,9 @@ export interface ChatMessage {
   quizFinishedData?: QuizFinishedData;
   wordLibraries?: boolean;
   answeredQuizWordId?: string;
+  isConfuserDuel?: boolean;
+  confuserWord?: string;
+  contrastRule?: string;
   suggestedReplies?: {
     reply: string;
     translation: string;

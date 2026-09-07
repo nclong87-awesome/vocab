@@ -198,6 +198,314 @@ export function generateConfusers(w: string): string[] {
   return Array.from(new Set(confusers)).filter(c => c.toLowerCase() !== w.toLowerCase() && c.trim().length > 1);
 }
 
+export interface ConfuserPairInfo {
+  rival: string;
+  rule: string;
+  exampleWithBlank?: string;
+}
+
+export const CURATED_CONFUSER_PAIRS: Record<string, ConfuserPairInfo> = {
+  "affect": {
+    rival: "effect",
+    rule: "'Affect' is typically a VERB (to influence or produce a change in), whereas 'Effect' is typically a NOUN (the result or consequence).",
+    exampleWithBlank: "The unexpected policy update will directly ______ our project timeline."
+  },
+  "effect": {
+    rival: "affect",
+    rule: "'Effect' is typically a NOUN (the result or consequence), whereas 'Affect' is a VERB (to produce a change in).",
+    exampleWithBlank: "Scientists are researching the environmental ______ of industrial carbon emissions."
+  },
+  "accept": {
+    rival: "except",
+    rule: "'Accept' means to receive or agree to something; 'Except' means excluding, apart from, or other than.",
+    exampleWithBlank: "She was honored to ______ the prestigious award on behalf of the foundation."
+  },
+  "except": {
+    rival: "accept",
+    rule: "'Except' denotes an exclusion or exception; 'Accept' means to receive with consent or approval.",
+    exampleWithBlank: "All team members attended the briefing ______ Marcus, who was traveling."
+  },
+  "borrow": {
+    rival: "lend",
+    rule: "'Borrow' means to take or receive temporarily from someone else; 'Lend' means to give or grant temporary use to someone.",
+    exampleWithBlank: "Could I please ______ your portable microphone for the afternoon session?"
+  },
+  "lend": {
+    rival: "borrow",
+    rule: "'Lend' means to grant temporary use to someone; 'Borrow' means to obtain temporary use from someone.",
+    exampleWithBlank: "The college library will ______ up to five reference laptops each semester."
+  },
+  "advice": {
+    rival: "advise",
+    rule: "'Advice' (with a 'c') is an uncountable NOUN (recommendations); 'Advise' (with an 's') is a VERB (to counsel or guide).",
+    exampleWithBlank: "The senior mentor offered invaluable career ______ to the incoming fellows."
+  },
+  "advise": {
+    rival: "advice",
+    rule: "'Advise' (with an 's') is a VERB meaning to recommend or counsel; 'Advice' (with a 'c') is the NOUN.",
+    exampleWithBlank: "Physicians strongly ______ drinking plenty of electrolytes during endurance runs."
+  },
+  "compliment": {
+    rival: "complement",
+    rule: "'Compliment' (with an 'i') is praise or admiration; 'Complement' (with an 'e') completes or pairs harmoniously with something.",
+    exampleWithBlank: "The keynote speaker received a sincere ______ on the clarity of her slides."
+  },
+  "complement": {
+    rival: "compliment",
+    rule: "'Complement' (with an 'e') means to enhance, complete, or pair well with; 'Compliment' (with an 'i') means praise.",
+    exampleWithBlank: "The crisp citrus dressing was chosen to ______ the flavor of fresh smoked salmon."
+  },
+  "principal": {
+    rival: "principle",
+    rule: "'Principal' refers to the head of an institution or a primary capital sum; 'Principle' is an ethical standard, moral rule, or scientific law.",
+    exampleWithBlank: "The ______ reason for restructuring was to improve cross-functional collaboration."
+  },
+  "principle": {
+    rival: "principal",
+    rule: "'Principle' refers to a core ethical standard or rule; 'Principal' refers to a chief leader or main amount.",
+    exampleWithBlank: "She made it a guiding ______ never to compromise privacy for convenient features."
+  },
+  "sensible": {
+    rival: "sensitive",
+    rule: "'Sensible' means possessing practical wisdom, prudence, and sound judgment; 'Sensitive' means easily affected emotionally or physically delicate.",
+    exampleWithBlank: "Allocating an emergency contingency reserve was a very ______ business decision."
+  },
+  "sensitive": {
+    rival: "sensible",
+    rule: "'Sensitive' describes emotional empathy, responsiveness, or delicate sensors; 'Sensible' means practical and reasonable.",
+    exampleWithBlank: "The optical sensor is remarkably ______ and registers minuscule light variations."
+  },
+  "stationary": {
+    rival: "stationery",
+    rule: "'Stationary' (with an 'a') means motionless or standing still; 'Stationery' (with an 'e' like envelope) means writing materials and paper.",
+    exampleWithBlank: "Commuters grew restless as the electric train remained ______ between stations."
+  },
+  "stationery": {
+    rival: "stationary",
+    rule: "'Stationery' (with 'er' like paper) refers to writing materials; 'Stationary' (with an 'a') means unmoving or fixed.",
+    exampleWithBlank: "The firm ordered luxury embossed ______ for executive correspondence."
+  },
+  "loose": {
+    rival: "lose",
+    rule: "'Loose' (rhymes with goose) means not tight, slack, or unfastened; 'Lose' (rhymes with choose) means to misplace or suffer defeat.",
+    exampleWithBlank: "The mechanic quickly tightened the ______ screw before road testing the vehicle."
+  },
+  "lose": {
+    rival: "loose",
+    rule: "'Lose' is a VERB meaning to misplace, fail to retain, or suffer loss; 'Loose' is an ADJECTIVE meaning unconstrained.",
+    exampleWithBlank: "Be cautious not to ______ your digital transit pass while sightseeing."
+  },
+  "desert": {
+    rival: "dessert",
+    rule: "'Desert' (one 's') is an arid barren territory (or to abandon); 'Dessert' (two 's's for sweet treats) is a course eaten after dinner.",
+    exampleWithBlank: "Endemic cacti have adapted to conserve moisture in the harsh ______ climate."
+  },
+  "dessert": {
+    rival: "desert",
+    rule: "'Dessert' (double 's' for sweet treats) is the sweet course concluding a meal; 'Desert' (single 's') is dry wasteland.",
+    exampleWithBlank: "We enjoyed warm berry cobbler paired with pistachio ice cream for ______."
+  },
+  "historic": {
+    rival: "historical",
+    rule: "'Historic' means famous, momentous, or making history; 'Historical' refers generally to anything situated in or related to past events.",
+    exampleWithBlank: "The peace accord was hailed across continents as a ______ diplomatic breakthrough."
+  },
+  "historical": {
+    rival: "historic",
+    rule: "'Historical' means related to the study or records of the past; 'Historic' denotes an event of monumental historical importance.",
+    exampleWithBlank: "The museum preserves centuries of valuable ______ artifacts and documents."
+  },
+  "economic": {
+    rival: "economical",
+    rule: "'Economic' relates to the economy, commerce, or monetary systems; 'Economical' means thrifty, cost-effective, or avoiding waste.",
+    exampleWithBlank: "The central bank released its quarterly report on national ______ recovery."
+  },
+  "economical": {
+    rival: "economic",
+    rule: "'Economical' means frugal, cheap to operate, or minimizing expense; 'Economic' pertains to macro-financial systems.",
+    exampleWithBlank: "Carpooling with colleagues proved significantly more ______ than driving solo."
+  },
+  "lie": {
+    rival: "lay",
+    rule: "'Lie' is intransitive (to recline yourself, no direct object); 'Lay' is transitive (to put something down, requires an object).",
+    exampleWithBlank: "After traveling across time zones, all I wanted was to ______ down and sleep."
+  },
+  "lay": {
+    rival: "lie",
+    rule: "'Lay' requires a direct object (to place something down); 'Lie' is what a person does on their own without an object.",
+    exampleWithBlank: "Please ______ the porcelain dinner plates carefully on the dining table."
+  },
+  "raise": {
+    rival: "rise",
+    rule: "'Raise' is transitive (to lift something up, takes an object); 'Rise' is intransitive (to move upward by itself, no object).",
+    exampleWithBlank: "Participants were asked to ______ their badges if they needed technical support."
+  },
+  "rise": {
+    rival: "raise",
+    rule: "'Rise' is intransitive (something ascends by itself, e.g. the sun, temperature); 'Raise' requires an agent lifting something.",
+    exampleWithBlank: "At dawn, gentle vapor begins to ______ from the surface of the mountain lake."
+  },
+  "wander": {
+    rival: "wonder",
+    rule: "'Wander' (with an 'a') means to stroll or move without destination; 'Wonder' (with an 'o') means to ponder, feel curiosity, or marvel.",
+    exampleWithBlank: "On weekend mornings, we like to ______ through the vibrant farmers market."
+  },
+  "wonder": {
+    rival: "wander",
+    rule: "'Wonder' means to speculate, be curious, or feel amazement; 'Wander' means physical roaming or strolling.",
+    exampleWithBlank: "Astronomers continue to ______ about the uncharted boundaries of distant galaxies."
+  },
+  "breath": {
+    rival: "breathe",
+    rule: "'Breath' (noun, rhymes with death) is the air taken in; 'Breathe' (verb, rhymes with seethe) is the physical act of respiration.",
+    exampleWithBlank: "Take a deep, steady ______ before delivering your introductory remarks."
+  },
+  "breathe": {
+    rival: "breath",
+    rule: "'Breathe' is the active VERB (to inhale and exhale); 'Breath' is the singular NOUN.",
+    exampleWithBlank: "Stepping into the crisp pine forest allowed the campers to ______ fresh air."
+  },
+  "discreet": {
+    rival: "discrete",
+    rule: "'Discreet' (double 'e' together = prudent and tactful); 'Discrete' (separated 'e's = distinct, separate, individual).",
+    exampleWithBlank: "The executive assistant handled sensitive company inquiries in a very ______ manner."
+  },
+  "discrete": {
+    rival: "discreet",
+    rule: "'Discrete' means detached, individual, and separate; 'Discreet' means tactful, cautious, and confidential.",
+    exampleWithBlank: "The modular system divides complex computing operations into ______ microservices."
+  },
+  "assure": {
+    rival: "ensure",
+    rule: "'Assure' is spoken to a PERSON to relieve anxiety or remove doubts; 'Ensure' means to guarantee an outcome or make certain.",
+    exampleWithBlank: "The flight attendant hastened to ______ the nervous traveler that turbulence was normal."
+  },
+  "ensure": {
+    rival: "assure",
+    rule: "'Ensure' means to make sure an outcome or standard happens; 'Assure' is directed to a person to instill confidence.",
+    exampleWithBlank: "Run automated test suites regularly to ______ that system deployments remain stable."
+  },
+  "allusion": {
+    rival: "illusion",
+    rule: "'Allusion' is an indirect literary, artistic, or historical reference; 'Illusion' is an optical deception, trick, or false impression.",
+    exampleWithBlank: "The novelist wove a subtle ______ to Shakespeare's tragic plays into the dialogue."
+  },
+  "illusion": {
+    rival: "allusion",
+    rule: "'Illusion' is an optical trick or deceptive appearance; 'Allusion' is a brief indirect reference.",
+    exampleWithBlank: "Clever mirror placement gives the small studio apartment the ______ of expansive space."
+  },
+  "emigrate": {
+    rival: "immigrate",
+    rule: "'Emigrate' (from) means to depart your homeland; 'Immigrate' (to/into) means to enter and settle in a new country.",
+    exampleWithBlank: "Seeking new academic opportunities, his family decided to ______ from Norway."
+  },
+  "immigrate": {
+    rival: "emigrate",
+    rule: "'Immigrate' means to move into a foreign country to settle permanently; 'Emigrate' means to leave one's home country.",
+    exampleWithBlank: "She completed her postgraduate studies before applying to ______ to New Zealand."
+  },
+  "conscious": {
+    rival: "conscience",
+    rule: "'Conscious' is an ADJECTIVE meaning awake, alert, and aware; 'Conscience' is a NOUN for one's moral sense of right and wrong.",
+    exampleWithBlank: "The paramedic verified that the driver was fully ______ and aware of his surroundings."
+  },
+  "conscience": {
+    rival: "conscious",
+    rule: "'Conscience' is the internal moral compass guiding ethical choices; 'Conscious' means awake and sensory-aware.",
+    exampleWithBlank: "He made a sizable charitable donation to ease his troubled ______."
+  },
+  "collaborate": {
+    rival: "corroborate",
+    rule: "'Collaborate' means to work together jointly; 'Corroborate' means to confirm, support, or authenticate with evidence.",
+    exampleWithBlank: "Graphic designers and copywriters must ______ closely on launch campaigns."
+  },
+  "corroborate": {
+    rival: "collaborate",
+    rule: "'Corroborate' means to verify or authenticate with evidence; 'Collaborate' means to partner or work together.",
+    exampleWithBlank: "Independent sensor telemetry was able to ______ the pilot's incident report."
+  }
+};
+
+/**
+ * Generate a Confuser Duel (Contrast Match) question for a word.
+ * Designed specifically for unlearning words, false friends, and close rivals.
+ */
+export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string): QuizQuestion {
+  const cleanWord = (word.word || "").trim().toLowerCase();
+  
+  // 1. Check curated high-frequency confuser pairs
+  let confuserWord = "";
+  let contrastRule = "";
+  let exampleWithBlank = "";
+
+  if (CURATED_CONFUSER_PAIRS[cleanWord]) {
+    const pair = CURATED_CONFUSER_PAIRS[cleanWord];
+    confuserWord = pair.rival;
+    contrastRule = pair.rule;
+    exampleWithBlank = pair.exampleWithBlank || "";
+  } else {
+    // Check if cleanWord is a rival in any curated pair
+    for (const [key, pair] of Object.entries(CURATED_CONFUSER_PAIRS)) {
+      if (pair.rival.toLowerCase() === cleanWord) {
+        confuserWord = key;
+        contrastRule = pair.rule;
+        break;
+      }
+    }
+  }
+
+  // 2. Fallback to dynamic confuser generation if not found in curated dictionary
+  if (!confuserWord) {
+    const dynamicConfusers = generateConfusers(word.word);
+    if (dynamicConfusers.length > 0) {
+      confuserWord = dynamicConfusers[0];
+    } else {
+      confuserWord = word.word.endsWith('e') ? word.word.slice(0, -1) : `${word.word}s`;
+    }
+    contrastRule = `Target '${word.word}' vs rival '${confuserWord}': notice the exact semantic distinction, part of speech, and context to unlearn any confusion.`;
+  }
+
+  // 3. Build the duel sentence with blank
+  let sentenceText = exampleWithBlank;
+  if (!sentenceText) {
+    if (word.example) {
+      const regex = new RegExp(`\\b${word.word}\\b`, "i");
+      sentenceText = word.example.replace(regex, "______");
+    } else {
+      sentenceText = `Choose the precise term: "The team needed to ______ the process accurately."`;
+    }
+  }
+
+  const questionText = `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"${sentenceText}"`;
+
+  // Contrast options: Target word vs Rival confuser (shuffled)
+  const options = [word.word, confuserWord].sort(() => 0.5 - Math.random());
+
+  return {
+    id: `duel-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
+    wordId: word.id,
+    word: word.word,
+    type: 'duel',
+    question: questionText,
+    options,
+    correctAnswer: word.word,
+    hint: `Contrast Duel: '${word.word}' vs '${confuserWord}'. Pay attention to the subtle semantic boundary!`,
+    sentence: word.example || sentenceText.replace("______", word.word),
+    sentenceTranslation: word.exampleTranslation,
+    confuserWord,
+    contrastRule
+  };
+}
+
+/**
+ * Generate a full suite of Confuser Duel questions for the given words.
+ */
+export function generateConfuserDuelQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
+  if (!wordList || wordList.length === 0) return [];
+  return wordList.map((word) => generateDuelQuestionForWord(word, targetLanguage));
+}
+
 // Rule-based Quiz Question Generator with strict distractor logic & target-language restrictions
 export function generateQuizQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
   if (!wordList || wordList.length === 0) return [];
@@ -209,13 +517,21 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
   const pictureQuestionIndex = Math.floor(Math.random() * allWords.length);
 
   allWords.forEach((word, index) => {
-    const types: ('definition' | 'sentence' | 'listening' | 'picture')[] = [
+    const types: ('definition' | 'sentence' | 'listening' | 'picture' | 'duel')[] = [
       'definition', 
       'sentence',
       'listening',
-      'picture'
+      'picture',
+      'duel'
     ];
     let type = index === pictureQuestionIndex ? 'picture' : types[Math.floor(Math.random() * types.length)];
+
+    // If type is duel, generate a Confuser Duel question directly
+    if (type === 'duel') {
+      const duelQ = generateDuelQuestionForWord(word, targetLanguage);
+      generated.push(duelQ);
+      return;
+    }
 
     // If definition contains native non-target language, avoid definition type to preserve target language restriction
     if (type === 'definition' && containsNonTargetLanguage(word.definition, targetLanguage)) {

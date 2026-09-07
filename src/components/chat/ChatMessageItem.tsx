@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2
+  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2, Swords
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -35,7 +35,7 @@ interface ChatMessageItemProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz",
+    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "confuser_duel",
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
@@ -373,6 +373,7 @@ function ChatMessageItem({
             a.action === "copy_sentence" ||
             a.action === "start_practice_balanced" ||
             a.action === "start_practice_quiz_only" ||
+            a.action === "start_practice_confuser_duel" ||
             a.action === "start_practice" ||
             a.action === "next_quiz"
         );
@@ -549,6 +550,9 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_balanced") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "balanced");
+    } else if (act.action === "start_practice_confuser_duel") {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "confuser_duel");
     } else if (act.action === "start_sandwich_quiz") {
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
@@ -700,6 +704,44 @@ function ChatMessageItem({
                       <span>{copiedKey === `fixed-${msg.id}` ? t("copied", currentAppLang) : t("copy", currentAppLang)}</span>
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Confuser Duel (Contrast Match) Banner */}
+              {(msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && (
+                <div className="mb-3.5 p-3.5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-300/90 rounded-xl shadow-2xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500 text-stone-950 font-black flex items-center justify-center text-sm shadow-xs shrink-0">
+                        <Swords className="w-4 h-4 text-stone-950" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-stone-950 uppercase tracking-wide">
+                            Confuser Duel
+                          </span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                            Contrast Match
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-700 font-medium line-clamp-1 mt-0.5">
+                          Break fossilized habits: choose the right word against its common confuser
+                        </p>
+                      </div>
+                    </div>
+                    {msg.confuserWord && (
+                      <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 bg-white/90 rounded-md border border-amber-300 text-amber-950 shadow-3xs shrink-0">
+                        <span>Rival:</span>
+                        <span className="text-rose-700 font-black underline underline-offset-2 decoration-rose-300">{msg.confuserWord}</span>
+                      </div>
+                    )}
+                  </div>
+                  {msg.contrastRule && (
+                    <div className="mt-2.5 pt-2 border-t border-amber-200/80 text-[11px] text-stone-800 font-medium flex items-start gap-1.5">
+                      <span className="text-amber-700 font-bold shrink-0">💡 Rule:</span>
+                      <span className="leading-snug">{msg.contrastRule}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1092,6 +1134,8 @@ function ChatMessageItem({
               const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
               const isSandwichQuiz = act.action === "start_sandwich_quiz";
               const isSandwichQuizLocked = isSandwichQuiz && !isAllWarmupReviewed;
+              const isDuelPracticeAction = act.action === "start_practice_confuser_duel";
+              const isDuelQuizAction = (msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && act.action === "quiz_answer";
               const currentPayload = customActionPayloads[aIdx] || act.payload;
 
               return (
@@ -1129,6 +1173,10 @@ function ChatMessageItem({
                         ? "bg-stone-100/95 hover:bg-stone-200/80 border border-stone-300/80 text-stone-600 cursor-pointer"
                         : isSandwichQuiz
                         ? "bg-amber-400 hover:bg-amber-300 focus:bg-amber-300 border border-amber-500/80 text-stone-950 font-bold shadow-xs cursor-pointer"
+                        : isDuelPracticeAction
+                        ? "bg-amber-50/80 hover:bg-amber-100 border border-amber-300/90 text-stone-900 font-bold shadow-xs cursor-pointer"
+                        : isDuelQuizAction
+                        ? "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-amber-200/80 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
                         : isNextQ
                         ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold cursor-pointer"
                         : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
@@ -1139,6 +1187,8 @@ function ChatMessageItem({
                       <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
                     ) : isSandwichQuiz ? (
                       <Sparkles className="w-3.5 h-3.5 text-stone-950 animate-pulse shrink-0 mt-0.5" />
+                    ) : (isDuelPracticeAction || isDuelQuizAction) ? (
+                      <Swords className="w-3.5 h-3.5 text-amber-600 group-hover:text-amber-400 shrink-0 mt-0.5" />
                     ) : isNextQ ? (
                       <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                     ) : (

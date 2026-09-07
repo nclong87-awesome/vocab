@@ -19,7 +19,7 @@ interface MessageListProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz",
+    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "confuser_duel",
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
