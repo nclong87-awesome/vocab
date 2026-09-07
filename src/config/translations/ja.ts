@@ -3,7 +3,6 @@ import { LanguageTranslations } from "../i18n";
 export const jaTranslations: LanguageTranslations = {
     app_title: "AI単語学習",
     nav_collection: "単語帳",
-    nav_methods: "学習メソッド",
     nav_analytics: "分析",
     nav_settings: "設定",
     nav_dashboard: "ダッシュボード",

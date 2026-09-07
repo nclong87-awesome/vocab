@@ -22,7 +22,6 @@ import ChatView from "./components/ChatView";
 import CollectionManager from "./components/CollectionManager";
 import SettingsView from "./components/SettingsView";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
-import StudyMethodsHub from "./components/studyMethods/StudyMethodsHub";
 import LlmLoginModal from "./components/LlmLoginModal";
 import OnboardingModal from "./components/OnboardingModal";
 import WordAddModal from "./components/chat/WordAddModal";
@@ -37,8 +36,8 @@ import { useVocabulary } from "./hooks/useVocabulary";
 import { useChat } from "./hooks/useChat";
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<"chatview" | "manage" | "methods" | "analytics" | "settings" >("chatview");
-  const [sidePanelTab, setSidePanelTab] = useState<"collection" | "methods" | "analytics" | "settings">("collection");
+  const [currentView, setCurrentView] = useState<"chatview" | "manage" | "analytics" | "settings">("chatview");
+  const [sidePanelTab, setSidePanelTab] = useState<"collection" | "analytics" | "settings">("collection");
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
@@ -97,14 +96,9 @@ export default function App() {
         showToast(e.detail.message);
       }
     };
-    const handleOpenMethods = () => {
-      handleSetView("methods");
-    };
     window.addEventListener("vocab-show-toast", handleToastEvent);
-    window.addEventListener("vocab-open-methods", handleOpenMethods);
     return () => {
       window.removeEventListener("vocab-show-toast", handleToastEvent);
-      window.removeEventListener("vocab-open-methods", handleOpenMethods);
     };
   }, [showToast]);
 
@@ -282,12 +276,9 @@ export default function App() {
   }, [setLlmConfig, setTargetLanguage, setNativeLanguage, setIsLlmModalOpen]);
 
   // Unified setter to map old page views to side panel operations
-  const handleSetView = (view: "chatview" | "manage" | "methods" | "analytics" | "settings") => {
+  const handleSetView = (view: "chatview" | "manage" | "analytics" | "settings") => {
     if (view === "manage") {
       setSidePanelTab("collection");
-      setIsSidePanelOpen(true);
-    } else if (view === "methods") {
-      setSidePanelTab("methods");
       setIsSidePanelOpen(true);
     } else if (view === "analytics") {
       setSidePanelTab("analytics");
@@ -405,19 +396,6 @@ export default function App() {
             />
           )}
 
-          {sidePanelTab === "methods" && (
-            <StudyMethodsHub
-              words={words}
-              targetLanguage={targetLanguage}
-              nativeLanguage={nativeLanguage}
-              appLanguage={appLanguage}
-              ttsConfig={ttsConfig}
-              llmConfig={llmConfig}
-              onUpdateWords={handleUpdateWords}
-              onAddWord={handleOpenAddWordModal}
-            />
-          )}
-
           {sidePanelTab === "analytics" && (
             <AnalyticsDashboard
               words={words}
@@ -500,7 +478,6 @@ export default function App() {
                     onFixGrammar={handlePromptFixGrammar}
                     onViewStoryImmersion={handleViewStoryImmersion}
                     onOpenWordLibrary={handleShowWordLibraries}
-                    onOpenStudyMethods={(_tab) => handleSetView("methods")}
                     onSelectDefinition={handleSelectDefinition}
                     onClearHistory={handleClearChatHistory}
                     onSwitchProvider={handleSwitchProviderQuick}

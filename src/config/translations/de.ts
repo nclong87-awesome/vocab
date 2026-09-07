@@ -3,7 +3,6 @@ import { LanguageTranslations } from "../i18n";
 export const deTranslations: LanguageTranslations = {
     app_title: "Wortschatz Lernen KI",
     nav_collection: "Sammlung",
-    nav_methods: "Lernmethoden",
     nav_analytics: "Analysen",
     nav_settings: "Einstellungen",
     nav_dashboard: "Übersicht",

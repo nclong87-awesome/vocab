@@ -53,6 +53,7 @@ export function getRemainingWordActions(
           a.action === "confirm_save_word" ||
           a.action === "select_definition" ||
           a.action === "add_multiplewords" ||
+          a.action === "start_sandwich_duel" ||
           a.action === "start_sandwich_quiz" ||
           a.action === "start_practice_balanced" ||
           a.action === "start_practice_confuser_duel")
@@ -61,7 +62,7 @@ export function getRemainingWordActions(
 
   const wordsList = Array.isArray(currentWords) ? currentWords : [];
 
-  // Extract non-word session navigation actions (e.g. start_sandwich_quiz) to preserve them across word additions.
+  // Extract non-word session navigation actions (e.g. start_sandwich_duel, start_sandwich_quiz) to preserve them across word additions.
   // Search backwards across all messages so intermediate messages without session actions don't lose the session action.
   const lastMsgWithSessionAction = reversed.find((m) =>
     m &&
@@ -71,7 +72,8 @@ export function getRemainingWordActions(
       (a: any) =>
         a &&
         typeof a === "object" &&
-        (a.action === "start_sandwich_quiz" ||
+        (a.action === "start_sandwich_duel" ||
+          a.action === "start_sandwich_quiz" ||
           a.action === "start_practice_balanced" ||
           a.action === "start_practice_quiz_only" ||
           a.action === "start_practice_confuser_duel" ||
@@ -87,7 +89,8 @@ export function getRemainingWordActions(
         (a: any) =>
           a &&
           typeof a === "object" &&
-          (a.action === "start_sandwich_quiz" ||
+          (a.action === "start_sandwich_duel" ||
+            a.action === "start_sandwich_quiz" ||
             a.action === "start_practice_balanced" ||
             a.action === "start_practice_quiz_only" ||
             a.action === "start_practice_confuser_duel" ||
@@ -100,6 +103,12 @@ export function getRemainingWordActions(
 
   const sessionActions = rawSessionActions
     .map((a: any) => {
+      if (a.action === "start_sandwich_duel") {
+        return {
+          ...a,
+          label: a.label || t("chat_sandwich_start_duel_action", appLang),
+        };
+      }
       if (a.action === "start_sandwich_quiz") {
         return {
           ...a,

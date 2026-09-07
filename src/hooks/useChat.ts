@@ -9,7 +9,7 @@ import {
   analyzeImageVocabService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { generateImmersionStoryService } from "../services/studyMethodsService";
+import { generateImmersionStoryService } from "../services/immersionStoryService";
 import {
   getQuizCandidateWords,
   getCandidateWordsForImmersion,
@@ -30,7 +30,6 @@ import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection } from "../utils/wordNormalization";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
-import { CURATED_CONFUSER_PAIRS, generateConfuserDuelQuestions } from "../utils/quizGenerator";
 
 interface UseChatProps {
   words: Word[];
@@ -132,6 +131,7 @@ export function useChat({
     correctIds: string[];
     incorrectIds: string[];
     isSandwichSession?: boolean;
+    sandwichStep?: 2 | 3;
     warmupWordIds?: string[];
   } | null>(null);
 
@@ -246,7 +246,7 @@ export function useChat({
   // Start the unified Practice flow: checks Quiz candidates first, then Immersion candidates, or displays no-words message
   const startPractice = async (
     overrideConfig?: LLMConfig,
-    practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "confuser_duel" = "auto",
+    practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" = "auto",
     options?: { warmupWordIds?: string[] }
   ) => {
     const configToUse = overrideConfig || llmConfig;
@@ -277,7 +277,14 @@ export function useChat({
     const immersionCandidates = getImmersionCandidates(activeWords);
     const dueQuizCandidates = getQuizCandidates(activeWords);
 
-    if (practiceMode !== "confuser_duel" && immersionCandidates.length === 0 && dueQuizCandidates.length === 0) {
+    if (
+      practiceMode !== "confuser_duel" &&
+      practiceMode !== "sandwich_duel" &&
+      practiceMode !== "sandwich_quiz" &&
+      practiceMode !== "balanced" &&
+      immersionCandidates.length === 0 &&
+      dueQuizCandidates.length === 0
+    ) {
       const noCandidateMsg: ChatMessage = {
         id: `practice-no-candidates-${Date.now()}`,
         role: "assistant",
@@ -303,14 +310,18 @@ export function useChat({
       // Balanced Sandwich Loop is the premier, scientifically balanced learning mode
       if (activeWords.length >= 2) {
         actions.push({
-          label: `🥪 Smart Balanced Session`,
+          label: `🥪 Smart Balanced Session (Warm-up ➔ Duel ➔ Quiz)`,
           action: "start_practice_balanced",
         });
       }
 
-      if (activeWords.length >= 1) {
+      const confuserCount = immersionCount > 0 ? immersionCount : activeWords.length;
+      if (confuserCount >= 1) {
         actions.push({
-          label: `⚔️ Confuser Duel (Contrast Match)`,
+          label: t("action_confuser_duel_count", currentAppLang, {
+            count: String(confuserCount),
+            label: confuserCount === 1 ? "word" : "words",
+          }),
           action: "start_practice_confuser_duel",
         });
       }
@@ -347,7 +358,105 @@ export function useChat({
       return;
     }
 
-    // --- SANDWICH LOOP STEP 2 & 3: Retrieval Quiz (Core Reviews + Immediate Warm-up Check) ---
+    // --- BALANCED LEARNING LOOP STEP 2: Confuser Duel (Contrast Match) ---
+    if (practiceMode === "sandwich_duel") {
+      const warmupIds = new Set(options?.warmupWordIds || []);
+      const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
+
+      // Prioritize the warm-up words from Step 1 to test contrast and eliminate confusions
+      let duelWords = [...warmupWords];
+      if (duelWords.length === 0) {
+        duelWords = getCandidateWordsForImmersion(activeWords, 4);
+      }
+      if (duelWords.length < 4) {
+        const existingIds = new Set(duelWords.map((w) => w.id));
+        const unstudied = sortUnstudiedWordsOldestFirst(activeWords.filter((w) => !isWordLearnedOrStudied(w)));
+        for (const w of [...unstudied, ...dueQuizCandidates, ...activeWords]) {
+          if (!existingIds.has(w.id)) {
+            duelWords.push(w);
+            existingIds.add(w.id);
+            if (duelWords.length >= 4) break;
+          }
+        }
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const configForServer = startTypingWithConfig(configToUse);
+
+      try {
+        const quizResult = await generateAiQuizQuestionsService({
+          words: duelWords.slice(0, 4),
+          targetLanguage,
+          nativeLanguage,
+          llmConfig: configForServer,
+          stats,
+          signal: controller.signal,
+          practiceMode: "sandwich_duel",
+        });
+
+        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
+        const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
+        const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
+
+        if (!generatedQuestions || generatedQuestions.length === 0) {
+          throw new Error("No duel questions could be generated.");
+        }
+
+        const firstQ = generatedQuestions[0];
+
+        setActiveQuiz({
+          questions: generatedQuestions,
+          currentIndex: 0,
+          score: 0,
+          correctIds: [],
+          incorrectIds: [],
+          isSandwichSession: true,
+          sandwichStep: 2,
+          warmupWordIds: Array.from(warmupIds.size > 0 ? warmupIds : duelWords.map((w) => w.id)),
+        });
+
+        const introMsg: ChatMessage = {
+          id: `sandwich-duel-start-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_sandwich_duel_intro", currentAppLang, {
+            total: String(generatedQuestions.length),
+            question: firstQ.question,
+          }),
+          timestamp: new Date().toISOString(),
+          audioWord: undefined,
+          quizSpeechText: firstQ.question,
+          isConfuserDuel: true,
+          confuserWord: firstQ.confuserWord,
+          contrastRule: firstQ.contrastRule,
+          suggestedActions: firstQ.options?.map((opt: any) => ({
+            label: opt,
+            action: "quiz_answer",
+            payload: { answer: opt, wordId: firstQ.wordId },
+          })) || [
+            { label: firstQ.correctAnswer, action: "quiz_answer", payload: { answer: firstQ.correctAnswer, wordId: firstQ.wordId } },
+          ],
+          provider,
+          model,
+          responseTimeMs,
+        };
+
+        setChatMessages([introMsg]);
+      } catch (e: any) {
+        if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
+          console.log("Duel generation was cancelled by user.");
+          return;
+        }
+        console.error("Error starting sandwich duel:", e);
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode, options), "duel-error");
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
+
+    // --- BALANCED LEARNING LOOP STEP 3: Retrieval Quiz (Core Reviews + Immediate Warm-up Check) ---
     if (practiceMode === "sandwich_quiz") {
       const warmupIds = new Set(options?.warmupWordIds || []);
       const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
@@ -364,11 +473,18 @@ export function useChat({
         ? coreReviewWords 
         : (studiedNonWarmup.length > 0 ? studiedNonWarmup.slice(0, 3) : nonWarmupWords.slice(0, 3));
 
-      // Prioritize non-warmup words so the practice quiz tests DIFFERENT words from initial study review.
-      // Fall back to warmupWords ONLY if no other words exist in the user's collection.
-      const effectiveQuizWords = fallbackReviewWords.length > 0
-        ? fallbackReviewWords
-        : (warmupWords.length > 0 ? warmupWords : activeWords.slice(0, 5));
+      // Build balanced session quiz words:
+      // Combine Core Review words (up to 3) with Warm-up words (up to 2) for immediate retention check
+      const selectedWarmup = warmupWords.slice(0, 2);
+      const combinedWords = [...fallbackReviewWords.slice(0, 3)];
+      for (const w of selectedWarmup) {
+        if (!combinedWords.some((cw) => cw.id === w.id)) {
+          combinedWords.push(w);
+        }
+      }
+      const effectiveQuizWords = combinedWords.length > 0
+        ? combinedWords
+        : (fallbackReviewWords.length > 0 ? fallbackReviewWords : activeWords.slice(0, 5));
 
       const actualReviewCount = fallbackReviewWords.length;
       const actualWarmupCount = effectiveQuizWords.filter((w) => warmupIds.has(w.id)).length;
@@ -385,6 +501,7 @@ export function useChat({
           llmConfig: configForServer,
           stats,
           signal: controller.signal,
+          practiceMode: "sandwich_quiz",
         });
 
         const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
@@ -398,7 +515,11 @@ export function useChat({
 
         const firstQ = generatedQuestions[0];
         const isFirstQWarmup = warmupIds.has(firstQ.wordId);
-        const qTag = isFirstQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang);
+        const qTag = firstQ.type === "duel"
+          ? t("chat_sandwich_q_duel_tag", currentAppLang)
+          : isFirstQWarmup
+          ? t("chat_sandwich_q_warmup_tag", currentAppLang)
+          : t("chat_sandwich_q_review_tag", currentAppLang);
 
         setActiveQuiz({
           questions: generatedQuestions,
@@ -407,6 +528,7 @@ export function useChat({
           correctIds: [],
           incorrectIds: [],
           isSandwichSession: true,
+          sandwichStep: 3,
           warmupWordIds: Array.from(warmupIds),
         });
 
@@ -498,19 +620,12 @@ export function useChat({
           return updatedWords;
         });
 
-        const warmupIds = new Set(warmupCandidates.map((w) => w.id));
-        const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
-        const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
-        const hasQuizEligibleWords = quizCandidates.length > 0 || getQuizCandidates(activeWords).length > 0;
-
         const sessionNextActions: any[] = [];
-        if (hasQuizEligibleWords) {
-          sessionNextActions.push({
-            label: t("chat_sandwich_start_quiz_action", currentAppLang),
-            action: "start_sandwich_quiz",
-            payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
-          });
-        }
+        sessionNextActions.push({
+          label: t("chat_sandwich_start_duel_action", currentAppLang),
+          action: "start_sandwich_duel",
+          payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
+        });
         sessionNextActions.push({
           label: "📖 Next Story Practice",
           action: "start_practice_story_immersion",
@@ -519,7 +634,7 @@ export function useChat({
         const storyMsg: ChatMessage = {
           id: `sandwich-warmup-story-${Date.now()}`,
           role: "assistant",
-          content: `### 🥪 Step 1 Warm-up: Contextual Story Immersion\n\nRead through the graded story below to acquire **${warmupCandidates.length} target words** naturally in rich context with dual translation and one-click sentence mining.`,
+          content: `### 🥪 Step 1 Warm-up: Contextual Story Immersion\n\nRead through the graded story below to acquire **${warmupCandidates.length} target words** naturally in rich context with dual translation and one-click sentence mining.\n\nNext, advance to **Step 2: ⚔️ Confuser Duel**, followed by **Step 3: 🎯 Practice Quiz**!`,
           timestamp: new Date().toISOString(),
           audioWord: warmupCandidates[0]?.word,
           storyData: storyResult,
@@ -541,50 +656,55 @@ export function useChat({
 
     // --- CONFUSER DUEL (CONTRAST MATCH) MODE ---
     if (practiceMode === "confuser_duel") {
-      // Prioritize words that have curated confusers or lowest strength (fossilized errors / unlearning targets)
-      const sortedCandidates = [...activeWords].sort((a, b) => {
-        const aWord = a.word.toLowerCase().trim();
-        const bWord = b.word.toLowerCase().trim();
-        const aHasCurated = CURATED_CONFUSER_PAIRS[aWord] ? 1 : 0;
-        const bHasCurated = CURATED_CONFUSER_PAIRS[bWord] ? 1 : 0;
-        if (aHasCurated !== bHasCurated) return bHasCurated - aHasCurated;
-        return (a.strength || 0) - (b.strength || 0);
-      });
-      const duelWords = sortedCandidates.slice(0, 5);
+      // Target word selection logic using the flashcard review priority:
+      // 1. Words with unresolved quiz errors (urgent remedial review)
+      // 2. Never learned / unreviewed words chronologically FIFO (oldest added first)
+      // 3. Spaced repetition due reviews (scheduled date reached, memory decay, or idle > 7 days)
+      let duelWords = getCandidateWordsForImmersion(activeWords, 5);
+
+      if (duelWords.length === 0) {
+        const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+        const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
+        if (unstudiedWords.length > 0) {
+          duelWords = unstudiedWords.slice(0, 5);
+        } else if (immersionCandidates.length > 0) {
+          duelWords = immersionCandidates.slice(0, 5);
+        } else {
+          duelWords = activeWords.slice(0, 5);
+        }
+      } else if (duelWords.length < 5 && activeWords.length > duelWords.length) {
+        // Supplement with remaining unstudied/due/active words to reach up to 5 words
+        const existingIds = new Set(duelWords.map((w) => w.id));
+        const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+        const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
+        for (const w of [...unstudiedWords, ...immersionCandidates, ...activeWords]) {
+          if (!existingIds.has(w.id)) {
+            duelWords.push(w);
+            existingIds.add(w.id);
+            if (duelWords.length >= 5) break;
+          }
+        }
+      }
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const configForServer = startTypingWithConfig(configToUse);
 
       try {
-        let generatedQuestions: QuizQuestion[] = [];
-        let provider: string | undefined;
-        let model: string | undefined;
-        let responseTimeMs: number | undefined;
+        const quizResult = await generateAiQuizQuestionsService({
+          words: duelWords,
+          targetLanguage,
+          nativeLanguage,
+          llmConfig: configForServer,
+          stats,
+          signal: controller.signal,
+          practiceMode: "confuser_duel",
+        });
 
-        try {
-          const quizResult = await generateAiQuizQuestionsService({
-            words: duelWords,
-            targetLanguage,
-            nativeLanguage,
-            llmConfig: configForServer,
-            stats,
-            signal: controller.signal,
-            practiceMode: "confuser_duel",
-          });
-
-          generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
-          provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
-          model = Array.isArray(quizResult) ? undefined : quizResult?.model;
-          responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
-        } catch (aiErr) {
-          console.warn("AI Duel generation failed, using curated generator fallback:", aiErr);
-          generatedQuestions = generateConfuserDuelQuestions(duelWords, targetLanguage);
-        }
-
-        if (!generatedQuestions || generatedQuestions.length === 0) {
-          generatedQuestions = generateConfuserDuelQuestions(duelWords, targetLanguage);
-        }
+        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
+        const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
+        const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
 
         if (!generatedQuestions || generatedQuestions.length === 0) {
           throw new Error("No duel questions could be generated.");
@@ -951,7 +1071,7 @@ export function useChat({
       const nextQ = activeQuiz.questions[nextIndex];
       const isNextQWarmup = activeQuiz.isSandwichSession && activeQuiz.warmupWordIds?.includes(nextQ.wordId);
       const qTag = activeQuiz.isSandwichSession
-        ? ` (${isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
+        ? ` (${nextQ.type === "duel" ? t("chat_sandwich_q_duel_tag", currentAppLang) : isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
         : "";
 
       setActiveQuiz({
@@ -990,7 +1110,9 @@ export function useChat({
       setChatMessages((prev) => [...prev, nextMsg]);
     } else {
       const totalQs = activeQuiz.questions.length;
-      const wasSandwich = activeQuiz.isSandwichSession;
+      const wasSandwichStep2 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 2);
+      const wasSandwich = Boolean(activeQuiz.isSandwichSession);
+      const sandwichWarmupIds = activeQuiz.warmupWordIds || [];
       setActiveQuiz(null);
 
       handleFinishQuiz(newScore, totalQs);
@@ -1054,7 +1176,14 @@ export function useChat({
 
       const top3SuggestedWords = allSuggestedWords.slice(0, 3);
 
-      let finishedContent = wasSandwich
+      let finishedContent = wasSandwichStep2
+        ? t("chat_sandwich_step2_finished_msg", currentAppLang, {
+            feedback: feedback,
+            score: String(newScore),
+            total: String(totalQs),
+            accuracy: String(Math.round((newScore / totalQs) * 100)),
+          })
+        : wasSandwich
         ? t("chat_sandwich_finished_msg", currentAppLang, {
             feedback: feedback,
             score: String(newScore),
@@ -1086,16 +1215,26 @@ export function useChat({
         payload: { word: sw.word, hint: sw.translation || sw.hint },
       }));
 
-      const defaultActions = wasSandwich
+      const defaultActions = wasSandwichStep2
+        ? [
+            {
+              label: t("chat_sandwich_start_quiz_action", currentAppLang),
+              action: "start_sandwich_quiz",
+              payload: { warmupWordIds: sandwichWarmupIds },
+            },
+            { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
+            { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },
+          ]
+        : wasSandwich
         ? [
             { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
-            { label: "⚔️ Confuser Duel", action: "start_practice_confuser_duel" },
+            { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },
             { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
           ]
         : [
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
-            { label: "⚔️ Confuser Duel", action: "start_practice_confuser_duel" },
+            { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },
             { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ];
 

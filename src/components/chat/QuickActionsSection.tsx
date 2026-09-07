@@ -28,7 +28,6 @@ interface QuickActionsSectionProps {
   onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onOpenWordLibrary?: () => void;
-  onOpenStudyMethods?: (tab?: string) => void;
   onSwitchProvider?: (provider: LLMProvider, model?: string) => void;
   showToast: (msg: string) => void;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
@@ -67,7 +66,6 @@ function QuickActionsSection({
   onViewStoryImmersion,
   onSuggestCasualReplyPrompt,
   onOpenWordLibrary,
-  onOpenStudyMethods,
   onSwitchProvider,
   showToast,
   scrollToBottom,
@@ -108,7 +106,6 @@ function QuickActionsSection({
     onViewStoryImmersion,
     onSuggestCasualReplyPrompt,
     onOpenWordLibrary,
-    onOpenStudyMethods,
     onSwitchProvider,
     showToast,
     scrollToBottom,
@@ -133,7 +130,6 @@ function QuickActionsSection({
       onViewStoryImmersion,
       onSuggestCasualReplyPrompt,
       onOpenWordLibrary,
-      onOpenStudyMethods,
       onSwitchProvider,
       showToast,
       scrollToBottom,
@@ -172,9 +168,6 @@ function QuickActionsSection({
             p.onSuggestCasualReplyPrompt?.();
           },
           onOpenWordLibrary: p.onOpenWordLibrary,
-          onOpenStudyMethods: (tab) => {
-            p.onOpenStudyMethods?.(tab);
-          },
         });
         setIsActionsPanelOpen(false);
         p.scrollToBottom("smooth");

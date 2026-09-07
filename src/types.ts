@@ -285,43 +285,9 @@ export interface UserPersonalityProfile {
 }
 
 // ==========================================
-// Advanced Science-Backed Learning Methods
+// Contextual Immersion Story Types (Chat)
 // ==========================================
 
-export type StudyMethodTab = 
-  | "goldlist" 
-  | "immersion" 
-  | "palace" 
-  | "wrap" 
-  | "physical" 
-  | "guide";
-
-// 1. Goldlist Method Types
-export interface GoldlistDistillationTier {
-  tierNumber: number; // 0 = Headlist, 1 = Bronze, 2 = Silver, 3 = Gold (Mastered)
-  title: string;
-  wordIds: string[];
-  createdAt: string;
-  gestationUntilDate: string; // 14 days from creation
-  isReadyForDistillation: boolean;
-  testedAt?: string;
-  retainedWordIds?: string[];
-  distilledWordIds?: string[];
-}
-
-export interface GoldlistNotebook {
-  id: string;
-  title: string;
-  targetLanguage: string;
-  nativeLanguage: string;
-  createdAt: string;
-  headlistWords: Word[];
-  tiers: GoldlistDistillationTier[];
-  notes?: string;
-  status: "gestating" | "ready_to_distill" | "completed";
-}
-
-// 2. Contextual Immersion & Dual Reader Types
 export interface ImmersionStoryWord {
   word: string;
   targetInStory: string;
@@ -365,96 +331,4 @@ export interface MinedSentence {
   minedWords: string[];
   createdAt: string;
   userNotes?: string;
-}
-
-// 3. Mnemonics & Memory Palace Types
-export interface KeywordMnemonic {
-  wordId?: string;
-  word: string;
-  translation: string;
-  pronunciation?: string;
-  keywordSoundAlike: string; // Native phonetic sound-alike (e.g., "pajama" for "pájaro")
-  vividImageryStory: string; // Vivid, absurd memorable story
-  humorousVisualCue: string; // Short visual snapshot prompt
-  stationRecommendation?: string; // e.g. "Kitchen Fridge", "Front Door"
-}
-
-export interface PalaceStation {
-  id: string;
-  name: string; // e.g. "Front Porch", "Cozy Sofa", "Coffee Machine", "Balcony View"
-  icon: string;
-  order: number;
-  wordId?: string;
-  word?: string;
-  translation?: string;
-  mnemonic?: KeywordMnemonic;
-  visualAnchorNote?: string;
-}
-
-export interface MemoryPalace {
-  id: string;
-  name: string;
-  theme: "home" | "cafe" | "library" | "villa" | "scifi";
-  description: string;
-  stations: PalaceStation[];
-  createdAt: string;
-  lastWalkedAt?: string;
-}
-
-// 4. WRAP Studio & Deep Processing Types
-export interface WrapStepState {
-  wordId: string;
-  word: string;
-  translation: string;
-  writtenText: string; // W - Write
-  repeatAudioCount: number; // R - Repeat
-  personalAssociation: string; // A - Associate
-  visualSceneDescription: string; // P - Picture
-  completedAt?: string;
-}
-
-export interface SentenceEvaluation {
-  score: number; // 0 - 100
-  naturalness: "Natural & Native-like" | "Grammatically Correct but Stiff" | "Contains Minor Nuance Flaws" | "Needs Correction";
-  feedback: string;
-  polishedSentence: string;
-  alternativeVariations?: string[];
-  collocationTips?: string;
-  grammarNotes?: string;
-}
-
-export interface TargetWordMission {
-  id: string;
-  title: string;
-  scenario: string;
-  aiRole: string;
-  userRole: string;
-  targetWords: { word: string; translation: string; used: boolean }[];
-  suggestedOpening: string;
-}
-
-// 5. Physical Environment & Real-World Utility Types
-export interface StickyNoteItem {
-  id: string;
-  word: string;
-  translation: string;
-  pronunciation: string;
-  partOfSpeech: string;
-  contextSentence: string;
-  roomAffixLocation: string; // e.g. "Affix to Microwave", "Affix to Bathroom Mirror"
-  tips?: string;
-}
-
-export interface RealWorldUtilityList {
-  id: string;
-  type: "grocery" | "todo" | "device_ui" | "restaurant_menu";
-  title: string;
-  items: {
-    targetText: string;
-    nativeText: string;
-    category?: string;
-    phonetic?: string;
-    actionHint?: string;
-    checked?: boolean;
-  }[];
 }

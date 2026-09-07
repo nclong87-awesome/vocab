@@ -10,7 +10,6 @@ import { koTranslations } from "./translations/ko";
 export type TranslationKey =
   | "app_title"
   | "nav_collection"
-  | "nav_methods"
   | "nav_analytics"
   | "nav_settings"
   | "nav_dashboard"
@@ -416,15 +415,21 @@ export type TranslationKey =
   | "chat_error_retrying_now"
   | "chat_sandwich_warmup_title"
   | "chat_sandwich_warmup_desc"
+  | "chat_sandwich_start_duel_action"
   | "chat_sandwich_start_quiz_action"
   | "chat_sandwich_review_to_unlock"
   | "chat_sandwich_cards_reviewed_progress"
   | "chat_sandwich_review_all_cards_toast"
+  | "chat_sandwich_duel_intro"
+  | "chat_sandwich_step2_finished_msg"
   | "chat_sandwich_quiz_intro"
   | "chat_sandwich_q_warmup_tag"
   | "chat_sandwich_q_review_tag"
+  | "chat_sandwich_q_duel_tag"
   | "chat_sandwich_finished_msg"
-  | "action_next_balanced_session";
+  | "action_next_balanced_session"
+  | "action_confuser_duel"
+  | "action_confuser_duel_count";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

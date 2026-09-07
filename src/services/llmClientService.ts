@@ -2141,7 +2141,7 @@ export interface QuizGenerationRequest {
   llmConfig?: LLMConfig;
   stats?: UserStats;
   signal?: AbortSignal;
-  practiceMode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "confuser_duel";
+  practiceMode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel";
 }
 
 export interface QuizGenerationResult {
@@ -2166,7 +2166,8 @@ export async function generateAiQuizQuestionsService(
     throw new Error("AI provider configuration or login is required to generate quiz questions.");
   }
 
-  const isDuelMode = practiceMode === "confuser_duel";
+  const isDuelMode = practiceMode === "confuser_duel" || practiceMode === "sandwich_duel";
+  const isSandwichMode = practiceMode === "sandwich_quiz" || practiceMode === "balanced";
 
   // Optimize payload: Only send essential fields to reduce token count and AI latency
   const minimalWordList = words.map(w => ({
@@ -2206,7 +2207,7 @@ STRICT GENERATION RULES & RESTRICTIONS:
      * MUST provide 'confuserWord' (the rival word) and 'contrastRule' (a crisp 1-sentence mnemonic rule contrasting the target word and the confuser to break fossilized confusion).
 ${isDuelMode ? "   - CRITICAL REQUIREMENT: 'practiceMode' is 'confuser_duel'. ALL generated questions MUST be of type 'duel'!" : ""}
 4. MANDATORY REQUIREMENTS:
-${isDuelMode ? "   - All questions MUST be type 'duel' focusing on contrastive unlearning with 'confuserWord' and 'contrastRule'." : "   - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'."}
+${isDuelMode ? "   - All questions MUST be type 'duel' focusing on contrastive unlearning with 'confuserWord' and 'contrastRule'." : isSandwichMode ? "   - In 'sandwich_quiz' (Smart Balanced Session), seamlessly blend question types: include at least one 'duel' type question (⚔️ Confuser Duel / Contrast Match) pitting a target word against its trickiest rival/confuser word with 'confuserWord' and 'contrastRule' to break fossilized confusion, and at least one picture question ('type': 'picture') with an 'imageKeyword'." : "   - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'."}
    - Generate UP TO THREE (max 3) suggested companion words across the entire quiz ('suggestedWords' array with 1 to 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
    - CRITICAL RULE FOR SUGGESTED WORDS:
      * Derive these suggested words directly from candidates that are actually used in the quiz questions, specifically selecting meaningful incorrect answers (distractors) or options presented in the quiz (e.g. options such as 'freighter' or other notable distractor choices).
@@ -2250,7 +2251,11 @@ Output MUST be strictly valid JSON matching this schema:
     `1. Return exactly 1 question per word.\n` +
     `2. The correct answer (correctAnswer) to each question MUST be EXACTLY the target word being tested. For example, if the word being tested is "minutes", the correctAnswer MUST be "minutes".\n` +
     `3. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
-    (isDuelMode ? `4. CRITICAL: 'practiceMode' is 'confuser_duel'. Generate ALL 'duel' type questions, pitting each target word against its trickiest rival/confuser word with 'confuserWord' and 'contrastRule'.\n` : `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n`) +
+    (isDuelMode 
+      ? `4. CRITICAL: 'practiceMode' is 'confuser_duel'. Generate ALL 'duel' type questions, pitting each target word against its trickiest rival/confuser word with 'confuserWord' and 'contrastRule'.\n` 
+      : isSandwichMode
+      ? `4. BALANCED SESSION MIX: In this Smart Balanced Session quiz, include at least one 'duel' question (⚔️ Confuser Duel / Contrast Match with 'confuserWord' and 'contrastRule') to contrast easily confused vocabulary or tricky nuances, and at least one 'picture' question with an 'imageKeyword'.\n`
+      : `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n`) +
     `5. Include up to 3 suggested companion words ('suggestedWords' array, max 3) derived directly from the candidates actually used in the quiz questions, specifically selecting meaningful incorrect answer options (distractors) presented in the quiz (such as 'freighter' or other options found in the distractors).`;
 
   const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule) and suggestedWords (array of up to 3 items with word, translation, pairedWith, hint derived from quiz distractors/options).`;

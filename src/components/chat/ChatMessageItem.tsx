@@ -35,7 +35,7 @@ interface ChatMessageItemProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "confuser_duel",
+    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel",
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
@@ -83,6 +83,10 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
   if (act.action === "next_quiz" || lower === "next quiz" || lower === "🏆 next quiz") {
     return t("action_next_quiz", currentAppLang);
+  }
+
+  if (act.action === "start_sandwich_duel" || lower.includes("start confuser duel")) {
+    return t("chat_sandwich_start_duel_action", currentAppLang);
   }
 
   if (act.action === "start_sandwich_quiz" || lower.includes("start practice quiz")) {
@@ -240,8 +244,9 @@ function ChatMessageItem({
     return messages.find(
       (m) =>
         (m.id.startsWith("sandwich-warmup-msg-") ||
-          (m.suggestedActions && m.suggestedActions.some((a) => a?.action === "start_sandwich_quiz"))) &&
-        !messages.some((quizM) => quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
+          m.id.startsWith("sandwich-warmup-story-") ||
+          (m.suggestedActions && m.suggestedActions.some((a) => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz"))) &&
+        !messages.some((quizM) => quizM.id.startsWith("sandwich-duel-start-") || quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
     );
   }, [messages]);
 
@@ -380,33 +385,42 @@ function ChatMessageItem({
       }
 
       // During a smart balanced review session, when a new word is added or thread advances,
-      // consistently move the "Start practice Quiz" button to appear after the final message.
+      // consistently move the "Start Confuser Duel" (Step 2) or "Start Practice Quiz" (Step 3) button to appear after the final message.
       const sandwichWarmupMsg = messages.find(
         m =>
           (m.id.startsWith("sandwich-warmup-msg-") ||
-            (m.suggestedActions && m.suggestedActions.some(a => a?.action === "start_sandwich_quiz"))) &&
-          !messages.some(quizM => quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
+            m.id.startsWith("sandwich-warmup-story-") ||
+            (m.suggestedActions && m.suggestedActions.some(a => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz"))) &&
+          !messages.some(quizM => quizM.id.startsWith("sandwich-duel-start-") || quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
       );
 
       if (sandwichWarmupMsg) {
+        const origDuelAction = sandwichWarmupMsg.suggestedActions?.find(
+          a => a && a.action === "start_sandwich_duel"
+        );
         const origQuizAction = sandwichWarmupMsg.suggestedActions?.find(
           a => a && a.action === "start_sandwich_quiz"
         );
-        const quizPayload = origQuizAction?.payload?.warmupWordIds
-          ? origQuizAction.payload
-          : { warmupWordIds: [] };
+        const actionToPromote = origDuelAction || origQuizAction;
+        if (actionToPromote) {
+          const actionPayload = actionToPromote.payload?.warmupWordIds
+            ? actionToPromote.payload
+            : { warmupWordIds: [] };
 
-        const sandwichQuizAction = {
-          label: t("chat_sandwich_start_quiz_action", currentAppLang),
-          action: "start_sandwich_quiz",
-          payload: quizPayload,
-        };
+          const promotedAction = {
+            label: actionToPromote.action === "start_sandwich_duel"
+              ? t("chat_sandwich_start_duel_action", currentAppLang)
+              : t("chat_sandwich_start_quiz_action", currentAppLang),
+            action: actionToPromote.action,
+            payload: actionPayload,
+          };
 
-        const existingIdx = rawActions.findIndex(a => a && a.action === "start_sandwich_quiz");
-        if (existingIdx >= 0) {
-          rawActions[existingIdx] = sandwichQuizAction;
-        } else {
-          rawActions.push(sandwichQuizAction);
+          const existingIdx = rawActions.findIndex(a => a && (a.action === "start_sandwich_duel" || a.action === "start_sandwich_quiz"));
+          if (existingIdx >= 0) {
+            rawActions[existingIdx] = promotedAction;
+          } else {
+            rawActions.push(promotedAction);
+          }
         }
       }
     }
@@ -553,12 +567,21 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_confuser_duel") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "confuser_duel");
+    } else if (act.action === "start_sandwich_duel") {
+      handleRecordActionUse("start_practice");
+      let warmupWordIds = act.payload?.warmupWordIds;
+      if (!warmupWordIds || !Array.isArray(warmupWordIds) || warmupWordIds.length === 0) {
+        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-") || m.id.startsWith("sandwich-warmup-story-"));
+        const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz");
+        warmupWordIds = origAction?.payload?.warmupWordIds || [];
+      }
+      startPractice(undefined, "sandwich_duel", { warmupWordIds });
     } else if (act.action === "start_sandwich_quiz") {
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
       if (!warmupWordIds || !Array.isArray(warmupWordIds) || warmupWordIds.length === 0) {
-        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-"));
-        const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_quiz");
+        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-") || m.id.startsWith("sandwich-warmup-story-"));
+        const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_quiz" || a?.action === "start_sandwich_duel");
         warmupWordIds = origAction?.payload?.warmupWordIds || [];
       }
       startPractice(undefined, "sandwich_quiz", { warmupWordIds });
@@ -1132,8 +1155,10 @@ function ChatMessageItem({
                 actLbl.includes("continue to question")
               );
               const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
+              const isSandwichDuel = act.action === "start_sandwich_duel";
               const isSandwichQuiz = act.action === "start_sandwich_quiz";
-              const isSandwichQuizLocked = isSandwichQuiz && !isAllWarmupReviewed;
+              const isSandwichAction = isSandwichDuel || isSandwichQuiz;
+              const isSandwichDuelLocked = isSandwichDuel && !isAllWarmupReviewed;
               const isDuelPracticeAction = act.action === "start_practice_confuser_duel";
               const isDuelQuizAction = (msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && act.action === "quiz_answer";
               const currentPayload = customActionPayloads[aIdx] || act.payload;
@@ -1161,7 +1186,7 @@ function ChatMessageItem({
                     key={aIdx}
                     onClick={() => handleActionClick(act, aIdx)}
                     title={
-                      isSandwichQuizLocked
+                      isSandwichDuelLocked
                         ? t("chat_sandwich_review_all_cards_toast", currentAppLang, {
                             total: String(totalWarmupCards),
                             remaining: String(remainingWarmupToReview),
@@ -1169,25 +1194,27 @@ function ChatMessageItem({
                         : undefined
                     }
                     className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs group ${
-                      isSandwichQuizLocked
+                      isSandwichDuelLocked
                         ? "bg-stone-100/95 hover:bg-stone-200/80 border border-stone-300/80 text-stone-600 cursor-pointer"
-                        : isSandwichQuiz
+                        : isSandwichAction
                         ? "bg-amber-400 hover:bg-amber-300 focus:bg-amber-300 border border-amber-500/80 text-stone-950 font-bold shadow-xs cursor-pointer"
-                        : isDuelPracticeAction
-                        ? "bg-amber-50/80 hover:bg-amber-100 border border-amber-300/90 text-stone-900 font-bold shadow-xs cursor-pointer"
-                        : isDuelQuizAction
-                        ? "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-amber-200/80 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
+                        : (isDuelPracticeAction || isDuelQuizAction)
+                        ? "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
                         : isNextQ
                         ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold cursor-pointer"
                         : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
                     }`}
                   >
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                    {isSandwichQuizLocked ? (
+                    {isSandwichDuelLocked ? (
                       <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                    ) : isSandwichDuel ? (
+                      <Swords className="w-3.5 h-3.5 text-stone-950 shrink-0 mt-0.5" />
                     ) : isSandwichQuiz ? (
                       <Sparkles className="w-3.5 h-3.5 text-stone-950 animate-pulse shrink-0 mt-0.5" />
-                    ) : (isDuelPracticeAction || isDuelQuizAction) ? (
+                    ) : isDuelPracticeAction ? (
+                      <Swords className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0 mt-0.5" />
+                    ) : isDuelQuizAction ? (
                       <Swords className="w-3.5 h-3.5 text-amber-600 group-hover:text-amber-400 shrink-0 mt-0.5" />
                     ) : isNextQ ? (
                       <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -1195,7 +1222,7 @@ function ChatMessageItem({
                       <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 animate-pulse shrink-0 mt-0.5" />
                     )}
 
-                    {isSandwichQuizLocked ? (
+                    {isSandwichDuelLocked ? (
                       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold text-stone-700">
@@ -1203,7 +1230,7 @@ function ChatMessageItem({
                           </span>
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
                             <Lock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
-                            <span>Step 2 & 3</span>
+                            <span>Step 2</span>
                           </span>
                         </div>
                         <span className="text-[11px] font-medium text-amber-800 flex items-center gap-1.5 mt-0.5">
@@ -1218,7 +1245,7 @@ function ChatMessageItem({
                           </span>
                         </span>
                       </div>
-                    ) : isSandwichQuiz ? (
+                    ) : isSandwichDuel ? (
                       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-stone-950">
@@ -1236,6 +1263,21 @@ function ChatMessageItem({
                               total: String(totalWarmupCards),
                             })}
                           </span>
+                        </span>
+                      </div>
+                    ) : isSandwichQuiz ? (
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-stone-950">
+                            {formatActionLabel(act, currentAppLang)}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-stone-950 text-amber-300 shrink-0">
+                            Step 3: Quiz
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-medium text-stone-900 flex items-center gap-1 mt-0.5">
+                          <Sparkles className="w-3.5 h-3.5 text-stone-950 shrink-0 animate-pulse" />
+                          <span>Retention Check & Core Review</span>
                         </span>
                       </div>
                     ) : act.action === "select_definition" && act.payload?.definition ? (
@@ -1313,20 +1355,20 @@ function ChatMessageItem({
                         </div>
                       </div>
                     ) : (
-                      <span className={`whitespace-normal break-words leading-relaxed font-semibold min-w-0 flex-1 transition-colors ${
+                      <span className={`whitespace-normal break-words leading-relaxed min-w-0 flex-1 transition-colors ${
                         isNextQ
-                          ? "text-white"
-                          : "text-stone-900 group-hover:text-white group-focus:text-white group-active:text-white"
+                          ? "text-white font-bold"
+                          : "text-stone-900 group-hover:text-white group-focus:text-white group-active:text-white font-semibold"
                       }`}>
                         {formatActionLabel(act, currentAppLang)}
                       </span>
                     )}
                   </div>
-                  {isSandwichQuizLocked ? (
+                  {isSandwichDuelLocked ? (
                     <Lock className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-1 ml-2" />
                   ) : (
                     <ChevronRight className={`w-3.5 h-3.5 group-hover:translate-x-0.5 transition-all shrink-0 mt-1 ml-2 ${
-                      isSandwichQuiz
+                      isSandwichAction
                         ? "text-stone-950"
                         : isNextQ 
                         ? "text-stone-300" 

@@ -22,7 +22,7 @@ import {
   getStoredMinedSentences, 
   saveMinedSentence, 
   deleteMinedSentence 
-} from "../../services/studyMethodsService";
+} from "../../services/immersionStoryService";
 import { getOverrideConfig } from "../../services/llmClientService";
 import { speakText } from "../../utils/ttsService";
 import WordReviewedBanner from "./WordReviewedBanner";
