@@ -58,10 +58,11 @@ export default function StoryImmersionView({
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
   const [generationMetadata, setGenerationMetadata] = useState<{ provider?: string; model?: string; responseTimeMs?: number } | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   // Generation Controls
   const [selectedTopic, setSelectedTopic] = useState("");
-  const [selectedGenre, setSelectedGenre] = useState("Historical Non-Fiction (Real Events & Figures)");
+  const [selectedGenre, setSelectedGenre] = useState("Tech History & Internet Milestones");
   const [selectedDifficulty, setSelectedDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
   const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set());
 
@@ -190,6 +191,7 @@ export default function StoryImmersionView({
   const handleGenerateStory = async () => {
     setIsGenerating(true);
     setSelectedWordLookup(null);
+    setGenerationError(null);
     const startTime = performance.now();
     try {
       const targetWordsObj = words.filter(w => selectedWordIds.has(w.id));
@@ -210,8 +212,9 @@ export default function StoryImmersionView({
         model: story.model || effectiveConfig?.model,
         responseTimeMs: durationMs
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error("Story generation failed:", e);
+      setGenerationError(e?.message || "An unexpected error occurred while generating the immersion story.");
     } finally {
       setIsGenerating(false);
     }
@@ -322,10 +325,10 @@ export default function StoryImmersionView({
                     onChange={(e) => setSelectedGenre(e.target.value)}
                     className="w-full text-xs p-1.5 rounded-lg border border-stone-200 bg-white"
                   >
-                    <option value="Historical Non-Fiction (Real Events & Figures)">📜 Real Events & Non-Fiction</option>
-                    <option value="Biography & Milestones">👤 Biography & True Milestones</option>
+                    <option value="Tech History & Internet Milestones">💻 Tech History & Internet Milestones</option>
+                    <option value="Digital Innovation & Open Source">🚀 Digital Innovation & Open Source</option>
+                    <option value="Everyday Tech & Quirky Inventions">💡 Everyday Tech & Quirky Inventions</option>
                     <option value="Slice of Life">Slice of Life</option>
-                    <option value="Mystery">Mystery</option>
                   </select>
                 </div>
                 <div>
@@ -384,6 +387,14 @@ export default function StoryImmersionView({
                   })}
                 </div>
               </div>
+
+              {/* Error Message Banner */}
+              {generationError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+                  <span className="font-bold shrink-0">Error:</span>
+                  <span className="flex-1">{generationError}</span>
+                </div>
+              )}
 
               {/* Generate Button */}
               <button

@@ -537,11 +537,12 @@ export async function generateImmersionStoryService(params: {
   const wordListFormatted = candidateSlice.map(w => `"${w.word}" (${w.translation || w.definition})`).join(", ");
 
   const topicDirective = (!topic || topic.trim() === "" || topic.toLowerCase().startsWith("auto"))
-    ? `TOPIC SELECTION DIRECTIVE (AUTONOMOUS):
-- Autonomously choose an engaging, factually documented REAL historical event, milestone, scientific discovery, exploration, or historical figure's life event (e.g. Marie Curie discovering radium, Alexander Fleming discovering penicillin, Apollo 11 moon mission, the Rosetta Stone decipherment, Amelia Earhart's flight, Wright brothers, etc.) that best and most naturally connects with the target vocabulary words.
-- Set the "topic" field in the output JSON to the name of this chosen real historical event or figure.`
+    ? `TOPIC SELECTION DIRECTIVE (AUTONOMOUS - TECH & DIGITAL CULTURE HISTORY):
+- Autonomously choose an engaging, factually documented REAL tech history event, internet milestone, open-source software release, digital culture moment, or modern innovation (e.g. the 2006 launch of jQuery 1.0 by John Resig, the invention of the World Wide Web at CERN, the creation of VisiCalc spreadsheet, the invention of QWERTY, early indie game development, or Wikipedia's founding) that best and most naturally connects with the target vocabulary words.
+- STRICTLY AVOID well-known traditional textbook historical figures (DO NOT use Marie Curie, Alexander Fleming, Einstein, Newton, or Wright Brothers). Focus instead on modern technology history, web development milestones, digital culture, and software innovations!
+- Set the "topic" field in the output JSON to the name of this chosen tech/digital milestone.`
     : `TOPIC DIRECTIVE:
-- Ground the non-fiction narrative accurately in the real historical context of: "${topic}".`;
+- Ground the narrative accurately in the real tech/digital culture history context of: "${topic}".`;
 
   const nonFictionDirectives = `
 NON-FICTION ACCURACY DIRECTIVES (CRITICAL):
@@ -676,37 +677,9 @@ Return JSON in this EXACT schema:
       responseTimeMs: rawRes.responseTimeMs,
       createdAt: new Date().toISOString()
     };
-  } catch (error) {
-    console.error("Story generation failed, returning fallback story:", error);
-    // Real event fallback template (Alexander Fleming's Discovery of Penicillin)
-    const fallbackParagraphs: ImmersionStoryParagraph[] = [
-      {
-        id: "p1",
-        targetText: `In 1928, Dr. Alexander Fleming made a breakthrough that transformed medicine forever. While carrying out research on bacterial cultures, he began to notice a curious clear zone forming around a stray mold in a petri dish, illustrating how we encounter ${candidateSlice.map(w => w.word).join(", ")}.`,
-        nativeText: `Năm 1928, Tiến sĩ Alexander Fleming đã tạo ra bước đột phá làm thay đổi y học mãi mãi. Trong khi tiến hành nghiên cứu trên các mẻ cấy vi khuẩn, ông bắt đầu nhận thấy một vùng trong suốt kỳ lạ hình thành xung quanh vết nấm mốc trong đĩa thí nghiệm, minh họa cách chúng ta bắt gặp ${candidateSlice.map(w => w.translation || w.word).join(", ")}.`
-      },
-      {
-        id: "p2",
-        targetText: `Scientists were excited about investigating how this mold prevented bacterial growth. Instead of giving up or ignoring the anomaly, he decided to listen to what the evidence suggested, leading directly to the discovery of life-saving penicillin.`,
-        nativeText: `Các nhà khoa học đã rất hào hứng tìm hiểu cách loài nấm này ức chế vi khuẩn phát triển. Thay vì từ bỏ hoặc bỏ qua hiện tượng bất thường, ông quyết định lắng nghe những gì bằng chứng gợi mở, trực tiếp dẫn đến phát minh penicillin cứu sống hàng triệu người.`
-      }
-    ];
-    return {
-      id: `story_${Date.now()}`,
-      title: "The Discovery of Penicillin",
-      titleTranslation: "Khám phá ra Penicillin",
-      topic: "Alexander Fleming & Discovery of Penicillin",
-      genre: "Historical Non-Fiction (Real Events & Figures)",
-      difficulty,
-      targetLanguage,
-      nativeLanguage,
-      targetWords: candidateSlice.map(w => ({ word: w.word, targetInStory: w.word, translation: w.translation, definition: w.definition })),
-      suggestedWords: extractStoryCollocations(fallbackParagraphs, nativeLanguage, targetLanguage),
-      paragraphs: fallbackParagraphs,
-      provider: cfg?.provider,
-      model: cfg?.model,
-      createdAt: new Date().toISOString()
-    };
+  } catch (error: any) {
+    console.error("Story generation failed:", error);
+    throw new Error(error?.message || "Failed to generate immersion story from LLM.");
   }
 }
 
