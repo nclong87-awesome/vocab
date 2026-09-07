@@ -734,43 +734,7 @@ function ChatMessageItem({
                 </div>
               )}
 
-              {/* Confuser Duel (Contrast Match) Banner */}
-              {(msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && (
-                <div className="mb-3.5 p-3.5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-300/90 rounded-xl shadow-2xs">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500 text-stone-950 font-black flex items-center justify-center text-sm shadow-xs shrink-0">
-                        <Swords className="w-4 h-4 text-stone-950" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-bold text-stone-950 uppercase tracking-wide">
-                            Confuser Duel
-                          </span>
-                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300">
-                            Contrast Match
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-stone-700 font-medium line-clamp-1 mt-0.5">
-                          Break fossilized habits: choose the right word against its common confuser
-                        </p>
-                      </div>
-                    </div>
-                    {msg.confuserWord && (
-                      <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 bg-white/90 rounded-md border border-amber-300 text-amber-950 shadow-3xs shrink-0">
-                        <span>Rival:</span>
-                        <span className="text-rose-700 font-black underline underline-offset-2 decoration-rose-300">{msg.confuserWord}</span>
-                      </div>
-                    )}
-                  </div>
-                  {msg.contrastRule && (
-                    <div className="mt-2.5 pt-2 border-t border-amber-200/80 text-[11px] text-stone-800 font-medium flex items-start gap-1.5">
-                      <span className="text-amber-700 font-bold shrink-0">💡 Rule:</span>
-                      <span className="leading-snug">{msg.contrastRule}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+
 
               <FormattedMessage
                 text={feedbackPart}
