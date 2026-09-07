@@ -281,6 +281,8 @@ export type TranslationKey =
   | "chat_quiz_sentence_only"
   | "chat_quiz_speech_correct"
   | "chat_quiz_speech_incorrect"
+  | "chat_quiz_next_question_btn"
+  | "chat_quiz_finish_summary_btn"
   | "chat_quiz_finished_msg"
   | "chat_practice_start_today_action"
   | "action_next_practice"

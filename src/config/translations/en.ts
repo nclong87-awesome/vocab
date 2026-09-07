@@ -278,6 +278,8 @@ export const enTranslations: LanguageTranslations = {
     chat_quiz_sentence_only: "\n*Sentence*: \"{sentence}\"",
     chat_quiz_speech_correct: "Correct! The answer is {answer}",
     chat_quiz_speech_incorrect: "Incorrect! Correct answer: {answer}",
+    chat_quiz_next_question_btn: "Next Question",
+    chat_quiz_finish_summary_btn: "View Quiz Summary",
     chat_quiz_finished_msg: "{feedback}\n---\n🏆 **Quiz Completed!**\n\nYou scored **{score} out of {total}** ({accuracy}%).\n\nI have updated your statistics and adjusted word learning strength values! All set.\n\nWhat would you like to learn next?",
     chat_practice_start_today_action: "🎯 Start Practice",
     action_next_practice: "🎯 Next Practice Session",

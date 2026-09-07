@@ -588,6 +588,9 @@ function ChatMessageItem({
     } else if (act.action === "quiz_answer" && act.payload?.answer) {
       onSendMessage(act.payload.answer);
       return;
+    } else if (act.action === "next_quiz_question") {
+      onSendMessage("__next_quiz_question__");
+      return;
     } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
       onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
     } else if (act.action === "common_phrases") {
@@ -1150,11 +1153,11 @@ function ChatMessageItem({
           <div className="flex flex-col gap-1.5 pt-1 w-full">
             {effectiveActions.map((act, aIdx) => {
               const actLbl = (act && typeof act.label === "string") ? act.label.toLowerCase() : "";
-              const isNextQ = act.action === "send_message" && (
+              const isNextQ = act.action === "next_quiz_question" || (act.action === "send_message" && (
                 actLbl.startsWith("move on") ||
                 actLbl.startsWith("next question") ||
                 actLbl.includes("continue to question")
-              );
+              ));
               const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
               const isSandwichDuel = act.action === "start_sandwich_duel";
               const isSandwichQuiz = act.action === "start_sandwich_quiz";

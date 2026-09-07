@@ -987,6 +987,48 @@ export function useChat({
     }
 
     const nextIndex = activeQuiz.currentIndex + 1;
+    const isLastQ = nextIndex >= activeQuiz.questions.length;
+
+    setActiveQuiz({
+      ...activeQuiz,
+      currentIndex: nextIndex,
+      score: newScore,
+      correctIds: newCorrectIds,
+      incorrectIds: newIncorrectIds,
+    });
+
+    const now = Date.now();
+    const nextBtnText = isLastQ
+      ? `🏆 ${t("chat_quiz_finish_summary_btn", currentAppLang)} ➔`
+      : `➡️ ${t("chat_quiz_next_question_btn", currentAppLang)} (${nextIndex + 1}/${activeQuiz.questions.length}) ➔`;
+
+    const feedbackMsg: ChatMessage = {
+      id: `quiz-feedback-${now}`,
+      role: "assistant",
+      content: feedback,
+      timestamp: new Date(now).toISOString(),
+      audioWord: targetWordObj ? targetWordObj.word : currentQ.word,
+      quizSpeechText: isCorrect
+        ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
+        : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
+      answeredQuizWordId: wordId,
+      suggestedActions: [
+        {
+          label: nextBtnText,
+          action: "next_quiz_question",
+          payload: { nextIndex },
+        },
+      ],
+    };
+
+    setChatMessages((prev) => [...prev, feedbackMsg]);
+  };
+
+  const handleNextQuizQuestion = () => {
+    if (!activeQuiz) return;
+    const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
+
+    const nextIndex = activeQuiz.currentIndex;
 
     if (nextIndex < activeQuiz.questions.length) {
       const nextQ = activeQuiz.questions[nextIndex];
@@ -995,33 +1037,12 @@ export function useChat({
         ? ` (${nextQ.type === "duel" ? t("chat_sandwich_q_duel_tag", currentAppLang) : isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
         : "";
 
-      setActiveQuiz({
-        ...activeQuiz,
-        currentIndex: nextIndex,
-        score: newScore,
-        correctIds: newCorrectIds,
-        incorrectIds: newIncorrectIds,
-      });
-
       const now = Date.now();
-
-      const feedbackMsg: ChatMessage = {
-        id: `quiz-feedback-${now}`,
-        role: "assistant",
-        content: feedback,
-        timestamp: new Date(now).toISOString(),
-        audioWord: targetWordObj ? targetWordObj.word : currentQ.word,
-        quizSpeechText: isCorrect
-          ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
-          : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
-        answeredQuizWordId: wordId,
-      };
-
       const nextMsg: ChatMessage = {
-        id: `quiz-next-${now + 1}`,
+        id: `quiz-next-${now}`,
         role: "assistant",
         content: `### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}${qTag}:\n**${nextQ.question}**`,
-        timestamp: new Date(now + 1).toISOString(),
+        timestamp: new Date(now).toISOString(),
         audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
         quizSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
         imageUrl: nextQ.imageUrl,
@@ -1038,9 +1059,10 @@ export function useChat({
         ],
       };
 
-      setChatMessages((prev) => [...prev, feedbackMsg, nextMsg]);
+      setChatMessages((prev) => [...prev, nextMsg]);
     } else {
       const totalQs = activeQuiz.questions.length;
+      const newScore = activeQuiz.score;
       const wasSandwichStep1 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 1);
       const wasSandwichStep2 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 2);
       const wasSandwich = Boolean(activeQuiz.isSandwichSession);
@@ -1049,7 +1071,6 @@ export function useChat({
 
       handleFinishQuiz(newScore, totalQs);
 
-      // Aggregate 1 to 3 suggestions for words that frequently appear alongside the words used in the quiz
       const allSuggestedWords: QuizSuggestedWord[] = [];
       const seenWords = new Set<string>();
 
@@ -1083,7 +1104,6 @@ export function useChat({
         });
       });
 
-      // If under 3 suggestions, pull directly from incorrect options (distractors) used in the quiz questions
       if (allSuggestedWords.length < 3) {
         for (const q of activeQuiz.questions) {
           const targetWordLower = (q.word || "").toLowerCase().trim();
@@ -1173,30 +1193,17 @@ export function useChat({
 
       const now = Date.now();
 
-      const feedbackMsg: ChatMessage = {
-        id: `quiz-feedback-${now}`,
-        role: "assistant",
-        content: feedback,
-        timestamp: new Date(now).toISOString(),
-        audioWord: targetWordObj ? targetWordObj.word : currentQ.word,
-        quizSpeechText: isCorrect
-          ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
-          : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
-        answeredQuizWordId: wordId,
-      };
-
       const finishedMsg: ChatMessage = {
-        id: `quiz-end-${now + 1}`,
+        id: `quiz-end-${now}`,
         role: "assistant",
         content: finishedContent,
-        timestamp: new Date(now + 1).toISOString(),
-        audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
+        timestamp: new Date(now).toISOString(),
         quizFinishedData: {
           score: newScore,
           total: totalQs,
           accuracy: Math.round((newScore / totalQs) * 100),
           suggestedWords: top3SuggestedWords,
-          testedWordIds: [...newCorrectIds, ...newIncorrectIds],
+          testedWordIds: [...activeQuiz.correctIds, ...activeQuiz.incorrectIds],
         },
         suggestedActions: [
           ...wordAddActions,
@@ -1204,7 +1211,7 @@ export function useChat({
         ],
       };
 
-      setChatMessages((prev) => [...prev, feedbackMsg, finishedMsg]);
+      setChatMessages((prev) => [...prev, finishedMsg]);
     }
   };
 
@@ -1537,6 +1544,11 @@ export function useChat({
     });
 
     if (activeQuiz) {
+      if (text.trim() === "__next_quiz_question__") {
+        setChatMessages((prev) => prev.filter((m) => m.content !== "__next_quiz_question__"));
+        handleNextQuizQuestion();
+        return;
+      }
       handleQuizAnswer(text.trim());
       return;
     }
