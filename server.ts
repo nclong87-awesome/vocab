@@ -1175,8 +1175,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Technology & Programming", "Travel & Hospitality", "Business & Work", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.
-- "suggestedWords": Array of 1 or 2 practical vocabulary words or collocations in "${userTarget}" that people frequently pair or use together with this word in natural contexts.
-  CRITICAL VERB & COLLOCATION RULE: For verbs or verb-derived phrases, prioritize natural verb + dependent preposition collocations (e.g. "cure for", "elaborate on", "rely on", "participate in", "deal with", "benefit from") rather than bare verbs, so learners master the complete prepositional pattern. Do NOT include or repeat the current word itself in the suggested words. ALWAYS output each suggested word as an object containing "word", "definition" (short definition in ${userTarget}), and "translation" (translation in ${userNative}). Example: for "cure" -> [{"word": "cure for", "definition": "A remedy or solution that restores health or fixes a condition", "translation": "phương thuốc chữa cho"}, {"word": "elaborate on", "definition": "To add more detail or explain further", "translation": "nói chi tiết về"}].`;
+- "suggestedWords": Array of exactly 3 practical companion vocabulary items in "${userTarget}".
+  CRITICAL SUGGESTED WORDS REQUIREMENT:
+  During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
+  1. EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
+  2. EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep"
+  3. EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the context, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun"
+  Ensure the context naturally incorporates all three of these items so learners see them used in context! Do NOT include or repeat the current word itself in the suggested words. ALWAYS output each suggested word as an object containing "word", "definition" (short definition in ${userTarget}), "translation" (translation in ${userNative}), and "partOfSpeech".`;
 
     const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -1193,7 +1198,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
     {
       "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
       "definition": "string (short definition in ${userTarget})",
-      "translation": "string (translation in ${userNative})"
+      "translation": "string (translation in ${userNative})",
+      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
     }
   ]
 }`;
@@ -1302,7 +1308,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
      "category": string,
      "context": string,
-     "suggestedWords": Array of exactly 1 or 2 practical vocabulary words/collocations in "${userTarget}" that people frequently pair or use together with this word in natural contexts. CRITICAL: For verbs or actions, prioritize natural verb + dependent preposition collocations (e.g. "cure for", "elaborate on", "rely on", "participate in", "benefit from", "cope with") rather than bare verbs. Do NOT include or repeat the current word itself in the suggested words; output just the companion/paired words (e.g. for "cure" -> ["cure for", "remedy"]; for "elaborate" -> ["elaborate on", "details"]; for "apple" -> ["crisp", "orchard"]; for "acquire" -> ["acquire knowledge", "skill"]; for "mitigate" -> ["mitigate risk", "impact"]).`;
+      "suggestedWords": Array of exactly 3 items in "${userTarget}". CRITICAL SUGGESTED WORDS REQUIREMENT: During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of: 1) EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb", 2) EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep", 3) EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the context, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun". Ensure the context naturally incorporates all three of these items so learners see them used in context! Do NOT include or repeat the current word itself in the suggested words.`;
 
     const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -1313,7 +1319,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
     {
       "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
       "definition": "string (short definition in ${userTarget})",
-      "translation": "string (translation in ${userNative})"
+      "translation": "string (translation in ${userNative})",
+      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
     }
   ],
   "senses": [
@@ -1332,7 +1339,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
         {
           "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
           "definition": "string (short definition in ${userTarget})",
-          "translation": "string (translation in ${userNative})"
+          "translation": "string (translation in ${userNative})",
+          "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
         }
       ]
     }
@@ -2360,12 +2368,13 @@ STRICT GENERATION RULES & RESTRICTIONS:
 ${isDuelMode ? "   - CRITICAL REQUIREMENT: 'practiceMode' is 'confuser_duel'. ALL generated questions MUST be of type 'duel'!" : ""}
 4. MANDATORY REQUIREMENTS:
 ${isDuelMode ? "   - All questions MUST be type 'duel' focusing on contrastive unlearning with 'confuserWord' and 'contrastRule'." : "   - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'."}
-   - Generate UP TO THREE (max 3) suggested companion words across the entire quiz ('suggestedWords' array with 1 to 3 items: 'word', 'translation' in ${nativeLanguage}, 'pairedWith', 'hint').
-   - CRITICAL RULE FOR SUGGESTED WORDS:
-     * Derive these suggested words directly from candidates that are actually used in the quiz questions, specifically selecting meaningful incorrect answers (distractors) or options presented in the quiz (e.g. options such as 'freighter' or other notable distractor choices).
-     * CRITICAL VERB & COLLOCATION RULE: For verbs or verb options, prioritize verbs with their dependent prepositions/collocations (e.g., "elaborate on", "rely on", "cure for", "participate in").
-     * Set 'pairedWith' to the quiz word/question it accompanied.
-     * Keep the total number of suggested words at a maximum of three (3).
+   - Generate exactly 3 suggested companion words across the entire quiz ('suggestedWords' array with exactly 3 items).
+   - CRITICAL SUGGESTED WORDS REQUIREMENT:
+     During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
+     1. EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
+     2. EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep"
+     3. EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the quiz questions/distractors, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun"
+     Ensure the quiz questions naturally incorporate all three of these items so learners see them used in context! Set 'pairedWith' to the quiz word/question it accompanied.
 5. STRICT CORRECT ANSWER MATCHING RULE (CRITICAL):
    - The correct answer to every question MUST be EXACTLY the target vocabulary word itself (matching the spelling in the input list exactly).
    - Under no circumstances should the correct answer be a synonym, a definition, or any other word.
@@ -2391,7 +2400,8 @@ Output MUST be strictly valid JSON matching this schema:
       "word": "string (Suggested word derived from incorrect answer options/distractors used in the quiz)",
       "translation": "string (Translation in ${nativeLanguage})",
       "pairedWith": "string (Which quiz word it accompanies as an option)",
-      "hint": "string (Brief note on its meaning or context from the quiz options)"
+      "hint": "string (Brief note on its meaning or context from the quiz options)",
+      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
     }
   ]
 }`;
@@ -2402,9 +2412,9 @@ Output MUST be strictly valid JSON matching this schema:
       `2. The correct answer (correctAnswer) to each question MUST be EXACTLY the target word being tested. For example, if the word being tested is "minutes", the correctAnswer MUST be "minutes".\n` +
       `3. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
       (isDuelMode ? `4. CRITICAL: 'practiceMode' is 'confuser_duel'. Generate ALL 'duel' type questions, pitting each target word against its trickiest rival/confuser word with 'confuserWord' and 'contrastRule'.\n` : `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n`) +
-      `5. Include up to 3 suggested companion words ('suggestedWords' array, max 3) derived directly from the candidates actually used in the quiz questions, specifically selecting meaningful incorrect answer options (distractors) presented in the quiz (such as 'freighter' or other options found in the distractors).`;
+      `5. Include exactly 3 suggested companion words ('suggestedWords' array with 1 phrasal verb, 1 verb/adj + prep, 1 noun) derived directly from the quiz questions and distractors.`;
 
-    const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword, confuserWord, contrastRule) and suggestedWords (array of up to 3 items with word, translation, pairedWith, hint derived from quiz distractors/options).`;
+    const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, imageKeyword, confuserWord, contrastRule) and suggestedWords (array of exactly 3 items: 1 phrasal verb, 1 verb/adj + prep, 1 noun with word, translation, pairedWith, hint, partOfSpeech).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;

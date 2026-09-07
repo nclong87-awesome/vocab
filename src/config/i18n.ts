@@ -421,6 +421,7 @@ export type TranslationKey =
   | "chat_sandwich_cards_reviewed_progress"
   | "chat_sandwich_review_all_cards_toast"
   | "chat_sandwich_duel_intro"
+  | "chat_sandwich_step1_finished_msg"
   | "chat_sandwich_step2_finished_msg"
   | "chat_sandwich_quiz_intro"
   | "chat_sandwich_q_warmup_tag"

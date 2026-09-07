@@ -131,7 +131,7 @@ export function useChat({
     correctIds: string[];
     incorrectIds: string[];
     isSandwichSession?: boolean;
-    sandwichStep?: 2 | 3;
+    sandwichStep?: 1 | 2;
     warmupWordIds?: string[];
   } | null>(null);
 
@@ -310,7 +310,7 @@ export function useChat({
       // Balanced Sandwich Loop is the premier, scientifically balanced learning mode
       if (activeWords.length >= 2) {
         actions.push({
-          label: `🥪 Smart Balanced Session (Warm-up ➔ Duel ➔ Quiz)`,
+          label: `🥪 Smart Balanced Session (Duel ➔ Quiz)`,
           action: "start_practice_balanced",
         });
       }
@@ -413,7 +413,7 @@ export function useChat({
           correctIds: [],
           incorrectIds: [],
           isSandwichSession: true,
-          sandwichStep: 2,
+          sandwichStep: 1,
           warmupWordIds: Array.from(warmupIds.size > 0 ? warmupIds : duelWords.map((w) => w.id)),
         });
 
@@ -528,7 +528,7 @@ export function useChat({
           correctIds: [],
           incorrectIds: [],
           isSandwichSession: true,
-          sandwichStep: 3,
+          sandwichStep: 2,
           warmupWordIds: Array.from(warmupIds),
         });
 
@@ -573,86 +573,7 @@ export function useChat({
       return;
     }
 
-    // --- SANDWICH LOOP STEP 1: Warm-up Story Immersion & Dual Reader ---
-    if (practiceMode === "balanced") {
-      const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
-      const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
-      let warmupCandidates: Word[] = [];
 
-      if (unstudiedWords.length > 0) {
-        warmupCandidates = unstudiedWords.slice(0, 5);
-      } else if (immersionCandidates.length > 0) {
-        warmupCandidates = immersionCandidates.slice(0, 5);
-      } else {
-        warmupCandidates = activeWords.slice(0, 5);
-      }
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      const configForServer = startTypingWithConfig(configToUse);
-
-      try {
-        const storyResult = await generateImmersionStoryService({
-          targetWords: warmupCandidates,
-          targetLanguage,
-          nativeLanguage,
-          cfg: configForServer,
-        });
-
-        // Update strength and review history for all studied words
-        const candidateIds = new Set(warmupCandidates.map((w) => w.id));
-        setWords((prevWords) => {
-          const updatedWords = prevWords.map((w) => {
-            if (candidateIds.has(w.id)) {
-              const prevStrength = w.strength ?? 0;
-              const calcNewStrength = Math.min(100, prevStrength + 10);
-              const strengthGained = calcNewStrength - prevStrength;
-              return recordStrengthHistory(
-                w, 
-                calcNewStrength, 
-                'immersion_review', 
-                `Studied Contextual Story Immersion (+${strengthGained}% strength gained)`
-              );
-            }
-            return w;
-          });
-          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB story word save error:", e));
-          return updatedWords;
-        });
-
-        const sessionNextActions: any[] = [];
-        sessionNextActions.push({
-          label: t("chat_sandwich_start_duel_action", currentAppLang),
-          action: "start_sandwich_duel",
-          payload: { warmupWordIds: warmupCandidates.map((w) => w.id) },
-        });
-        sessionNextActions.push({
-          label: "📖 Next Story Practice",
-          action: "start_practice_story_immersion",
-        });
-
-        const storyMsg: ChatMessage = {
-          id: `sandwich-warmup-story-${Date.now()}`,
-          role: "assistant",
-          content: `### 🥪 Step 1 Warm-up: Contextual Story Immersion\n\nRead through the graded story below to acquire **${warmupCandidates.length} target words** naturally in rich context with dual translation and one-click sentence mining.\n\nNext, advance to **Step 2: ⚔️ Confuser Duel**, followed by **Step 3: 🎯 Practice Quiz**!`,
-          timestamp: new Date().toISOString(),
-          audioWord: warmupCandidates[0]?.word,
-          storyData: storyResult,
-          provider: storyResult.provider || configForServer?.provider,
-          model: storyResult.model || configForServer?.model,
-          responseTimeMs: storyResult.responseTimeMs,
-          suggestedActions: sessionNextActions,
-        };
-
-        setChatMessages([storyMsg]);
-      } catch (e: any) {
-        console.error("Error generating sandwich warm-up story:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
-      } finally {
-        setIsTyping(false);
-      }
-      return;
-    }
 
     // --- CONFUSER DUEL (CONTRAST MATCH) MODE ---
     if (practiceMode === "confuser_duel") {
@@ -1120,6 +1041,7 @@ export function useChat({
       setChatMessages((prev) => [...prev, feedbackMsg, nextMsg]);
     } else {
       const totalQs = activeQuiz.questions.length;
+      const wasSandwichStep1 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 1);
       const wasSandwichStep2 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 2);
       const wasSandwich = Boolean(activeQuiz.isSandwichSession);
       const sandwichWarmupIds = activeQuiz.warmupWordIds || [];
@@ -1186,14 +1108,14 @@ export function useChat({
 
       const top3SuggestedWords = allSuggestedWords.slice(0, 3);
 
-      let finishedContent = wasSandwichStep2
-        ? t("chat_sandwich_step2_finished_msg", currentAppLang, {
+      let finishedContent = wasSandwichStep1
+        ? t("chat_sandwich_step1_finished_msg", currentAppLang, {
             feedback: "",
             score: String(newScore),
             total: String(totalQs),
             accuracy: String(Math.round((newScore / totalQs) * 100)),
           })
-        : wasSandwich
+        : wasSandwichStep2 || wasSandwich
         ? t("chat_sandwich_finished_msg", currentAppLang, {
             feedback: "",
             score: String(newScore),
@@ -1227,7 +1149,7 @@ export function useChat({
         payload: { word: sw.word, hint: sw.translation || sw.hint },
       }));
 
-      const defaultActions = wasSandwichStep2
+      const defaultActions = wasSandwichStep1
         ? [
             {
               label: t("chat_sandwich_start_quiz_action", currentAppLang),
@@ -1242,7 +1164,6 @@ export function useChat({
             { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
             { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },
-            { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
           ]
         : [
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
