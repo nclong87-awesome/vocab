@@ -358,8 +358,8 @@ export function useChat({
       return;
     }
 
-    // --- BALANCED LEARNING LOOP STEP 2: Confuser Duel (Contrast Match) ---
-    if (practiceMode === "sandwich_duel") {
+    // --- BALANCED LEARNING LOOP STEP 1: Confuser Duel (Contrast Match) ---
+    if (practiceMode === "sandwich_duel" || practiceMode === "balanced") {
       const warmupIds = new Set(options?.warmupWordIds || []);
       const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
 

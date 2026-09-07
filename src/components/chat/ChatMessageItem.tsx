@@ -391,7 +391,7 @@ function ChatMessageItem({
           (m.id.startsWith("sandwich-warmup-msg-") ||
             m.id.startsWith("sandwich-warmup-story-") ||
             (m.suggestedActions && m.suggestedActions.some(a => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz"))) &&
-          !messages.some(quizM => quizM.id.startsWith("sandwich-duel-start-") || quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
+          !messages.some(quizM => quizM.id.startsWith("sandwich-quiz-start-"))
       );
 
       if (sandwichWarmupMsg) {
