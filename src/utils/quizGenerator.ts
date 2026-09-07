@@ -204,7 +204,71 @@ export interface ConfuserPairInfo {
   exampleWithBlank?: string;
 }
 
+/**
+ * Ensures that a fill-in-the-blank question or Confuser Duel question string
+ * contains a visible blank (______). If the target word is present in the sentence,
+ * it replaces the target word (or its inflected forms) with ______.
+ * If no target word or blank placeholder is present, it automatically inserts ______.
+ */
+export function ensureQuestionHasBlank(questionText: string, targetWord: string): string {
+  if (!questionText) {
+    return `Choose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`;
+  }
+
+  // 1. Standardize existing blank placeholders (e.g. [blank], (_____), ..., _____) to ______
+  let sanitized = questionText.replace(/\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi, "______");
+
+  // If ______ is already in the sanitized question, return it
+  if (sanitized.includes("______")) {
+    return sanitized;
+  }
+
+  const cleanTarget = (targetWord || "").trim();
+  if (!cleanTarget) {
+    return sanitized + " ______";
+  }
+
+  // 2. Try to replace target word or its inflected variations in sanitized text
+  const escapedTarget = cleanTarget.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regexWithSuffixes = new RegExp(`\\b${escapedTarget}(?:s|es|ed|ing|d)?\\b`, "gi");
+
+  if (regexWithSuffixes.test(sanitized)) {
+    return sanitized.replace(regexWithSuffixes, "______");
+  }
+
+  // Also try stem matching if target ends in 'e' or 'y'
+  let stem = escapedTarget;
+  if (cleanTarget.endsWith("e")) {
+    stem = escapedTarget.slice(0, -1);
+  } else if (cleanTarget.endsWith("y")) {
+    stem = escapedTarget.slice(0, -1) + "(?:y|ies|ied)";
+  }
+  const stemRegex = new RegExp(`\\b${stem}(?:ing|ed|es|s)?\\b`, "gi");
+  if (stemRegex.test(sanitized)) {
+    return sanitized.replace(stemRegex, "______");
+  }
+
+  // 3. Failsafe: No blank indicator and target word was omitted or not matched.
+  if (/"\s*$/i.test(sanitized)) {
+    return sanitized.replace(/"\s*$/i, " ______\"");
+  } else if (/\.\s*$/i.test(sanitized)) {
+    return sanitized.replace(/\.\s*$/i, " ______.");
+  } else {
+    return sanitized + " ______";
+  }
+}
+
 export const CURATED_CONFUSER_PAIRS: Record<string, ConfuserPairInfo> = {
+  "tract": {
+    rival: "track",
+    rule: "'Tract' (with a 't') is an area or plot of land, or a system of body organs; 'Track' (with a 'k') is a path, course, or railway line.",
+    exampleWithBlank: "The farmer owns a large ______ of fertile agricultural land."
+  },
+  "track": {
+    rival: "tract",
+    rule: "'Track' is a path, trail, or course; 'Tract' is an expanse or plot of land.",
+    exampleWithBlank: "The athletic team ran several laps around the newly paved running ______."
+  },
   "affect": {
     rival: "effect",
     rule: "'Affect' is typically a VERB (to influence or produce a change in), whereas 'Effect' is typically a NOUN (the result or consequence).",
@@ -470,14 +534,20 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
   let sentenceText = exampleWithBlank;
   if (!sentenceText) {
     if (word.example) {
-      const regex = new RegExp(`\\b${word.word}\\b`, "i");
-      sentenceText = word.example.replace(regex, "______");
+      sentenceText = ensureQuestionHasBlank(word.example, word.word);
     } else {
       sentenceText = `Choose the precise term: "The team needed to ______ the process accurately."`;
     }
+  } else {
+    sentenceText = ensureQuestionHasBlank(sentenceText, word.word);
   }
 
-  const questionText = `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"${sentenceText}"`;
+  // Clean trailing/leading quotes in sentenceText before wrapping
+  const cleanSentence = sentenceText.replace(/^["“]|["”]$/g, "").trim();
+  const questionText = ensureQuestionHasBlank(
+    `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"${cleanSentence}"`,
+    word.word
+  );
 
   // Contrast options: Target word vs Rival confuser (shuffled)
   const options = [word.word, confuserWord].sort(() => 0.5 - Math.random());
@@ -585,9 +655,10 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     else {
       // sentence type
       correctAnswer = word.word;
-      const regex = new RegExp(`\\b${word.word}\\b`, "i");
-      const hiddenSentence = word.example ? word.example.replace(regex, "______") : `Please select the correct word: ${word.word}`;
-      questionText = `Fill in the blank for the sentence:\n"${hiddenSentence}"`;
+      const hiddenSentence = word.example
+        ? ensureQuestionHasBlank(word.example, word.word)
+        : `Please select the correct word: ______`;
+      questionText = ensureQuestionHasBlank(`Fill in the blank for the sentence:\n"${hiddenSentence.replace(/^["“]|["”]$/g, "").trim()}"`, word.word);
       
       const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());

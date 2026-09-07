@@ -2568,6 +2568,27 @@ Output MUST be strictly valid JSON matching this schema:
         return Array.from(new Set(list)).filter(c => c.toLowerCase() !== target.toLowerCase() && c.trim().length > 1);
       };
 
+      const ensureServerQuestionHasBlank = (qText: string, tWord: string): string => {
+        if (!qText) {
+          return `Choose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`;
+        }
+        let sanitized = qText.replace(/\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi, "______");
+        if (sanitized.includes("______")) return sanitized;
+        const cleanT = (tWord || "").trim();
+        if (!cleanT) return sanitized + " ______";
+        const escaped = cleanT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rSuffixes = new RegExp(`\\b${escaped}(?:s|es|ed|ing|d)?\\b`, "gi");
+        if (rSuffixes.test(sanitized)) return sanitized.replace(rSuffixes, "______");
+        let stem = escaped;
+        if (cleanT.endsWith("e")) stem = escaped.slice(0, -1);
+        else if (cleanT.endsWith("y")) stem = escaped.slice(0, -1) + "(?:y|ies|ied)";
+        const rStem = new RegExp(`\\b${stem}(?:ing|ed|es|s)?\\b`, "gi");
+        if (rStem.test(sanitized)) return sanitized.replace(rStem, "______");
+        if (/"\s*$/i.test(sanitized)) return sanitized.replace(/"\s*$/i, " ______\"");
+        if (/\.\s*$/i.test(sanitized)) return sanitized.replace(/\.\s*$/i, " ______.");
+        return sanitized + " ______";
+      };
+
       const normalizedQuestions = questionsArray.map((q: any, idx: number) => {
         const matchingWord = words.find((w: any) => w.id === q.wordId || (w.word || "").toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length] || {};
         const targetWordText = matchingWord.word || q.word || "";
@@ -2612,15 +2633,21 @@ Output MUST be strictly valid JSON matching this schema:
         }
 
         const isQuestionDuel = isDuelMode || q.type === "duel";
+        const qType = isQuestionDuel ? 'duel' : (q.type || 'definition');
+        let rawQuestionText = q.question || (isQuestionDuel 
+          ? `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`
+          : `Which word matches: ${matchingWord.definition || targetWordText}`);
+
+        if (qType === 'duel' || qType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestionText)) {
+          rawQuestionText = ensureServerQuestionHasBlank(rawQuestionText, targetWordText);
+        }
 
         return {
           id: q.id || `ai-q-${matchingWord.id || idx}-${idx}`,
           wordId: matchingWord.id || `w-${idx}`,
           word: targetWordText,
-          type: isQuestionDuel ? 'duel' : (q.type || 'definition'),
-          question: q.question || (isQuestionDuel 
-            ? `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`
-            : `Which word matches: ${matchingWord.definition || targetWordText}`),
+          type: qType,
+          question: rawQuestionText,
           options: cleanOptions.sort(() => 0.5 - Math.random()),
           correctAnswer: correctAns,
           hint: q.hint || (isQuestionDuel ? `Contrast duel: '${targetWordText}' vs '${q.confuserWord || "rival"}'` : (matchingWord.pronunciation || "")),

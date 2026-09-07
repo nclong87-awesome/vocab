@@ -1,10 +1,8 @@
 import React from "react";
 import { Sparkles, Volume2 } from "lucide-react";
 
-// Inline custom markdown-like parser for formatting AI messages
-export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] | string {
-  if (!text) return "";
-  const safeText = typeof text === "string" ? text : String(text);
+function parseMarkdownTokens(safeText: string): (string | React.ReactNode)[] | string {
+  if (!safeText) return "";
   const parts: (string | React.ReactNode)[] = [];
   let index = 0;
   
@@ -37,6 +35,44 @@ export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] 
   }
   
   return parts.length > 0 ? parts : safeText;
+}
+
+// Inline custom markdown-like parser for formatting AI messages
+export function parseInlineMarkdown(text: string): (string | React.ReactNode)[] | string {
+  if (!text) return "";
+  const safeText = typeof text === "string" ? text : String(text);
+
+  // Match fill-in-the-blank placeholders: (_____), ______, [blank], [BLANK], or 3+ underscores
+  const blankRegex = /(\(\s*_{2,}\s*\)|_{3,}|\[blank\]|\[BLANK\])/g;
+  const chunks = safeText.split(blankRegex);
+
+  if (chunks.length > 1) {
+    const resultParts: React.ReactNode[] = [];
+    chunks.forEach((chunk, cIdx) => {
+      if (!chunk) return;
+      if (blankRegex.test(chunk) || /^\(\s*_{2,}\s*\)$|^_{3,}$|^\[blank\]$/i.test(chunk.trim())) {
+        resultParts.push(
+          <span
+            key={`blank-${cIdx}`}
+            className="px-2.5 py-0.5 mx-1 bg-amber-100/90 text-amber-950 font-black border-b-2 border-amber-600 rounded-md font-mono tracking-widest shadow-3xs inline-flex items-center justify-center align-baseline text-xs sm:text-sm select-none"
+            title="Fill in the blank"
+          >
+            (_____)
+          </span>
+        );
+      } else {
+        const parsedChunk = parseMarkdownTokens(chunk);
+        if (Array.isArray(parsedChunk)) {
+          resultParts.push(...parsedChunk);
+        } else if (parsedChunk) {
+          resultParts.push(parsedChunk);
+        }
+      }
+    });
+    return resultParts.length > 0 ? resultParts : safeText;
+  }
+
+  return parseMarkdownTokens(safeText);
 }
 
 export function renderCellContent(cellText: string): React.ReactNode {

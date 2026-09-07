@@ -1,5 +1,5 @@
 import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile } from "../types";
-import { generateConfusers, getImageKeyword } from "../utils/quizGenerator";
+import { generateConfusers, getImageKeyword, ensureQuestionHasBlank } from "../utils/quizGenerator";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
@@ -2498,14 +2498,21 @@ Output MUST be strictly valid JSON matching this schema:
 
         const resolvedSentenceTranslation = q.sentenceTranslation || matchingWord.exampleTranslation || undefined;
 
+        const questionType = isQuestionDuel ? 'duel' : (q.type || 'definition');
+        let rawQuestion = q.question || (isQuestionDuel
+          ? `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`
+          : `Which word matches: ${matchingWord.definition}`);
+
+        if (questionType === 'duel' || questionType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestion)) {
+          rawQuestion = ensureQuestionHasBlank(rawQuestion, matchingWord.word);
+        }
+
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
           word: matchingWord.word,
-          type: isQuestionDuel ? 'duel' : (q.type || 'definition'),
-          question: q.question || (isQuestionDuel
-            ? `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`
-            : `Which word matches: ${matchingWord.definition}`),
+          type: questionType,
+          question: rawQuestion,
           options: cleanOptions.sort(() => 0.5 - Math.random()),
           correctAnswer: correctAns,
           hint: q.hint || (isQuestionDuel ? `Contrast duel: '${matchingWord.word}' vs '${q.confuserWord || "rival"}'` : matchingWord.pronunciation),
