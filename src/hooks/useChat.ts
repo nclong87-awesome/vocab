@@ -1082,19 +1082,29 @@ export function useChat({
         incorrectIds: newIncorrectIds,
       });
 
-      const nextMsg: ChatMessage = {
-        id: `quiz-next-${Date.now()}`,
+      const now = Date.now();
+
+      const feedbackMsg: ChatMessage = {
+        id: `quiz-feedback-${now}`,
         role: "assistant",
-        content: `${feedback}\n---\n### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}${qTag}:\n**${nextQ.question}**`,
-        timestamp: new Date().toISOString(),
-        audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
+        content: feedback,
+        timestamp: new Date(now).toISOString(),
+        audioWord: targetWordObj ? targetWordObj.word : currentQ.word,
         quizSpeechText: isCorrect
           ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
           : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
-        nextQuestionSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
+        answeredQuizWordId: wordId,
+      };
+
+      const nextMsg: ChatMessage = {
+        id: `quiz-next-${now + 1}`,
+        role: "assistant",
+        content: `### ${t("chat_quiz_question_header", currentAppLang, { index: String(nextIndex + 1), total: String(activeQuiz.questions.length) })}${qTag}:\n**${nextQ.question}**`,
+        timestamp: new Date(now + 1).toISOString(),
+        audioWord: nextQ.type === "listening" ? nextQ.word : undefined,
+        quizSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
         imageUrl: nextQ.imageUrl,
         imageKeyword: nextQ.imageKeyword,
-        answeredQuizWordId: wordId,
         isConfuserDuel: nextQ.type === "duel",
         confuserWord: nextQ.confuserWord,
         contrastRule: nextQ.contrastRule,
@@ -1107,7 +1117,7 @@ export function useChat({
         ],
       };
 
-      setChatMessages((prev) => [...prev, nextMsg]);
+      setChatMessages((prev) => [...prev, feedbackMsg, nextMsg]);
     } else {
       const totalQs = activeQuiz.questions.length;
       const wasSandwichStep2 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 2);
@@ -1178,24 +1188,26 @@ export function useChat({
 
       let finishedContent = wasSandwichStep2
         ? t("chat_sandwich_step2_finished_msg", currentAppLang, {
-            feedback: feedback,
+            feedback: "",
             score: String(newScore),
             total: String(totalQs),
             accuracy: String(Math.round((newScore / totalQs) * 100)),
           })
         : wasSandwich
         ? t("chat_sandwich_finished_msg", currentAppLang, {
-            feedback: feedback,
+            feedback: "",
             score: String(newScore),
             total: String(totalQs),
             accuracy: String(Math.round((newScore / totalQs) * 100)),
           })
         : t("chat_quiz_finished_msg", currentAppLang, {
-            feedback: feedback,
+            feedback: "",
             score: String(newScore),
             total: String(totalQs),
             accuracy: String(Math.round((newScore / totalQs) * 100)),
           });
+
+      finishedContent = finishedContent.replace(/^(\s*---\s*)+/, "").trim();
 
       if (top3SuggestedWords.length > 0) {
         const header = t("chat_quiz_suggested_words_header", currentAppLang);
@@ -1238,16 +1250,26 @@ export function useChat({
             { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ];
 
-      const finishedMsg: ChatMessage = {
-        id: `quiz-end-${Date.now()}`,
+      const now = Date.now();
+
+      const feedbackMsg: ChatMessage = {
+        id: `quiz-feedback-${now}`,
         role: "assistant",
-        content: finishedContent,
-        timestamp: new Date().toISOString(),
-        audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
+        content: feedback,
+        timestamp: new Date(now).toISOString(),
+        audioWord: targetWordObj ? targetWordObj.word : currentQ.word,
         quizSpeechText: isCorrect
           ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
           : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
         answeredQuizWordId: wordId,
+      };
+
+      const finishedMsg: ChatMessage = {
+        id: `quiz-end-${now + 1}`,
+        role: "assistant",
+        content: finishedContent,
+        timestamp: new Date(now + 1).toISOString(),
+        audioWord: currentQ.type === "listening" ? currentQ.word : undefined,
         quizFinishedData: {
           score: newScore,
           total: totalQs,
@@ -1261,7 +1283,7 @@ export function useChat({
         ],
       };
 
-      setChatMessages((prev) => [...prev, finishedMsg]);
+      setChatMessages((prev) => [...prev, feedbackMsg, finishedMsg]);
     }
   };
 

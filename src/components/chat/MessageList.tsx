@@ -73,6 +73,17 @@ function MessageList({
   onRetryErrorMessage,
   onCancelErrorMessage,
 }: MessageListProps) {
+  const targetScrollIndex = React.useMemo(() => {
+    if (messages.length === 0) return -1;
+    if (messages.length >= 2) {
+      const secondLast = messages[messages.length - 2];
+      if (secondLast.id.startsWith("quiz-feedback-") || secondLast.answeredQuizWordId) {
+        return messages.length - 2;
+      }
+    }
+    return messages.length - 1;
+  }, [messages]);
+
   return (
     <div 
       className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-stone-50/50 chat-message-body" 
@@ -80,9 +91,10 @@ function MessageList({
     >
       {messages.map((msg, idx) => {
         const isLatestMessage = idx === messages.length - 1;
+        const isTargetScrollMessage = idx === targetScrollIndex;
         return (
           <Fragment key={msg.id}>
-            {isLatestMessage && (
+            {isTargetScrollMessage && (
               <div ref={latestMessageRef} />
             )}
             <ChatMessageItem

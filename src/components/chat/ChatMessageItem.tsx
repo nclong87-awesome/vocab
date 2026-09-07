@@ -587,6 +587,7 @@ function ChatMessageItem({
       startPractice(undefined, "sandwich_quiz", { warmupWordIds });
     } else if (act.action === "quiz_answer" && act.payload?.answer) {
       onSendMessage(act.payload.answer);
+      return;
     } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
       onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
     } else if (act.action === "common_phrases") {
