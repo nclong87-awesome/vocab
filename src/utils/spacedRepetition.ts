@@ -161,12 +161,58 @@ export function calculateNextReviewDate(
 }
 
 /**
+ * Minimum cooldown interval in hours after a review before a word can be reviewed again.
+ * A word practiced recently (e.g. within 2 hours) is protected from re-testing.
+ */
+export const MIN_REVIEW_COOLDOWN_HOURS = 2;
+
+/**
+ * Checks whether a word was reviewed recently and is currently in its cooldown window.
+ * Words on cooldown are shielded from being reused in quizzes, duels, or review fallbacks.
+ */
+export function isWordOnReviewCooldown(
+  word: Word,
+  now: Date = new Date(),
+  minCooldownHours: number = MIN_REVIEW_COOLDOWN_HOURS
+): boolean {
+  if (!word.lastReviewed) return false;
+
+  // Strict time check: if reviewed within the minimum cooldown window, it is on cooldown
+  const hoursSince = getHoursSinceLastReview(word, now);
+  if (hoursSince < minCooldownHours) {
+    return true;
+  }
+
+  // If nextReviewDate is explicitly set in the future, it is on cooldown
+  if (word.nextReviewDate) {
+    const nextReviewTime = new Date(word.nextReviewDate).getTime();
+    if (!isNaN(nextReviewTime) && now.getTime() < nextReviewTime) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Checks whether a word has reached or passed its scheduled next review time.
  */
-export function isWordEligibleForReview(word: Word, now: Date = new Date()): boolean {
+export function isWordEligibleForReview(
+  word: Word,
+  now: Date = new Date(),
+  minCooldownHours: number = MIN_REVIEW_COOLDOWN_HOURS
+): boolean {
   // If never reviewed, it is immediately eligible for initial review/practice
   if (!word.lastReviewed) {
     return true;
+  }
+
+  // Mandatory cooldown: a word reviewed very recently is never eligible for review
+  if (minCooldownHours > 0) {
+    const hoursSince = getHoursSinceLastReview(word, now);
+    if (hoursSince < minCooldownHours) {
+      return false;
+    }
   }
 
   // If exact nextReviewDate is present and word has been reviewed, check against it
@@ -250,6 +296,7 @@ export function getNextReviewInfo(word: Word, now: Date = new Date()): NextRevie
 export interface CandidateWordsOptions {
   maxCandidates?: number;
   candidatePoolSize?: number;
+  includeUnstudied?: boolean;
 }
 
 export interface WeightedCandidate {
@@ -318,65 +365,93 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 }
 
 /**
- * Selects candidate words for a new quiz based on dynamic spaced repetition eligibility.
- * Strictly selects from words that have been learned or studied previously and are due for review (isWordEligibleForReview),
- * gathers a candidate pool across priority tiers (starred: 5, memoryDecay: 4, weak: 3, rest: 1),
- * and applies weighted random sampling to pick candidate words.
+ * Selects candidate words for a new quiz based on dynamic spaced repetition eligibility and vocabulary backlog.
+ * 1. Prioritizes words that have been learned or studied previously and are due for review (isWordEligibleForReview),
+ *    applying A-Res weighted sampling across priority tiers (starred: 5, memoryDecay: 4, weak: 3, rest: 1).
+ * 2. If due review words are insufficient to meet maxCandidates (or if the user has thousands of unstudied words
+ *    waiting to be practiced), seamlessly fills remaining slots from unstudied words (sorted oldest/starred first),
+ *    strictly excluding any words on review cooldown.
+ * 3. Never returns words that were reviewed within the mandatory review cooldown window unless no other words exist.
  */
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
 
-  const { maxCandidates = 10, candidatePoolSize = 30 } = options;
+  const { maxCandidates = 10, candidatePoolSize = 30, includeUnstudied = true } = options;
   const now = new Date();
 
-  // 1. Strictly filter for words that have actually been learned or studied before
+  // 1. Find words that have been studied and are currently due for spaced repetition review (excluding cooldown)
   const learnedWords = words.filter(isWordLearnedOrStudied);
-  if (learnedWords.length === 0) {
-    return [];
-  }
+  const eligibleDueWords = learnedWords.filter(word => isWordEligibleForReview(word, now, MIN_REVIEW_COOLDOWN_HOURS));
 
-  // 2. Filter for words whose dynamic nextReviewDate is reached/due
-  const eligibleWords = learnedWords.filter(word => isWordEligibleForReview(word, now));
+  let selectedWords: Word[] = [];
 
-  // If no eligible words, return [] to allow falling back to study / word addition
-  if (eligibleWords.length < 1) {
-    return [];
-  }
+  if (eligibleDueWords.length > 0) {
+    // Categorize eligible learned words into priority tiers
+    const starred: Word[] = [];
+    const memoryDecay: Word[] = [];
+    const weak: Word[] = [];
+    const rest: Word[] = [];
 
-  // 3. Categorize eligible learned words into priority tiers
-  const starred: Word[] = [];
-  const memoryDecay: Word[] = [];
-  const weak: Word[] = [];
-  const rest: Word[] = [];
-
-  for (const word of eligibleWords) {
-    const { tier } = getWordTierAndWeight(word, now);
-    if (tier === "starred") starred.push(word);
-    else if (tier === "memoryDecay") memoryDecay.push(word);
-    else if (tier === "weak") weak.push(word);
-    else rest.push(word);
-  }
-
-  // Helper to shuffle an array randomly
-  const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
-
-  // 4. Gather candidate pool across all priority tiers
-  const candidatePool: WeightedCandidate[] = [];
-  const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "weak" | "rest", weight: number) => {
-    const shuffled = shuffle(tierWords);
-    for (const word of shuffled) {
-      if (candidatePool.length >= candidatePoolSize) break;
-      candidatePool.push({ word, tier, weight });
+    for (const word of eligibleDueWords) {
+      const { tier } = getWordTierAndWeight(word, now);
+      if (tier === "starred") starred.push(word);
+      else if (tier === "memoryDecay") memoryDecay.push(word);
+      else if (tier === "weak") weak.push(word);
+      else rest.push(word);
     }
-  };
 
-  addTierToPool(starred, "starred", 5);
-  addTierToPool(memoryDecay, "memoryDecay", 4);
-  addTierToPool(weak, "weak", 3);
-  addTierToPool(rest, "rest", 1);
+    // Helper to shuffle an array randomly
+    const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
 
-  // 5. Perform Weighted Random Sampling from the candidate pool
-  return sampleWeightedCandidates(candidatePool, maxCandidates);
+    // Gather candidate pool across all priority tiers
+    const candidatePool: WeightedCandidate[] = [];
+    const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "weak" | "rest", weight: number) => {
+      const shuffled = shuffle(tierWords);
+      for (const word of shuffled) {
+        if (candidatePool.length >= candidatePoolSize) break;
+        candidatePool.push({ word, tier, weight });
+      }
+    };
+
+    addTierToPool(starred, "starred", 5);
+    addTierToPool(memoryDecay, "memoryDecay", 4);
+    addTierToPool(weak, "weak", 3);
+    addTierToPool(rest, "rest", 1);
+
+    // Perform Weighted Random Sampling from the candidate pool
+    selectedWords = sampleWeightedCandidates(candidatePool, maxCandidates);
+  }
+
+  // 2. If we need more candidates to reach maxCandidates and includeUnstudied is enabled,
+  // pull from unstudied / new words that are NOT on cooldown
+  if (includeUnstudied && selectedWords.length < maxCandidates) {
+    const selectedIds = new Set(selectedWords.map(w => w.id));
+    const unstudied = words.filter(
+      w => !selectedIds.has(w.id) && !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
+    );
+
+    if (unstudied.length > 0) {
+      const sortedUnstudied = sortUnstudiedWordsOldestFirst(unstudied);
+      const needed = maxCandidates - selectedWords.length;
+      selectedWords = [...selectedWords, ...sortedUnstudied.slice(0, needed)];
+    }
+  }
+
+  // 3. If still under maxCandidates (e.g. all unstudied and due words are exhausted),
+  // supplement with any other available words that are NOT on review cooldown (shuffled)
+  if (selectedWords.length < maxCandidates) {
+    const selectedIds = new Set(selectedWords.map(w => w.id));
+    const otherAvailable = words.filter(
+      w => !selectedIds.has(w.id) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
+    );
+    if (otherAvailable.length > 0) {
+      const shuffled = [...otherAvailable].sort(() => 0.5 - Math.random());
+      const needed = maxCandidates - selectedWords.length;
+      selectedWords = [...selectedWords, ...shuffled.slice(0, needed)];
+    }
+  }
+
+  return selectedWords;
 }
 
 /**
@@ -509,6 +584,11 @@ export function getWordCreationTimestamp(word: Word, fallbackIndex: number = 0):
  */
 export function sortUnstudiedWordsOldestFirst(words: Word[]): Word[] {
   return [...words].sort((a, b) => {
+    // 1. Starred unstudied words always take highest priority
+    if (a.starred && !b.starred) return -1;
+    if (!a.starred && b.starred) return 1;
+
+    // 2. FIFO order (oldest created first)
     const tA = getWordCreationTimestamp(a);
     const tB = getWordCreationTimestamp(b);
     return tA - tB;
@@ -534,14 +614,17 @@ export function isImmersionCandidate(word: Word, now: Date = new Date(), customC
     return true;
   }
 
-  // 2. Custom cooldown override if explicitly passed (> 0)
-  if (customCooldownHours !== undefined && customCooldownHours > 0) {
+  // 2. Cooldown check: custom override or default MIN_REVIEW_COOLDOWN_HOURS
+  const cooldown = customCooldownHours !== undefined ? customCooldownHours : MIN_REVIEW_COOLDOWN_HOURS;
+  if (cooldown > 0) {
     const hoursSinceReview = getHoursSinceLastReview(word, now);
-    return hoursSinceReview >= customCooldownHours;
+    if (hoursSinceReview < cooldown) {
+      return false;
+    }
   }
 
   // 3. Dynamic eligibility check based on word's scheduled nextReviewDate
-  return isWordEligibleForReview(word, now);
+  return isWordEligibleForReview(word, now, cooldown);
 }
 
 /**
@@ -604,23 +687,54 @@ export function getCandidateWordForImmersion(words: Word[], now: Date = new Date
 
 /**
  * Checks whether a word is an eligible potential candidate for taking a quiz.
- * A word is a quiz candidate if it has prior exposure (learned or studied before)
- * and has reached its scheduled review date according to its strength history.
+ * 1. Words on review cooldown (e.g. reviewed within the last 2 hours) are strictly excluded.
+ * 2. Unstudied / new words are immediately eligible to be practiced and introduced via quiz.
+ * 3. Previously studied words are eligible when their scheduled review date is reached.
  */
 export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
-  // Quiz requires prior study/exposure
-  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
-    return false;
-  }
-  if (customCooldownHours !== undefined && customCooldownHours > 0) {
+  const cooldown = customCooldownHours !== undefined ? customCooldownHours : MIN_REVIEW_COOLDOWN_HOURS;
+  if (cooldown > 0) {
     const hours = getHoursSinceLastReview(word, now);
-    return hours >= customCooldownHours;
+    if (hours < cooldown) {
+      return false;
+    }
   }
-  return isWordEligibleForReview(word, now);
+
+  // Brand new, unstudied words are eligible for initial quiz practice
+  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+    return true;
+  }
+
+  return isWordEligibleForReview(word, now, cooldown);
 }
 
 /**
- * Gets all words that are potential candidates for quizzes.
+ * Checks whether a previously studied word is strictly due for spaced repetition review.
+ */
+export function isDueReviewCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
+  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+    return false;
+  }
+  const cooldown = customCooldownHours !== undefined ? customCooldownHours : MIN_REVIEW_COOLDOWN_HOURS;
+  if (cooldown > 0) {
+    const hours = getHoursSinceLastReview(word, now);
+    if (hours < cooldown) {
+      return false;
+    }
+  }
+  return isWordEligibleForReview(word, now, cooldown);
+}
+
+/**
+ * Gets all words that are strictly due for spaced repetition review.
+ */
+export function getDueReviewCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
+  if (!words || words.length === 0) return [];
+  return words.filter(word => isDueReviewCandidate(word, now, customCooldownHours));
+}
+
+/**
+ * Gets all words that are potential candidates for quizzes (both unstudied words + due reviews).
  */
 export function getQuizCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];

@@ -17,6 +17,9 @@ import {
   getImmersionCandidates,
   isWordLearnedOrStudied,
   sortUnstudiedWordsOldestFirst,
+  isWordOnReviewCooldown,
+  isDueReviewCandidate,
+  getDueReviewCandidates,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB, getUserPersonalityProfileFromDB } from "../db/indexedDB";
@@ -276,15 +279,16 @@ export function useChat({
 
     const immersionCandidates = getImmersionCandidates(activeWords);
     const dueQuizCandidates = getQuizCandidates(activeWords);
+    const unstudiedCandidates = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+    const nonCooldownActive = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
 
-    if (
-      practiceMode !== "confuser_duel" &&
-      practiceMode !== "sandwich_duel" &&
-      practiceMode !== "sandwich_quiz" &&
-      practiceMode !== "balanced" &&
-      immersionCandidates.length === 0 &&
-      dueQuizCandidates.length === 0
-    ) {
+    const hasAvailablePractice =
+      unstudiedCandidates.length > 0 ||
+      dueQuizCandidates.length > 0 ||
+      immersionCandidates.length > 0 ||
+      nonCooldownActive.length > 0;
+
+    if (!hasAvailablePractice) {
       const noCandidateMsg: ChatMessage = {
         id: `practice-no-candidates-${Date.now()}`,
         role: "assistant",
@@ -302,8 +306,10 @@ export function useChat({
     // When practiceMode is 'auto', present practice session starter overview with details & choice
     if (practiceMode === "auto") {
       const immersionCount = immersionCandidates.length;
-      const quizCount = dueQuizCandidates.length;
-      const newUnstudiedCount = immersionCandidates.filter((w) => !isWordLearnedOrStudied(w)).length;
+      const unstudiedCount = unstudiedCandidates.length;
+      const dueReviews = getDueReviewCandidates(activeWords);
+      const dueCount = dueReviews.length;
+      const totalReady = immersionCount > 0 ? immersionCount : (unstudiedCount + dueCount);
 
       const actions: { label: string; action: string }[] = [];
 
@@ -326,9 +332,15 @@ export function useChat({
         });
       }
 
-      if (quizCount > 0) {
+      if (dueCount > 0 || unstudiedCount > 0 || dueQuizCandidates.length > 0) {
+        const quizLabel =
+          dueCount > 0 && unstudiedCount > 0
+            ? `🏆 Quiz Practice (${dueCount} review, ${unstudiedCount} new)`
+            : dueCount > 0
+            ? `🏆 Quiz Review (${dueCount} ${dueCount === 1 ? "word" : "words"})`
+            : `🏆 Quiz Practice (${unstudiedCount} ${unstudiedCount === 1 ? "word" : "words"})`;
         actions.push({
-          label: `🏆 Quiz Review (${quizCount} ${quizCount === 1 ? "word" : "words"})`,
+          label: quizLabel,
           action: "start_practice_quiz_only",
         });
       }
@@ -341,16 +353,18 @@ export function useChat({
       }
 
       const breakdownText =
-        newUnstudiedCount > 0 && quizCount > 0
-          ? ` (**${newUnstudiedCount} new**, **${quizCount} review**)`
-          : newUnstudiedCount > 0
-          ? ` (**${newUnstudiedCount} new**)`
-          : ` (**${quizCount} review**)`;
+        unstudiedCount > 0 && dueCount > 0
+          ? ` (**${unstudiedCount} new**, **${dueCount} review**)`
+          : unstudiedCount > 0
+          ? ` (**${unstudiedCount} new**)`
+          : dueCount > 0
+          ? ` (**${dueCount} review**)`
+          : "";
 
       const choiceMsg: ChatMessage = {
         id: `practice-mode-choice-${Date.now()}`,
         role: "assistant",
-        content: `### 🎯 Practice Session Overview\n\nYou have **${immersionCount} word(s)** ready for practice${breakdownText}.\n\nHow would you like to practice?`,
+        content: `### 🎯 Practice Session Overview\n\nYou have **${totalReady} word(s)** ready for practice${breakdownText}.\n\nHow would you like to practice?`,
         timestamp: new Date().toISOString(),
         suggestedActions: actions,
       };
@@ -370,8 +384,12 @@ export function useChat({
       }
       if (duelWords.length < 4) {
         const existingIds = new Set(duelWords.map((w) => w.id));
-        const unstudied = sortUnstudiedWordsOldestFirst(activeWords.filter((w) => !isWordLearnedOrStudied(w)));
-        for (const w of [...unstudied, ...dueQuizCandidates, ...activeWords]) {
+        const unstudied = sortUnstudiedWordsOldestFirst(
+          activeWords.filter((w) => !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, new Date(), 2))
+        );
+        const nonCooldownWords = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+        const dueReviews = activeWords.filter((w) => isDueReviewCandidate(w, new Date(), 2));
+        for (const w of [...unstudied, ...dueReviews, ...nonCooldownWords]) {
           if (!existingIds.has(w.id)) {
             duelWords.push(w);
             existingIds.add(w.id);
@@ -463,20 +481,14 @@ export function useChat({
       
       // Select core review words (excluding warm-up words from Step 1)
       const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
-      const studiedNonWarmup = nonWarmupWords.filter(isWordLearnedOrStudied);
-      const quizCandidates = getQuizCandidateWords(nonWarmupWords, { maxCandidates: 3 });
-      const coreReviewWords = quizCandidates.length > 0
-        ? quizCandidates
-        : (dueQuizCandidates.filter((w) => !warmupIds.has(w.id)).slice(0, 3));
-      
-      const fallbackReviewWords = coreReviewWords.length > 0 
-        ? coreReviewWords 
-        : (studiedNonWarmup.length > 0 ? studiedNonWarmup.slice(0, 3) : nonWarmupWords.slice(0, 3));
+      const nonCooldownNonWarmup = nonWarmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+      const coreReviewWords = getQuizCandidateWords(nonCooldownNonWarmup, { maxCandidates: 3 });
 
       // Build balanced session quiz words:
-      // Combine Core Review words (up to 3) with Warm-up words (up to 2) for immediate retention check
-      const selectedWarmup = warmupWords.slice(0, 2);
-      const combinedWords = [...fallbackReviewWords.slice(0, 3)];
+      // Exclude warm-up words that are on review cooldown from immediate quiz re-testing
+      const eligibleWarmup = warmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+      const selectedWarmup = eligibleWarmup.slice(0, 2);
+      const combinedWords = [...coreReviewWords.slice(0, 3)];
       for (const w of selectedWarmup) {
         if (!combinedWords.some((cw) => cw.id === w.id)) {
           combinedWords.push(w);
@@ -484,9 +496,9 @@ export function useChat({
       }
       const effectiveQuizWords = combinedWords.length > 0
         ? combinedWords
-        : (fallbackReviewWords.length > 0 ? fallbackReviewWords : activeWords.slice(0, 5));
+        : (coreReviewWords.length > 0 ? coreReviewWords : nonCooldownNonWarmup.slice(0, 5));
 
-      const actualReviewCount = fallbackReviewWords.length;
+      const actualReviewCount = coreReviewWords.length;
       const actualWarmupCount = effectiveQuizWords.filter((w) => warmupIds.has(w.id)).length;
 
       const controller = new AbortController();
@@ -682,11 +694,40 @@ export function useChat({
     const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
 
     // Determine if we should launch Quiz mode (only for quiz_only)
-    const shouldRunQuiz = practiceMode === "quiz_only" && (quizWords.length >= 1 || dueQuizCandidates.length >= 1);
+    if (practiceMode === "quiz_only") {
+      let effectiveQuizWords = quizWords;
 
-    // Step 1: Look for candidate words for Quiz questions
-    if (shouldRunQuiz) {
-      const effectiveQuizWords = quizWords.length >= 1 ? quizWords : (dueQuizCandidates.length >= 1 ? dueQuizCandidates.slice(0, 5) : activeWords.slice(0, 5));
+      // Robust fallback if quizWords is somehow empty: pull directly from unstudied candidates
+      if (effectiveQuizWords.length === 0) {
+        const availableUnstudied = sortUnstudiedWordsOldestFirst(
+          activeWords.filter((w) => !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, new Date(), 2))
+        );
+        if (availableUnstudied.length > 0) {
+          effectiveQuizWords = availableUnstudied.slice(0, 5);
+        } else {
+          // Last resort: any non-cooldown word, shuffled
+          const nonCooldownWords = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+          if (nonCooldownWords.length > 0) {
+            effectiveQuizWords = [...nonCooldownWords].sort(() => 0.5 - Math.random()).slice(0, 5);
+          }
+        }
+      }
+
+      if (effectiveQuizWords.length === 0) {
+        const noCandidateMsg: ChatMessage = {
+          id: `practice-no-candidates-${Date.now()}`,
+          role: "assistant",
+          content: t("chat_quiz_no_candidates_warning", currentAppLang),
+          timestamp: new Date().toISOString(),
+          suggestedActions: [
+            { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+            { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+          ],
+        };
+        setChatMessages([noCandidateMsg]);
+        return;
+      }
+
       // Found Quiz candidates: proceed to generate and start Quiz
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -769,7 +810,22 @@ export function useChat({
       }
     }
     if (batchStoryCandidates.length === 0 && activeWords.length > 0) {
-      batchStoryCandidates = activeWords.slice(0, 5);
+      const nonCooldownWords = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+      batchStoryCandidates = nonCooldownWords.slice(0, 5);
+    }
+    if (batchStoryCandidates.length === 0) {
+      const noCandidateMsg: ChatMessage = {
+        id: `practice-no-candidates-${Date.now()}`,
+        role: "assistant",
+        content: t("chat_quiz_no_candidates_warning", currentAppLang),
+        timestamp: new Date().toISOString(),
+        suggestedActions: [
+          { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+        ],
+      };
+      setChatMessages([noCandidateMsg]);
+      return;
     }
     if (batchStoryCandidates.length > 0) {
       const controller = new AbortController();
@@ -905,6 +961,7 @@ export function useChat({
         }
         return w;
       });
+      wordsRef.current = updatedWords;
       saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB quiz single word update error:", e));
       return updatedWords;
     });
