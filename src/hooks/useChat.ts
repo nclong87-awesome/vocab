@@ -2491,20 +2491,27 @@ export function useChat({
       }
 
       const replies = res.suggestedReplies || [];
-      const candidates = res.vocabularyCandidates || [];
+      const rawCandidates = res.suggestedWords || res.vocabularyCandidates || [];
+
+      const normalizedSuggestedWords: QuizSuggestedWord[] = rawCandidates
+        .filter((c: any) => c && c.word)
+        .map((c: any) => ({
+          word: String(c.word).trim(),
+          definition: c.definition || c.reason || "",
+          translation: c.translation || "",
+          partOfSpeech: c.partOfSpeech || "vocabulary",
+          hint: c.reason || c.hint || c.definition || "",
+        }));
 
       const actions: any[] = [];
 
-      if (candidates && candidates.length > 0) {
-        candidates.forEach((cand) => {
-          if (cand.word) {
-            const reason = cand.reason || t("label_suggested_vocabulary", currentAppLang);
-            actions.push({
-              label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason }),
-              action: "add_word",
-              payload: { word: cand.word, hint: cand.reason || cand.translation },
-            });
-          }
+      if (normalizedSuggestedWords && normalizedSuggestedWords.length > 0) {
+        normalizedSuggestedWords.forEach((sw) => {
+          actions.push({
+            label: t("chat_suggest_reply_label", currentAppLang, { word: sw.word, reason: sw.hint || sw.translation }),
+            action: "add_word",
+            payload: { word: sw.word, definition: sw.definition, translation: sw.translation, partOfSpeech: sw.partOfSpeech, hint: sw.hint },
+          });
         });
       }
 
@@ -2518,13 +2525,6 @@ export function useChat({
         contentMarkdown += t("chat_suggest_replies_empty", currentAppLang);
       }
 
-      if (candidates && candidates.length > 0) {
-        contentMarkdown += t("chat_useful_conversation_vocab_header", currentAppLang);
-        candidates.forEach((c) => {
-          contentMarkdown += `- **${c.word}**: *${c.translation}* — ${c.reason}\n`;
-        });
-      }
-
       setChatMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== statusMsgId);
         return [
@@ -2536,6 +2536,7 @@ export function useChat({
             timestamp: new Date().toISOString(),
             suggestedActions: actions,
             suggestedReplies: replies,
+            suggestedWords: normalizedSuggestedWords,
             provider: res.provider,
             model: res.model,
             responseTimeMs: res.responseTimeMs,
@@ -2605,7 +2606,17 @@ export function useChat({
 
       const fixedSentence = res.fixedSentence || userText;
       const explanation = res.explanation || "";
-      const candidates = res.vocabularyCandidates || [];
+      const rawCandidates = res.suggestedWords || res.vocabularyCandidates || [];
+
+      const normalizedSuggestedWords: QuizSuggestedWord[] = rawCandidates
+        .filter((c: any) => c && c.word)
+        .map((c: any) => ({
+          word: String(c.word).trim(),
+          definition: c.definition || c.reason || "",
+          translation: c.translation || "",
+          partOfSpeech: c.partOfSpeech || "vocabulary",
+          hint: c.reason || c.hint || c.definition || "",
+        }));
 
       const actions: any[] = [];
 
@@ -2615,23 +2626,19 @@ export function useChat({
         payload: { text: fixedSentence },
       });
 
-      if (candidates && candidates.length > 0) {
-        candidates.forEach((cand) => {
-          if (cand.word) {
-            const defVal = cand.definition;
-            const transVal = cand.translation;
-            const hintVal = defVal || transVal || cand.reason || t("label_candidate_vocabulary", currentAppLang);
-            actions.push({
-              label: t("chat_suggest_reply_label", currentAppLang, { word: cand.word, reason: hintVal }),
-              action: "add_word",
-              payload: {
-                word: cand.word,
-                definition: defVal,
-                translation: transVal,
-                hint: hintVal,
-              },
-            });
-          }
+      if (normalizedSuggestedWords && normalizedSuggestedWords.length > 0) {
+        normalizedSuggestedWords.forEach((sw) => {
+          actions.push({
+            label: t("chat_suggest_reply_label", currentAppLang, { word: sw.word, reason: sw.hint || sw.translation }),
+            action: "add_word",
+            payload: {
+              word: sw.word,
+              definition: sw.definition,
+              translation: sw.translation,
+              partOfSpeech: sw.partOfSpeech,
+              hint: sw.hint,
+            },
+          });
         });
       }
 
@@ -2645,17 +2652,6 @@ export function useChat({
         contentMarkdown += `${explanation}\n\n`;
       }
 
-      if (candidates && candidates.length > 0) {
-        contentMarkdown += t("chat_recommended_vocabulary_candidates_header", currentAppLang);
-        candidates.forEach((c) => {
-          const trans = c.translation ? ` (${c.translation})` : "";
-          const defOrReason = c.definition
-            ? `: *${c.definition}*${c.reason ? ` — ${c.reason}` : ""}`
-            : (c.reason ? `: *${c.reason}*` : "");
-          contentMarkdown += `- **${c.word}**${trans}${defOrReason}\n`;
-        });
-      }
-
       setChatMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== statusMsgId);
         return [
@@ -2667,6 +2663,7 @@ export function useChat({
             timestamp: new Date().toISOString(),
             fixedSentence: fixedSentence,
             suggestedActions: actions,
+            suggestedWords: normalizedSuggestedWords,
             provider: res.provider,
             model: res.model,
             responseTimeMs: res.responseTimeMs,

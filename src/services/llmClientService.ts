@@ -1765,12 +1765,20 @@ export interface FixGrammarResult {
   provider?: string;
   model?: string;
   responseTimeMs?: number;
-  vocabularyCandidates: {
+  suggestedWords?: Array<{
     word: string;
     definition?: string;
     translation?: string;
-    reason: string;
-  }[];
+    partOfSpeech?: string;
+    reason?: string;
+    hint?: string;
+  }>;
+  vocabularyCandidates?: Array<{
+    word: string;
+    definition?: string;
+    translation?: string;
+    reason?: string;
+  }>;
 }
 
 export async function fixGrammarService(params: FixGrammarRequest): Promise<FixGrammarResult> {
@@ -1792,28 +1800,32 @@ CRITICAL INSTRUCTIONS:
    - What corrections were made (grammar, spelling, punctuation)
    - Why those changes make the sentence sound more natural and fluent
    - Alternative casual ways to express the same idea
-3. "vocabularyCandidates": Identify 1 to 4 valuable candidate vocabulary words, collocations, or expressions from EITHER the user's input or the fixed sentence that are worth learning in "${userTarget}".
-  CRITICAL VERB & PREPOSITION RULE: For any verb candidates, always suggest the verb together with its dependent preposition or key collocation (e.g. "elaborate on", "apologize for", "prevent from", "insist on", "comply with", "cure for", "rely on") instead of bare isolated verbs.
-  PRIORITY RULE: If the user's input contains misspelled words, prioritize those first as vocabulary candidates.
-  - For misspelled candidates, set "word" to the corrected form in "${userTarget}" and mention the original misspelling in "reason".
-  - If there are multiple misspellings, rank them before other candidate words.
-   For each candidate, provide:
-   - "word": string (the target language word or expression, with dependent prepositions for verbs)
+3. "suggestedWords": Array of exactly 3 practical companion vocabulary items in "${userTarget}" extracted or derived from the user's input or fixed sentence.
+   CRITICAL SUGGESTED WORDS REQUIREMENT (MATCHING QUIZ STYLE):
+   During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
+   1) EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
+   2) EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of", "double-check") with "partOfSpeech": "verb + prep" or "adj + prep"
+   3) EXACTLY ONE Noun (a key thematic or domain noun from the sentence context, e.g., "get back to", "breakthrough", "milestone", "curiosity") with "partOfSpeech": "noun"
+   PRIORITY RULE: If the user's input contains misspelled words, prioritize those first or incorporate their corrected forms.
+   For each item, provide:
+   - "word": string (the target language word or expression)
    - "definition": string (clear, concise definition written strictly in ${userTarget})
    - "translation": string (direct translation into user's native language ${userNative})
-   - "reason": string (a short, clear 1-line reason why this word/expression is a great candidate to add to their vocabulary collection)
+   - "partOfSpeech": string ("phrasal verb" | "verb + prep" | "adj + prep" | "noun")
+   - "reason": string (a short, clear 1-line reason or hint why this word/expression is valuable)
 `;
 
-  const systemInstruction = `You are a friendly, natural AI Language Coach. Polish sentences, improve flow, and fix grammar & spelling with a casual tone, suggesting candidate vocabulary words for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
+  const systemInstruction = `You are a friendly, natural AI Language Coach. Polish sentences, improve flow, and fix grammar & spelling with a casual tone, suggesting 3 companion vocabulary words (1 phrasal verb, 1 verb/adj + preposition, 1 noun) for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
   const schemaDesc = `{
   "fixedSentence": "string",
   "explanation": "string (markdown formatted casual explanation)",
-  "vocabularyCandidates": [
+  "suggestedWords": [
     {
       "word": "string (target word in ${userTarget})",
       "definition": "string (definition written strictly in ${userTarget})",
       "translation": "string (direct translation in ${userNative})",
-      "reason": "string (short reason)"
+      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')",
+      "reason": "string (short usage reason or hint)"
     }
   ]
 };`;
@@ -2731,10 +2743,18 @@ export interface SuggestReplyResult {
     tone: string;
     explanation: string;
   }>;
-  vocabularyCandidates: Array<{
+  vocabularyCandidates?: Array<{
     word: string;
     translation: string;
     reason: string;
+  }>;
+  suggestedWords?: Array<{
+    word: string;
+    definition?: string;
+    translation?: string;
+    partOfSpeech?: string;
+    reason?: string;
+    hint?: string;
   }>;
   provider?: string;
   model?: string;
@@ -2761,7 +2781,13 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
     userText += `\n\nUser guidance/instruction: "${customPrompt}"`;
   }
 
-  userText += `\n\nCRITICAL DIRECTIVES:\n- NO REASONING OR THINKING: Do not include any chain of thought, reasoning, thinking process, explanation of reasoning, or commentary in your response. Do not use '<think>' tags or similar blocks. Output strictly valid raw JSON and absolutely nothing else.\n- CRITICAL VERB & COLLOCATION RULE: When extracting vocabulary candidates for verbs, pair verbs with their natural dependent prepositions and collocations (e.g., "catch up on", "count on", "look forward to", "elaborate on", "rely on").`;
+  userText += `\n\nCRITICAL DIRECTIVES:
+- NO REASONING OR THINKING: Do not include any chain of thought, reasoning, thinking process, explanation of reasoning, or commentary in your response. Do not use '<think>' tags or similar blocks. Output strictly valid raw JSON and absolutely nothing else.
+- SUGGESTED WORDS REQUIREMENT (MATCHING QUIZ STYLE): Provide a "suggestedWords" array with EXACTLY 3 practical companion vocabulary items in "${userTarget}" relevant to the conversation context:
+  1) EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
+  2) EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of", "double-check") with "partOfSpeech": "verb + prep" or "adj + prep"
+  3) EXACTLY ONE Noun (a key thematic or domain noun from the conversation context, e.g., "get back to", "breakthrough", "milestone", "curiosity") with "partOfSpeech": "noun"
+  For each item, provide: "word", "definition" (short definition in ${userTarget}), "translation" (translation in ${userNative}), "partOfSpeech", and "reason" (short explanation or hint).`;
 
   const schemaDesc = `{
     "suggestedReplies": [
@@ -2772,11 +2798,13 @@ export async function suggestCasualReplyService(params: SuggestReplyRequest): Pr
         "explanation": "string (nuance/usage explanation in \"${userNative}\")"
       }
     ],
-    "vocabularyCandidates": [
+    "suggestedWords": [
       {
-        "word": "string (useful vocabulary term or verb + preposition collocation in ${userTarget})",
+        "word": "string (useful vocabulary term or collocation in ${userTarget})",
+        "definition": "string (short definition in ${userTarget})",
         "translation": "string (translation in ${userNative})",
-        "reason": "string (short explanation of usage/meaning in ${userNative})"
+        "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')",
+        "reason": "string (short usage explanation or hint)"
       }
     ]
   }`;

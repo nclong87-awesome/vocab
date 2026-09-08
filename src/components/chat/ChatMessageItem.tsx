@@ -803,7 +803,159 @@ function ChatMessageItem({
                 </>
               )}
 
-              {/* Suggested Words / Paired Collocations Card - ALWAYS rendered inside the chat message bubble */}
+              {/* Word Libraries List Card */}
+              {msg.wordLibraries && (
+                <WordLibraryChatCard
+                  targetLanguage={targetLanguage}
+                  nativeLanguage={nativeLanguage}
+                  appLanguage={currentAppLang}
+                  showToast={showToast}
+                  onAddWord={onAddWord}
+                  onAddMultipleWords={onAddMultipleWords}
+                  onGenerateByTopic={onGenerateByTopic}
+                  words={words}
+                  ttsConfig={ttsConfig}
+                  llmConfig={llmConfig}
+                />
+              )}
+
+              {/* Suggested replies cards with direct Copy buttons */}
+              {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (
+                <div className="mt-4 space-y-3 border-t border-stone-100/80 pt-3">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block font-mono mb-2">
+                    Suggested Replies (Quick Copy):
+                  </span>
+                  <div className="grid grid-cols-1 gap-3">
+                    {msg.suggestedReplies.map((rep, idx) => {
+                      const repKey = `reply-${msg.id}-${idx}`;
+                      const isCopied = copiedKey === repKey;
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition-all hover:border-amber-300/90"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <span className="text-[10px] font-extrabold text-amber-950 font-mono bg-amber-200/80 px-1.5 py-0.5 rounded">
+                                Option {idx + 1}
+                              </span>
+                              {rep.tone && (
+                                <span className="text-[10px] font-semibold text-amber-900 bg-amber-100/90 border border-amber-300/50 px-1.5 py-0.5 rounded-md">
+                                  {rep.tone}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs sm:text-sm font-semibold text-stone-900 break-words mt-1">
+                              "{rep.reply}"
+                            </p>
+                            {rep.translation && (
+                              <p className="text-xs text-amber-900/80 italic mt-1.5 font-medium">
+                                {rep.translation}
+                              </p>
+                            )}
+                            {rep.explanation && (
+                              <p className="text-xs text-stone-600 mt-1 leading-normal">
+                                {rep.explanation}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                            {!hideAskAiButton && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedChatWord(createAdHocWord({
+                                    id: `reply-${msg.id}-${idx}`,
+                                    word: rep.reply,
+                                    definition: rep.explanation || rep.translation || `Suggested reply in ${targetLanguage}`,
+                                    translation: rep.translation || "",
+                                    category: "Conversation Reply",
+                                    context: rep.tone ? `Tone: ${rep.tone}` : undefined,
+                                    strength: 100,
+                                    learned: true,
+                                    createdAt: new Date().toISOString(),
+                                    lastReviewed: null
+                                  }));
+                                }}
+                                className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
+                                title="Ask AI about this reply"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Ask AI</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(rep.reply, repKey, "📋 Copied suggestion to clipboard!")}
+                              className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
+                              title="Copy suggestion to clipboard"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{isCopied ? "Copied!" : "Copy"}</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Image for visual picture questions or photo analysis */}
+              {(msg.imageUrl || msg.imageKeyword) && (
+                <div className="my-2.5 max-w-md rounded-xl border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
+                  {msg.imageUrl && (msg.imageUrl.startsWith("data:") || msg.imageUrl.startsWith("blob:")) ? (
+                    <img 
+                      src={msg.imageUrl} 
+                      alt={msg.audioWord || "Uploaded photo"} 
+                      className="w-full max-h-80 object-cover rounded-xl"
+                    />
+                  ) : (
+                    <QuizImage
+                      imageKeyword={msg.imageKeyword}
+                      alt="Quiz visual clue" 
+                      word={msg.audioWord || "Quiz clue"} 
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Audio clip player card for listening questions (hidden if WordReviewedBanner is shown) */}
+              {msg.audioWord && !answeredWord && (
+                <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 sm:p-3.5 my-2.5 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-stone-900 hover:bg-stone-800 text-amber-400 flex items-center justify-center shrink-0 shadow-xs cursor-pointer transition-transform hover:scale-105"
+                      title="Play audio clip"
+                    >
+                      <Volume2 className="w-5 h-5" />
+                    </button>
+                    <div>
+                      <h5 className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center gap-1">
+                        <Volume2 className="w-3.5 h-3.5 text-amber-600" />
+                        Audio Clip
+                      </h5>
+                      <p className="text-[11px] text-stone-600 font-serif italic">
+                        Tap play to listen to the target word
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                      className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                      Play Clip
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Suggested Words / Paired Collocations Card - ALWAYS rendered inside the chat message bubble at the very bottom */}
               {effectiveSuggestedWords.length > 0 && (
                 <div className="mt-4 pt-3.5 border-t border-stone-200/80 space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -953,158 +1105,6 @@ function ChatMessageItem({
                         </div>
                       );
                     })}
-                  </div>
-                </div>
-              )}
-
-              {/* Word Libraries List Card */}
-              {msg.wordLibraries && (
-                <WordLibraryChatCard
-                  targetLanguage={targetLanguage}
-                  nativeLanguage={nativeLanguage}
-                  appLanguage={currentAppLang}
-                  showToast={showToast}
-                  onAddWord={onAddWord}
-                  onAddMultipleWords={onAddMultipleWords}
-                  onGenerateByTopic={onGenerateByTopic}
-                  words={words}
-                  ttsConfig={ttsConfig}
-                  llmConfig={llmConfig}
-                />
-              )}
-
-              {/* Suggested replies cards with direct Copy buttons */}
-              {msg.suggestedReplies && msg.suggestedReplies.length > 0 && (
-                <div className="mt-4 space-y-3 border-t border-stone-100/80 pt-3">
-                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block font-mono mb-2">
-                    Suggested Replies (Quick Copy):
-                  </span>
-                  <div className="grid grid-cols-1 gap-3">
-                    {msg.suggestedReplies.map((rep, idx) => {
-                      const repKey = `reply-${msg.id}-${idx}`;
-                      const isCopied = copiedKey === repKey;
-                      return (
-                        <div
-                          key={idx}
-                          className="p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start justify-between gap-3 shadow-2xs transition-all hover:border-amber-300/90"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                              <span className="text-[10px] font-extrabold text-amber-950 font-mono bg-amber-200/80 px-1.5 py-0.5 rounded">
-                                Option {idx + 1}
-                              </span>
-                              {rep.tone && (
-                                <span className="text-[10px] font-semibold text-amber-900 bg-amber-100/90 border border-amber-300/50 px-1.5 py-0.5 rounded-md">
-                                  {rep.tone}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs sm:text-sm font-semibold text-stone-900 break-words mt-1">
-                              "{rep.reply}"
-                            </p>
-                            {rep.translation && (
-                              <p className="text-xs text-amber-900/80 italic mt-1.5 font-medium">
-                                {rep.translation}
-                              </p>
-                            )}
-                            {rep.explanation && (
-                              <p className="text-xs text-stone-600 mt-1 leading-normal">
-                                {rep.explanation}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                            {!hideAskAiButton && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedChatWord(createAdHocWord({
-                                    id: `reply-${msg.id}-${idx}`,
-                                    word: rep.reply,
-                                    definition: rep.explanation || rep.translation || `Suggested reply in ${targetLanguage}`,
-                                    translation: rep.translation || "",
-                                    category: "Conversation Reply",
-                                    context: rep.tone ? `Tone: ${rep.tone}` : undefined,
-                                    strength: 100,
-                                    learned: true,
-                                    createdAt: new Date().toISOString(),
-                                    lastReviewed: null
-                                  }));
-                                }}
-                                className="px-2.5 py-1.5 bg-white hover:bg-stone-100 text-stone-800 font-bold text-xs rounded-lg border border-amber-300/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-105 active:scale-95"
-                                title="Ask AI about this reply"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
-                                <span>Ask AI</span>
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(rep.reply, repKey, "📋 Copied suggestion to clipboard!")}
-                              className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs hover:scale-105 active:scale-95"
-                              title="Copy suggestion to clipboard"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>{isCopied ? "Copied!" : "Copy"}</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Image for visual picture questions or photo analysis */}
-              {(msg.imageUrl || msg.imageKeyword) && (
-                <div className="my-2.5 max-w-md rounded-xl border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
-                  {msg.imageUrl && (msg.imageUrl.startsWith("data:") || msg.imageUrl.startsWith("blob:")) ? (
-                    <img 
-                      src={msg.imageUrl} 
-                      alt={msg.audioWord || "Uploaded photo"} 
-                      className="w-full max-h-80 object-cover rounded-xl"
-                    />
-                  ) : (
-                    <QuizImage
-                      imageKeyword={msg.imageKeyword}
-                      alt="Quiz visual clue" 
-                      word={msg.audioWord || "Quiz clue"} 
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Audio clip player card for listening questions (hidden if WordReviewedBanner is shown) */}
-              {msg.audioWord && !answeredWord && (
-                <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3 sm:p-3.5 my-2.5 flex items-center justify-between gap-3 shadow-2xs">
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-stone-900 hover:bg-stone-800 text-amber-400 flex items-center justify-center shrink-0 shadow-xs cursor-pointer transition-transform hover:scale-105"
-                      title="Play audio clip"
-                    >
-                      <Volume2 className="w-5 h-5" />
-                    </button>
-                    <div>
-                      <h5 className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center gap-1">
-                        <Volume2 className="w-3.5 h-3.5 text-amber-600" />
-                        Audio Clip
-                      </h5>
-                      <p className="text-[11px] text-stone-600 font-serif italic">
-                        Tap play to listen to the target word
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => speakText(msg.audioWord!, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                      className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-400 font-bold text-xs rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      Play Clip
-                    </button>
                   </div>
                 </div>
               )}
