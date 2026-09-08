@@ -321,7 +321,7 @@ export function useChat({
         });
       }
 
-      const confuserCount = immersionCount > 0 ? immersionCount : activeWords.length;
+      const confuserCount = Math.min(3, immersionCount > 0 ? immersionCount : activeWords.length);
       if (confuserCount >= 1) {
         actions.push({
           label: t("action_confuser_duel_count", currentAppLang, {
@@ -333,12 +333,13 @@ export function useChat({
       }
 
       if (dueCount > 0 || unstudiedCount > 0 || dueQuizCandidates.length > 0) {
+        const totalQuizTarget = Math.min(3, (dueCount > 0 ? dueCount : 0) + (unstudiedCount > 0 ? unstudiedCount : 0) || dueQuizCandidates.length || 3);
         const quizLabel =
           dueCount > 0 && unstudiedCount > 0
-            ? `🏆 Quiz Practice (${dueCount} review, ${unstudiedCount} new)`
+            ? `🏆 Quiz Practice (${Math.min(totalQuizTarget, dueCount)} review, ${Math.min(Math.max(0, totalQuizTarget - dueCount), unstudiedCount)} new)`
             : dueCount > 0
-            ? `🏆 Quiz Review (${dueCount} ${dueCount === 1 ? "word" : "words"})`
-            : `🏆 Quiz Practice (${unstudiedCount} ${unstudiedCount === 1 ? "word" : "words"})`;
+            ? `🏆 Quiz Review (${totalQuizTarget} ${totalQuizTarget === 1 ? "word" : "words"})`
+            : `🏆 Quiz Practice (${totalQuizTarget} ${totalQuizTarget === 1 ? "word" : "words"})`;
         actions.push({
           label: quizLabel,
           action: "start_practice_quiz_only",
@@ -380,9 +381,9 @@ export function useChat({
       // Prioritize the warm-up words from Step 1 to test contrast and eliminate confusions
       let duelWords = [...warmupWords];
       if (duelWords.length === 0) {
-        duelWords = getCandidateWordsForImmersion(activeWords, 4);
+        duelWords = getCandidateWordsForImmersion(activeWords, 3);
       }
-      if (duelWords.length < 4) {
+      if (duelWords.length < 3) {
         const existingIds = new Set(duelWords.map((w) => w.id));
         const unstudied = sortUnstudiedWordsOldestFirst(
           activeWords.filter((w) => !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, new Date(), 2))
@@ -393,7 +394,7 @@ export function useChat({
           if (!existingIds.has(w.id)) {
             duelWords.push(w);
             existingIds.add(w.id);
-            if (duelWords.length >= 4) break;
+            if (duelWords.length >= 3) break;
           }
         }
       }
@@ -404,7 +405,7 @@ export function useChat({
 
       try {
         const quizResult = await generateAiQuizQuestionsService({
-          words: duelWords.slice(0, 4),
+          words: duelWords.slice(0, 3),
           targetLanguage,
           nativeLanguage,
           llmConfig: configForServer,
@@ -413,7 +414,8 @@ export function useChat({
           practiceMode: "sandwich_duel",
         });
 
-        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const generatedQuestions = rawQuestions.slice(0, 3);
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -484,19 +486,19 @@ export function useChat({
       const nonCooldownNonWarmup = nonWarmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
       const coreReviewWords = getQuizCandidateWords(nonCooldownNonWarmup, { maxCandidates: 3 });
 
-      // Build balanced session quiz words:
+      // Build balanced session quiz words (max 3):
       // Exclude warm-up words that are on review cooldown from immediate quiz re-testing
       const eligibleWarmup = warmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
-      const selectedWarmup = eligibleWarmup.slice(0, 2);
-      const combinedWords = [...coreReviewWords.slice(0, 3)];
+      const selectedWarmup = eligibleWarmup.slice(0, 1);
+      const combinedWords = [...coreReviewWords.slice(0, 2)];
       for (const w of selectedWarmup) {
         if (!combinedWords.some((cw) => cw.id === w.id)) {
           combinedWords.push(w);
         }
       }
-      const effectiveQuizWords = combinedWords.length > 0
+      const effectiveQuizWords = (combinedWords.length > 0
         ? combinedWords
-        : (coreReviewWords.length > 0 ? coreReviewWords : nonCooldownNonWarmup.slice(0, 5));
+        : (coreReviewWords.length > 0 ? coreReviewWords : nonCooldownNonWarmup)).slice(0, 3);
 
       const actualReviewCount = coreReviewWords.length;
       const actualWarmupCount = effectiveQuizWords.filter((w) => warmupIds.has(w.id)).length;
@@ -507,7 +509,7 @@ export function useChat({
 
       try {
         const quizResult = await generateAiQuizQuestionsService({
-          words: effectiveQuizWords,
+          words: effectiveQuizWords.slice(0, 3),
           targetLanguage,
           nativeLanguage,
           llmConfig: configForServer,
@@ -516,7 +518,8 @@ export function useChat({
           practiceMode: "sandwich_quiz",
         });
 
-        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const generatedQuestions = rawQuestions.slice(0, 3);
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -593,20 +596,20 @@ export function useChat({
       // 1. Words with unresolved quiz errors (urgent remedial review)
       // 2. Never learned / unreviewed words chronologically FIFO (oldest added first)
       // 3. Spaced repetition due reviews (scheduled date reached, memory decay, or idle > 7 days)
-      let duelWords = getCandidateWordsForImmersion(activeWords, 5);
+      let duelWords = getCandidateWordsForImmersion(activeWords, 3);
 
       if (duelWords.length === 0) {
         const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
         const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
         if (unstudiedWords.length > 0) {
-          duelWords = unstudiedWords.slice(0, 5);
+          duelWords = unstudiedWords.slice(0, 3);
         } else if (immersionCandidates.length > 0) {
-          duelWords = immersionCandidates.slice(0, 5);
+          duelWords = immersionCandidates.slice(0, 3);
         } else {
-          duelWords = activeWords.slice(0, 5);
+          duelWords = activeWords.slice(0, 3);
         }
-      } else if (duelWords.length < 5 && activeWords.length > duelWords.length) {
-        // Supplement with remaining unstudied/due/active words to reach up to 5 words
+      } else if (duelWords.length < 3 && activeWords.length > duelWords.length) {
+        // Supplement with remaining unstudied/due/active words to reach up to 3 words
         const existingIds = new Set(duelWords.map((w) => w.id));
         const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
         const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
@@ -614,7 +617,7 @@ export function useChat({
           if (!existingIds.has(w.id)) {
             duelWords.push(w);
             existingIds.add(w.id);
-            if (duelWords.length >= 5) break;
+            if (duelWords.length >= 3) break;
           }
         }
       }
@@ -625,7 +628,7 @@ export function useChat({
 
       try {
         const quizResult = await generateAiQuizQuestionsService({
-          words: duelWords,
+          words: duelWords.slice(0, 3),
           targetLanguage,
           nativeLanguage,
           llmConfig: configForServer,
@@ -634,7 +637,8 @@ export function useChat({
           practiceMode: "confuser_duel",
         });
 
-        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const generatedQuestions = rawQuestions.slice(0, 3);
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -691,11 +695,11 @@ export function useChat({
 
     const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
     const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
-    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 5 });
+    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 3 });
 
     // Determine if we should launch Quiz mode (only for quiz_only)
     if (practiceMode === "quiz_only") {
-      let effectiveQuizWords = quizWords;
+      let effectiveQuizWords = quizWords.slice(0, 3);
 
       // Robust fallback if quizWords is somehow empty: pull directly from unstudied candidates
       if (effectiveQuizWords.length === 0) {
@@ -703,12 +707,12 @@ export function useChat({
           activeWords.filter((w) => !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, new Date(), 2))
         );
         if (availableUnstudied.length > 0) {
-          effectiveQuizWords = availableUnstudied.slice(0, 5);
+          effectiveQuizWords = availableUnstudied.slice(0, 3);
         } else {
           // Last resort: any non-cooldown word, shuffled
           const nonCooldownWords = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
           if (nonCooldownWords.length > 0) {
-            effectiveQuizWords = [...nonCooldownWords].sort(() => 0.5 - Math.random()).slice(0, 5);
+            effectiveQuizWords = [...nonCooldownWords].sort(() => 0.5 - Math.random()).slice(0, 3);
           }
         }
       }
@@ -735,7 +739,7 @@ export function useChat({
 
       try {
         const quizResult = await generateAiQuizQuestionsService({
-          words: effectiveQuizWords,
+          words: effectiveQuizWords.slice(0, 3),
           targetLanguage,
           nativeLanguage,
           llmConfig: configForServer,
@@ -743,7 +747,8 @@ export function useChat({
           signal: controller.signal,
         });
 
-        const generatedQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
+        const generatedQuestions = rawQuestions.slice(0, 3);
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -1059,6 +1064,25 @@ export function useChat({
       ? `🏆 ${t("chat_quiz_finish_summary_btn", currentAppLang)} ➔`
       : `➡️ ${t("chat_quiz_next_question_btn", currentAppLang)} (${nextIndex + 1}/${activeQuiz.questions.length}) ➔`;
 
+    // Retrieve per-question suggested words specifically for this individual question
+    let questionSuggestions: QuizSuggestedWord[] | undefined = undefined;
+    const rawList = (Array.isArray(currentQ.suggestedWords) && currentQ.suggestedWords.length === 3)
+      ? currentQ.suggestedWords
+      : (targetWordObj && Array.isArray(targetWordObj.suggestedWords) && targetWordObj.suggestedWords.length === 3)
+      ? targetWordObj.suggestedWords
+      : undefined;
+
+    if (rawList && rawList.length === 3) {
+      questionSuggestions = rawList.map((item: any) => ({
+        word: typeof item === "string" ? item : (item.word || ""),
+        translation: typeof item === "object" ? (item.translation || "") : "",
+        definition: typeof item === "object" ? (item.definition || "") : "",
+        hint: typeof item === "object" ? (item.hint || `Based on "${currentQ.word}"`) : `Based on "${currentQ.word}"`,
+        partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+        pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : currentQ.word,
+      }));
+    }
+
     const feedbackMsg: ChatMessage = {
       id: `quiz-feedback-${now}`,
       role: "assistant",
@@ -1069,6 +1093,7 @@ export function useChat({
         ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
         : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
       answeredQuizWordId: wordId,
+      suggestedWords: questionSuggestions,
       suggestedActions: [
         {
           label: nextBtnText,
@@ -1128,63 +1153,6 @@ export function useChat({
 
       handleFinishQuiz(newScore, totalQs);
 
-      const allSuggestedWords: QuizSuggestedWord[] = [];
-      const seenWords = new Set<string>();
-
-      activeQuiz.questions.forEach((q) => {
-        const targetWord = q.word || "";
-        let list = Array.isArray(q.suggestedWords) ? q.suggestedWords : [];
-        if (list.length === 0) {
-          const matched = words.find((w) => w.id === q.wordId || w.word.toLowerCase() === targetWord.toLowerCase());
-          if (matched && Array.isArray(matched.suggestedWords)) {
-            list = matched.suggestedWords;
-          }
-        }
-
-        list.forEach((item: any) => {
-          let wordText = typeof item === "string" ? item : (item.word || item.vocab || item.term || "");
-          wordText = wordText.trim();
-          if (!wordText || wordText.toLowerCase() === targetWord.toLowerCase()) return;
-
-          const key = wordText.toLowerCase();
-          if (seenWords.has(key)) return;
-          seenWords.add(key);
-
-          allSuggestedWords.push({
-            word: wordText,
-            translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
-            hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Appeared as option in quiz for ${targetWord}`) : `Appeared as option in quiz for ${targetWord}`,
-            pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWord,
-            relationship: typeof item === "object" ? item.relationship : undefined,
-            partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
-          });
-        });
-      });
-
-      if (allSuggestedWords.length < 3) {
-        for (const q of activeQuiz.questions) {
-          const targetWordLower = (q.word || "").toLowerCase().trim();
-          const rawOpts = Array.isArray(q.options) ? q.options : [];
-          for (const opt of rawOpts) {
-            const optStr = String(opt || "").trim();
-            if (!optStr) continue;
-            const optLower = optStr.toLowerCase();
-            if (optLower === targetWordLower || seenWords.has(optLower)) continue;
-            seenWords.add(optLower);
-            allSuggestedWords.push({
-              word: optStr,
-              translation: "",
-              hint: `Option used in quiz for "${q.word}"`,
-              pairedWith: q.word
-            });
-            if (allSuggestedWords.length >= 3) break;
-          }
-          if (allSuggestedWords.length >= 3) break;
-        }
-      }
-
-      const top3SuggestedWords = allSuggestedWords.slice(0, 3);
-
       let finishedContent = wasSandwichStep1
         ? t("chat_sandwich_step1_finished_msg", currentAppLang, {
             feedback: "",
@@ -1207,24 +1175,6 @@ export function useChat({
           });
 
       finishedContent = finishedContent.replace(/^(\s*---\s*)+/, "").trim();
-
-      if (top3SuggestedWords.length > 0) {
-        const header = t("chat_quiz_suggested_words_header", currentAppLang);
-        const itemsText = top3SuggestedWords.map((sw) => {
-          const transText = sw.translation ? ` *("${sw.translation}")*` : "";
-          const pairedText = sw.pairedWith ? ` — ${t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}` : "";
-          const hintText = sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") ? ` (${sw.hint})` : "";
-          return `• **${sw.word}**${transText}${pairedText}${hintText}`;
-        }).join("\n");
-
-        finishedContent += `\n\n---\n\n${header}\n${itemsText}`;
-      }
-
-      const wordAddActions = top3SuggestedWords.map((sw) => ({
-        label: `+ ${t("add_word_btn", currentAppLang)} "${sw.word}"`,
-        action: "add_word",
-        payload: { word: sw.word, hint: sw.translation || sw.hint },
-      }));
 
       const defaultActions = wasSandwichStep1
         ? [
@@ -1259,13 +1209,9 @@ export function useChat({
           score: newScore,
           total: totalQs,
           accuracy: Math.round((newScore / totalQs) * 100),
-          suggestedWords: top3SuggestedWords,
           testedWordIds: [...activeQuiz.correctIds, ...activeQuiz.incorrectIds],
         },
-        suggestedActions: [
-          ...wordAddActions,
-          ...defaultActions,
-        ],
+        suggestedActions: defaultActions,
       };
 
       setChatMessages((prev) => [...prev, finishedMsg]);
@@ -2077,36 +2023,27 @@ export function useChat({
       }
 
       const rawSuggested = Array.isArray(addedWord.suggestedWords) ? addedWord.suggestedWords : [];
-      const collocatedStrings: string[] = [];
-      const suggestedWordActions: any[] = [];
+      const collocatedSuggestions: QuizSuggestedWord[] = [];
 
       rawSuggested.forEach((sw) => {
         const swWord = typeof sw === "string" ? sw.trim() : sw?.word?.trim();
         if (!swWord) return;
         const existsAlready = isWordInCollection(updatedWords, swWord);
         if (!existsAlready) {
-          collocatedStrings.push(swWord);
           const swObj = typeof sw === "object" && sw !== null ? sw : null;
           const hintVal = swObj?.definition || swObj?.translation || (swObj?.hint && !swObj.hint.startsWith("Paired with") ? swObj.hint : undefined);
-          suggestedWordActions.push({
-            label: `+ ${swWord}`,
-            action: "add_word",
-            payload: {
-              word: swWord,
-              definition: swObj?.definition,
-              translation: swObj?.translation,
-              hint: hintVal,
-            },
+          collocatedSuggestions.push({
+            word: swWord,
+            definition: swObj?.definition,
+            translation: swObj?.translation || "",
+            hint: hintVal || `Commonly paired with ${addedWord.word}`,
+            partOfSpeech: swObj?.partOfSpeech,
+            pairedWith: addedWord.word,
           });
         }
       });
 
       const remainingActions = getRemainingWordActions(chatMessages, updatedWords, addedWord.word, currentAppLang);
-      const combinedActions = [...suggestedWordActions, ...remainingActions];
-
-      const collocatedSection = collocatedStrings.length > 0
-        ? `\n- **${t("label_commonly_used_with", currentAppLang)}**: ${collocatedStrings.map((s) => `*${s}*`).join(", ")}`
-        : "";
 
       setChatMessages((prev) => [
         ...prev,
@@ -2117,10 +2054,11 @@ export function useChat({
             word: addedWord.word,
             translation: addedWord.translation || "",
             definition: addedWord.definition || "",
-            collocatedSection: collocatedSection,
+            collocatedSection: "",
           }),
           timestamp: new Date().toISOString(),
-          suggestedActions: combinedActions,
+          suggestedWords: collocatedSuggestions.length > 0 ? collocatedSuggestions : undefined,
+          suggestedActions: remainingActions,
         },
       ]);
     } else {

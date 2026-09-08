@@ -552,6 +552,17 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
   // Contrast options: Target word vs Rival confuser (shuffled)
   const options = [word.word, confuserWord].sort(() => 0.5 - Math.random());
 
+  const qSuggestions = Array.isArray(word.suggestedWords) && word.suggestedWords.length >= 3
+    ? word.suggestedWords.slice(0, 3).map((item: any) => ({
+        word: typeof item === "string" ? item : (item.word || ""),
+        translation: typeof item === "object" ? (item.translation || "") : "",
+        definition: typeof item === "object" ? (item.definition || "") : "",
+        hint: typeof item === "object" ? (item.hint || `Based on "${word.word}"`) : `Based on "${word.word}"`,
+        partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+        pairedWith: word.word
+      }))
+    : [];
+
   return {
     id: `duel-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
     wordId: word.id,
@@ -564,7 +575,8 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
     sentence: word.example || sentenceText.replace("______", word.word),
     sentenceTranslation: word.exampleTranslation,
     confuserWord,
-    contrastRule
+    contrastRule,
+    suggestedWords: qSuggestions.length === 3 ? qSuggestions : []
   };
 }
 
@@ -573,14 +585,15 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
  */
 export function generateConfuserDuelQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
   if (!wordList || wordList.length === 0) return [];
-  return wordList.map((word) => generateDuelQuestionForWord(word, targetLanguage));
+  return wordList.slice(0, 3).map((word) => generateDuelQuestionForWord(word, targetLanguage));
 }
 
 // Rule-based Quiz Question Generator with strict distractor logic & target-language restrictions
 export function generateQuizQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
   if (!wordList || wordList.length === 0) return [];
   
-  const allWords = wordList;
+  // Cap to a maximum of 3 questions
+  const allWords = wordList.slice(0, 3);
   const generated: QuizQuestion[] = [];
 
   // Guarantee at least one picture/image-based question in the generated quiz
@@ -664,6 +677,17 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
 
+    const qSuggestions = Array.isArray(word.suggestedWords) && word.suggestedWords.length >= 3
+      ? word.suggestedWords.slice(0, 3).map((item: any) => ({
+          word: typeof item === "string" ? item : (item.word || ""),
+          translation: typeof item === "object" ? (item.translation || "") : "",
+          definition: typeof item === "object" ? (item.definition || "") : "",
+          hint: typeof item === "object" ? (item.hint || `Based on "${word.word}"`) : `Based on "${word.word}"`,
+          partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+          pairedWith: word.word
+        }))
+      : [];
+
     generated.push({
       id: `q-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
       wordId: word.id,
@@ -677,63 +701,11 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       sentenceTranslation: word.exampleTranslation,
       imageKeyword,
       imageUrl,
-      imageUrls: word.imageUrls
+      imageUrls: word.imageUrls,
+      suggestedWords: qSuggestions.length === 3 ? qSuggestions : []
     });
   });
 
-  // Collect up to 3 unique companion/suggested words across all questions in the quiz, prioritizing distractors actually used in the quiz options
-  const seenKeys = new Set<string>();
-  const top3Suggestions: any[] = [];
-
-  // 1. First, extract interesting options/distractors used in the generated quiz questions
-  for (const q of generated) {
-    const rawOpts = Array.isArray(q.options) ? q.options : [];
-    const targetLower = (q.word || "").toLowerCase().trim();
-    for (const opt of rawOpts) {
-      const optStr = String(opt || "").trim();
-      if (!optStr) continue;
-      const optLower = optStr.toLowerCase();
-      if (optLower === targetLower || seenKeys.has(optLower)) continue;
-      seenKeys.add(optLower);
-      top3Suggestions.push({
-        word: optStr,
-        translation: "",
-        hint: `Option used in quiz question for "${q.word}"`,
-        pairedWith: q.word
-      });
-      if (top3Suggestions.length >= 3) break;
-    }
-    if (top3Suggestions.length >= 3) break;
-  }
-
-  // 2. If under 3, fallback to wordList suggestedWords
-  if (top3Suggestions.length < 3) {
-    for (const w of wordList) {
-      if (Array.isArray(w.suggestedWords)) {
-        for (const item of w.suggestedWords) {
-          const wordText = typeof item === "string" ? item.trim() : (item.word || "").trim();
-          if (!wordText) continue;
-          const key = wordText.toLowerCase();
-          if (seenKeys.has(key) || key === w.word.toLowerCase()) continue;
-          seenKeys.add(key);
-
-          top3Suggestions.push({
-            word: wordText,
-            translation: typeof item === "object" ? (item.translation || "") : "",
-            hint: typeof item === "object" ? (item.hint || `Frequently appears with ${w.word}`) : `Frequently appears with ${w.word}`,
-            pairedWith: w.word
-          });
-          if (top3Suggestions.length >= 3) break;
-        }
-      }
-      if (top3Suggestions.length >= 3) break;
-    }
-  }
-
   const randomized = generated.sort(() => 0.5 - Math.random());
-  if (randomized.length > 0 && top3Suggestions.length > 0) {
-    randomized[0].suggestedWords = top3Suggestions;
-  }
-
-  return randomized;
+  return randomized.slice(0, 3);
 }

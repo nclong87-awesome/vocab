@@ -107,7 +107,7 @@ export interface Word {
   imageKeyword?: string;
   category?: string;
   context?: string;
-  suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string })[];
+  suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string; partOfSpeech?: string })[];
   strengthHistory?: StrengthHistoryTuple[];
 }
 
@@ -124,7 +124,7 @@ export interface WordSense {
   imageUrls?: string[];
   category?: string;
   context?: string;
-  suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string })[];
+  suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string; partOfSpeech?: string })[];
 }
 
 
@@ -132,6 +132,7 @@ export interface WordSense {
 export interface QuizSuggestedWord {
   word: string;
   translation?: string;
+  definition?: string;
   hint?: string;
   pairedWith?: string;
   relationship?: string;
@@ -227,6 +228,7 @@ export interface ChatMessage {
   fixedSentence?: string;
   storyData?: ImmersionStory;
   quizFinishedData?: QuizFinishedData;
+  suggestedWords?: QuizSuggestedWord[];
   wordLibraries?: boolean;
   answeredQuizWordId?: string;
   isConfuserDuel?: boolean;

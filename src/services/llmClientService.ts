@@ -1,4 +1,4 @@
-import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile } from "../types";
+import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile, QuizSuggestedWord } from "../types";
 import { generateConfusers, getImageKeyword, ensureQuestionHasBlank } from "../utils/quizGenerator";
 import {  resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
@@ -2154,6 +2154,7 @@ export interface QuizGenerationRequest {
 
 export interface QuizGenerationResult {
   questions: QuizQuestion[];
+  suggestedWords?: QuizSuggestedWord[];
   provider?: string;
   model?: string;
   responseTimeMs?: number;
@@ -2177,56 +2178,36 @@ export async function generateAiQuizQuestionsService(
   const isDuelMode = practiceMode === "confuser_duel" || practiceMode === "sandwich_duel";
   const isSandwichMode = practiceMode === "sandwich_quiz" || practiceMode === "balanced";
 
-  // Optimize payload: Only send essential fields to reduce token count and AI latency
-  const minimalWordList = words.map(w => ({
+  // Strictly enforce maximum 3 target words for faster LLM generation and response latency
+  const targetWords = words.slice(0, 3);
+  const minimalWordList = targetWords.map(w => ({
     word: w.word,
     partOfSpeech: w.partOfSpeech || "noun",
-    definition: w.definition,
-    example: w.example || undefined
+    definition: w.definition ? String(w.definition).slice(0, 100) : undefined
   }));
 
-  const systemInstruction = `You are a world-class AI Language Pedagogy Engine specializing in ${targetLanguage} assessment.
-Your goal is to generate a JSON array of high-quality, targeted quiz questions for the given vocabulary words.
+  const systemInstruction = `You are a fast, high-accuracy language assessment engine for ${targetLanguage}.
+Generate at most 3 targeted quiz questions (maximum 3, exactly 1 per input word) in valid JSON.
 
-STRICT GENERATION RULES & RESTRICTIONS:
-1. Target-Language Immersion:
-   - ALL question text, prompts, hints, and options MUST be written 100% strictly in ${targetLanguage}.
-   - Absolutely NO native language translations in questions, prompts, hints, or options.
-2. STRICT DISTRACTOR INDEPENDENCE DIRECTIVE (CRITICAL):
-   - ABSOLUTE BAN: DO NOT USE OR REUSE THE OTHER WORDS IN THE INPUT LIST AS DISTRACTORS/OPTIONS!
-   - Every question's incorrect options (distractors) MUST be external, plausible words/phrases crafted specifically for THAT target word.
-   - Distractors MUST match the target word's EXACT part of speech, grammatical category, and structural format:
-     * For a single noun (e.g., "inquiry"): all distractors MUST be nouns (e.g., "requisition", "proposal", "query").
-     * For a phrasal verb (e.g., "back off"): all distractors MUST be phrasal verbs (e.g., "step down", "hold back", "stand by").
-     * For an idiom/phrase (e.g., "tone it down"): all distractors MUST be parallel phrases (e.g., "play it down", "wind it up", "brush it off").
-   - Distractors must be challenging and convincing (phonetic/orthographic confusers, common particle shifts, or contextual near-misses).
-   - Distractors MUST NOT be valid synonyms or semantically acceptable answers for the given blank/question.
-3. Question Types:
-   - 'sentence': "Fill in the blank for the sentence:\n'[sentence in ${targetLanguage} with target word replaced by ______]'" (Ensure unambiguous single correct answer with distinct collocation/preposition cues).
-     * For 'sentence' questions, you MUST also provide:
-       - 'sentence': The full, complete sentence in ${targetLanguage} with the target word filled in.
-       - 'sentenceTranslation': The natural, complete sentence translation in ${nativeLanguage}.
-   - 'definition': "Which word matches the following definition?\n'[definition in ${targetLanguage}]'"
-   - 'listening': "Listen to the audio clip and select the correct matching word:" (options contain phonetically/morphologically similar words).
-   - 'picture': "Which word matches the visual concept shown below?" (set 'imageKeyword' to a concise 1-3 word English search term representing a concrete, physical object or scene).
-   - 'duel': "⚔️ Confuser Duel (Contrast Match)" - engineered specifically to unlearn fossilized errors, false friends, soundalikes, or easily confused word pairs (e.g., affect vs effect, borrow vs lend, discrete vs discreet).
-     * Question text MUST be: "⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n\"[sentence in ${targetLanguage} with target word replaced by ______]\""
-     * The options MUST pit the target word against its rival confuser ('confuserWord'). Options can be 2 to 4 choices, with the rival confuser guaranteed in the options.
-     * MUST provide 'confuserWord' (the rival word) and 'contrastRule' (a crisp 1-sentence mnemonic rule contrasting the target word and the confuser to break fossilized confusion).
-${isDuelMode ? "   - CRITICAL REQUIREMENT: 'practiceMode' is 'confuser_duel'. ALL generated questions MUST be of type 'duel'!" : ""}
-4. MANDATORY REQUIREMENTS:
-${isDuelMode ? "   - All questions MUST be type 'duel' focusing on contrastive unlearning with 'confuserWord' and 'contrastRule'." : isSandwichMode ? "   - In 'sandwich_quiz' (Smart Balanced Session), seamlessly blend question types: include at least one 'duel' type question (⚔️ Confuser Duel / Contrast Match) pitting a target word against its trickiest rival/confuser word with 'confuserWord' and 'contrastRule' to break fossilized confusion, and at least one picture question ('type': 'picture') with an 'imageKeyword'." : "   - At least ONE question in the quiz MUST be a picture question ('type': 'picture') with an 'imageKeyword'."}
-   - Generate exactly 3 suggested companion words across the entire quiz ('suggestedWords' array with exactly 3 items).
-   - CRITICAL SUGGESTED WORDS REQUIREMENT:
-     During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
-     1. EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
-     2. EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep"
-     3. EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the quiz questions/distractors, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun"
-     Ensure the quiz questions naturally incorporate all three of these items so learners see them used in context! Set 'pairedWith' to the quiz word/question it accompanied.
-5. STRICT CORRECT ANSWER MATCHING RULE (CRITICAL):
-   - The correct answer to every question MUST be EXACTLY the target vocabulary word itself (matching the spelling in the input list exactly).
-   - Under no circumstances should the correct answer be a synonym, a definition, or any other word.
-   - For example, if the word being tested is "minutes", the "correctAnswer" property MUST be set to "minutes", and the "options" array MUST contain "minutes".
+CORE RULES:
+1. Target-Language Immersion: All text, questions, hints, and options MUST be 100% in ${targetLanguage} (no translations in options/questions).
+2. Distractor Independence: Options must be plausible external confusers matching the exact part of speech. Never reuse input words as distractors.
+3. Correct Answer: MUST strictly equal the target word being tested.
+4. Question Types:
+   - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}).
+   - 'definition': Match word to definition.
+   - 'picture': Set concise 1-3 word 'imageKeyword'.
+   - 'duel': Pit target word against rival 'confuserWord' with a crisp 1-sentence 'contrastRule'.
+${isDuelMode 
+  ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord' and 'contrastRule'." 
+  : isSandwichMode 
+  ? "   - Balanced Session: Blend question types; include at least 1 'duel' question and 1 'picture' question." 
+  : "   - Include at least 1 'picture' question with an 'imageKeyword'."}
+5. Candidate-Root Suggested Words (FOR EACH INDIVIDUAL QUESTION):
+   For EACH individual question, try to identify 1 versatile root/verb from that question (the target word itself or a key verb/word appearing in its sentence/context, e.g. look, turn, break, set, take, call, run, hold, give, put, come, stand, fall, pass).
+   If found, provide a "suggestedWords" array inside that question with exactly 3 items derived ONLY from that 1 word:
+     (1) base word itself, (2) 1 phrasal verb, (3) 1 preposition combination. Set "pairedWith" to that root word.
+   If no suitable root word can form both a phrasal verb and a preposition combination for this question, set "suggestedWords": [] for this question. Do NOT generate random words.
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -2236,39 +2217,39 @@ Output MUST be strictly valid JSON matching this schema:
       "type": "definition" | "sentence" | "listening" | "picture" | "duel",
       "question": "string",
       "options": ["string", "string"],
-      "correctAnswer": "string (MUST be exactly the target word itself matching the 'word' field)",
+      "correctAnswer": "string (MUST be exactly the target word itself)",
       "hint": "string",
-      "sentence": "string (for sentence or duel questions, the complete sentence)",
+      "sentence": "string (complete sentence)",
       "sentenceTranslation": "string (translation in ${nativeLanguage})",
       "imageKeyword": "string (1-3 word English search term)",
-      "confuserWord": "string (for duel type: the rival confuser word)",
-      "contrastRule": "string (for duel type: crisp 1-sentence unlearning rule)"
-    }
-  ],
-  "suggestedWords": [
-    {
-      "word": "string (Suggested word derived from incorrect answer options/distractors used in the quiz)",
-      "translation": "string (Translation in ${nativeLanguage})",
-      "pairedWith": "string (Which quiz word it accompanies as an option)",
-      "hint": "string (Brief note on its meaning or context from the quiz options)",
-      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
+      "confuserWord": "string (for duel type)",
+      "contrastRule": "string (for duel type)",
+      "suggestedWords": [
+        {
+          "word": "string (suggested word, phrasal verb, or preposition combo)",
+          "translation": "string (in ${nativeLanguage})",
+          "definition": "string (in ${targetLanguage})",
+          "pairedWith": "string (the candidate root word)",
+          "hint": "string",
+          "partOfSpeech": "string"
+        }
+      ]
     }
   ]
 }`;
 
-  const prompt = `Generate 1 quiz question for each of these vocabulary words:\n${JSON.stringify(minimalWordList, null, 2)}\n\n` +
-    `CRITICAL INSTRUCTIONS:\n` +
-    `1. Return exactly 1 question per word.\n` +
-    `2. The correct answer (correctAnswer) to each question MUST be EXACTLY the target word being tested. For example, if the word being tested is "minutes", the correctAnswer MUST be "minutes".\n` +
-    `3. DO NOT use words from this input list as distractors for other questions. Generate external, plausible confusers sharing the exact same part of speech.\n` +
+  const prompt = `Generate at most 3 quiz questions (1 per word, max 3) for:\n${JSON.stringify(minimalWordList)}\n\n` +
+    `Requirements:\n` +
+    `1. Return at most 3 questions (1 per word). Correct answer MUST be the exact word.\n` +
+    `2. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
     (isDuelMode 
-      ? `4. CRITICAL: 'practiceMode' is 'confuser_duel'. Generate ALL 'duel' type questions, pitting each target word against its trickiest rival/confuser word with 'confuserWord' and 'contrastRule'.\n` 
-      : isSandwichMode
-      ? `4. BALANCED SESSION MIX: In this Smart Balanced Session quiz, include at least one 'duel' question (⚔️ Confuser Duel / Contrast Match with 'confuserWord' and 'contrastRule') to contrast easily confused vocabulary or tricky nuances, and at least one 'picture' question with an 'imageKeyword'.\n`
-      : `4. Ensure at least one question has 'type': 'picture' with a 1-3 word 'imageKeyword'.\n`) +
-    `5. Include exactly 3 suggested companion words ('suggestedWords' array with 1 phrasal verb, 1 verb/adj + prep, 1 noun) derived directly from the quiz questions and distractors.`;
+      ? `3. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
+      : isSandwichMode 
+      ? `3. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question.\n` 
+      : `3. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
+    `4. Suggested words for EACH individual question: Include "suggestedWords" with exactly 3 items derived from 1 candidate root word for that question (base word, 1 phrasal verb, 1 prep combination), or [] if none suitable.`;
 
-  const schemaDesc = `Object with questions (array of QuizQuestion objects with word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule) and suggestedWords (array of exactly 3 items: 1 phrasal verb, 1 verb/adj + prep, 1 noun with word, translation, pairedWith, hint, partOfSpeech).`;
+  const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of exactly 3 items based on 1 candidate word for that question: base word, phrasal verb, preposition combo; or [] if none suitable).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2327,85 +2308,33 @@ Output MUST be strictly valid JSON matching this schema:
       }
     }
 
-    if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
-      // Collect up to 3 total suggestions across all questions or topLevelSuggestions
-      let collectedSuggestions: any[] = [...topLevelSuggestions];
-
-      if (collectedSuggestions.length === 0) {
-        rawQuestions.forEach((q: any) => {
-          const list = Array.isArray(q.suggestedWords) ? q.suggestedWords : (Array.isArray(q.suggestedVocabulary) ? q.suggestedVocabulary : (Array.isArray(q.collocations) ? q.collocations : []));
-          list.forEach((item: any) => {
-            if (item) collectedSuggestions.push(typeof item === "object" ? { ...item, pairedWith: item.pairedWith || q.word } : { word: item, pairedWith: q.word });
-          });
-        });
-      }
-
-      const seenWordKeys = new Set<string>();
-      const normalizedTop3Suggestions: any[] = [];
-
-      for (const item of collectedSuggestions) {
+    // Helper to normalize exactly 3 companion words for an individual question
+    const normalizeSuggestionsForQuestion = (rawList: any[], targetWordText: string): any[] => {
+      if (!Array.isArray(rawList) || rawList.length === 0) return [];
+      const seen = new Set<string>();
+      const resList: any[] = [];
+      for (const item of rawList) {
         const w = typeof item === "string" ? item.trim() : (item.word || item.vocab || item.term || "").trim();
         if (!w) continue;
         const key = w.toLowerCase();
-        if (seenWordKeys.has(key)) continue;
-        seenWordKeys.add(key);
+        if (seen.has(key)) continue;
+        seen.add(key);
 
-        normalizedTop3Suggestions.push({
+        resList.push({
           word: w,
           translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
-          hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || `Option used in quiz question`) : `Option used in quiz question`,
-          pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : (words[0]?.word || "")
+          definition: typeof item === "object" ? (item.definition || "") : "",
+          hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || "") : "",
+          partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+          pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWordText
         });
 
-        if (normalizedTop3Suggestions.length >= 3) break;
+        if (resList.length >= 3) break;
       }
+      return resList.length === 3 ? resList : [];
+    };
 
-      // Fallback 1: Extract plausible distractors from the generated quiz questions if under 3
-      if (normalizedTop3Suggestions.length < 3) {
-        for (const q of rawQuestions) {
-          const rawOpts = Array.isArray(q.options) ? q.options : [];
-          const targetLower = (q.word || "").toLowerCase().trim();
-          for (const opt of rawOpts) {
-            const optStr = String(opt || "").trim();
-            if (!optStr) continue;
-            const optLower = optStr.toLowerCase();
-            if (optLower === targetLower || seenWordKeys.has(optLower)) continue;
-            seenWordKeys.add(optLower);
-            normalizedTop3Suggestions.push({
-              word: optStr,
-              translation: "",
-              hint: `Option used in quiz question for "${q.word || ""}"`,
-              pairedWith: q.word || ""
-            });
-            if (normalizedTop3Suggestions.length >= 3) break;
-          }
-          if (normalizedTop3Suggestions.length >= 3) break;
-        }
-      }
-
-      // Fallback 2: Pick from word database collocations up to 3
-      if (normalizedTop3Suggestions.length < 3) {
-        for (const w of words) {
-          if (Array.isArray(w.suggestedWords)) {
-            for (const sw of w.suggestedWords) {
-              const swText = typeof sw === "string" ? sw.trim() : (sw.word || "").trim();
-              if (!swText) continue;
-              const key = swText.toLowerCase();
-              if (seenWordKeys.has(key) || key === w.word.toLowerCase()) continue;
-              seenWordKeys.add(key);
-              normalizedTop3Suggestions.push({
-                word: swText,
-                translation: typeof sw === "object" ? (sw.translation || "") : "",
-                hint: typeof sw === "object" ? (sw.hint || `Frequently appears with ${w.word}`) : `Frequently appears with ${w.word}`,
-                pairedWith: w.word
-              });
-              if (normalizedTop3Suggestions.length >= 3) break;
-            }
-          }
-          if (normalizedTop3Suggestions.length >= 3) break;
-        }
-      }
-
+    if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
       // Build a set of all tested target words to strictly filter out any lazy cross-word distractors
       const allTargetWordKeys = new Set(words.map(w => w.word.toLowerCase().trim()));
 
@@ -2507,6 +2436,25 @@ Output MUST be strictly valid JSON matching this schema:
           rawQuestion = ensureQuestionHasBlank(rawQuestion, matchingWord.word);
         }
 
+        const rawQuestionSuggestions = Array.isArray(q.suggestedWords)
+          ? q.suggestedWords
+          : Array.isArray(q.suggestedVocabulary)
+          ? q.suggestedVocabulary
+          : Array.isArray(q.collocations)
+          ? q.collocations
+          : [];
+
+        let qSuggestions = normalizeSuggestionsForQuestion(rawQuestionSuggestions, matchingWord.word);
+
+        // Fallback: check topLevelSuggestions if question didn't yield 3
+        if (qSuggestions.length < 3 && topLevelSuggestions.length >= 3) {
+          qSuggestions = normalizeSuggestionsForQuestion(topLevelSuggestions, matchingWord.word);
+        }
+
+        if (qSuggestions.length < 3 && matchingWord && Array.isArray(matchingWord.suggestedWords) && matchingWord.suggestedWords.length >= 3) {
+          qSuggestions = normalizeSuggestionsForQuestion(matchingWord.suggestedWords, matchingWord.word);
+        }
+
         return {
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
@@ -2520,7 +2468,7 @@ Output MUST be strictly valid JSON matching this schema:
           sentenceTranslation: resolvedSentenceTranslation,
           imageKeyword: keywordText,
           imageUrl: imgUrl,
-          suggestedWords: idx === 0 ? normalizedTop3Suggestions : undefined,
+          suggestedWords: qSuggestions.length === 3 ? qSuggestions : [],
           confuserWord: q.confuserWord || undefined,
           contrastRule: q.contrastRule || undefined
         };
@@ -2554,7 +2502,7 @@ Output MUST be strictly valid JSON matching this schema:
       }
 
       return {
-        questions: validQuestions,
+        questions: validQuestions.slice(0, 3),
         provider,
         model,
         responseTimeMs

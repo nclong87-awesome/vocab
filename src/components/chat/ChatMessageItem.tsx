@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { 
   Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2, Swords
 } from "lucide-react";
-import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
+import { ChatMessage, LLMConfig, TTSConfig, Word, QuizSuggestedWord } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
@@ -238,6 +238,35 @@ function ChatMessageItem({
     );
   }, [messages]);
 
+  // Determine suggested words: from msg.suggestedWords, msg.quizFinishedData.suggestedWords,
+  // or derived from any 'add_word' actions so they are ALWAYS rendered INSIDE the message bubble!
+  const effectiveSuggestedWords = useMemo<QuizSuggestedWord[]>(() => {
+    if (msg.suggestedWords && msg.suggestedWords.length > 0) {
+      return msg.suggestedWords;
+    }
+    if (msg.quizFinishedData?.suggestedWords && msg.quizFinishedData.suggestedWords.length > 0) {
+      return msg.quizFinishedData.suggestedWords;
+    }
+    const addWordActions = (msg.suggestedActions || []).filter(
+      (a) => a && a.action === "add_word" && a.payload && (a.payload.word || (a as any).word)
+    );
+    if (addWordActions.length > 0) {
+      return addWordActions.map((a) => {
+        const p = a.payload || {};
+        const wordText = String(p.word || (a as any).word || "").trim();
+        return {
+          word: wordText,
+          translation: p.translation || "",
+          definition: p.definition || "",
+          hint: p.hint || (a.label ? a.label.replace(/^\+\s*(?:Add\s*(?:word\s*)?)?["']?/i, "").replace(/["']?$/i, "") : ""),
+          partOfSpeech: p.partOfSpeech,
+          pairedWith: p.pairedWith,
+        };
+      });
+    }
+    return [];
+  }, [msg.suggestedWords, msg.quizFinishedData?.suggestedWords, msg.suggestedActions]);
+
   const isWelcomeMsg = !isUser && msg.id.startsWith("welcome-msg") && !isQuizActive;
 
   const activeSandwichWarmupMsg = useMemo(() => {
@@ -429,8 +458,13 @@ function ChatMessageItem({
       if (!act || typeof act !== "object") return false;
       if (act.action === "select_definition") return Boolean(act.payload?.definition);
 
-      // Filter out add_word or confirm_save_word if word is already in words collection
-      if (act.action === "add_word" || act.action === "confirm_save_word") {
+      // Suggested words are ALWAYS rendered inside the chat message bubble, never below the message
+      if (act.action === "add_word") {
+        return false;
+      }
+
+      // Filter out confirm_save_word if word is already in words collection
+      if (act.action === "confirm_save_word") {
         const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim();
         if (actWord && words && Array.isArray(words) && isWordInCollection(words, actWord)) {
           return false;
@@ -769,8 +803,8 @@ function ChatMessageItem({
                 </>
               )}
 
-              {/* Frequently Paired Words (Collocations) Card on Quiz Finish */}
-              {msg.quizFinishedData?.suggestedWords && msg.quizFinishedData.suggestedWords.length > 0 && (
+              {/* Suggested Words / Paired Collocations Card - ALWAYS rendered inside the chat message bubble */}
+              {effectiveSuggestedWords.length > 0 && (
                 <div className="mt-4 pt-3.5 border-t border-stone-200/80 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
@@ -780,17 +814,21 @@ function ChatMessageItem({
                       <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 font-mono flex items-center gap-1.5">
                         {t("quiz_suggested_words_title", currentAppLang)}
                         <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300/60 px-1.5 py-0.2 rounded-full">
-                          {msg.quizFinishedData.suggestedWords.length}
+                          {effectiveSuggestedWords.length}
                         </span>
                       </h4>
                     </div>
                   </div>
                   <p className="text-xs text-stone-600 font-medium">
-                    {t("quiz_suggested_words_desc", currentAppLang)}
+                    {effectiveSuggestedWords[0]?.pairedWith
+                      ? (currentAppLang === "vi"
+                          ? `Từ và cụm từ thường xuất hiện cùng với từ của câu hỏi này ("${effectiveSuggestedWords[0].pairedWith}"):`
+                          : `Words that frequently appear alongside this question's target word ("${effectiveSuggestedWords[0].pairedWith}"):`)
+                      : t("quiz_suggested_words_desc", currentAppLang)}
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                    {msg.quizFinishedData.suggestedWords.map((sw, idx) => {
+                    {effectiveSuggestedWords.map((sw, idx) => {
                       const isAlreadyInWords = words && isWordInCollection(words, sw.word);
 
                       return (
@@ -816,6 +854,11 @@ function ChatMessageItem({
                                     "{sw.translation}"
                                   </p>
                                 )}
+                                {sw.definition && (
+                                  <p className="text-xs text-stone-600 mt-0.5 leading-snug">
+                                    {sw.definition}
+                                  </p>
+                                )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 {!hideAskAiButton && (
@@ -827,7 +870,7 @@ function ChatMessageItem({
                                       id: `quiz-suggested-${sw.word}-${idx}`,
                                       word: sw.word,
                                       partOfSpeech: sw.partOfSpeech || "vocabulary",
-                                      definition: sw.hint || `Recommended vocabulary word for ${targetLanguage}`,
+                                      definition: sw.definition || sw.hint || `Recommended vocabulary word for ${targetLanguage}`,
                                       translation: sw.translation || "",
                                       context: sw.pairedWith ? `Collocation with: ${sw.pairedWith}` : undefined,
                                       strength: 0,
@@ -887,7 +930,7 @@ function ChatMessageItem({
                             <button
                               type="button"
                               disabled={Boolean(isAlreadyInWords)}
-                              onClick={() => handleAddSuggestedWord(sw.word, sw.translation || sw.hint)}
+                              onClick={() => handleAddSuggestedWord(sw.word, sw.translation || sw.definition || sw.hint)}
                               className={`px-2.5 py-1 text-xs font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
                                 isAlreadyInWords
                                   ? "bg-emerald-100 text-emerald-850 cursor-default"
