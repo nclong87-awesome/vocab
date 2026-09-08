@@ -1066,14 +1066,14 @@ export function useChat({
 
     // Retrieve per-question suggested words specifically for this individual question
     let questionSuggestions: QuizSuggestedWord[] | undefined = undefined;
-    const rawList = (Array.isArray(currentQ.suggestedWords) && currentQ.suggestedWords.length === 3)
+    const rawList = (Array.isArray(currentQ.suggestedWords) && currentQ.suggestedWords.length > 0)
       ? currentQ.suggestedWords
-      : (targetWordObj && Array.isArray(targetWordObj.suggestedWords) && targetWordObj.suggestedWords.length === 3)
+      : (targetWordObj && Array.isArray(targetWordObj.suggestedWords) && targetWordObj.suggestedWords.length > 0)
       ? targetWordObj.suggestedWords
       : undefined;
 
-    if (rawList && rawList.length === 3) {
-      questionSuggestions = rawList.map((item: any) => ({
+    if (rawList && rawList.length > 0) {
+      questionSuggestions = rawList.slice(0, 3).map((item: any) => ({
         word: typeof item === "string" ? item : (item.word || ""),
         translation: typeof item === "object" ? (item.translation || "") : "",
         definition: typeof item === "object" ? (item.definition || "") : "",
@@ -1081,6 +1081,53 @@ export function useChat({
         partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
         pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : currentQ.word,
       }));
+    }
+
+    // Fallback: If no suggestions pre-populated, derive high-value suggestions (rival duel word & context collocations)
+    if (!questionSuggestions || questionSuggestions.length === 0) {
+      const derived: QuizSuggestedWord[] = [];
+      const seenWords = new Set<string>();
+      if (currentQ.word) seenWords.add(currentQ.word.toLowerCase());
+
+      // 1. For Confuser Duel, include the rival confuser word
+      const rival = currentQ.confuserWord || (currentQ.type === "duel" && currentQ.options?.find(o => o.toLowerCase() !== currentQ.correctAnswer.toLowerCase()));
+      if (rival && !seenWords.has(rival.toLowerCase())) {
+        seenWords.add(rival.toLowerCase());
+        derived.push({
+          word: rival,
+          translation: "",
+          definition: currentQ.contrastRule || `Contrast rival against "${currentQ.word}"`,
+          hint: `Contrast rival against "${currentQ.word}"`,
+          partOfSpeech: targetWordObj?.partOfSpeech,
+          pairedWith: currentQ.word,
+        });
+      }
+
+      // 2. Extract preposition collocation from resolvedSentence or question (e.g. "liaise with")
+      const sentenceToScan = resolvedSentence || currentQ.sentence || currentQ.question || "";
+      if (sentenceToScan && currentQ.word) {
+        const escapedWord = currentQ.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const prepRegex = new RegExp(`\\b(${escapedWord})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i");
+        const prepMatch = sentenceToScan.match(prepRegex);
+        if (prepMatch && prepMatch[0]) {
+          const combo = prepMatch[0].trim();
+          if (!seenWords.has(combo.toLowerCase())) {
+            seenWords.add(combo.toLowerCase());
+            derived.push({
+              word: combo,
+              translation: "",
+              definition: `Preposition collocation with "${currentQ.word}"`,
+              hint: `Found in context sentence`,
+              partOfSpeech: "collocation",
+              pairedWith: currentQ.word,
+            });
+          }
+        }
+      }
+
+      if (derived.length > 0) {
+        questionSuggestions = derived;
+      }
     }
 
     const feedbackMsg: ChatMessage = {
@@ -1093,6 +1140,9 @@ export function useChat({
         ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
         : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
       answeredQuizWordId: wordId,
+      isConfuserDuel: currentQ.type === "duel" || Boolean(currentQ.confuserWord),
+      confuserWord: currentQ.confuserWord,
+      contrastRule: currentQ.contrastRule,
       suggestedWords: questionSuggestions,
       suggestedActions: [
         {

@@ -552,7 +552,7 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
   // Contrast options: Target word vs Rival confuser (shuffled)
   const options = [word.word, confuserWord].sort(() => 0.5 - Math.random());
 
-  const qSuggestions = Array.isArray(word.suggestedWords) && word.suggestedWords.length >= 3
+  const qSuggestions: any[] = Array.isArray(word.suggestedWords) && word.suggestedWords.length > 0
     ? word.suggestedWords.slice(0, 3).map((item: any) => ({
         word: typeof item === "string" ? item : (item.word || ""),
         translation: typeof item === "object" ? (item.translation || "") : "",
@@ -563,6 +563,36 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
       }))
     : [];
 
+  if (confuserWord && !qSuggestions.some(s => s.word.toLowerCase() === confuserWord.toLowerCase())) {
+    qSuggestions.unshift({
+      word: confuserWord,
+      translation: "",
+      definition: contrastRule || `Contrast rival against "${word.word}"`,
+      hint: `Contrast rival against "${word.word}"`,
+      partOfSpeech: word.partOfSpeech,
+      pairedWith: word.word
+    });
+  }
+
+  const duelSentence = word.example || sentenceText.replace("______", word.word);
+  if (duelSentence && word.word && qSuggestions.length < 3) {
+    const escapedTarget = word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const prepMatch = duelSentence.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
+    if (prepMatch && prepMatch[0]) {
+      const colloc = prepMatch[0].trim();
+      if (!qSuggestions.some(s => s.word.toLowerCase() === colloc.toLowerCase())) {
+        qSuggestions.push({
+          word: colloc,
+          translation: "",
+          definition: `Common collocation with "${word.word}"`,
+          hint: `Appears in context sentence`,
+          partOfSpeech: "collocation",
+          pairedWith: word.word
+        });
+      }
+    }
+  }
+
   return {
     id: `duel-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
     wordId: word.id,
@@ -572,11 +602,11 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
     options,
     correctAnswer: word.word,
     hint: `Contrast Duel: '${word.word}' vs '${confuserWord}'. Pay attention to the subtle semantic boundary!`,
-    sentence: word.example || sentenceText.replace("______", word.word),
+    sentence: duelSentence,
     sentenceTranslation: word.exampleTranslation,
     confuserWord,
     contrastRule,
-    suggestedWords: qSuggestions.length === 3 ? qSuggestions : []
+    suggestedWords: qSuggestions.slice(0, 3)
   };
 }
 
@@ -677,7 +707,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
 
-    const qSuggestions = Array.isArray(word.suggestedWords) && word.suggestedWords.length >= 3
+    const qSuggestions: any[] = Array.isArray(word.suggestedWords) && word.suggestedWords.length > 0
       ? word.suggestedWords.slice(0, 3).map((item: any) => ({
           word: typeof item === "string" ? item : (item.word || ""),
           translation: typeof item === "object" ? (item.translation || "") : "",
@@ -687,6 +717,24 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
           pairedWith: word.word
         }))
       : [];
+
+    if (word.example && word.word && qSuggestions.length < 3) {
+      const escapedTarget = word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const prepMatch = word.example.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
+      if (prepMatch && prepMatch[0]) {
+        const colloc = prepMatch[0].trim();
+        if (!qSuggestions.some(s => s.word.toLowerCase() === colloc.toLowerCase())) {
+          qSuggestions.push({
+            word: colloc,
+            translation: "",
+            definition: `Common collocation with "${word.word}"`,
+            hint: `Appears in context sentence`,
+            partOfSpeech: "collocation",
+            pairedWith: word.word
+          });
+        }
+      }
+    }
 
     generated.push({
       id: `q-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
@@ -702,7 +750,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       imageKeyword,
       imageUrl,
       imageUrls: word.imageUrls,
-      suggestedWords: qSuggestions.length === 3 ? qSuggestions : []
+      suggestedWords: qSuggestions.slice(0, 3)
     });
   });
 

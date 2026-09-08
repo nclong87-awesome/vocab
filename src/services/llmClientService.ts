@@ -2215,11 +2215,11 @@ ${isDuelMode
   : isSandwichMode 
   ? "   - Balanced Session: Blend question types; include at least 1 'duel' question and 1 'picture' question." 
   : "   - Include at least 1 'picture' question with an 'imageKeyword'."}
-5. Candidate-Root Suggested Words (FOR EACH INDIVIDUAL QUESTION):
-   For EACH individual question, try to identify 1 versatile root/verb from that question (the target word itself or a key verb/word appearing in its sentence/context, e.g. look, turn, break, set, take, call, run, hold, give, put, come, stand, fall, pass).
-   If found, provide a "suggestedWords" array inside that question with exactly 3 items derived ONLY from that 1 word:
-     (1) base word itself, (2) 1 phrasal verb, (3) 1 preposition combination. Set "pairedWith" to that root word.
-   If no suitable root word can form both a phrasal verb and a preposition combination for this question, set "suggestedWords": [] for this question. Do NOT generate random words.
+5. Suggested Words / Paired Collocations (FOR EACH INDIVIDUAL QUESTION):
+   For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} directly relevant to that question:
+   - For 'duel' questions: Include (1) the rival 'confuserWord' being contrasted (with its translation and definition), (2) a common collocation, phrasal verb, or preposition phrase for the target word (e.g. for "liaise" -> "liaise with"), and (3) a common collocation for the rival word or key related term from the context sentence.
+   - For other questions: Include 2 to 3 natural collocations, phrasal verbs, preposition combinations (e.g. "rely on", "carry out"), or related domain vocabulary directly paired with or appearing in the question sentence.
+   Each item must include: "word", "translation" (in ${nativeLanguage}), "definition" (in ${targetLanguage}), "hint", "partOfSpeech", and "pairedWith" (the target word).
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -2238,10 +2238,10 @@ Output MUST be strictly valid JSON matching this schema:
       "contrastRule": "string (for duel type)",
       "suggestedWords": [
         {
-          "word": "string (suggested word, phrasal verb, or preposition combo)",
+          "word": "string (companion word, collocation, rival word, or preposition combo)",
           "translation": "string (in ${nativeLanguage})",
           "definition": "string (in ${targetLanguage})",
-          "pairedWith": "string (the candidate root word)",
+          "pairedWith": "string (the target word)",
           "hint": "string",
           "partOfSpeech": "string"
         }
@@ -2259,9 +2259,9 @@ Output MUST be strictly valid JSON matching this schema:
       : isSandwichMode 
       ? `3. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question.\n` 
       : `3. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
-    `4. Suggested words for EACH individual question: Include "suggestedWords" with exactly 3 items derived from 1 candidate root word for that question (base word, 1 phrasal verb, 1 prep combination), or [] if none suitable.`;
+    `4. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 companion vocabulary items, collocations (e.g. preposition phrases), or rival duel words for that question.`;
 
-  const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of exactly 3 items based on 1 candidate word for that question: base word, phrasal verb, preposition combo; or [] if none suitable).`;
+  const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 companion words/collocations for that question).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2320,7 +2320,7 @@ Output MUST be strictly valid JSON matching this schema:
       }
     }
 
-    // Helper to normalize exactly 3 companion words for an individual question
+    // Helper to normalize companion words for an individual question
     const normalizeSuggestionsForQuestion = (rawList: any[], targetWordText: string): any[] => {
       if (!Array.isArray(rawList) || rawList.length === 0) return [];
       const seen = new Set<string>();
@@ -2343,7 +2343,7 @@ Output MUST be strictly valid JSON matching this schema:
 
         if (resList.length >= 3) break;
       }
-      return resList.length === 3 ? resList : [];
+      return resList;
     };
 
     if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
@@ -2458,13 +2458,48 @@ Output MUST be strictly valid JSON matching this schema:
 
         let qSuggestions = normalizeSuggestionsForQuestion(rawQuestionSuggestions, matchingWord.word);
 
-        // Fallback: check topLevelSuggestions if question didn't yield 3
-        if (qSuggestions.length < 3 && topLevelSuggestions.length >= 3) {
+        // Fallback 1: check topLevelSuggestions if question didn't yield suggestions
+        if (qSuggestions.length === 0 && topLevelSuggestions.length > 0) {
           qSuggestions = normalizeSuggestionsForQuestion(topLevelSuggestions, matchingWord.word);
         }
 
-        if (qSuggestions.length < 3 && matchingWord && Array.isArray(matchingWord.suggestedWords) && matchingWord.suggestedWords.length >= 3) {
+        // Fallback 2: check matchingWord in user's collection
+        if (qSuggestions.length === 0 && matchingWord && Array.isArray(matchingWord.suggestedWords) && matchingWord.suggestedWords.length > 0) {
           qSuggestions = normalizeSuggestionsForQuestion(matchingWord.suggestedWords, matchingWord.word);
+        }
+
+        // Fallback 3: for Duel questions, ensure rival confuser word is included in suggested words!
+        if (isQuestionDuel || q.confuserWord) {
+          const confuserStr = String(q.confuserWord || "").trim();
+          if (confuserStr && !qSuggestions.some(s => s.word.toLowerCase() === confuserStr.toLowerCase())) {
+            qSuggestions.unshift({
+              word: confuserStr,
+              translation: "",
+              definition: q.contrastRule || `Contrast rival against "${matchingWord.word}"`,
+              hint: `Contrast rival against "${matchingWord.word}"`,
+              partOfSpeech: matchingWord.partOfSpeech,
+              pairedWith: matchingWord.word
+            });
+          }
+        }
+
+        // Fallback 4: Extract common preposition collocation from resolvedSentence (e.g. "liaise with")
+        if (resolvedSentence && matchingWord.word && qSuggestions.length < 3) {
+          const escapedTarget = matchingWord.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const prepMatch = resolvedSentence.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
+          if (prepMatch && prepMatch[0]) {
+            const colloc = prepMatch[0].trim();
+            if (!qSuggestions.some(s => s.word.toLowerCase() === colloc.toLowerCase())) {
+              qSuggestions.push({
+                word: colloc,
+                translation: "",
+                definition: `Preposition collocation with "${matchingWord.word}"`,
+                hint: `Appears in context sentence`,
+                partOfSpeech: "collocation",
+                pairedWith: matchingWord.word
+              });
+            }
+          }
         }
 
         return {
@@ -2480,7 +2515,7 @@ Output MUST be strictly valid JSON matching this schema:
           sentenceTranslation: resolvedSentenceTranslation,
           imageKeyword: keywordText,
           imageUrl: imgUrl,
-          suggestedWords: qSuggestions.length === 3 ? qSuggestions : [],
+          suggestedWords: qSuggestions.length > 0 ? qSuggestions.slice(0, 3) : [],
           confuserWord: q.confuserWord || undefined,
           contrastRule: q.contrastRule || undefined
         };

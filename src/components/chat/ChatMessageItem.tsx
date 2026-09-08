@@ -239,7 +239,7 @@ function ChatMessageItem({
   }, [messages]);
 
   // Determine suggested words: from msg.suggestedWords, msg.quizFinishedData.suggestedWords,
-  // or derived from any 'add_word' actions so they are ALWAYS rendered INSIDE the message bubble!
+  // or derived from any 'add_word' actions or quiz feedback content so they are ALWAYS rendered INSIDE the message bubble!
   const effectiveSuggestedWords = useMemo<QuizSuggestedWord[]>(() => {
     if (msg.suggestedWords && msg.suggestedWords.length > 0) {
       return msg.suggestedWords;
@@ -264,8 +264,64 @@ function ChatMessageItem({
         };
       });
     }
+
+    // Safety fallback for quiz feedback messages: extract contrast rival or collocations from feedback content if missing
+    if (msg.id.startsWith("quiz-feedback-") && msg.content) {
+      const derived: QuizSuggestedWord[] = [];
+      const targetWord = msg.audioWord || "";
+
+      let rivalWord = msg.confuserWord;
+      let contrastText = msg.contrastRule || "";
+
+      if (!rivalWord) {
+        // Try extracting from content: e.g. Contrast Match & Unlearning Rule: 'Liaise' means ... while 'mediate' means ...
+        const contrastMatch = msg.content.match(/(?:Contrast Match & Unlearning Rule:?|Contrast Duel:?)\s*([^\n]+)/i);
+        if (contrastMatch && contrastMatch[1]) {
+          contrastText = contrastMatch[1];
+          const wordsInQuotes = Array.from(contrastText.matchAll(/['"“]([a-zA-ZÀ-ỹ\s-]+)['"”]/g)).map(m => m[1].trim());
+          const otherWord = wordsInQuotes.find(w => targetWord && w.toLowerCase() !== targetWord.toLowerCase());
+          if (otherWord) {
+            rivalWord = otherWord;
+          }
+        }
+      }
+
+      if (rivalWord && (!targetWord || rivalWord.toLowerCase() !== targetWord.toLowerCase())) {
+        derived.push({
+          word: rivalWord,
+          translation: "",
+          definition: contrastText || `Contrast rival against "${targetWord}"`,
+          hint: `Contrast rival against "${targetWord}"`,
+          pairedWith: targetWord || undefined,
+        });
+      }
+
+      // Check for preposition collocation in the sentence in msg.content
+      if (targetWord) {
+        const escapedWord = targetWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const prepMatch = msg.content.match(new RegExp(`\\b(${escapedWord})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between)\\b`, "i"));
+        if (prepMatch && prepMatch[0]) {
+          const combo = prepMatch[0].trim();
+          if (!derived.some(d => d.word.toLowerCase() === combo.toLowerCase())) {
+            derived.push({
+              word: combo,
+              translation: "",
+              definition: `Common collocation with "${targetWord}"`,
+              hint: `Found in context sentence`,
+              partOfSpeech: "collocation",
+              pairedWith: targetWord,
+            });
+          }
+        }
+      }
+
+      if (derived.length > 0) {
+        return derived;
+      }
+    }
+
     return [];
-  }, [msg.suggestedWords, msg.quizFinishedData?.suggestedWords, msg.suggestedActions]);
+  }, [msg.suggestedWords, msg.quizFinishedData?.suggestedWords, msg.suggestedActions, msg.id, msg.content, msg.confuserWord, msg.contrastRule, msg.audioWord]);
 
   const isWelcomeMsg = !isUser && msg.id.startsWith("welcome-msg") && !isQuizActive;
 
@@ -414,41 +470,69 @@ function ChatMessageItem({
       }
 
       // During a smart balanced review session, when a new word is added or thread advances,
-      // consistently move the "Start Confuser Duel" (Step 2) or "Start Practice Quiz" (Step 3) button to appear after the final message.
-      const sandwichWarmupMsg = messages.find(
-        m =>
-          (m.id.startsWith("sandwich-warmup-msg-") ||
-            m.id.startsWith("sandwich-warmup-story-") ||
-            (m.suggestedActions && m.suggestedActions.some(a => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz"))) &&
-          !messages.some(quizM => quizM.id.startsWith("sandwich-quiz-start-"))
-      );
+      // consistently move the "Start Confuser Duel" (Step 2) or "Start Practice Quiz" (Step 3) button
+      // to appear ONLY after the final (latest) message, never duplicating onto previous messages.
+      if (isLatestMessage) {
+        const duelAlreadyStarted = messages.some(quizM => quizM.id.startsWith("sandwich-duel-start-"));
+        const quizAlreadyStarted = messages.some(quizM => quizM.id.startsWith("sandwich-quiz-start-"));
 
-      if (sandwichWarmupMsg) {
-        const origDuelAction = sandwichWarmupMsg.suggestedActions?.find(
-          a => a && a.action === "start_sandwich_duel"
-        );
-        const origQuizAction = sandwichWarmupMsg.suggestedActions?.find(
-          a => a && a.action === "start_sandwich_quiz"
-        );
-        const actionToPromote = origDuelAction || origQuizAction;
-        if (actionToPromote) {
-          const actionPayload = actionToPromote.payload?.warmupWordIds
-            ? actionToPromote.payload
-            : { warmupWordIds: [] };
+        if (!quizAlreadyStarted) {
+          let actionToPromote: { action: string; payload?: any } | undefined;
 
-          const promotedAction = {
-            label: actionToPromote.action === "start_sandwich_duel"
-              ? t("chat_sandwich_start_duel_action", currentAppLang)
-              : t("chat_sandwich_start_quiz_action", currentAppLang),
-            action: actionToPromote.action,
-            payload: actionPayload,
-          };
-
-          const existingIdx = rawActions.findIndex(a => a && (a.action === "start_sandwich_duel" || a.action === "start_sandwich_quiz"));
-          if (existingIdx >= 0) {
-            rawActions[existingIdx] = promotedAction;
+          if (duelAlreadyStarted) {
+            // Once duel has started/finished, only promote the quiz step
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const qAction = messages[i].suggestedActions?.find(a => a && a.action === "start_sandwich_quiz");
+              if (qAction) {
+                actionToPromote = qAction;
+                break;
+              }
+            }
           } else {
-            rawActions.push(promotedAction);
+            // Duel has not started yet, promote the duel step
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const dAction = messages[i].suggestedActions?.find(a => a && a.action === "start_sandwich_duel");
+              if (dAction) {
+                actionToPromote = dAction;
+                break;
+              }
+            }
+          }
+
+          if (actionToPromote) {
+            let actionPayload = actionToPromote.payload?.warmupWordIds
+              ? actionToPromote.payload
+              : undefined;
+
+            if (!actionPayload || !Array.isArray(actionPayload.warmupWordIds) || actionPayload.warmupWordIds.length === 0) {
+              const warmupMsg = messages.find(
+                m => m.id.startsWith("sandwich-warmup-msg-") || m.id.startsWith("sandwich-warmup-story-")
+              );
+              const origAction = warmupMsg?.suggestedActions?.find(
+                a => a?.action === "start_sandwich_quiz" || a?.action === "start_sandwich_duel"
+              );
+              actionPayload = origAction?.payload?.warmupWordIds
+                ? origAction.payload
+                : { warmupWordIds: [] };
+            }
+
+            const promotedAction = {
+              label:
+                actionToPromote.action === "start_sandwich_duel"
+                  ? t("chat_sandwich_start_duel_action", currentAppLang)
+                  : t("chat_sandwich_start_quiz_action", currentAppLang),
+              action: actionToPromote.action,
+              payload: actionPayload,
+            };
+
+            const existingIdx = rawActions.findIndex(
+              a => a && (a.action === "start_sandwich_duel" || a.action === "start_sandwich_quiz")
+            );
+            if (existingIdx >= 0) {
+              rawActions[existingIdx] = promotedAction;
+            } else {
+              rawActions.push(promotedAction);
+            }
           }
         }
       }
@@ -495,6 +579,7 @@ function ChatMessageItem({
       a => a && (a.action === "confirm_save_word" || a.action === "add_word" || a.action === "select_definition" || a.action === "add_multiplewords")
     );
 
+    const seenActionKeys = new Set<string>();
     return filtered
       .filter(act => {
         // If this message originally had word confirmation/addition actions and all of them have been resolved/saved,
@@ -506,6 +591,18 @@ function ChatMessageItem({
         if (isCancelAction && hasOriginalWordConfirmAction && !hasRemainingWordConfirmAction) {
           return false;
         }
+
+        // Deduplicate actions by action type (for session actions) or action+label
+        if (act.action === "start_sandwich_duel" || act.action === "start_sandwich_quiz") {
+          const sessionStepKey = `session_step_${act.action}`;
+          if (seenActionKeys.has(sessionStepKey)) return false;
+          seenActionKeys.add(sessionStepKey);
+        } else {
+          const dedupeKey = `${act.action}:${act.label || ""}:${JSON.stringify(act.payload || {})}`;
+          if (seenActionKeys.has(dedupeKey)) return false;
+          seenActionKeys.add(dedupeKey);
+        }
+
         return true;
       })
       .map(act => {
