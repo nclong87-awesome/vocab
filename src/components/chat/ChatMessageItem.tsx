@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2, Swords
+  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2, Swords, BookOpen
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, QuizSuggestedWord } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
@@ -601,6 +601,13 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_confuser_duel") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "confuser_duel");
+    } else if (
+      act.action === "start_practice_story_immersion" ||
+      act.action === "start_story_immersion" ||
+      act.action === "next_story"
+    ) {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "story_immersion");
     } else if (act.action === "start_sandwich_duel") {
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
@@ -1172,6 +1179,10 @@ function ChatMessageItem({
               const isSandwichDuelLocked = isSandwichDuel && !isAllWarmupReviewed;
               const isDuelPracticeAction = act.action === "start_practice_confuser_duel";
               const isDuelQuizAction = (msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && act.action === "quiz_answer";
+              const isStoryImmersionAction =
+                act.action === "start_practice_story_immersion" ||
+                act.action === "start_story_immersion" ||
+                act.action === "next_story";
               const currentPayload = customActionPayloads[aIdx] || act.payload;
 
               return (
@@ -1227,6 +1238,8 @@ function ChatMessageItem({
                       <Swords className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0 mt-0.5" />
                     ) : isDuelQuizAction ? (
                       <Swords className="w-3.5 h-3.5 text-amber-600 group-hover:text-amber-400 shrink-0 mt-0.5" />
+                    ) : isStoryImmersionAction ? (
+                      <BookOpen className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0 mt-0.5" />
                     ) : isNextQ ? (
                       <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                     ) : (

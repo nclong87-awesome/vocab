@@ -78,6 +78,7 @@ export function getRemainingWordActions(
           a.action === "start_practice_quiz_only" ||
           a.action === "start_practice_confuser_duel" ||
           a.action === "start_practice" ||
+          a.action === "start_practice_story_immersion" ||
           a.action === "start_story_immersion" ||
           a.action === "next_story" ||
           a.action === "next_quiz")
@@ -95,6 +96,7 @@ export function getRemainingWordActions(
             a.action === "start_practice_quiz_only" ||
             a.action === "start_practice_confuser_duel" ||
             a.action === "start_practice" ||
+            a.action === "start_practice_story_immersion" ||
             a.action === "start_story_immersion" ||
             a.action === "next_story" ||
             a.action === "next_quiz")
