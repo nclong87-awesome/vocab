@@ -26,6 +26,7 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { findWordInCollection } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../../utils/llmEvents";
 import ChatMessageItem from "./ChatMessageItem";
 import LlmProgressIndicator from "./LlmProgressIndicator";
 
@@ -140,6 +141,14 @@ export default function WordAddModal({
     inputRef.current?.focus();
   }, []);
 
+  // Subscribe to LLM request start events to keep activeModelInfo updated with the live candidate model
+  useEffect(() => {
+    const unsubscribe = subscribeLlmRequestStart((data) => {
+      setActiveModelInfo({ provider: data.provider, model: data.model });
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Keyboard shortcut: ESC to close
   useEffect(() => {
     if (!isOpen) return;
@@ -185,10 +194,8 @@ export default function WordAddModal({
 
       setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
-      setActiveModelInfo({
-        provider: llmConfig?.provider || "auto",
-        model: llmConfig?.model || "auto",
-      });
+      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig);
+      setActiveModelInfo(activeInfo);
       scrollToBottom();
 
       if (abortControllerRef.current) {
@@ -324,10 +331,8 @@ export default function WordAddModal({
 
       setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
-      setActiveModelInfo({
-        provider: llmConfig?.provider || "auto",
-        model: llmConfig?.model || "auto",
-      });
+      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig);
+      setActiveModelInfo(activeInfo);
       scrollToBottom();
 
       // Check if already in collection

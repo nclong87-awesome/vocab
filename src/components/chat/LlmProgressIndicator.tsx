@@ -34,7 +34,7 @@ export default function LlmProgressIndicator({ llmConfig, onCancel, activeModelI
   let model = liveModelInfo?.model || activeModelInfo?.model || llmConfig.model;
   const isAutoMode = llmConfig.provider === "auto" || llmConfig.model === "auto";
 
-  if ((!provider || provider === "auto" || model === "auto") && !liveModelInfo && !activeModelInfo) {
+  if (!provider || provider === "auto" || !model || model === "auto") {
     try {
       const nextCand = getNextAutoCandidate(llmConfig, undefined, false);
       provider = nextCand.provider;
