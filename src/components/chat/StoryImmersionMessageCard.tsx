@@ -86,7 +86,7 @@ export default function StoryImmersionMessageCard({
 
   // Generation Controls for Regeneration
   const [selectedTopic, setSelectedTopic] = useState(initialStory.topic || "");
-  const [selectedGenre, setSelectedGenre] = useState(initialStory.genre || "Historical Non-Fiction (Real Events & Figures)");
+  const [selectedGenre, setSelectedGenre] = useState(initialStory.genre || "Auto");
   const [selectedDifficulty, setSelectedDifficulty] = useState<"beginner" | "intermediate" | "advanced">(
     (initialStory.difficulty as any) || "intermediate"
   );
@@ -362,14 +362,14 @@ export default function StoryImmersionMessageCard({
               {/* Topic suggestions */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-stone-700">Topic / Real Event</label>
-                  <span className="text-[11px] text-stone-500 italic">Leave blank for AI to pick the best real historical event</span>
+                  <label className="block text-xs font-semibold text-stone-700">Topic / Premise</label>
+                  <span className="text-[11px] text-stone-500 italic">Leave blank for AI to invent a fresh, creative premise</span>
                 </div>
                 <input
                   type="text"
                   value={selectedTopic}
                   onChange={(e) => setSelectedTopic(e.target.value)}
-                  placeholder="Auto-decided by AI based on vocabulary (or enter specific figure/event)"
+                  placeholder="Auto-invented by AI based on vocabulary (or enter any setting, character, or theme)"
                   className="w-full text-xs px-3 py-2 rounded-lg border border-stone-200 focus:border-stone-900 outline-none"
                 />
               </div>
@@ -383,10 +383,13 @@ export default function StoryImmersionMessageCard({
                     onChange={(e) => setSelectedGenre(e.target.value)}
                     className="w-full text-xs p-2 rounded-lg border border-stone-200 bg-white"
                   >
-                    <option value="Historical Non-Fiction (Real Events & Figures)">📜 Real Events & Non-Fiction (Default)</option>
-                    <option value="Biography & Milestones">👤 Biography & True Milestones</option>
-                    <option value="Slice of Life">Slice of Life</option>
-                    <option value="Mystery">Mystery</option>
+                    <option value="Auto">✨ Auto (AI-Curated for Words)</option>
+                    <option value="Slice of Life & Everyday">☕ Slice of Life & Everyday</option>
+                    <option value="Creative Fiction & Adventure">🌟 Creative Fiction & Adventure</option>
+                    <option value="Travel & Cultural Discovery">✈️ Travel & Culture</option>
+                    <option value="Mystery & Intrigue">🔍 Mystery & Intrigue</option>
+                    <option value="Humor & Lighthearted">😄 Humor & Lighthearted</option>
+                    <option value="Historical Non-Fiction (Real Events & Figures)">📜 Real Events & Inspiring Milestones</option>
                   </select>
                 </div>
                 <div>

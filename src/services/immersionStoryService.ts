@@ -321,6 +321,69 @@ const THEMATIC_NOUNS_DICTIONARY: DictionaryItem[] = [
     partOfSpeech: "noun",
     definition: "A thing done successfully typically by effort, courage, or skill",
     translationMap: { Vietnamese: "thành tựu, thành tích", Spanish: "logro", French: "accomplissement" }
+  },
+  {
+    pattern: /\bopportunit(?:y|ies)\b/i,
+    word: "opportunity",
+    partOfSpeech: "noun",
+    definition: "A set of circumstances that makes it possible to do something",
+    translationMap: { Vietnamese: "cơ hội", Spanish: "oportunidad", French: "opportunité" }
+  },
+  {
+    pattern: /\bperspectives?\b/i,
+    word: "perspective",
+    partOfSpeech: "noun",
+    definition: "A particular attitude toward or way of regarding something; a point of view",
+    translationMap: { Vietnamese: "góc nhìn, quan điểm", Spanish: "perspectiva", French: "perspective" }
+  },
+  {
+    pattern: /\batmospheres?\b/i,
+    word: "atmosphere",
+    partOfSpeech: "noun",
+    definition: "The pervading tone or mood of a place, situation, or creative work",
+    translationMap: { Vietnamese: "bầu không khí", Spanish: "atmósfera, ambiente", French: "atmosphère" }
+  },
+  {
+    pattern: /\bconversations?\b/i,
+    word: "conversation",
+    partOfSpeech: "noun",
+    definition: "A talk, especially an informal one, between two or more people",
+    translationMap: { Vietnamese: "cuộc trò chuyện", Spanish: "conversación", French: "conversation" }
+  },
+  {
+    pattern: /\bdestinations?\b/i,
+    word: "destination",
+    partOfSpeech: "noun",
+    definition: "The place to which someone or something is going or being sent",
+    translationMap: { Vietnamese: "điểm đến", Spanish: "destino", French: "destination" }
+  },
+  {
+    pattern: /\bcollaborations?\b/i,
+    word: "collaboration",
+    partOfSpeech: "noun",
+    definition: "The action of working with someone to produce or create something",
+    translationMap: { Vietnamese: "sự hợp tác", Spanish: "colaboración", French: "collaboration" }
+  },
+  {
+    pattern: /\bjourneys?\b/i,
+    word: "journey",
+    partOfSpeech: "noun",
+    definition: "An act of traveling from one place to another or a process of personal growth",
+    translationMap: { Vietnamese: "hành trình", Spanish: "viaje, trayecto", French: "voyage" }
+  },
+  {
+    pattern: /\bdecisions?\b/i,
+    word: "decision",
+    partOfSpeech: "noun",
+    definition: "A conclusion or resolution reached after consideration",
+    translationMap: { Vietnamese: "quyết định", Spanish: "decisión", French: "décision" }
+  },
+  {
+    pattern: /\bmemories?\b/i,
+    word: "memory",
+    partOfSpeech: "noun",
+    definition: "Something remembered from the past; a recollection",
+    translationMap: { Vietnamese: "kỷ niệm, ký ức", Spanish: "recuerdo, memoria", French: "souvenir" }
   }
 ];
 
@@ -355,16 +418,16 @@ export function extractStoryCollocations(
     return false;
   };
 
-  // 1. Prioritize exactly ONE phrasal verb
+  // 1. Prioritize phrasal verbs
   findFirstFromDict(PHRASAL_VERBS_DICTIONARY);
 
-  // 2. Prioritize exactly ONE verb or adjective followed by a preposition
+  // 2. Prioritize verb or adjective followed by a preposition
   findFirstFromDict(VERB_ADJ_PREP_DICTIONARY);
 
-  // 3. Prioritize exactly ONE key noun
+  // 3. Prioritize key nouns
   findFirstFromDict(THEMATIC_NOUNS_DICTIONARY);
 
-  // If any slot is still missing, fill from remaining entries across all 3 dictionaries
+  // If any slot is still missing, fill from remaining entries across all dictionaries
   const allDicts = [...PHRASAL_VERBS_DICTIONARY, ...VERB_ADJ_PREP_DICTIONARY, ...THEMATIC_NOUNS_DICTIONARY];
   for (const item of allDicts) {
     if (found.length >= 3) break;
@@ -396,7 +459,7 @@ export async function generateImmersionStoryService(params: {
   const { 
     targetWords, 
     topic, 
-    genre = "Historical Non-Fiction (Real Events & Figures)", 
+    genre = "Auto", 
     difficulty = "intermediate", 
     targetLanguage, 
     nativeLanguage, 
@@ -407,46 +470,50 @@ export async function generateImmersionStoryService(params: {
   const candidateSlice = targetWords.slice(0, 5);
   const wordListFormatted = candidateSlice.map(w => `"${w.word}" (${w.translation || w.definition})`).join(", ");
 
-  const topicDirective = (!topic || topic.trim() === "" || topic.toLowerCase().startsWith("auto"))
-    ? `TOPIC SELECTION DIRECTIVE (AUTONOMOUS - TECH & DIGITAL CULTURE HISTORY):
-- Autonomously choose an engaging, factually documented REAL tech history event, internet milestone, open-source software release, digital culture moment, or modern innovation (e.g. the 2006 launch of jQuery 1.0 by John Resig, the invention of the World Wide Web at CERN, the creation of VisiCalc spreadsheet, the invention of QWERTY, early indie game development, or Wikipedia's founding) that best and most naturally connects with the target vocabulary words.
-- STRICTLY AVOID well-known traditional textbook historical figures (DO NOT use Marie Curie, Alexander Fleming, Einstein, Newton, or Wright Brothers). Focus instead on modern technology history, web development milestones, digital culture, and software innovations!
-- Set the "topic" field in the output JSON to the name of this chosen tech/digital milestone.`
+  const isAutoTopic = !topic || topic.trim() === "" || topic.toLowerCase().startsWith("auto");
+  const isAutoGenre = !genre || genre.trim() === "" || genre.toLowerCase().startsWith("auto");
+
+  const topicDirective = isAutoTopic
+    ? `DYNAMIC & DIVERSE TOPIC SELECTION (CRITICAL MANDATE):
+- Autonomously invent an original, creative, and captivating story premise, slice-of-life scenario, or memorable situation that naturally weaves together the target vocabulary words.
+- Explore rich and diverse themes across varied settings: everyday encounters, culinary adventures, travel journeys, heartwarming friendships, artistic pursuits, nature exploration, workplace collaborations, curiosities, or whimsical moments.
+- STRICT DIVERSITY MANDATE: NEVER repeat clichéd historical tropes or default to the same story (such as Wikipedia's founding, tech startup launches, or boilerplate historical overviews). Every story must have a fresh, unique premise, setting, and characters tailored organically to the target words.
+- Set the "topic" field in the output JSON to a concise title or theme of your chosen scenario.`
     : `TOPIC DIRECTIVE:
-- Ground the narrative accurately in the real tech/digital culture history context of: "${topic}".`;
+- Center the narrative around the theme, topic, or scenario of: "${topic}".`;
 
-  const nonFictionDirectives = `
-NON-FICTION ACCURACY DIRECTIVES (CRITICAL):
-- This narrative MUST be strictly grounded in REAL, ACCURATELY DOCUMENTED historical events, biographical facts, scientific discoveries, or real people.
-- DO NOT invent fake historical characters, fictitious events, or counter-factual timelines.
-- Recount genuine biographical moments, milestones, or discoveries while naturally integrating the target vocabulary words.
-`;
+  const genreDirective = isAutoGenre
+    ? `GENRE DIRECTIVE:
+- Dynamically select the most natural, engaging genre for the target words (e.g. "Slice of Life & Everyday", "Creative Fiction & Adventure", "Travel & Cultural Discovery", "Mystery & Intrigue", "Humor & Lighthearted", or "Inspiring Milestones").
+- Set the "genre" field in the output JSON to your chosen genre.`
+    : `GENRE DIRECTIVE:
+- Write the story in the style and tone of the genre: "${genre}".`;
 
-  const prompt = `Write a concise, engaging narrative based on real historical events or real figures (strictly 2 to 3 short paragraphs, around 80-140 words total) in ${targetLanguage} that naturally integrates the following ${candidateSlice.length} target vocabulary words:
+  const prompt = `Write an engaging, well-crafted, and concise narrative (strictly 2 to 3 short paragraphs, around 90-150 words total) in ${targetLanguage} that naturally and meaningfully integrates the following ${candidateSlice.length} target vocabulary words:
 Target Vocabulary to emphasize (exactly ${candidateSlice.length} words): [${wordListFormatted}]
 
-Comprehensible Input & Length Constraints:
-- Length: Keep the story short, concise, and easy to read (strictly 2 to 3 short paragraphs, 80-140 words total). Avoid overly long or verbose narratives.
+Comprehensible Input & Storytelling Guidelines:
+- Length: Keep the story short, concise, and easy to read (strictly 2 to 3 short paragraphs, 90-150 words total). Avoid rambling or overly long text.
 - Difficulty Level: ${difficulty} (aim for ~90-95% comprehensible phrasing with natural syntax).
-- Genre: ${genre}
+${genreDirective}
 ${topicDirective}
-- Provide an accurate paragraph-by-paragraph parallel translation in ${nativeLanguage}.
-- Focus on natural repetition and rich context for the target words.
+- Parallel Translation: Provide an accurate, natural paragraph-by-paragraph parallel translation in ${nativeLanguage}.
+- Focus on natural storytelling where the target words feel genuinely organic and contextual, not forced.
+- Create distinct, vivid characters or a lively context. Ensure variety and freshness across generations.
 
-CRITICAL SUGGESTED WORDS REQUIREMENT:
-During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
-1. EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
-2. EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep"
-3. EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the story, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun"
-Ensure the story text naturally incorporates all three of these items so learners see them used in context!
+SUGGESTED WORDS & COLLOCATIONS REQUIREMENT:
+Identify exactly 3 natural collocations, phrasal expressions, or high-value vocabulary items that you used in this story text so the learner can expand their vocabulary (the "suggestedWords" array with exactly 3 items):
+1. A Phrasal Verb or Verb Phrase actually used in your story (with "partOfSpeech": "phrasal verb" or "verb phrase")
+2. A Prepositional Collocation (verb + prep or adj + prep) or Idiomatic Phrase actually used in your story (with "partOfSpeech": "verb + prep" or "adj + prep" or "idiom")
+3. A Key Thematic Noun or Descriptive Adjective from the story (with "partOfSpeech": "noun" or "adjective")
+Ensure the story text naturally incorporates all three of these items!
 
-${nonFictionDirectives}
 Return JSON in this EXACT schema:
 {
   "title": "Story title in ${targetLanguage}",
   "titleTranslation": "Story title translated in ${nativeLanguage}",
-  "topic": "Name of the real historical event or figure chosen",
-  "genre": "${genre}",
+  "topic": "Concise topic or premise of the story",
+  "genre": "Genre of the story",
   "difficulty": "${difficulty}",
   "targetWords": [
     {
@@ -460,27 +527,27 @@ Return JSON in this EXACT schema:
   ],
   "suggestedWords": [
     {
-      "word": "phrasal verb (e.g. 'carry out' or 'figure out')",
+      "word": "phrasal verb or verb phrase used in story",
       "targetInStory": "exact phrase as appeared in the story text",
       "translation": "translation in ${nativeLanguage}",
-      "definition": "definition of the phrasal verb",
-      "partOfSpeech": "phrasal verb",
+      "definition": "definition of the phrase",
+      "partOfSpeech": "phrasal verb or verb phrase",
       "pronunciation": "/phonetic/"
     },
     {
-      "word": "verb or adjective + preposition (e.g. 'excited about' or 'rely on')",
+      "word": "preposition collocation or idiom used in story",
       "targetInStory": "exact phrase as appeared in the story text",
       "translation": "translation in ${nativeLanguage}",
-      "definition": "definition of this preposition collocation",
-      "partOfSpeech": "verb + prep or adj + prep",
+      "definition": "definition of this collocation",
+      "partOfSpeech": "verb + prep or adj + prep or idiom",
       "pronunciation": "/phonetic/"
     },
     {
-      "word": "thematic noun (e.g. 'breakthrough' or 'laboratory')",
-      "targetInStory": "exact noun as appeared in the story text",
+      "word": "thematic noun or adjective from story",
+      "targetInStory": "exact word as appeared in the story text",
       "translation": "translation in ${nativeLanguage}",
-      "definition": "definition of the noun",
-      "partOfSpeech": "noun",
+      "definition": "definition of the word",
+      "partOfSpeech": "noun or adjective",
       "pronunciation": "/phonetic/"
     }
   ],
@@ -493,7 +560,7 @@ Return JSON in this EXACT schema:
   ]
 }`;
 
-  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), strictly focused on real historical events/figures and the candidate vocabulary words. When generating the 3 suggested words, strictly prioritize: 1 phrasal verb, 1 verb or adjective followed by a preposition, and 1 noun. Remain strictly factual and accurate without fabricating untrue events or characters.`;
+  const systemInstruction = `You are an expert language pedagogue specializing in Stephen Krashen's Comprehensible Input and contextual immersion storytelling. Output ONLY valid JSON matching the requested schema. Keep stories brief, concise (2-3 short paragraphs), engaging, creative, and organically woven around the target vocabulary words. Provide fresh, diverse themes and NEVER repeat clichéd tropes or hardcoded stories like Wikipedia's founding. Provide 3 valuable collocations/expressions actually used in the story.`;
 
   try {
     const rawRes = await sendLlmRequestWithMeta({
@@ -505,12 +572,12 @@ Return JSON in this EXACT schema:
     });
 
     const parsed = cleanAndParseJson(rawRes.text);
-    const resolvedTopic = parsed.topic || topic || "Historical Discovery";
+    const resolvedTopic = parsed.topic || topic || "Contextual Immersion";
     const paragraphsList: ImmersionStoryParagraph[] = parsed.paragraphs || [
       {
         id: "p1",
-        targetText: `A remarkable moment in history unfolded during ${resolvedTopic}.`,
-        nativeText: `Một khoảnh khắc đáng nhớ trong lịch sử đã diễn ra trong ${resolvedTopic}.`
+        targetText: `An engaging story unfolded around ${resolvedTopic}.`,
+        nativeText: `Một câu chuyện hấp dẫn đã mở ra xoay quanh ${resolvedTopic}.`
       }
     ];
 
@@ -529,12 +596,14 @@ Return JSON in this EXACT schema:
       extractedSuggestions = extractStoryCollocations(paragraphsList, nativeLanguage, targetLanguage);
     }
 
+    const resolvedGenre = parsed.genre || (genre && genre !== "Auto" ? genre : "Slice of Life & Everyday");
+
     return {
       id: `story_${Date.now()}`,
-      title: parsed.title || "Historical Non-Fiction Story",
-      titleTranslation: parsed.titleTranslation || "Truyện lịch sử có thật",
+      title: parsed.title || "Contextual Immersion Story",
+      titleTranslation: parsed.titleTranslation || "Truyện ngữ cảnh học từ",
       topic: resolvedTopic,
-      genre: parsed.genre || genre,
+      genre: resolvedGenre,
       difficulty: parsed.difficulty || difficulty,
       targetLanguage,
       nativeLanguage,

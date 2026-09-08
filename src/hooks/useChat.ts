@@ -1747,7 +1747,21 @@ export function useChat({
 
     if (isExplicitStoryRequest && !trimmedInput.toLowerCase().startsWith("why") && !trimmedInput.toLowerCase().startsWith("how")) {
       let extractedTopic: string | undefined = undefined;
-      const genre = "Historical Non-Fiction (Real Events & Figures)";
+      let genre = "Auto";
+
+      if (/\b(?:historical|real\s*(?:person|event|figure|history)|non-fiction|tiểu\s+sử|lịch\s+sử)\b/i.test(trimmedInput)) {
+        genre = "Historical Non-Fiction (Real Events & Figures)";
+      } else if (/\b(?:mystery|trinh\s+thám|detective)\b/i.test(trimmedInput)) {
+        genre = "Mystery & Intrigue";
+      } else if (/\b(?:travel|adventure|du\s+lịch|phiêu\s+lưu)\b/i.test(trimmedInput)) {
+        genre = "Travel & Cultural Discovery";
+      } else if (/\b(?:funny|humor|comedy|hài|hài\s+hước)\b/i.test(trimmedInput)) {
+        genre = "Humor & Lighthearted";
+      } else if (/\b(?:daily|slice\s+of\s+life|đời\s+thường)\b/i.test(trimmedInput)) {
+        genre = "Slice of Life & Everyday";
+      } else if (/\b(?:fiction|fairy\s+tale|khoa\s+học\s+viễn\s+tưởng|sci-fi|fantasy)\b/i.test(trimmedInput)) {
+        genre = "Creative Fiction & Adventure";
+      }
 
       const topicMatch = trimmedInput.match(/(?:about|on|regarding|về)\s+([^.?!]+)/i);
       if (topicMatch && topicMatch[1]) {
@@ -2777,7 +2791,7 @@ export function useChat({
 
     try {
       const topic = options?.topic;
-      const genre = options?.genre || "Historical Non-Fiction (Real Events & Figures)";
+      const genre = options?.genre || "Auto";
       const difficulty = options?.difficulty || "intermediate";
 
       const storyResult = await generateImmersionStoryService({
@@ -2811,22 +2825,22 @@ export function useChat({
         return updatedWords;
       });
 
-      const resolvedTopic = storyResult.topic || topic || "Real Historical Event";
-      const isHistorical = !genre || genre.toLowerCase().includes("historical") || genre.toLowerCase().includes("non-fiction") || genre.toLowerCase().includes("real");
+      const resolvedTopic = storyResult.topic || topic || "Immersion Story";
+      const isHistorical = genre && genre !== "Auto" && (genre.toLowerCase().includes("historical") || genre.toLowerCase().includes("non-fiction") || genre.toLowerCase().includes("real"));
 
       const storyMsg: ChatMessage = {
         id: `story-msg-${Date.now()}`,
         role: "assistant",
         content: isHistorical
           ? `### 📜 Real Event Immersion: ${resolvedTopic}\n\nEnjoy this factual account recounting real events while naturally practicing **${candidateWords.length} candidate words** with Comprehensible Input.`
-          : `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
+          : `### 📖 Contextual Story Immersion: ${resolvedTopic}\n\nEnjoy this story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
         timestamp: new Date().toISOString(),
         audioWord: candidateWords[0]?.word,
         storyData: storyResult,
         provider: configForServer?.provider,
         model: configForServer?.model,
         suggestedActions: [
-          { label: "📖 Next Historical Story", action: "start_practice_story_immersion" },
+          { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
           { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
         ],
       };
