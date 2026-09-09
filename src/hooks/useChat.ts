@@ -321,7 +321,7 @@ export function useChat({
         });
       }
 
-      const confuserCount = Math.min(3, immersionCount > 0 ? immersionCount : activeWords.length);
+      const confuserCount = immersionCount > 0 ? immersionCount : (totalReady > 0 ? totalReady : activeWords.length);
       if (confuserCount >= 1) {
         actions.push({
           label: t("action_confuser_duel_count", currentAppLang, {
@@ -333,12 +333,12 @@ export function useChat({
       }
 
       if (dueCount > 0 || unstudiedCount > 0 || dueQuizCandidates.length > 0) {
-        const totalQuizTarget = Math.min(3, (dueCount > 0 ? dueCount : 0) + (unstudiedCount > 0 ? unstudiedCount : 0) || dueQuizCandidates.length || 3);
+        const totalQuizTarget = (dueCount > 0 ? dueCount : 0) + (unstudiedCount > 0 ? unstudiedCount : 0) || dueQuizCandidates.length;
         const quizLabel =
           dueCount > 0 && unstudiedCount > 0
-            ? `🏆 Quiz Practice (${Math.min(totalQuizTarget, dueCount)} review, ${Math.min(Math.max(0, totalQuizTarget - dueCount), unstudiedCount)} new)`
+            ? `🏆 Quiz Practice (${dueCount} review, ${unstudiedCount} new)`
             : dueCount > 0
-            ? `🏆 Quiz Review (${totalQuizTarget} ${totalQuizTarget === 1 ? "word" : "words"})`
+            ? `🏆 Quiz Review (${dueCount} ${dueCount === 1 ? "word" : "words"})`
             : `🏆 Quiz Practice (${totalQuizTarget} ${totalQuizTarget === 1 ? "word" : "words"})`;
         actions.push({
           label: quizLabel,
