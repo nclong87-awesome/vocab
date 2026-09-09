@@ -432,7 +432,8 @@ export type TranslationKey =
   | "chat_sandwich_finished_msg"
   | "action_next_balanced_session"
   | "action_confuser_duel"
-  | "action_confuser_duel_count";
+  | "action_confuser_duel_count"
+  | "action_quiz_practice_count";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

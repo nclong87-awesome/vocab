@@ -425,5 +425,6 @@ export const enTranslations: LanguageTranslations = {
     chat_sandwich_finished_msg: "{feedback}\n---\n🎉 **Smart Balanced Session Completed! (2/2)**\n\nYou successfully finished the **Balanced Learning Loop**:\n1. ⚔️ **Confuser Duel**: Contrasted rival words to break fossilized errors\n2. 🎯 **Practice Quiz**: Core retrieval & immediate retention check!\n\n🏆 **Final Score: {score} out of {total}** ({accuracy}% accuracy)\n\nI have updated your memory strength history and spaced repetition schedules!",
     action_next_balanced_session: "⚡ Next Balanced Session",
     action_confuser_duel: "⚔️ Confuser Duel (Contrast Match)",
-    action_confuser_duel_count: "⚔️ Confuser Duel ({count} {label})"
+    action_confuser_duel_count: "⚔️ Confuser Duel ({count} {label})",
+    action_quiz_practice_count: "🏆 Quiz Practice ({count} review {label})"
   };

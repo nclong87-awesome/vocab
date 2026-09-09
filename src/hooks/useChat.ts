@@ -20,6 +20,7 @@ import {
   isWordOnReviewCooldown,
   isDueReviewCandidate,
   getDueReviewCandidates,
+  hasUnresolvedQuizMistake,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB, getUserPersonalityProfileFromDB } from "../db/indexedDB";
@@ -308,6 +309,7 @@ export function useChat({
       const immersionCount = immersionCandidates.length;
       const unstudiedCount = unstudiedCandidates.length;
       const dueReviews = getDueReviewCandidates(activeWords);
+      const learnedWords = activeWords.filter(isWordLearnedOrStudied);
       const dueCount = dueReviews.length;
       const totalReady = immersionCount > 0 ? immersionCount : (unstudiedCount + dueCount);
 
@@ -321,7 +323,11 @@ export function useChat({
         });
       }
 
-      const confuserCount = immersionCount > 0 ? immersionCount : (totalReady > 0 ? totalReady : activeWords.length);
+      // Rule: Confuser Duel -> ONLY new or unlearned words (or wrong answers in Quiz)
+      const confuserCandidates = activeWords.filter(
+        (w) => !isWordLearnedOrStudied(w) || hasUnresolvedQuizMistake(w)
+      );
+      const confuserCount = confuserCandidates.length;
       if (confuserCount >= 1) {
         actions.push({
           label: t("action_confuser_duel_count", currentAppLang, {
@@ -332,16 +338,15 @@ export function useChat({
         });
       }
 
-      if (dueCount > 0 || unstudiedCount > 0 || dueQuizCandidates.length > 0) {
-        const totalQuizTarget = (dueCount > 0 ? dueCount : 0) + (unstudiedCount > 0 ? unstudiedCount : 0) || dueQuizCandidates.length;
-        const quizLabel =
-          dueCount > 0 && unstudiedCount > 0
-            ? `🏆 Quiz Practice (${dueCount} review, ${unstudiedCount} new)`
-            : dueCount > 0
-            ? `🏆 Quiz Review (${dueCount} ${dueCount === 1 ? "word" : "words"})`
-            : `🏆 Quiz Practice (${totalQuizTarget} ${totalQuizTarget === 1 ? "word" : "words"})`;
+      // Rule: Quiz Practice -> ONLY review words (learned words due for review or all learned words)
+      const quizReviewCandidates = dueCount > 0 ? dueReviews : learnedWords;
+      const quizReviewCount = quizReviewCandidates.length;
+      if (quizReviewCount >= 1) {
         actions.push({
-          label: quizLabel,
+          label: t("action_quiz_practice_count", currentAppLang, {
+            count: String(quizReviewCount),
+            label: quizReviewCount === 1 ? "word" : "words",
+          }),
           action: "start_practice_quiz_only",
         });
       }
@@ -592,28 +597,46 @@ export function useChat({
 
     // --- CONFUSER DUEL (CONTRAST MATCH) MODE ---
     if (practiceMode === "confuser_duel") {
-      // Target word selection logic using the flashcard review priority:
-      // 1. Words with unresolved quiz errors (urgent remedial review)
-      // 2. Never learned / unreviewed words chronologically FIFO (oldest added first)
-      // 3. Spaced repetition due reviews (scheduled date reached, memory decay, or idle > 7 days)
-      let duelWords = getCandidateWordsForImmersion(activeWords, 3);
+      // Candidate pool: strictly new/unlearned words OR words with unresolved quiz mistakes
+      const confuserCandidates = activeWords.filter(
+        (w) => !isWordLearnedOrStudied(w) || hasUnresolvedQuizMistake(w)
+      );
 
-      if (duelWords.length === 0) {
-        const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
-        const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
-        if (unstudiedWords.length > 0) {
-          duelWords = unstudiedWords.slice(0, 3);
-        } else if (immersionCandidates.length > 0) {
-          duelWords = immersionCandidates.slice(0, 3);
-        } else {
-          duelWords = activeWords.slice(0, 3);
+      if (confuserCandidates.length === 0) {
+        const noCandidateMsg: ChatMessage = {
+          id: `practice-no-candidates-${Date.now()}`,
+          role: "assistant",
+          content: "🎉 **No candidate words for Confuser Duel right now!**\n\nConfuser Duel practices new/unlearned words or words with recent quiz errors. You currently have no unlearned words or unresolved quiz mistakes!",
+          timestamp: new Date().toISOString(),
+          suggestedActions: [
+            { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+            { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+          ],
+        };
+        setChatMessages([noCandidateMsg]);
+        return;
+      }
+
+      // Priority order: 1. Unresolved quiz mistakes, 2. Unstudied / new words chronologically FIFO (oldest added first)
+      const quizErrorWords = confuserCandidates.filter(hasUnresolvedQuizMistake);
+      const unstudiedWords = sortUnstudiedWordsOldestFirst(
+        confuserCandidates.filter((w) => !isWordLearnedOrStudied(w))
+      );
+
+      const prioritized = [...quizErrorWords, ...unstudiedWords];
+      let duelWords: Word[] = [];
+      const existingIds = new Set<string>();
+
+      for (const w of prioritized) {
+        if (!existingIds.has(w.id)) {
+          duelWords.push(w);
+          existingIds.add(w.id);
+          if (duelWords.length >= 3) break;
         }
-      } else if (duelWords.length < 3 && activeWords.length > duelWords.length) {
-        // Supplement with remaining unstudied/due/active words to reach up to 3 words
-        const existingIds = new Set(duelWords.map((w) => w.id));
-        const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
-        const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
-        for (const w of [...unstudiedWords, ...immersionCandidates, ...activeWords]) {
+      }
+
+      if (duelWords.length < 3 && confuserCandidates.length > duelWords.length) {
+        for (const w of confuserCandidates) {
           if (!existingIds.has(w.id)) {
             duelWords.push(w);
             existingIds.add(w.id);
@@ -693,28 +716,37 @@ export function useChat({
       return;
     }
 
-    const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
-    const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
-    const quizWords = getQuizCandidateWords(activeWords, { maxCandidates: 3 });
-
     // Determine if we should launch Quiz mode (only for quiz_only)
     if (practiceMode === "quiz_only") {
-      let effectiveQuizWords = quizWords.slice(0, 3);
+      const dueReviews = getDueReviewCandidates(activeWords);
+      const learnedWords = activeWords.filter(isWordLearnedOrStudied);
 
-      // Robust fallback if quizWords is somehow empty: pull directly from unstudied candidates
+      // Prefer due reviews first; fallback to all learned/review words
+      const candidateReviewPool = dueReviews.length > 0 ? dueReviews : learnedWords;
+
+      if (candidateReviewPool.length === 0) {
+        const noCandidateMsg: ChatMessage = {
+          id: `practice-no-candidates-${Date.now()}`,
+          role: "assistant",
+          content: "🎉 **No review words available for Quiz Practice right now!**\n\nQuiz Practice is strictly for reviewing learned words. Please study new words first or wait until review dates are reached!",
+          timestamp: new Date().toISOString(),
+          suggestedActions: [
+            { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
+            { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
+          ],
+        };
+        setChatMessages([noCandidateMsg]);
+        return;
+      }
+
+      // Strictly select ONLY review words (includeUnstudied: false)
+      let effectiveQuizWords = getQuizCandidateWords(candidateReviewPool, {
+        maxCandidates: 3,
+        includeUnstudied: false,
+      }).slice(0, 3);
+
       if (effectiveQuizWords.length === 0) {
-        const availableUnstudied = sortUnstudiedWordsOldestFirst(
-          activeWords.filter((w) => !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, new Date(), 2))
-        );
-        if (availableUnstudied.length > 0) {
-          effectiveQuizWords = availableUnstudied.slice(0, 3);
-        } else {
-          // Last resort: any non-cooldown word, shuffled
-          const nonCooldownWords = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
-          if (nonCooldownWords.length > 0) {
-            effectiveQuizWords = [...nonCooldownWords].sort(() => 0.5 - Math.random()).slice(0, 3);
-          }
-        }
+        effectiveQuizWords = candidateReviewPool.slice(0, 3);
       }
 
       if (effectiveQuizWords.length === 0) {
@@ -806,6 +838,8 @@ export function useChat({
     }
 
     // Step 2: Search for candidate words for Story Immersion (for story_immersion mode)
+    const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
+    const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
     let batchStoryCandidates = getCandidateWordsForImmersion(activeWords, 5);
     if (practiceMode === "story_immersion" || unstudiedWords.length > 0) {
       if (unstudiedWords.length > 0) {

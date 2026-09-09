@@ -425,5 +425,6 @@ export const viTranslations: LanguageTranslations = {
     chat_sandwich_finished_msg: "{feedback}\n---\n🎉 **Hoàn Thành Phiên Học Cân Bằng! (2/2)**\n\nBạn đã hoàn thành trọn vẹn chu trình **Balanced Learning Loop**:\n1. ⚔️ **Confuser Duel**: Phân biệt các cặp từ dễ nhầm lẫn để sửa lỗi cố hữu\n2. 🎯 **Trắc nghiệm ôn tập**: Ôn tập cốt lõi & kiểm tra tức thì từ mới!\n\n🏆 **Kết quả: {score} / {total} câu đúng** (độ chính xác {accuracy}%)\n\nHệ thống đã cập nhật độ bền trí nhớ và lịch ôn tập lặp lại ngắt quãng (SRS)!",
     action_next_balanced_session: "⚡ Phiên Cân Bằng Tiếp Theo",
     action_confuser_duel: "⚔️ Confuser Duel (Đối Đầu Từ Dễ Nhầm)",
-    action_confuser_duel_count: "⚔️ Confuser Duel ({count} từ)"
+    action_confuser_duel_count: "⚔️ Confuser Duel ({count} từ)",
+    action_quiz_practice_count: "🏆 Quiz Practice ({count} từ ôn tập)"
   };
