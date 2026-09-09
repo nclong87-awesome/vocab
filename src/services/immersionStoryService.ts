@@ -501,12 +501,9 @@ ${topicDirective}
 - Focus on natural storytelling where the target words feel genuinely organic and contextual, not forced.
 - Create distinct, vivid characters or a lively context. Ensure variety and freshness across generations.
 
-SUGGESTED WORDS & COLLOCATIONS REQUIREMENT:
-Identify exactly 3 natural collocations, phrasal expressions, or high-value vocabulary items that you used in this story text so the learner can expand their vocabulary (the "suggestedWords" array with exactly 3 items):
-1. A Phrasal Verb or Verb Phrase actually used in your story (with "partOfSpeech": "phrasal verb" or "verb phrase")
-2. A Prepositional Collocation (verb + prep or adj + prep) or Idiomatic Phrase actually used in your story (with "partOfSpeech": "verb + prep" or "adj + prep" or "idiom")
-3. A Key Thematic Noun or Descriptive Adjective from the story (with "partOfSpeech": "noun" or "adjective")
-Ensure the story text naturally incorporates all three of these items!
+SUGGESTED WORDS & COLLOCATIONS:
+Identify 2 to 3 natural collocations, expressions, or companion vocabulary items actually used in this story text.
+SPEED OPTIMIZATION: Return ONLY "word" and "translation" (or concise "definition"). Do NOT output partOfSpeech, targetInStory, or pronunciation.
 
 Return JSON in this EXACT schema:
 {
@@ -527,28 +524,8 @@ Return JSON in this EXACT schema:
   ],
   "suggestedWords": [
     {
-      "word": "phrasal verb or verb phrase used in story",
-      "targetInStory": "exact phrase as appeared in the story text",
-      "translation": "translation in ${nativeLanguage}",
-      "definition": "definition of the phrase",
-      "partOfSpeech": "phrasal verb or verb phrase",
-      "pronunciation": "/phonetic/"
-    },
-    {
-      "word": "preposition collocation or idiom used in story",
-      "targetInStory": "exact phrase as appeared in the story text",
-      "translation": "translation in ${nativeLanguage}",
-      "definition": "definition of this collocation",
-      "partOfSpeech": "verb + prep or adj + prep or idiom",
-      "pronunciation": "/phonetic/"
-    },
-    {
-      "word": "thematic noun or adjective from story",
-      "targetInStory": "exact word as appeared in the story text",
-      "translation": "translation in ${nativeLanguage}",
-      "definition": "definition of the word",
-      "partOfSpeech": "noun or adjective",
-      "pronunciation": "/phonetic/"
+      "word": "companion word or collocation used in story",
+      "translation": "translation in ${nativeLanguage} or concise definition"
     }
   ],
   "paragraphs": [

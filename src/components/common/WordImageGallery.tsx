@@ -1,9 +1,23 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Image as ImageIcon, Plus, X, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { 
+  Image as ImageIcon, 
+  Plus, 
+  X, 
+  ExternalLink, 
+  Sparkles, 
+  Loader2, 
+  ArrowLeft, 
+  ChevronLeft, 
+  ChevronRight, 
+  Sun, 
+  Moon 
+} from "lucide-react";
 import { Word, LLMConfig } from "../../types";
 import { fetchWorkerImageUrl, getImageKeyword } from "../../utils/quizGenerator";
 import { generateImageSearchQueryService } from "../../services/llmClientService";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 export interface WordImageGalleryProps {
   word: Partial<Word> & { word: string; definition?: string; context?: string; partOfSpeech?: string; imageUrls?: string[]; imageUrl?: string };
@@ -35,7 +49,14 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
   const [showAddImageInput, setShowAddImageInput] = useState<boolean>(false);
   const [newImageUrlInput, setNewImageUrlInput] = useState<string>("");
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
+  const [selectedPreviewIndex, setSelectedPreviewIndex] = useState<number | null>(null);
+  const [backdropMode, setBackdropMode] = useState<"light" | "dark">("light");
   const [generatingSlotIndex, setGeneratingSlotIndex] = useState<number | null>(null);
+  const [lightboxResolvedSrc, setLightboxResolvedSrc] = useState<string>("");
+  const [isLightboxLoading, setIsLightboxLoading] = useState<boolean>(false);
+  const [lightboxError, setLightboxError] = useState<boolean>(false);
+
+  const touchStartXRef = useRef<number | null>(null);
 
   // Sync internal state with props
   useEffect(() => {
@@ -109,6 +130,10 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
     return internalImageUrls;
   }, [internalImageUrls]);
 
+  const validImageUrls = useMemo<string[]>(() => {
+    return internalImageUrls.filter(Boolean);
+  }, [internalImageUrls]);
+
   const handleUpdateUrls = (nextList: string[]) => {
     setInternalImageUrls(nextList);
     if (onImagesChange) {
@@ -172,6 +197,128 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
     if (JSON.stringify(nextList) === JSON.stringify(currentList)) return;
     handleUpdateUrls(nextList);
   };
+
+  const handleOpenPreview = useCallback((src: string, index: number) => {
+    setSelectedPreviewImage(src);
+    setSelectedPreviewIndex(index);
+    setLightboxResolvedSrc(src);
+    setIsLightboxLoading(!src || src.includes("image.nclong87.workers.dev"));
+    setLightboxError(false);
+  }, []);
+
+  const handleClosePreview = useCallback(() => {
+    setSelectedPreviewImage(null);
+    setSelectedPreviewIndex(null);
+    setLightboxResolvedSrc("");
+  }, []);
+
+  // Back-button navigation hook: intercepts browser/hardware back button to close ONLY this image lightbox
+  useModalBackNavigation(
+    Boolean(selectedPreviewImage),
+    handleClosePreview,
+    "word-image-preview-modal"
+  );
+
+  // Carousel navigation between images
+  const handlePrevImage = useCallback(() => {
+    if (validImageUrls.length <= 1) return;
+    setSelectedPreviewIndex((prev) => {
+      const curr = prev !== null ? prev : 0;
+      const next = (curr - 1 + validImageUrls.length) % validImageUrls.length;
+      const nextSrc = validImageUrls[next];
+      setSelectedPreviewImage(nextSrc);
+      setLightboxResolvedSrc(nextSrc);
+      setIsLightboxLoading(!nextSrc || nextSrc.includes("image.nclong87.workers.dev"));
+      setLightboxError(false);
+      return next;
+    });
+  }, [validImageUrls]);
+
+  const handleNextImage = useCallback(() => {
+    if (validImageUrls.length <= 1) return;
+    setSelectedPreviewIndex((prev) => {
+      const curr = prev !== null ? prev : 0;
+      const next = (curr + 1) % validImageUrls.length;
+      const nextSrc = validImageUrls[next];
+      setSelectedPreviewImage(nextSrc);
+      setLightboxResolvedSrc(nextSrc);
+      setIsLightboxLoading(!nextSrc || nextSrc.includes("image.nclong87.workers.dev"));
+      setLightboxError(false);
+      return next;
+    });
+  }, [validImageUrls]);
+
+  // Keyboard navigation shortcuts
+  useEffect(() => {
+    if (!selectedPreviewImage) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClosePreview();
+      } else if (e.key === "ArrowLeft") {
+        handlePrevImage();
+      } else if (e.key === "ArrowRight") {
+        handleNextImage();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedPreviewImage, handleClosePreview, handlePrevImage, handleNextImage]);
+
+  // Touch swipe detection for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (Math.abs(deltaX) > 40) {
+      if (deltaX > 0) {
+        handlePrevImage();
+      } else {
+        handleNextImage();
+      }
+    }
+  };
+
+  // Resolve worker URL in lightbox if needed
+  useEffect(() => {
+    if (!selectedPreviewImage) return;
+
+    if (!selectedPreviewImage.includes("image.nclong87.workers.dev")) {
+      setLightboxResolvedSrc(selectedPreviewImage);
+      setIsLightboxLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLightboxLoading(true);
+    setLightboxError(false);
+
+    const match = selectedPreviewImage.match(/query=([^&]+)/);
+    const queryTerm = match ? decodeURIComponent(match[1]) : (word.word || "");
+    const slotIdx = (selectedPreviewIndex !== null ? selectedPreviewIndex : 0) + 1;
+
+    fetchWorkerImageUrl(queryTerm, slotIdx).then((url) => {
+      if (isMounted) {
+        if (url) {
+          setLightboxResolvedSrc(url);
+          handleResolveImageUrl(selectedPreviewImage, url);
+        } else {
+          setLightboxError(true);
+        }
+        setIsLightboxLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedPreviewImage, selectedPreviewIndex, word.word]);
+
+  const currentAppLang = (typeof window !== "undefined" && (localStorage.getItem("vocab_learner_app_lang") || "en")) || "en";
+  const isVi = currentAppLang === "vi";
 
   const totalSlotsCount = Math.max(minSlots, allImageUrls.length);
   const displayTitle = title || (titlePrefix ? `${titlePrefix} (${totalSlotsCount})` : `Word Images (${totalSlotsCount})`);
@@ -247,7 +394,7 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
                   imgUrl={imgUrl}
                   wordText={word.word}
                   index={idx}
-                  onPreview={(src) => setSelectedPreviewImage(src)}
+                  onPreview={(src, previewIdx) => handleOpenPreview(src, previewIdx)}
                   onRemove={(src) => handleRemoveImageUrl(src)}
                   onResolveUrl={handleResolveImageUrl}
                   onRegenerateSlot={() => handleGenerateSlotQuery(idx)}
@@ -300,34 +447,268 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
         </div>
       )}
 
-      {/* Lightbox Modal */}
-      <AnimatePresence>
-        {selectedPreviewImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setSelectedPreviewImage(null)}
-            className="fixed inset-0 z-50 bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-pointer"
-          >
-            <div className="relative max-w-3xl max-h-[85vh] bg-black rounded-xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => setSelectedPreviewImage(null)}
-                className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-stone-900/80 text-white hover:bg-stone-800 transition-colors cursor-pointer"
+      {/* Lightbox Modal with Back Navigation & Clean Mobile Layout */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {selectedPreviewImage && (
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Image preview"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={handleClosePreview}
+              className={`fixed inset-0 z-[9999] flex flex-col justify-between p-2 sm:p-4 select-none cursor-pointer transition-colors duration-300 ${
+                backdropMode === "light"
+                  ? "bg-stone-900/40 sm:bg-stone-900/45 backdrop-blur-md"
+                  : "bg-stone-950/85 backdrop-blur-md"
+              }`}
+              style={{
+                paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+                paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+              }}
+            >
+              {/* Top Bar Navigation */}
+              <header
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 w-full max-w-4xl mx-auto z-20 cursor-default"
               >
-                <X className="w-5 h-5" />
-              </button>
-              <img
-                src={selectedPreviewImage}
-                alt={`${word.word} full view`}
-                className="max-w-full max-h-[85vh] object-contain"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                {/* Back button */}
+                <button
+                  type="button"
+                  onClick={handleClosePreview}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer active:scale-95 shadow-md ${
+                    backdropMode === "light"
+                      ? "bg-white/95 text-stone-800 hover:bg-stone-100 border border-stone-200"
+                      : "bg-stone-900/90 text-stone-100 hover:bg-stone-800 border border-stone-700"
+                  }`}
+                  aria-label={isVi ? "Quay lại" : "Back"}
+                  title={isVi ? "Quay lại (Esc)" : "Back (Esc)"}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>{isVi ? "Quay lại" : "Back"}</span>
+                </button>
+
+                {/* Word title & counter */}
+                <div className="flex flex-col items-center min-w-0 px-2 text-center">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`text-xs sm:text-sm font-bold truncate max-w-[150px] sm:max-w-xs ${
+                        backdropMode === "light" ? "text-white drop-shadow-sm" : "text-white"
+                      }`}
+                    >
+                      {word.word}
+                    </span>
+                    {selectedPreviewIndex !== null && validImageUrls.length > 0 && (
+                      <span
+                        className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
+                          backdropMode === "light"
+                            ? "bg-amber-400/90 text-amber-950 border border-amber-300"
+                            : "bg-amber-950/80 text-amber-300 border border-amber-700/60"
+                        }`}
+                      >
+                        {selectedPreviewIndex + 1}/{validImageUrls.length}
+                      </span>
+                    )}
+                  </div>
+                  {word.translation && (
+                    <span
+                      className={`text-[10px] truncate max-w-[180px] sm:max-w-xs ${
+                        backdropMode === "light" ? "text-stone-200 drop-shadow-2xs" : "text-stone-400"
+                      }`}
+                    >
+                      {word.translation}
+                    </span>
+                  )}
+                </div>
+
+                {/* Actions: Theme Toggle, Open Original, Close */}
+                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setBackdropMode((m) => (m === "light" ? "dark" : "light"))}
+                    className={`p-2 rounded-full transition-all cursor-pointer active:scale-95 shadow-md ${
+                      backdropMode === "light"
+                        ? "bg-white/95 text-stone-700 hover:bg-stone-100 border border-stone-200"
+                        : "bg-stone-900/90 text-stone-300 hover:bg-stone-800 border border-stone-700"
+                    }`}
+                    title={backdropMode === "light" ? "Dark backdrop mode" : "Light backdrop mode"}
+                    aria-label="Toggle background theme"
+                  >
+                    {backdropMode === "light" ? (
+                      <Moon className="w-4 h-4 text-stone-700" />
+                    ) : (
+                      <Sun className="w-4 h-4 text-amber-400" />
+                    )}
+                  </button>
+
+                  {lightboxResolvedSrc && !lightboxError && (
+                    <a
+                      href={lightboxResolvedSrc}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`p-2 rounded-full transition-all cursor-pointer active:scale-95 shadow-md ${
+                        backdropMode === "light"
+                          ? "bg-white/95 text-stone-700 hover:bg-stone-100 border border-stone-200"
+                          : "bg-stone-900/90 text-stone-300 hover:bg-stone-800 border border-stone-700"
+                      }`}
+                      title={isVi ? "Mở ảnh gốc trong tab mới" : "Open full resolution in new tab"}
+                      aria-label="Open image in new tab"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleClosePreview}
+                    className={`p-2 rounded-full transition-all cursor-pointer active:scale-95 shadow-md ${
+                      backdropMode === "light"
+                        ? "bg-white/95 text-stone-700 hover:text-stone-900 hover:bg-stone-100 border border-stone-200"
+                        : "bg-stone-900/90 text-stone-300 hover:text-white hover:bg-stone-800 border border-stone-700"
+                    }`}
+                    title={isVi ? "Đóng" : "Close"}
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </header>
+
+              {/* Main Image Stage */}
+              <div
+                className="flex-1 flex items-center justify-center p-2 sm:p-4 relative min-h-0 w-full"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
+                {/* Prev Button */}
+                {validImageUrls.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePrevImage();
+                    }}
+                    className={`absolute left-2 sm:left-6 z-20 p-2.5 sm:p-3 rounded-full transition-all cursor-pointer active:scale-90 shadow-xl ${
+                      backdropMode === "light"
+                        ? "bg-white/90 hover:bg-white text-stone-800 border border-stone-200/80"
+                        : "bg-stone-900/80 hover:bg-stone-900 text-white border border-stone-700"
+                    }`}
+                    aria-label="Previous image"
+                    title="Previous image"
+                  >
+                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                )}
+
+                {/* Centered Image (No black box!) */}
+                <motion.div
+                  key={lightboxResolvedSrc || selectedPreviewImage}
+                  initial={{ scale: 0.94, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.94, opacity: 0 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="relative max-w-full max-h-full flex items-center justify-center cursor-default"
+                >
+                  {isLightboxLoading && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                      <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-2" />
+                      <span className="text-xs font-semibold text-white/90 drop-shadow-md font-mono">
+                        {isVi ? "Đang tải ảnh..." : "Loading image..."}
+                      </span>
+                    </div>
+                  )}
+
+                  {lightboxError ? (
+                    <div className="p-8 rounded-2xl bg-white/90 dark:bg-stone-900/90 shadow-2xl flex flex-col items-center justify-center text-center max-w-sm">
+                      <ImageIcon className="w-10 h-10 text-stone-400 mb-2" />
+                      <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                        {isVi ? "Không thể tải ảnh xem trước" : "Unable to load image preview"}
+                      </span>
+                    </div>
+                  ) : (
+                    <img
+                      src={lightboxResolvedSrc}
+                      alt={`${word.word} full preview`}
+                      className={`max-w-[92vw] sm:max-w-2xl md:max-w-3xl max-h-[66vh] sm:max-h-[74vh] object-contain rounded-2xl shadow-2xl transition-all ${
+                        backdropMode === "light"
+                          ? "ring-1 ring-stone-900/10 shadow-stone-900/30"
+                          : "ring-1 ring-white/15 shadow-black/80"
+                      } ${isLightboxLoading ? "opacity-0" : "opacity-100"}`}
+                      referrerPolicy="no-referrer"
+                      onLoad={() => setIsLightboxLoading(false)}
+                      onError={() => {
+                        setIsLightboxLoading(false);
+                        setLightboxError(true);
+                      }}
+                    />
+                  )}
+                </motion.div>
+
+                {/* Next Button */}
+                {validImageUrls.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNextImage();
+                    }}
+                    className={`absolute right-2 sm:right-6 z-20 p-2.5 sm:p-3 rounded-full transition-all cursor-pointer active:scale-90 shadow-xl ${
+                      backdropMode === "light"
+                        ? "bg-white/90 hover:bg-white text-stone-800 border border-stone-200/80"
+                        : "bg-stone-900/80 hover:bg-stone-900 text-white border border-stone-700"
+                    }`}
+                    aria-label="Next image"
+                    title="Next image"
+                  >
+                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                )}
+              </div>
+
+              {/* Bottom Footer: Dots and dismiss hint */}
+              <footer
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md mx-auto flex flex-col items-center gap-2 pb-1 sm:pb-2 px-4 z-20 cursor-default"
+              >
+                {validImageUrls.length > 1 && (
+                  <div className="flex items-center gap-2 py-1 px-3 rounded-full backdrop-blur-md shadow-xs bg-black/25 dark:bg-white/15">
+                    {validImageUrls.map((_, dotIdx) => (
+                      <button
+                        key={`dot-${dotIdx}`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPreviewIndex(dotIdx);
+                          setSelectedPreviewImage(validImageUrls[dotIdx]);
+                          setLightboxResolvedSrc(validImageUrls[dotIdx]);
+                          setIsLightboxLoading(!validImageUrls[dotIdx] || validImageUrls[dotIdx].includes("image.nclong87.workers.dev"));
+                          setLightboxError(false);
+                        }}
+                        className={`h-2 rounded-full transition-all cursor-pointer ${
+                          selectedPreviewIndex === dotIdx
+                            ? "w-6 bg-amber-400 shadow-xs"
+                            : "w-2 bg-white/50 hover:bg-white/80"
+                        }`}
+                        aria-label={`Go to image #${dotIdx + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[11px] font-medium tracking-tight text-center text-white/80 drop-shadow-xs">
+                  {isVi
+                    ? "Nhấn quay lại hoặc chạm bên ngoài hình để đóng"
+                    : "Press Back or tap outside image to close"}
+                </p>
+              </footer>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 };
@@ -336,7 +717,7 @@ export interface WordCardImageItemProps {
   imgUrl: string;
   wordText: string;
   index: number;
-  onPreview: (src: string) => void;
+  onPreview: (src: string, index: number) => void;
   onRemove: (src: string) => void;
   onResolveUrl?: (oldUrl: string, resolvedUrl: string) => void;
   onRegenerateSlot?: () => void;
@@ -430,7 +811,7 @@ export function WordCardImageItem({
           referrerPolicy="no-referrer"
           onClick={(e) => {
             e.stopPropagation();
-            onPreview(resolvedSrc || imgUrl);
+            onPreview(resolvedSrc || imgUrl, index);
           }}
           onError={() => {
             setFailed(true);
@@ -462,7 +843,7 @@ export function WordCardImageItem({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onPreview(resolvedSrc || imgUrl);
+            onPreview(resolvedSrc || imgUrl, index);
           }}
           className="text-white hover:text-amber-300 p-0.5 rounded cursor-pointer"
           title="Expand Image"

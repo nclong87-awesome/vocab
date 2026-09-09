@@ -1175,13 +1175,8 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
 - "exampleTranslation": Full translation of the example sentence into the user's native language (${userNative}), e.g. "Xin chào, bạn khỏe không?".
 - "category": High-level category or topic classification (e.g. "Technology & Programming", "Travel & Hospitality", "Business & Work", "Daily Life", "Emotions & Mind", "Education", "Food & Dining", etc.).
 - "context": A concise 1-sentence description of the specific real-world scenario, domain, or usage context where this term is typically used.
-- "suggestedWords": Array of exactly 3 practical companion vocabulary items in "${userTarget}".
-  CRITICAL SUGGESTED WORDS REQUIREMENT:
-  During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
-  1. EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
-  2. EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep"
-  3. EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the context, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun"
-  Ensure the context naturally incorporates all three of these items so learners see them used in context! Do NOT include or repeat the current word itself in the suggested words. ALWAYS output each suggested word as an object containing "word", "definition" (short definition in ${userTarget}), "translation" (translation in ${userNative}), and "partOfSpeech".`;
+- "suggestedWords": Array of 2 to 3 practical companion vocabulary items in "${userTarget}".
+  SPEED OPTIMIZATION: Return ONLY "word" and "translation" (or concise "definition"). Do NOT output partOfSpeech or lengthy definitions.`;
 
     const systemInstruction = `You are a professional multilingual dictionary database engine. You detect input language, deduce intended vocabulary from natural language descriptions, map native language inputs to the target language, and output target language vocabulary details with native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -1197,9 +1192,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
   "suggestedWords": [
     {
       "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
-      "definition": "string (short definition in ${userTarget})",
-      "translation": "string (translation in ${userNative})",
-      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
+      "translation": "string (translation in ${userNative} or concise definition)"
     }
   ]
 }`;
@@ -1308,7 +1301,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
      "category": string,
      "context": string,
-      "suggestedWords": Array of exactly 3 items in "${userTarget}". CRITICAL SUGGESTED WORDS REQUIREMENT: During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of: 1) EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb", 2) EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of") with "partOfSpeech": "verb + prep" or "adj + prep", 3) EXACTLY ONE Noun (a key thematic, scientific, or domain noun from the context, e.g., "breakthrough", "milestone", "curiosity", "laboratory", "perseverance", "evidence", "hypothesis") with "partOfSpeech": "noun". Ensure the context naturally incorporates all three of these items so learners see them used in context! Do NOT include or repeat the current word itself in the suggested words.`;
+      "suggestedWords": Array of 2 to 3 practical companion vocabulary items in "${userTarget}". SPEED OPTIMIZATION: Return ONLY "word" and "translation" (or concise "definition"). Do NOT output partOfSpeech, definitions, or extra fields.`;
 
     const systemInstruction = `You are an elite multilingual vocabulary extraction & dictionary engine. You automatically detect input language, deduce target vocabulary terms from natural language descriptions or requests, and output structured JSON with target language words, definitions, and native language translations. Output strictly valid JSON-only output when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
@@ -1318,9 +1311,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
   "suggestedWords": [
     {
       "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
-      "definition": "string (short definition in ${userTarget})",
-      "translation": "string (translation in ${userNative})",
-      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
+      "translation": "string (translation in ${userNative} or concise definition)"
     }
   ],
   "senses": [
@@ -1338,9 +1329,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       "suggestedWords": [
         {
           "word": "string (vocabulary word in ${userTarget} commonly paired with this word)",
-          "definition": "string (short definition in ${userTarget})",
-          "translation": "string (translation in ${userNative})",
-          "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')"
+          "translation": "string (translation in ${userNative} or concise definition)"
         }
       ]
     }
@@ -1486,32 +1475,18 @@ CRITICAL INSTRUCTIONS:
    - What corrections were made (grammar, spelling, punctuation)
    - Why those changes make the sentence sound more natural and fluent
    - Alternative casual ways to express the same idea
-3. "suggestedWords": Array of exactly 3 practical companion vocabulary items in "${userTarget}" extracted or derived from the user's input or fixed sentence.
-   CRITICAL SUGGESTED WORDS REQUIREMENT (MATCHING QUIZ STYLE):
-   During the process of generating suggested words (the "suggestedWords" array with exactly 3 items), strictly prioritize the inclusion of:
-   1) EXACTLY ONE Phrasal Verb (e.g., "carry out", "look into", "figure out", "bring about", "find out", "set up", "turn out", "break through") with "partOfSpeech": "phrasal verb"
-   2) EXACTLY ONE Verb or Adjective followed by a Preposition (e.g., "excited about", "rely on", "interested in", "focus on", "listen to", "depend on", "participate in", "worry about", "proud of", "double-check") with "partOfSpeech": "verb + prep" or "adj + prep"
-   3) EXACTLY ONE Noun (a key thematic or domain noun from the sentence context, e.g., "get back to", "breakthrough", "milestone", "curiosity") with "partOfSpeech": "noun"
-   PRIORITY RULE: If the user's input contains misspelled words, prioritize those first or incorporate their corrected forms.
-   For each item, provide:
-   - "word": string (the target language word or expression)
-   - "definition": string (clear, concise definition written strictly in ${userTarget})
-   - "translation": string (direct translation into user's native language ${userNative})
-   - "partOfSpeech": string ("phrasal verb" | "verb + prep" | "adj + prep" | "noun")
-   - "reason": string (a short, clear 1-line reason or hint why this word/expression is valuable)
+3. "suggestedWords": Array of 2 to 3 practical companion vocabulary items in "${userTarget}".
+   SPEED OPTIMIZATION: To maximize response speed, return ONLY "word" and "translation" (or concise "definition"). Do NOT output partOfSpeech, definition sentences, or reason fields.
 `;
 
-    const systemInstruction = `You are a friendly, natural AI Language Coach. Polish sentences, improve flow, and fix grammar & spelling with a casual tone, suggesting 3 companion vocabulary words (1 phrasal verb, 1 verb/adj + preposition, 1 noun) for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
+    const systemInstruction = `You are a friendly, natural AI Language Coach. Polish sentences, improve flow, and fix grammar & spelling with a casual tone. Suggest 2-3 companion vocabulary words (word and translation or definition) for the user's collection. Output strictly valid JSON-only output matching the schema when requested. Do not include any conversational filler outside the JSON.`;
     const schemaDesc = `{
   "fixedSentence": "string",
   "explanation": "string (markdown formatted casual explanation)",
   "suggestedWords": [
     {
       "word": "string (target word in ${userTarget})",
-      "definition": "string (definition written strictly in ${userTarget})",
-      "translation": "string (direct translation in ${userNative})",
-      "partOfSpeech": "string ('phrasal verb' | 'verb + prep' | 'adj + prep' | 'noun')",
-      "reason": "string (short usage reason or hint)"
+      "translation": "string (direct translation in ${userNative} or concise definition)"
     }
   ]
 }`;
@@ -2362,11 +2337,9 @@ ${isDuelMode
   : isSandwichMode 
   ? "   - Balanced Session: Blend question types; include at least 1 'duel' question and 1 'picture' question." 
   : "   - Include at least 1 'picture' question with an 'imageKeyword'."}
-5. Candidate-Root Suggested Words (FOR EACH INDIVIDUAL QUESTION):
-   For EACH individual question, try to identify 1 versatile root/verb from that question (the target word itself or a key verb/word appearing in its sentence/context, e.g. look, turn, break, set, take, call, run, hold, give, put, come, stand, fall, pass).
-   If found, provide a "suggestedWords" array inside that question with exactly 3 items derived ONLY from that 1 word:
-     (1) base word itself, (2) 1 phrasal verb, (3) 1 preposition combination. Set "pairedWith" to that root word.
-   If no suitable root word can form both a phrasal verb and a preposition combination for this question, set "suggestedWords": [] for this question. Do NOT generate random words.
+5. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
+   For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} relevant to that question.
+   SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -2385,12 +2358,8 @@ Output MUST be strictly valid JSON matching this schema:
       "contrastRule": "string (for duel type)",
       "suggestedWords": [
         {
-          "word": "string (suggested word, phrasal verb, or preposition combo)",
-          "translation": "string (in ${nativeLanguage})",
-          "definition": "string (in ${targetLanguage})",
-          "pairedWith": "string (the candidate root word)",
-          "hint": "string",
-          "partOfSpeech": "string"
+          "word": "string (companion word or collocation)",
+          "translation": "string (concise translation in ${nativeLanguage} or definition)"
         }
       ]
     }
@@ -2406,9 +2375,9 @@ Output MUST be strictly valid JSON matching this schema:
         : isSandwichMode 
         ? `3. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question.\n` 
         : `3. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
-      `4. Suggested words for EACH individual question: Include "suggestedWords" with exactly 3 items derived from 1 candidate root word for that question (base word, 1 phrasal verb, 1 prep combination), or [] if none suitable.`;
+      `4. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
 
-    const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of exactly 3 items based on 1 candidate word for that question: base word, phrasal verb, preposition combo; or [] if none suitable).`;
+    const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
@@ -2434,7 +2403,7 @@ Output MUST be strictly valid JSON matching this schema:
     }
 
     // Helper to normalize exactly 3 companion words for an individual question
-    const normalizeSuggestionsForQuestion = (rawList: any[], targetWordText: string): any[] => {
+    const normalizeSuggestionsForQuestion = (rawList: any[], _targetWordText?: string): any[] => {
       if (!Array.isArray(rawList) || rawList.length === 0) return [];
       const seen = new Set<string>();
       const resList: any[] = [];
@@ -2445,18 +2414,21 @@ Output MUST be strictly valid JSON matching this schema:
         if (seen.has(key)) continue;
         seen.add(key);
 
+        const trans = typeof item === "object" ? (item.translation || item.meaning || "") : "";
+        const def = typeof item === "object" ? (item.definition || "") : "";
+
         resList.push({
           word: w,
-          translation: typeof item === "object" ? (item.translation || item.meaning || "") : "",
-          definition: typeof item === "object" ? (item.definition || "") : "",
+          translation: trans || (!def ? "" : trans),
+          definition: def,
           hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || "") : "",
           partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
-          pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : targetWordText
+          pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : undefined
         });
 
         if (resList.length >= 3) break;
       }
-      return resList.length === 3 ? resList : [];
+      return resList.length >= 1 ? resList : [];
     };
 
     if (Array.isArray(questionsArray) && questionsArray.length > 0) {
@@ -2594,13 +2566,13 @@ Output MUST be strictly valid JSON matching this schema:
 
         let qSuggestions = normalizeSuggestionsForQuestion(rawQuestionSuggestions, targetWordText);
 
-        // Fallback: check topLevelSuggestions if question didn't yield 3
-        if (qSuggestions.length < 3 && topLevelSuggestions.length >= 3) {
+        // Fallback: check topLevelSuggestions if question didn't yield suggestions
+        if (qSuggestions.length === 0 && topLevelSuggestions.length > 0) {
           qSuggestions = normalizeSuggestionsForQuestion(topLevelSuggestions, targetWordText);
         }
 
-        // Fallback: check matchingWord.suggestedWords if question didn't yield 3
-        if (qSuggestions.length < 3 && matchingWord && Array.isArray(matchingWord.suggestedWords) && matchingWord.suggestedWords.length >= 3) {
+        // Fallback: check matchingWord.suggestedWords if question didn't yield suggestions
+        if (qSuggestions.length === 0 && matchingWord && Array.isArray(matchingWord.suggestedWords) && matchingWord.suggestedWords.length > 0) {
           qSuggestions = normalizeSuggestionsForQuestion(matchingWord.suggestedWords, targetWordText);
         }
 
@@ -2616,7 +2588,7 @@ Output MUST be strictly valid JSON matching this schema:
           sentence: q.sentence || matchingWord.example || undefined,
           sentenceTranslation: q.sentenceTranslation || matchingWord.exampleTranslation || undefined,
           imageKeyword: q.imageKeyword || targetWordText,
-          suggestedWords: qSuggestions.length === 3 ? qSuggestions : [],
+          suggestedWords: qSuggestions.length > 0 ? qSuggestions.slice(0, 3) : [],
           confuserWord: q.confuserWord || undefined,
           contrastRule: q.contrastRule || undefined
         };
