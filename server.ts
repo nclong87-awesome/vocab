@@ -1298,7 +1298,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
      "pronunciation": string,
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
-     "imageKeyword": string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search),
+     "imageKeyword": string (CRITICAL: APPLY IMAGE QUERY ONLY TO NOUNS. If partOfSpeech is a noun, provide the single most relevant, concrete 1-3 word English visual photographic search query for this noun based on its definition and context. For abstract nouns, use an iconic physical object or concrete symbol. If partOfSpeech is NOT a noun [e.g. verb, adjective, adverb, preposition], set to empty string ""),
      "category": string,
      "context": string,
       "suggestedWords": Array of 2 to 3 practical companion vocabulary items in "${userTarget}". SPEED OPTIMIZATION: Return ONLY "word" and "translation" (or concise "definition"). Do NOT output partOfSpeech, definitions, or extra fields.`;
@@ -1323,7 +1323,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageKeyword": "string (3-5 word comma-free search term capturing the visual concept of the word with relevance context and category for image search)",
+      "imageKeyword": "string (ONLY FOR NOUNS: single most relevant 1-3 word concrete visual search query in English for this noun based on its definition and context. If partOfSpeech is NOT a noun, leave as empty string '')",
       "category": "string",
       "context": "string",
       "suggestedWords": [
@@ -2312,8 +2312,19 @@ app.post("/api/generate-quiz", async (req, res) => {
     const isDuelMode = practiceMode === "confuser_duel" || practiceMode === "sandwich_duel";
     const isSandwichMode = practiceMode === "sandwich_quiz" || practiceMode === "balanced";
 
+    // Strictly deduplicate target words by word text so the LLM is never sent duplicate words
+    const uniqueInputWords: any[] = [];
+    for (const w of words) {
+      const wText = String(w.word || "").trim();
+      if (!wText) continue;
+      if (!uniqueInputWords.some((uw: any) => (uw.word || "").trim().toLowerCase() === wText.toLowerCase())) {
+        uniqueInputWords.push(w);
+      }
+    }
+
     // Strictly enforce maximum 3 target words for faster LLM generation and response latency
-    const targetWords = words.slice(0, 3);
+    const targetWords = uniqueInputWords.slice(0, 3);
+    const expectedCount = targetWords.length;
     const minimalWordList = targetWords.map((w: any) => ({
       word: w.word,
       partOfSpeech: w.partOfSpeech || "noun",
@@ -2321,13 +2332,14 @@ app.post("/api/generate-quiz", async (req, res) => {
     }));
 
     const systemInstruction = `You are a fast, high-accuracy language assessment engine for ${targetLanguage}.
-Generate at most 3 targeted quiz questions (maximum 3, exactly 1 per input word) in valid JSON.
+Generate exactly ${expectedCount} targeted quiz question(s) (strictly 1 question per input word, total ${expectedCount} question(s)) in valid JSON.
 
 CORE RULES:
 1. Target-Language Immersion: All text, questions, hints, and options MUST be 100% in ${targetLanguage} (no translations in options/questions).
 2. Distractor Independence: Options must be plausible external confusers matching the exact part of speech. Never reuse input words as distractors.
 3. Correct Answer: MUST strictly equal the target word being tested.
-4. Question Types:
+4. STRICT NO DUPLICATE WORDS: Each question MUST test a DIFFERENT, UNIQUE target word from the input list. NEVER generate two questions for the same word.
+5. Question Types:
    - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}).
    - 'definition': Match word to definition.
    - 'picture': Set concise 1-3 word 'imageKeyword'.
@@ -2335,9 +2347,11 @@ CORE RULES:
 ${isDuelMode 
   ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord' and 'contrastRule'." 
   : isSandwichMode 
-  ? "   - Balanced Session: Blend question types; include at least 1 'duel' question and 1 'picture' question." 
+  ? (expectedCount >= 2 
+      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question and 1 'picture' question for different words." 
+      : "   - Balanced Session: Include 1 'picture' question with an 'imageKeyword'.")
   : "   - Include at least 1 'picture' question with an 'imageKeyword'."}
-5. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
+6. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
    For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} relevant to that question.
    SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
 
@@ -2366,18 +2380,21 @@ Output MUST be strictly valid JSON matching this schema:
   ]
 }`;
 
-    const prompt = `Generate at most 3 quiz questions (1 per word, max 3) for:\n${JSON.stringify(minimalWordList)}\n\n` +
+    const prompt = `Generate exactly ${expectedCount} quiz question(s) (strictly 1 question per word, total ${expectedCount}) for:\n${JSON.stringify(minimalWordList)}\n\n` +
       `Requirements:\n` +
-      `1. Return at most 3 questions (1 per word). Correct answer MUST be the exact word.\n` +
-      `2. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
+      `1. Return exactly ${expectedCount} question(s) (strictly 1 per word). Correct answer MUST be the exact word.\n` +
+      `2. CRITICAL: Every question must test a different target word. NEVER generate more than one question for the same word.\n` +
+      `3. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
       (isDuelMode 
-        ? `3. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
+        ? `4. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
         : isSandwichMode 
-        ? `3. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question.\n` 
-        : `3. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
-      `4. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
+        ? (expectedCount >= 2 
+            ? `4. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question on different words.\n`
+            : `4. Include 1 'picture' question with 1-3 word 'imageKeyword'.\n`)
+        : `4. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
+      `5. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
 
-    const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
+    const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
@@ -2503,10 +2520,88 @@ Output MUST be strictly valid JSON matching this schema:
         return sanitized + " ______";
       };
 
-      const normalizedQuestions = questionsArray.map((q: any, idx: number) => {
-        const matchingWord = words.find((w: any) => w.id === q.wordId || (w.word || "").toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length] || {};
+      // Helper to generate a fallback question if an input word was missed or duplicated
+      const createFallbackQuestion = (wordObj: any, qIdx: number, preferPicture: boolean): any => {
+        const wText = wordObj.word || `Word-${qIdx}`;
+        const wDef = wordObj.definition || "";
+        const confusers = generateServerConfusers(wText);
+        const options = [wText, ...confusers.slice(0, 3)].sort(() => 0.5 - Math.random());
+        
+        if (preferPicture) {
+          return {
+            id: `ai-q-${wordObj.id || qIdx}-${qIdx}`,
+            wordId: wordObj.id || `w-${qIdx}`,
+            word: wText,
+            type: "picture",
+            question: "Which word matches the visual concept shown below?",
+            options,
+            correctAnswer: wText,
+            hint: wordObj.pronunciation || "",
+            sentence: wordObj.example || undefined,
+            sentenceTranslation: wordObj.exampleTranslation || undefined,
+            imageKeyword: wText,
+            suggestedWords: []
+          };
+        }
+        
+        const hasSentence = Boolean(wordObj.example);
+        const qSentence = hasSentence ? ensureServerQuestionHasBlank(wordObj.example, wText) : `Choose the word that fits: ______`;
+        return {
+          id: `ai-q-${wordObj.id || qIdx}-${qIdx}`,
+          wordId: wordObj.id || `w-${qIdx}`,
+          word: wText,
+          type: hasSentence ? "sentence" : "definition",
+          question: hasSentence ? `Fill in the blank for the sentence:\n"${qSentence.replace(/^["“]|["”]$/g, "").trim()}"` : `Which word matches the definition?\n"${wDef || wText}"`,
+          options,
+          correctAnswer: wText,
+          hint: wordObj.pronunciation || "",
+          sentence: wordObj.example || undefined,
+          sentenceTranslation: wordObj.exampleTranslation || undefined,
+          imageKeyword: wText,
+          suggestedWords: []
+        };
+      };
+
+      const seenWordKeys = new Set<string>();
+      const deduplicatedQuestions: any[] = [];
+
+      for (let idx = 0; idx < questionsArray.length; idx++) {
+        const q = questionsArray[idx];
+        const qWordLower = String(q.word || q.correctAnswer || "").toLowerCase().trim();
+        
+        // Match against targetWords by id or word text
+        let matchingWord = targetWords.find((w: any) => 
+          (w.id && q.wordId && w.id === q.wordId) || 
+          (w.word || "").toLowerCase().trim() === qWordLower
+        );
+
+        // If not matched directly, find an untested word
+        if (!matchingWord) {
+          matchingWord = targetWords.find((w: any) => !seenWordKeys.has((w.word || "").toLowerCase().trim()));
+        }
+
+        if (!matchingWord) continue;
+
         const targetWordText = matchingWord.word || q.word || "";
         const targetWordLower = targetWordText.toLowerCase().trim();
+
+        // If this target word was already tested in this quiz session:
+        if (seenWordKeys.has(targetWordLower)) {
+          // Check if there is an untested word in targetWords
+          const unusedWord = targetWords.find((w: any) => !seenWordKeys.has((w.word || "").toLowerCase().trim()));
+          if (!unusedWord) {
+            // All words are already covered, strictly skip this duplicate question!
+            continue;
+          }
+          // Untested word exists, create a tailored fallback question for the unused word
+          seenWordKeys.add((unusedWord.word || "").toLowerCase().trim());
+          const fallbackQ = createFallbackQuestion(unusedWord, deduplicatedQuestions.length, !deduplicatedQuestions.some(dq => dq.type === "picture"));
+          deduplicatedQuestions.push(fallbackQ);
+          continue;
+        }
+
+        seenWordKeys.add(targetWordLower);
+
         // The correct answer MUST be strictly the target vocabulary word itself being tested
         const correctAns = targetWordText;
         const correctAnsLower = correctAns.toLowerCase().trim();
@@ -2576,7 +2671,7 @@ Output MUST be strictly valid JSON matching this schema:
           qSuggestions = normalizeSuggestionsForQuestion(matchingWord.suggestedWords, targetWordText);
         }
 
-        return {
+        deduplicatedQuestions.push({
           id: q.id || `ai-q-${matchingWord.id || idx}-${idx}`,
           wordId: matchingWord.id || `w-${idx}`,
           word: targetWordText,
@@ -2591,10 +2686,20 @@ Output MUST be strictly valid JSON matching this schema:
           suggestedWords: qSuggestions.length > 0 ? qSuggestions.slice(0, 3) : [],
           confuserWord: q.confuserWord || undefined,
           contrastRule: q.contrastRule || undefined
-        };
-      });
+        });
+      }
 
-      questionsArray = normalizedQuestions.slice(0, 3);
+      // If we still have fewer questions than targetWords (e.g. LLM returned fewer questions), fill missing target words
+      for (const w of targetWords) {
+        const key = (w.word || "").toLowerCase().trim();
+        if (!seenWordKeys.has(key) && deduplicatedQuestions.length < 3) {
+          seenWordKeys.add(key);
+          const fallbackQ = createFallbackQuestion(w, deduplicatedQuestions.length, !deduplicatedQuestions.some(dq => dq.type === "picture"));
+          deduplicatedQuestions.push(fallbackQ);
+        }
+      }
+
+      questionsArray = deduplicatedQuestions.slice(0, 3);
 
       await Promise.all(
         questionsArray.map(async (q: any) => {

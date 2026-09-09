@@ -1,6 +1,7 @@
 import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile, QuizSuggestedWord } from "../types";
-import { generateConfusers, getImageKeyword, ensureQuestionHasBlank } from "../utils/quizGenerator";
-import {  resizeImageDataUrl } from "../utils/llmHelpers";
+import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions } from "../utils/quizGenerator";
+import { areWordsEquivalent, isNoun } from "../utils/wordNormalization";
+import { resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
@@ -1225,7 +1226,7 @@ export async function testLlmConnection(llmConfig: LLMConfig): Promise<Connectio
   }
 }
 
-// 2b. Generate Image Search Query Parameter using LLM
+// 2b. Generate Image Search Query Parameter using LLM (Strictly for Nouns)
 export async function generateImageSearchQueryService(params: {
   word: string;
   definition?: string;
@@ -1235,26 +1236,32 @@ export async function generateImageSearchQueryService(params: {
   cfg?: LLMConfig;
   signal?: AbortSignal;
 }): Promise<string> {
-  const { word, definition, context, partOfSpeech, placeholderIndex = 1, cfg, signal } = params;
+  const { word, definition, context, partOfSpeech, placeholderIndex: _placeholderIndex = 1, cfg, signal } = params;
+
+  // RULE: Apply image search query generation strictly to nouns
+  if (partOfSpeech && !isNoun(partOfSpeech)) {
+    return "";
+  }
+
   const llmConfig = getOverrideConfig(cfg);
   notifyLlmRequestStartFromConfig(llmConfig);
 
-  const slotDescriptions = [
-    "a direct main subject visual depiction",
-    "a realistic photo showing the word in action or real-world setting",
-    "a clear illustration or creative visual depiction"
-  ];
-  const slotHint = slotDescriptions[(placeholderIndex - 1) % 3] || "a clear visual clue";
+  const prompt = `You are an expert visual search query optimizer for vocabulary learners.
+Your mission is to generate the single most relevant, concise 1-3 word English search query to retrieve an authentic, iconic, high-quality photograph representing this noun.
 
-  const prompt = `Vocabulary Word: "${word}"
+Noun: "${word}"
 Part of Speech: "${partOfSpeech || 'noun'}"
 Definition: "${definition || ''}"
 Context/Usage: "${context || ''}"
 
-Goal: Generate a concise, highly specific 1-3 word English visual search query term for fetching an image from an image search API for placeholder #${placeholderIndex} (${slotHint}).
-Output MUST be strictly JSON format: {"query": "search_query_here"}`;
+OPTIMIZATION DIRECTIVES:
+1. STRICTLY FOR NOUNS: Focus on the primary concrete physical object, person, or setting that unmistakably depicts this noun according to the specified definition and context.
+2. DISAMBIGUATE ACCURATELY: If this noun has multiple distinct meanings (e.g., "bank" as riverbank vs. financial institution; "crane" as bird vs. construction machine; "cell" as biology vs. prison), select the specific visual subject that strictly matches the definition and context provided.
+3. CONCRETE SYMBOLISM FOR ABSTRACT NOUNS: If the noun is conceptual or abstract (e.g., "serendipity", "nostalgia", "peace", "democracy"), select the most universally recognized physical visual symbol or iconic scene (e.g., "four leaf clover", "vintage polaroid", "olive branch", "ballot box").
+4. PHOTOGRAPHIC SEARCH QUERY: Output 1 to 3 words in English optimized for photography search engines (Unsplash, Pexels). NO punctuation, NO quotes, NO generic filler words like "image of", "picture of", "photo".
+5. OUTPUT FORMAT: Output MUST be strictly JSON format: {"query": "search_query_here"}`;
 
-  const systemInstruction = "You are a helpful dictionary visual search assistant. Generate a short 1-3 word query term for image search in JSON format. Do not include markdown code block formatting outside the JSON.";
+  const systemInstruction = "You are an expert visual search query optimizer. Given a noun and its definition/context, output a JSON object containing a highly optimized 1-3 word English photographic search query. Do not include any explanations or markdown formatting outside the JSON.";
   const schemaDescription = '{\n  "query": "string"\n}';
 
   try {
@@ -1274,10 +1281,8 @@ Output MUST be strictly JSON format: {"query": "search_query_here"}`;
     console.warn("LLM image query generation failed, using fallback query parameter:", err);
   }
 
-  // Fallback query if LLM fails or is offline
+  // Fallback query if LLM fails or is offline (only for nouns)
   const cleanWord = word.includes(",") ? word.split(",")[0].trim() : word.trim();
-  if (placeholderIndex === 2) return `${cleanWord} photo`;
-  if (placeholderIndex === 3) return `${cleanWord} illustration`;
   return cleanWord;
 }
 
@@ -1548,7 +1553,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
      "example": string (written in "${userTarget}"),
      "exampleTranslation": string (written in "${userNative}"),
      "suggestedWords": Array of 2 to 3 practical companion vocabulary items in "${userTarget}". SPEED OPTIMIZATION: Return ONLY "word" and "translation" (or concise "definition"). Do NOT output partOfSpeech, definitions, or extra fields.,
-     "imageKeyword": string (MUST be in English, 1-3 words, representing a highly concrete, visual, physical object or action that symbolizes the word for Unsplash image search. Avoid abstract concepts. Examples: for "ephemeral" use "soap bubble", for "serendipity" use "four leaf clover", for "understand" use "light bulb", for "gregarious" use "friends cafe"),
+     "imageKeyword": string (CRITICAL: APPLY IMAGE QUERY ONLY TO NOUNS. If partOfSpeech is a noun, provide the single most relevant, concrete 1-3 word English visual photographic search query for this noun based on its definition and context. For abstract nouns, use an iconic physical object or concrete symbol. If partOfSpeech is NOT a noun [e.g. verb, adjective, adverb, preposition], set to empty string ""),
      "category": string,
      "context": string`;
 
@@ -1572,7 +1577,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       "pronunciation": "string (IPA pronunciation)",
       "example": "string (sentence in ${userTarget})",
       "exampleTranslation": "string (sentence translation in ${userNative})",
-      "imageKeyword": "string (MUST be in English, highly focused 1-3 word concrete visual concept/object that symbolizes the word for Unsplash image search)",
+      "imageKeyword": "string (ONLY FOR NOUNS: single most relevant 1-3 word concrete visual search query in English for this noun based on its definition and context. If partOfSpeech is NOT a noun, leave as empty string '')",
       "category": "string",
       "context": "string",
       "suggestedWords": [
@@ -2165,8 +2170,17 @@ export async function generateAiQuizQuestionsService(
   const isDuelMode = practiceMode === "confuser_duel" || practiceMode === "sandwich_duel";
   const isSandwichMode = practiceMode === "sandwich_quiz" || practiceMode === "balanced";
 
+  // Strictly deduplicate target words so no equivalent or duplicate words are sent to the AI
+  const uniqueInputWords: Word[] = [];
+  for (const w of words) {
+    if (!uniqueInputWords.some(uw => uw.id === w.id || areWordsEquivalent(uw.word, w.word))) {
+      uniqueInputWords.push(w);
+    }
+  }
+
   // Strictly enforce maximum 3 target words for faster LLM generation and response latency
-  const targetWords = words.slice(0, 3);
+  const targetWords = uniqueInputWords.slice(0, 3);
+  const expectedCount = targetWords.length;
   const minimalWordList = targetWords.map(w => ({
     word: w.word,
     partOfSpeech: w.partOfSpeech || "noun",
@@ -2174,13 +2188,14 @@ export async function generateAiQuizQuestionsService(
   }));
 
   const systemInstruction = `You are a fast, high-accuracy language assessment engine for ${targetLanguage}.
-Generate at most 3 targeted quiz questions (maximum 3, exactly 1 per input word) in valid JSON.
+Generate exactly ${expectedCount} targeted quiz question(s) (strictly 1 question per input word, total ${expectedCount} question(s)) in valid JSON.
 
 CORE RULES:
 1. Target-Language Immersion: All text, questions, hints, and options MUST be 100% in ${targetLanguage} (no translations in options/questions).
 2. Distractor Independence: Options must be plausible external confusers matching the exact part of speech. Never reuse input words as distractors.
 3. Correct Answer: MUST strictly equal the target word being tested.
-4. Question Types:
+4. STRICT NO DUPLICATE WORDS: Each question MUST test a DIFFERENT, UNIQUE target word from the input list. NEVER generate two questions for the same word.
+5. Question Types:
    - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}).
    - 'definition': Match word to definition.
    - 'picture': Set concise 1-3 word 'imageKeyword'.
@@ -2188,9 +2203,11 @@ CORE RULES:
 ${isDuelMode 
   ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord' and 'contrastRule'." 
   : isSandwichMode 
-  ? "   - Balanced Session: Blend question types; include at least 1 'duel' question and 1 'picture' question." 
+  ? (expectedCount >= 2 
+      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question and 1 'picture' question for different words." 
+      : "   - Balanced Session: Include 1 'picture' question with an 'imageKeyword'.")
   : "   - Include at least 1 'picture' question with an 'imageKeyword'."}
-5. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
+6. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
    For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} relevant to that question.
    SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
 
@@ -2219,18 +2236,21 @@ Output MUST be strictly valid JSON matching this schema:
   ]
 }`;
 
-  const prompt = `Generate at most 3 quiz questions (1 per word, max 3) for:\n${JSON.stringify(minimalWordList)}\n\n` +
+  const prompt = `Generate exactly ${expectedCount} quiz question(s) (strictly 1 question per word, total ${expectedCount}) for:\n${JSON.stringify(minimalWordList)}\n\n` +
     `Requirements:\n` +
-    `1. Return at most 3 questions (1 per word). Correct answer MUST be the exact word.\n` +
-    `2. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
+    `1. Return exactly ${expectedCount} question(s) (strictly 1 per word). Correct answer MUST be the exact word.\n` +
+    `2. CRITICAL: Every question must test a different target word. NEVER generate more than one question for the same word.\n` +
+    `3. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
     (isDuelMode 
-      ? `3. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
+      ? `4. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
       : isSandwichMode 
-      ? `3. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question.\n` 
-      : `3. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
-    `4. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
+      ? (expectedCount >= 2 
+          ? `4. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question on different words.\n`
+          : `4. Include 1 'picture' question with 1-3 word 'imageKeyword'.\n`)
+      : `4. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
+    `5. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
 
-  const schemaDesc = `Object with questions: array of at most 3 QuizQuestion objects each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
+  const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
 
   let provider = llmConfig?.provider || "gemini";
   let model = sanitizeModel(provider, llmConfig?.model);
@@ -2320,11 +2340,50 @@ Output MUST be strictly valid JSON matching this schema:
 
     if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
       // Build a set of all tested target words to strictly filter out any lazy cross-word distractors
-      const allTargetWordKeys = new Set(words.map(w => w.word.toLowerCase().trim()));
+      const allTargetWordKeys = new Set(targetWords.map(w => w.word.toLowerCase().trim()));
 
-      const validQuestions: QuizQuestion[] = rawQuestions.map((q: any, idx: number) => {
-        const matchingWord = words.find(w => w.id === q.wordId || w.word.toLowerCase() === (q.word || "").toLowerCase()) || words[idx % words.length];
+      const seenWordKeys = new Set<string>();
+      const validQuestions: QuizQuestion[] = [];
+
+      for (let idx = 0; idx < rawQuestions.length; idx++) {
+        const q = rawQuestions[idx];
+        const qWordLower = String(q.word || q.correctAnswer || "").toLowerCase().trim();
+
+        // Match against targetWords by id or word text
+        let matchingWord = targetWords.find(w => 
+          (w.id && q.wordId && w.id === q.wordId) || 
+          w.word.toLowerCase().trim() === qWordLower || 
+          areWordsEquivalent(w.word, q.word || "")
+        );
+
+        // If not matched directly, find an untested word
+        if (!matchingWord) {
+          matchingWord = targetWords.find(w => !seenWordKeys.has(w.word.toLowerCase().trim()));
+        }
+
+        if (!matchingWord) continue;
+
         const targetWordLower = matchingWord.word.toLowerCase().trim();
+
+        // If this target word was already tested in this quiz batch:
+        if (seenWordKeys.has(targetWordLower)) {
+          // Check if there is an untested word in targetWords
+          const unusedWord = targetWords.find(w => !seenWordKeys.has(w.word.toLowerCase().trim()));
+          if (!unusedWord) {
+            // All words covered, strictly skip this duplicate question
+            continue;
+          }
+          // Untested word exists, generate a rule-based question for the unused word
+          seenWordKeys.add(unusedWord.word.toLowerCase().trim());
+          const fallbackQs = generateQuizQuestions([unusedWord], targetLanguage);
+          if (fallbackQs.length > 0) {
+            validQuestions.push(fallbackQs[0]);
+          }
+          continue;
+        }
+
+        seenWordKeys.add(targetWordLower);
+
         // The correct answer MUST be strictly the target vocabulary word itself being tested
         const correctAns = matchingWord.word;
         const correctAnsLower = correctAns.toLowerCase().trim();
@@ -2474,7 +2533,7 @@ Output MUST be strictly valid JSON matching this schema:
           }
         }
 
-        return {
+        validQuestions.push({
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
           word: matchingWord.word,
@@ -2490,8 +2549,20 @@ Output MUST be strictly valid JSON matching this schema:
           suggestedWords: qSuggestions.length > 0 ? qSuggestions.slice(0, 3) : [],
           confuserWord: q.confuserWord || undefined,
           contrastRule: q.contrastRule || undefined
-        };
-      });
+        });
+      }
+
+      // If any target words were missed by the LLM, fill them with rule-based questions
+      for (const w of targetWords) {
+        const key = w.word.toLowerCase().trim();
+        if (!seenWordKeys.has(key) && validQuestions.length < 3) {
+          seenWordKeys.add(key);
+          const fallbackQs = generateQuizQuestions([w], targetLanguage);
+          if (fallbackQs.length > 0) {
+            validQuestions.push(fallbackQs[0]);
+          }
+        }
+      }
 
       // Guarantee at least one picture or image-based question in the generated quiz (unless duel mode)
       if (!isDuelMode) {

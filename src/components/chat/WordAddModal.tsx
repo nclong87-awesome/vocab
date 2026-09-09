@@ -23,7 +23,7 @@ import {
 } from "../../services/userInquiryService";
 import { getUserPersonalityProfileFromDB } from "../../db/indexedDB";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
-import { findWordInCollection } from "../../utils/wordNormalization";
+import { findWordInCollection, isNoun } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../../utils/llmEvents";
@@ -550,8 +550,9 @@ export default function WordAddModal({
           createdAt: new Date().toISOString(),
           lastReviewed: null,
           strength: 0,
-          imageUrls: sense?.imageUrls || data.imageUrls || undefined,
-          imageUrl: sense?.imageUrl || data.imageUrl || undefined,
+          imageKeyword: isNoun(partOfSpeechVal) ? (sense?.imageKeyword || data.imageKeyword || undefined) : undefined,
+          imageUrls: isNoun(partOfSpeechVal) ? (sense?.imageUrls || data.imageUrls || undefined) : undefined,
+          imageUrl: isNoun(partOfSpeechVal) ? (sense?.imageUrl || data.imageUrl || undefined) : undefined,
         };
 
         setCurrentWord(newWordObj);
@@ -719,8 +720,9 @@ export default function WordAddModal({
         createdAt: new Date().toISOString(),
         lastReviewed: null,
         strength: 0,
-        imageUrls: sense.imageUrls || undefined,
-        imageUrl: sense.imageUrl || undefined,
+        imageKeyword: isNoun(sense.partOfSpeech) ? sense.imageKeyword : undefined,
+        imageUrls: isNoun(sense.partOfSpeech) ? sense.imageUrls : undefined,
+        imageUrl: isNoun(sense.partOfSpeech) ? sense.imageUrl : undefined,
       };
 
       setCurrentWord(newWord);

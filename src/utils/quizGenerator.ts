@@ -1,5 +1,6 @@
 import { Word, QuizQuestion } from "../types";
 import { fetchWithTimeout, getStoredAccessCode } from "../utils";
+import { areWordsEquivalent } from "./wordNormalization";
 
 // Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Spanish/etc.)
 export function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
@@ -615,15 +616,30 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
  */
 export function generateConfuserDuelQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
   if (!wordList || wordList.length === 0) return [];
-  return wordList.slice(0, 3).map((word) => generateDuelQuestionForWord(word, targetLanguage));
+  // Strictly deduplicate by word text/equivalence so no word is tested twice
+  const uniqueWords: Word[] = [];
+  for (const w of wordList) {
+    if (!uniqueWords.some((uw) => uw.id === w.id || areWordsEquivalent(uw.word, w.word))) {
+      uniqueWords.push(w);
+    }
+  }
+  return uniqueWords.slice(0, 3).map((word) => generateDuelQuestionForWord(word, targetLanguage));
 }
 
 // Rule-based Quiz Question Generator with strict distractor logic & target-language restrictions
 export function generateQuizQuestions(wordList: Word[], targetLanguage?: string): QuizQuestion[] {
   if (!wordList || wordList.length === 0) return [];
   
+  // Strictly deduplicate by word text/equivalence so no word is tested twice
+  const uniqueWords: Word[] = [];
+  for (const w of wordList) {
+    if (!uniqueWords.some((uw) => uw.id === w.id || areWordsEquivalent(uw.word, w.word))) {
+      uniqueWords.push(w);
+    }
+  }
+
   // Cap to a maximum of 3 questions
-  const allWords = wordList.slice(0, 3);
+  const allWords = uniqueWords.slice(0, 3);
   const generated: QuizQuestion[] = [];
 
   // Guarantee at least one picture/image-based question in the generated quiz

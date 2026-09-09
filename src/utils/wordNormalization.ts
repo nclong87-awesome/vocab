@@ -66,3 +66,28 @@ export function findWordInCollection(words: Word[], targetWord?: string | null):
 export function isWordInCollection(words: Word[], targetWord?: string | null): boolean {
   return Boolean(findWordInCollection(words, targetWord));
 }
+
+/**
+ * Checks if a given part-of-speech string indicates that the word is a noun.
+ * Supports standard English POS tags ("noun", "proper noun", "countable noun", "n.", "n"),
+ * compound phrases ("noun, verb"), and common multilingual variants.
+ */
+export function isNoun(partOfSpeech?: string | null): boolean {
+  if (!partOfSpeech || typeof partOfSpeech !== "string") return false;
+  const pos = partOfSpeech.trim().toLowerCase();
+  if (pos === "n" || pos === "n.") return true;
+  if (
+    pos.includes("noun") ||
+    pos.includes("danh từ") ||
+    pos.includes("sustantivo") ||
+    pos.includes("substantiv") ||
+    pos.includes("nom") ||
+    pos.includes("명사") ||
+    pos.includes("名詞") ||
+    pos.includes("名词")
+  ) {
+    return true;
+  }
+  return false;
+}
+

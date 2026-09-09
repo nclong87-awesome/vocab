@@ -31,7 +31,7 @@ import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
-import { areWordsEquivalent, findWordInCollection, isWordInCollection } from "../utils/wordNormalization";
+import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun } from "../utils/wordNormalization";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 
 interface UseChatProps {
@@ -1497,8 +1497,9 @@ export function useChat({
           createdAt: new Date().toISOString(),
           lastReviewed: null,
           strength: 0,
-          imageUrls: sense?.imageUrls || data.imageUrls || undefined,
-          imageUrl: sense?.imageUrl || data.imageUrl || undefined,
+          imageKeyword: isNoun(partOfSpeechVal) ? (sense?.imageKeyword || data.imageKeyword || undefined) : undefined,
+          imageUrls: isNoun(partOfSpeechVal) ? (sense?.imageUrls || data.imageUrls || undefined) : undefined,
+          imageUrl: isNoun(partOfSpeechVal) ? (sense?.imageUrl || data.imageUrl || undefined) : undefined,
         };
 
         setPendingConfirmWord(newWordObj);
@@ -1934,8 +1935,8 @@ export function useChat({
             action: "confirm_save_word",
             payload: {
               ...item,
-              imageUrls: item.imageUrls || undefined,
-              imageUrl: item.imageUrl || undefined,
+              imageUrls: isNoun(item.partOfSpeech) ? (item.imageUrls || undefined) : undefined,
+              imageUrl: isNoun(item.partOfSpeech) ? (item.imageUrl || undefined) : undefined,
               category: item.category || "Photo Vocabulary",
               context: item.context || item.definition || "",
             },
@@ -2198,8 +2199,9 @@ export function useChat({
       createdAt: new Date().toISOString(),
       lastReviewed: null,
       strength: 0,
-      imageUrls: sense.imageUrls || undefined,
-      imageUrl: sense.imageUrl || undefined,
+      imageKeyword: isNoun(sense.partOfSpeech) ? sense.imageKeyword : undefined,
+      imageUrls: isNoun(sense.partOfSpeech) ? sense.imageUrls || undefined : undefined,
+      imageUrl: isNoun(sense.partOfSpeech) ? sense.imageUrl || undefined : undefined,
     };
 
     setPendingConfirmWord(newWord);

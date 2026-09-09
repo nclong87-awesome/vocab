@@ -18,9 +18,10 @@ import { Word, LLMConfig } from "../../types";
 import { fetchWorkerImageUrl, getImageKeyword } from "../../utils/quizGenerator";
 import { generateImageSearchQueryService } from "../../services/llmClientService";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
+import { isNoun } from "../../utils/wordNormalization";
 
 export interface WordImageGalleryProps {
-  word: Partial<Word> & { word: string; definition?: string; context?: string; partOfSpeech?: string; imageUrls?: string[]; imageUrl?: string };
+  word: Partial<Word> & { word: string; definition?: string; context?: string; partOfSpeech?: string; imageUrls?: string[]; imageUrl?: string; imageKeyword?: string };
   imageUrls?: string[];
   onImagesChange?: (updatedUrls: string[]) => void;
   llmConfig?: LLMConfig;
@@ -67,9 +68,14 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
     setInternalImageUrls(cleaned);
   }, [propImageUrls, word.imageUrls, word.imageUrl]);
 
-  // Handle auto-loading initial candidate images for new words (e.g. in Chat)
+  // Handle auto-loading initial candidate image for newly added words (Strictly for Nouns & Only 1 Image)
   useEffect(() => {
     if (!autoLoadInitialImages || !word.word) return;
+
+    // RULE 1: Apply only to nouns
+    if (word.partOfSpeech && !isNoun(word.partOfSpeech)) {
+      return;
+    }
 
     const existing = propImageUrls !== undefined 
       ? propImageUrls 
@@ -82,49 +88,58 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
     let isMounted = true;
     setIsInitialLoading(true);
 
-    const keyword = (word && (getImageKeyword(word.word) || word.word)) || "";
-    const cleanKey = keyword && keyword.includes(",") ? keyword.split(",")[0].trim() : (keyword ? keyword.trim() : "");
+    const loadSingleCandidateImage = async () => {
+      try {
+        // RULE 2 & 3: Optimize the query prompt for this single noun image
+        let queryTerm = word.imageKeyword?.trim() || "";
 
-    const queries = [
-      cleanKey,
-      `${cleanKey} photo`,
-      `${cleanKey} illustration`
-    ];
-
-    Promise.all(queries.map((q, idx) => fetchWorkerImageUrl(q, idx + 1)))
-      .then((resolvedList) => {
-        if (!isMounted) return;
-        const validUrls = resolvedList.filter(Boolean) as string[];
-        if (validUrls.length > 0) {
-          setInternalImageUrls(validUrls);
-          if (onImagesChange) {
-            onImagesChange(validUrls);
-          }
+        if (!queryTerm) {
+          queryTerm = await generateImageSearchQueryService({
+            word: word.word,
+            definition: word.definition,
+            context: word.context,
+            partOfSpeech: word.partOfSpeech,
+            placeholderIndex: 1,
+            cfg: llmConfig,
+          });
         }
-      })
-      .catch((e) => {
-        console.warn("Error fetching initial candidate images:", e);
+
+        if (!queryTerm) {
+          const keyword = getImageKeyword(word.word) || word.word;
+          queryTerm = keyword && keyword.includes(",") ? keyword.split(",")[0].trim() : (keyword ? keyword.trim() : "");
+        }
+
+        // Fetch exactly ONE image URL
+        const resolvedUrl = await fetchWorkerImageUrl(queryTerm, 1);
         if (!isMounted) return;
-        const fallbackList = [
-          `https://loremflickr.com/400/400/${encodeURIComponent(cleanKey.toLowerCase())}?lock=1`,
-          `https://loremflickr.com/400/400/${encodeURIComponent(cleanKey.toLowerCase())}?lock=2`,
-          `https://loremflickr.com/400/400/${encodeURIComponent(cleanKey.toLowerCase())}?lock=3`,
-        ];
-        setInternalImageUrls(fallbackList);
+
+        const finalUrl = resolvedUrl || `https://image.nclong87.workers.dev?query=${encodeURIComponent(queryTerm)}`;
+        setInternalImageUrls([finalUrl]);
         if (onImagesChange) {
-          onImagesChange(fallbackList);
+          onImagesChange([finalUrl]);
         }
-      })
-      .finally(() => {
+      } catch (e) {
+        console.warn("Error fetching single candidate image for noun:", e);
+        if (!isMounted) return;
+        const cleanKey = word.word.includes(",") ? word.word.split(",")[0].trim() : word.word.trim();
+        const fallbackUrl = `https://loremflickr.com/400/400/${encodeURIComponent(cleanKey.toLowerCase())}?lock=1`;
+        setInternalImageUrls([fallbackUrl]);
+        if (onImagesChange) {
+          onImagesChange([fallbackUrl]);
+        }
+      } finally {
         if (isMounted) {
           setIsInitialLoading(false);
         }
-      });
+      }
+    };
+
+    loadSingleCandidateImage();
 
     return () => {
       isMounted = false;
     };
-  }, [autoLoadInitialImages, word.word]);
+  }, [autoLoadInitialImages, word.word, word.partOfSpeech, word.definition, word.context, word.imageKeyword, llmConfig]);
 
   const allImageUrls = useMemo<string[]>(() => {
     return internalImageUrls;
@@ -370,7 +385,7 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
 
       {/* Slots Grid */}
       {isInitialLoading ? (
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1">
+        <div className={minSlots === 1 ? "grid grid-cols-1 max-w-[180px] sm:max-w-[200px] gap-1.5 sm:gap-2 pt-1" : "grid grid-cols-3 gap-1.5 sm:gap-2 pt-1"}>
           {Array.from({ length: minSlots }).map((_, idx) => (
             <div
               key={idx}
@@ -382,7 +397,7 @@ export const WordImageGallery: React.FC<WordImageGalleryProps> = ({
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1">
+        <div className={totalSlotsCount === 1 ? "grid grid-cols-1 max-w-[180px] sm:max-w-[200px] gap-1.5 sm:gap-2 pt-1" : "grid grid-cols-3 gap-1.5 sm:gap-2 pt-1"}>
           {Array.from({ length: totalSlotsCount }).map((_, idx) => {
             const imgUrl = allImageUrls[idx];
             const isGenerating = generatingSlotIndex === idx;

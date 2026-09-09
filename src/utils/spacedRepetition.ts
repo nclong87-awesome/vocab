@@ -1,5 +1,6 @@
 import { Word, StrengthHistoryReason, StrengthHistoryTuple } from "../types";
 import { recordStrengthHistory, sanitizeAndHealWordHistory } from "./strengthHistoryHelpers";
+import { areWordsEquivalent } from "./wordNormalization";
 
 export interface BaselinePracticeInfo {
   baselineStrength: number;
@@ -361,7 +362,14 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
   });
 
   sampled.sort((a, b) => b.key - a.key);
-  return sampled.slice(0, count).map(s => s.word);
+  const result: Word[] = [];
+  for (const s of sampled) {
+    if (!result.some(w => w.id === s.word.id || areWordsEquivalent(w.word, s.word.word))) {
+      result.push(s.word);
+      if (result.length >= count) break;
+    }
+  }
+  return result;
 }
 
 /**
@@ -378,6 +386,11 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
 
   const { maxCandidates = 10, candidatePoolSize = 30, includeUnstudied = true } = options;
   const now = new Date();
+
+  // Helper to check if a word is already represented in a list (by id or vocabulary equivalence)
+  const isAlreadySelected = (candidate: Word, list: Word[]): boolean => {
+    return list.some(w => w.id === candidate.id || areWordsEquivalent(w.word, candidate.word));
+  };
 
   // 1. Find words that have been studied and are currently due for spaced repetition review (excluding cooldown)
   const learnedWords = words.filter(isWordLearnedOrStudied);
@@ -403,13 +416,15 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     // Helper to shuffle an array randomly
     const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
 
-    // Gather candidate pool across all priority tiers
+    // Gather candidate pool across all priority tiers (ensuring no duplicate equivalent words in the pool)
     const candidatePool: WeightedCandidate[] = [];
     const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "weak" | "rest", weight: number) => {
       const shuffled = shuffle(tierWords);
       for (const word of shuffled) {
         if (candidatePool.length >= candidatePoolSize) break;
-        candidatePool.push({ word, tier, weight });
+        if (!candidatePool.some(item => item.word.id === word.id || areWordsEquivalent(item.word.word, word.word))) {
+          candidatePool.push({ word, tier, weight });
+        }
       }
     };
 
@@ -423,31 +438,37 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   }
 
   // 2. If we need more candidates to reach maxCandidates and includeUnstudied is enabled,
-  // pull from unstudied / new words that are NOT on cooldown
+  // pull from unstudied / new words that are NOT on cooldown (strictly preventing duplicate words)
   if (includeUnstudied && selectedWords.length < maxCandidates) {
-    const selectedIds = new Set(selectedWords.map(w => w.id));
     const unstudied = words.filter(
-      w => !selectedIds.has(w.id) && !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
+      w => !isAlreadySelected(w, selectedWords) && !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
     );
 
     if (unstudied.length > 0) {
       const sortedUnstudied = sortUnstudiedWordsOldestFirst(unstudied);
-      const needed = maxCandidates - selectedWords.length;
-      selectedWords = [...selectedWords, ...sortedUnstudied.slice(0, needed)];
+      for (const w of sortedUnstudied) {
+        if (selectedWords.length >= maxCandidates) break;
+        if (!isAlreadySelected(w, selectedWords)) {
+          selectedWords.push(w);
+        }
+      }
     }
   }
 
   // 3. If still under maxCandidates (e.g. all unstudied and due words are exhausted),
-  // supplement with any other available words that are NOT on review cooldown (shuffled)
+  // supplement with any other available words that are NOT on review cooldown (shuffled and deduplicated)
   if (selectedWords.length < maxCandidates) {
-    const selectedIds = new Set(selectedWords.map(w => w.id));
     const otherAvailable = words.filter(
-      w => !selectedIds.has(w.id) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
+      w => !isAlreadySelected(w, selectedWords) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
     );
     if (otherAvailable.length > 0) {
       const shuffled = [...otherAvailable].sort(() => 0.5 - Math.random());
-      const needed = maxCandidates - selectedWords.length;
-      selectedWords = [...selectedWords, ...shuffled.slice(0, needed)];
+      for (const w of shuffled) {
+        if (selectedWords.length >= maxCandidates) break;
+        if (!isAlreadySelected(w, selectedWords)) {
+          selectedWords.push(w);
+        }
+      }
     }
   }
 
@@ -667,13 +688,21 @@ export function getCandidateWordsForImmersion(
 
   // Prioritize unstudied words chronologically FIFO (oldest added first, e.g. yesterday before today)
   const sortedNeverLearned = sortUnstudiedWordsOldestFirst(neverLearnedWords);
-  const prioritized = [
+  const rawPrioritized = [
     ...quizErrorWords,
     ...sortedNeverLearned,
     ...srsDueWords,
   ];
 
-  return prioritized.slice(0, count);
+  const prioritized: Word[] = [];
+  for (const w of rawPrioritized) {
+    if (!prioritized.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
+      prioritized.push(w);
+      if (prioritized.length >= count) break;
+    }
+  }
+
+  return prioritized;
 }
 
 /**
@@ -754,17 +783,21 @@ export function getImmersionCandidates(words: Word[], now: Date = new Date(), cu
  */
 export function getAllPracticeCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  const practiceMap = new Map<string, Word>();
+  const practiceList: Word[] = [];
 
   const quizList = getQuizCandidates(words, now, customCooldownHours);
   for (const w of quizList) {
-    practiceMap.set(w.id || w.word, w);
+    if (!practiceList.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
+      practiceList.push(w);
+    }
   }
 
   const immersionList = getImmersionCandidates(words, now, customCooldownHours);
   for (const w of immersionList) {
-    practiceMap.set(w.id || w.word, w);
+    if (!practiceList.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
+      practiceList.push(w);
+    }
   }
 
-  return Array.from(practiceMap.values());
+  return practiceList;
 }
