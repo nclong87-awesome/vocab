@@ -287,11 +287,22 @@ function ChatMessageItem({
       }
 
       if (rivalWord && (!targetWord || rivalWord.toLowerCase() !== targetWord.toLowerCase())) {
+        let cleanRivalDef = "";
+        if (contrastText) {
+          const escapedRival = rivalWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const m = contrastText.match(
+            new RegExp(`(?:while|whereas)?\\s*(?:a|an)?\\s*['"]?${escapedRival}['"]?\\s*(?:refers to|means|is defined as|denotes|is)\\s*([^.;]+)`, "i")
+          );
+          if (m && m[1]) {
+            cleanRivalDef = m[1].trim();
+          } else {
+            cleanRivalDef = contrastText;
+          }
+        }
         derived.push({
           word: rivalWord,
           translation: "",
-          definition: contrastText || `Contrast rival against "${targetWord}"`,
-          hint: `Contrast rival against "${targetWord}"`,
+          definition: cleanRivalDef,
           pairedWith: targetWord || undefined,
         });
       }
@@ -306,8 +317,7 @@ function ChatMessageItem({
             derived.push({
               word: combo,
               translation: "",
-              definition: `Common collocation with "${targetWord}"`,
-              hint: `Found in context sentence`,
+              definition: "",
               partOfSpeech: "collocation",
               pairedWith: targetWord,
             });
@@ -1059,14 +1069,12 @@ function ChatMessageItem({
                 </div>
               )}
 
-              {/* Suggested Words / Paired Collocations Card - ALWAYS rendered inside the chat message bubble at the very bottom */}
+              {/* Suggested Words / Vocabulary Card - Simple, clean: word + translation or definition */}
               {effectiveSuggestedWords.length > 0 && (
-                <div className="mt-4 pt-3.5 border-t border-stone-200/80 space-y-3">
+                <div className="mt-3.5 pt-3 border-t border-stone-200/80 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded-md bg-amber-500 text-stone-950 flex items-center justify-center font-bold text-xs">
-                        💡
-                      </div>
+                      <span className="text-xs">💡</span>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 font-mono flex items-center gap-1.5">
                         {t("quiz_suggested_words_title", currentAppLang)}
                         <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300/60 px-1.5 py-0.2 rounded-full">
@@ -1075,133 +1083,123 @@ function ChatMessageItem({
                       </h4>
                     </div>
                   </div>
-                  <p className="text-xs text-stone-600 font-medium">
-                    {effectiveSuggestedWords[0]?.pairedWith
-                      ? (currentAppLang === "vi"
-                          ? `Từ và cụm từ thường xuất hiện cùng với từ của câu hỏi này ("${effectiveSuggestedWords[0].pairedWith}"):`
-                          : `Words that frequently appear alongside this question's target word ("${effectiveSuggestedWords[0].pairedWith}"):`)
-                      : t("quiz_suggested_words_desc", currentAppLang)}
-                  </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                  <div className="space-y-1.5 pt-0.5">
                     {effectiveSuggestedWords.map((sw, idx) => {
                       const isAlreadyInWords = words && isWordInCollection(words, sw.word);
+
+                      // Priority: Clean translation (in native language) -> Clean definition
+                      const cleanTranslation = (sw.translation || "").trim().replace(/^["“]|["”]$/g, "");
+                      let cleanDefinition = (sw.definition || "").trim().replace(/^["“]|["”]$/g, "");
+                      if (
+                        cleanDefinition.startsWith("Contrast rival against") ||
+                        cleanDefinition.startsWith("Common collocation with") ||
+                        cleanDefinition.startsWith("Preposition collocation with") ||
+                        cleanDefinition.startsWith("Based on")
+                      ) {
+                        cleanDefinition = "";
+                      }
+                      if (cleanDefinition) {
+                        const escapedWord = sw.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                        const specificMeaningMatch = cleanDefinition.match(
+                          new RegExp(`(?:while|whereas)?\\s*(?:a|an|the)?\\s*['"]?${escapedWord}['"]?\\s*(?:refers to|means|is defined as|denotes|is)\\s*([^.;]+)`, "i")
+                        );
+                        if (specificMeaningMatch && specificMeaningMatch[1]) {
+                          cleanDefinition = specificMeaningMatch[1].trim();
+                        }
+                      }
+                      const displayMeaning = cleanTranslation || cleanDefinition || (sw.hint && !sw.hint.startsWith("Contrast rival") && !sw.hint.startsWith("Based on") && !sw.hint.startsWith("Frequently") ? sw.hint.trim() : "");
 
                       return (
                         <div
                           key={idx}
-                          className="p-3 bg-stone-50/90 hover:bg-stone-50 border border-stone-200/90 rounded-xl flex flex-col justify-between gap-2 transition-all shadow-3xs"
+                          className="px-3 py-2 sm:py-2.5 bg-stone-50/90 hover:bg-stone-50 border border-stone-200/90 rounded-xl flex items-center justify-between gap-2.5 transition-all shadow-3xs"
                         >
-                          <div>
-                            <div className="flex items-start justify-between gap-1.5">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-sm font-bold text-stone-950 font-serif">
-                                    {sw.word}
-                                  </span>
-                                  {sw.partOfSpeech && (
-                                    <span className="text-[9px] font-bold uppercase bg-stone-200 text-stone-700 px-1 py-0.2 rounded">
-                                      {sw.partOfSpeech}
-                                    </span>
-                                  )}
-                                </div>
-                                {sw.translation && (
-                                  <p className="text-xs font-semibold text-amber-900 mt-0.5">
-                                    "{sw.translation}"
-                                  </p>
-                                )}
-                                {sw.definition && (
-                                  <p className="text-xs text-stone-600 mt-0.5 leading-snug">
-                                    {sw.definition}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {!hideAskAiButton && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const matched = words ? findWordInCollection(words, sw.word) : undefined;
-                                    setSelectedChatWord(matched || createAdHocWord({
-                                      id: `quiz-suggested-${sw.word}-${idx}`,
-                                      word: sw.word,
-                                      partOfSpeech: sw.partOfSpeech || "vocabulary",
-                                      definition: sw.definition || sw.hint || `Recommended vocabulary word for ${targetLanguage}`,
-                                      translation: sw.translation || "",
-                                      context: sw.pairedWith ? `Collocation with: ${sw.pairedWith}` : undefined,
-                                      strength: 0,
-                                      learned: false,
-                                      createdAt: new Date().toISOString(),
-                                      lastReviewed: null
-                                    }));
-                                  }}
-                                  className="p-1.5 bg-white hover:bg-stone-200 text-indigo-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
-                                  title={`Ask AI about "${sw.word}"`}
-                                >
-                                  <MessageSquare className="w-3.5 h-3.5" />
-                                </button>
-                                )}
-                                {isAlreadyInWords && (() => {
-                                  const matched = words ? findWordInCollection(words, sw.word) : undefined;
-                                  if (matched) {
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={() => setSelectedHistoryWord(matched)}
-                                        className="p-1.5 bg-white hover:bg-amber-50 hover:border-amber-300 text-amber-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
-                                        title={`View Strength History for "${sw.word}"`}
-                                      >
-                                        <History className="w-3.5 h-3.5 text-amber-600" />
-                                      </button>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                                <button
-                                  type="button"
-                                  onClick={() => speakText(sw.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                                  className="p-1.5 bg-white hover:bg-stone-200 text-stone-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
-                                  title={`Pronounce "${sw.word}"`}
-                                >
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-bold text-stone-950 font-sans tracking-tight">
+                                {sw.word}
+                              </span>
+                              {sw.partOfSpeech && (
+                                <span className="text-[9.5px] font-medium px-1.5 py-0.2 rounded bg-stone-200/80 text-stone-600 lowercase">
+                                  {sw.partOfSpeech}
+                                </span>
+                              )}
                             </div>
-
-                            {sw.pairedWith && (
-                              <div className="mt-1.5 flex items-center gap-1 text-[11px] text-stone-500 font-mono">
-                                <span className="text-stone-400">🔗</span>
-                                <span>{t("quiz_paired_with", currentAppLang, { word: sw.pairedWith })}</span>
-                              </div>
-                            )}
-
-                            {sw.hint && !sw.hint.toLowerCase().startsWith("frequently appears with") && (
-                              <p className="text-[11px] text-stone-600 mt-1 italic leading-tight">
-                                {sw.hint}
+                            {displayMeaning && (
+                              <p className="text-xs text-stone-600 mt-0.5 leading-snug break-words">
+                                {displayMeaning}
                               </p>
                             )}
                           </div>
 
-                          <div className="pt-2 border-t border-stone-200/60 flex items-center justify-end">
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => speakText(sw.word, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
+                              className="p-1.5 bg-white hover:bg-stone-200 text-stone-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                              title={`Pronounce "${sw.word}"`}
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                            </button>
+                            {!hideAskAiButton && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const matched = words ? findWordInCollection(words, sw.word) : undefined;
+                                  setSelectedChatWord(matched || createAdHocWord({
+                                    id: `quiz-suggested-${sw.word}-${idx}`,
+                                    word: sw.word,
+                                    partOfSpeech: sw.partOfSpeech || "vocabulary",
+                                    definition: displayMeaning || `Recommended vocabulary word for ${targetLanguage}`,
+                                    translation: sw.translation || "",
+                                    strength: 0,
+                                    learned: false,
+                                    createdAt: new Date().toISOString(),
+                                    lastReviewed: null
+                                  }));
+                                }}
+                                className="p-1.5 bg-white hover:bg-stone-200 text-indigo-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                                title={`Ask AI about "${sw.word}"`}
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {isAlreadyInWords && (() => {
+                              const matched = words ? findWordInCollection(words, sw.word) : undefined;
+                              if (matched) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedHistoryWord(matched)}
+                                    className="p-1.5 bg-white hover:bg-amber-50 hover:border-amber-300 text-amber-700 rounded-lg border border-stone-200/70 shrink-0 cursor-pointer shadow-3xs transition-transform hover:scale-105 active:scale-95"
+                                    title={`View Strength History for "${sw.word}"`}
+                                  >
+                                    <History className="w-3.5 h-3.5 text-amber-600" />
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
                             <button
                               type="button"
                               disabled={Boolean(isAlreadyInWords)}
-                              onClick={() => handleAddSuggestedWord(sw.word, sw.translation || sw.definition || sw.hint)}
-                              className={`px-2.5 py-1 text-xs font-bold rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                              onClick={() => handleAddSuggestedWord(sw.word, displayMeaning || sw.translation || sw.definition)}
+                              className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
                                 isAlreadyInWords
-                                  ? "bg-emerald-100 text-emerald-850 cursor-default"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80 cursor-default"
                                   : "bg-stone-900 hover:bg-stone-800 text-white shadow-3xs active:scale-95"
                               }`}
                             >
                               {isAlreadyInWords ? (
                                 <>
-                                  <Check className="w-3 h-3" />
-                                  <span>{t("quiz_suggested_word_added", currentAppLang)}</span>
+                                  <Check className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
+                                  <span className="text-[11px] font-medium">{t("quiz_suggested_word_added", currentAppLang)}</span>
                                 </>
                               ) : (
                                 <>
-                                  <Plus className="w-3 h-3" />
-                                  <span>{t("quiz_add_suggested_word", currentAppLang)}</span>
+                                  <Plus className="w-3 h-3 stroke-[2.5]" />
+                                  <span className="text-[11px] font-medium">{t("quiz_add_suggested_word", currentAppLang)}</span>
                                 </>
                               )}
                             </button>

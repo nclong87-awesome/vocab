@@ -565,11 +565,22 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
     : [];
 
   if (confuserWord && !qSuggestions.some(s => s.word.toLowerCase() === confuserWord.toLowerCase())) {
+    let cleanRivalDef = "";
+    if (contrastRule) {
+      const escapedRival = confuserWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const m = contrastRule.match(
+        new RegExp(`(?:while|whereas)?\\s*(?:a|an)?\\s*['"]?${escapedRival}['"]?\\s*(?:refers to|means|is defined as|denotes|is)\\s*([^.;]+)`, "i")
+      );
+      if (m && m[1]) {
+        cleanRivalDef = m[1].trim();
+      } else {
+        cleanRivalDef = contrastRule;
+      }
+    }
     qSuggestions.unshift({
       word: confuserWord,
       translation: "",
-      definition: contrastRule || `Contrast rival against "${word.word}"`,
-      hint: `Contrast rival against "${word.word}"`,
+      definition: cleanRivalDef,
       partOfSpeech: word.partOfSpeech,
       pairedWith: word.word
     });

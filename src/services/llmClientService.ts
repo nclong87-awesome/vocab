@@ -2503,11 +2503,22 @@ Output MUST be strictly valid JSON matching this schema:
         if (isQuestionDuel || q.confuserWord) {
           const confuserStr = String(q.confuserWord || "").trim();
           if (confuserStr && !qSuggestions.some(s => s.word.toLowerCase() === confuserStr.toLowerCase())) {
+            let cleanRivalDef = "";
+            if (q.contrastRule) {
+              const escapedRival = confuserStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const m = q.contrastRule.match(
+                new RegExp(`(?:while|whereas)?\\s*(?:a|an)?\\s*['"]?${escapedRival}['"]?\\s*(?:refers to|means|is defined as|denotes|is)\\s*([^.;]+)`, "i")
+              );
+              if (m && m[1]) {
+                cleanRivalDef = m[1].trim();
+              } else {
+                cleanRivalDef = q.contrastRule;
+              }
+            }
             qSuggestions.unshift({
               word: confuserStr,
               translation: "",
-              definition: q.contrastRule || `Contrast rival against "${matchingWord.word}"`,
-              hint: `Contrast rival against "${matchingWord.word}"`,
+              definition: cleanRivalDef,
               partOfSpeech: matchingWord.partOfSpeech,
               pairedWith: matchingWord.word
             });

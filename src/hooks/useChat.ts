@@ -1127,11 +1127,22 @@ export function useChat({
       const rival = currentQ.confuserWord || (currentQ.type === "duel" && currentQ.options?.find(o => o.toLowerCase() !== currentQ.correctAnswer.toLowerCase()));
       if (rival && !seenWords.has(rival.toLowerCase())) {
         seenWords.add(rival.toLowerCase());
+        let cleanRivalDef = "";
+        if (currentQ.contrastRule) {
+          const escapedRival = rival.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const m = currentQ.contrastRule.match(
+            new RegExp(`(?:while|whereas)?\\s*(?:a|an)?\\s*['"]?${escapedRival}['"]?\\s*(?:refers to|means|is defined as|denotes|is)\\s*([^.;]+)`, "i")
+          );
+          if (m && m[1]) {
+            cleanRivalDef = m[1].trim();
+          } else {
+            cleanRivalDef = currentQ.contrastRule;
+          }
+        }
         derived.push({
           word: rival,
           translation: "",
-          definition: currentQ.contrastRule || `Contrast rival against "${currentQ.word}"`,
-          hint: `Contrast rival against "${currentQ.word}"`,
+          definition: cleanRivalDef,
           partOfSpeech: targetWordObj?.partOfSpeech,
           pairedWith: currentQ.word,
         });
@@ -1150,8 +1161,7 @@ export function useChat({
             derived.push({
               word: combo,
               translation: "",
-              definition: `Preposition collocation with "${currentQ.word}"`,
-              hint: `Found in context sentence`,
+              definition: "",
               partOfSpeech: "collocation",
               pairedWith: currentQ.word,
             });
