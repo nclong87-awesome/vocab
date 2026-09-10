@@ -151,6 +151,7 @@ export interface QuizQuestion {
   id: string;
   wordId: string;
   word: string;
+  partOfSpeech?: string;
   type: 'definition' | 'translation' | 'sentence' | 'spelling' | 'listening' | 'picture' | 'duel';
   question: string;
   options?: string[]; // For multiple choice
@@ -221,6 +222,7 @@ export interface ChatMessage {
   timestamp: string;
   suggestedActions?: { label: string; action: string; payload?: any }[];
   audioWord?: string;
+  partOfSpeech?: string;
   imageUrl?: string;
   imageKeyword?: string;
   quizSpeechText?: string;

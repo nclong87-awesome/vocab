@@ -567,6 +567,7 @@ export function useChat({
           quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
           imageUrl: firstQ.imageUrl,
           imageKeyword: firstQ.imageKeyword,
+          partOfSpeech: firstQ.partOfSpeech,
           suggestedActions: firstQ.options?.map((opt: any) => ({
             label: opt,
             action: "quiz_answer",
@@ -811,6 +812,7 @@ export function useChat({
           quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
           imageUrl: firstQ.imageUrl,
           imageKeyword: firstQ.imageKeyword,
+          partOfSpeech: firstQ.partOfSpeech,
           suggestedActions: firstQ.options?.map((opt: any) => ({
             label: opt,
             action: "quiz_answer",
@@ -1223,6 +1225,7 @@ export function useChat({
         quizSpeechText: (nextQ.type === "listening" || nextQ.type === "spelling") ? nextQ.word : nextQ.question,
         imageUrl: nextQ.imageUrl,
         imageKeyword: nextQ.imageKeyword,
+        partOfSpeech: nextQ.partOfSpeech,
         isConfuserDuel: nextQ.type === "duel",
         confuserWord: nextQ.confuserWord,
         contrastRule: nextQ.contrastRule,

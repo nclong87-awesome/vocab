@@ -2181,9 +2181,10 @@ export async function generateAiQuizQuestionsService(
   // Strictly enforce maximum 3 target words for faster LLM generation and response latency
   const targetWords = uniqueInputWords.slice(0, 3);
   const expectedCount = targetWords.length;
+  const hasAnyNoun = targetWords.some(w => isNoun(w.partOfSpeech));
   const minimalWordList = targetWords.map(w => ({
     word: w.word,
-    partOfSpeech: w.partOfSpeech || "noun",
+    partOfSpeech: w.partOfSpeech || "",
     definition: w.definition ? String(w.definition).slice(0, 100) : undefined
   }));
 
@@ -2195,19 +2196,27 @@ CORE RULES:
 2. Distractor Independence: Options must be plausible external confusers matching the exact part of speech. Never reuse input words as distractors.
 3. Correct Answer: MUST strictly equal the target word being tested.
 4. STRICT NO DUPLICATE WORDS: Each question MUST test a DIFFERENT, UNIQUE target word from the input list. NEVER generate two questions for the same word.
-5. Question Types:
+5. NOUN-ONLY RULE FOR IMAGES:
+   - Images and 'picture' questions are STRICTLY RESTRICTED to words whose part of speech is a NOUN.
+   - If a word is NOT a noun (e.g. adjective, verb, adverb, preposition), you MUST NEVER use 'picture' type, and 'imageKeyword' MUST be omitted or empty.
+   - Do NOT generate a 'picture' question unless the target word is actually a noun.
+6. Question Types:
    - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}).
    - 'definition': Match word to definition.
-   - 'picture': Set concise 1-3 word 'imageKeyword'.
+   - 'picture': Set concise 1-3 word 'imageKeyword' (ONLY FOR NOUNS).
    - 'duel': Pit target word against rival 'confuserWord' with a crisp 1-sentence 'contrastRule'.
 ${isDuelMode 
   ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord' and 'contrastRule'." 
   : isSandwichMode 
-  ? (expectedCount >= 2 
-      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question and 1 'picture' question for different words." 
-      : "   - Balanced Session: Include 1 'picture' question with an 'imageKeyword'.")
-  : "   - Include at least 1 'picture' question with an 'imageKeyword'."}
-6. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
+  ? (hasAnyNoun && expectedCount >= 2 
+      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question and 1 'picture' question for a NOUN target word." 
+      : hasAnyNoun 
+      ? "   - Balanced Session: Include 1 'picture' question for a NOUN target word with an 'imageKeyword'."
+      : "   - Balanced Session: Blend 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")
+  : (hasAnyNoun 
+      ? "   - Include at least 1 'picture' question with an 'imageKeyword' for a target word that is a NOUN."
+      : "   - Use 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")}
+7. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
    For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} relevant to that question.
    SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
 
@@ -2216,6 +2225,7 @@ Output MUST be strictly valid JSON matching this schema:
   "questions": [
     {
       "word": "string (the target word being tested)",
+      "partOfSpeech": "string (the part of speech of the word)",
       "type": "definition" | "sentence" | "listening" | "picture" | "duel",
       "question": "string",
       "options": ["string", "string"],
@@ -2223,7 +2233,7 @@ Output MUST be strictly valid JSON matching this schema:
       "hint": "string",
       "sentence": "string (complete sentence)",
       "sentenceTranslation": "string (translation in ${nativeLanguage})",
-      "imageKeyword": "string (1-3 word English search term)",
+      "imageKeyword": "string (ONLY for nouns: 1-3 word English search term, omit/empty for non-nouns)",
       "confuserWord": "string (for duel type)",
       "contrastRule": "string (for duel type)",
       "suggestedWords": [
@@ -2241,14 +2251,19 @@ Output MUST be strictly valid JSON matching this schema:
     `1. Return exactly ${expectedCount} question(s) (strictly 1 per word). Correct answer MUST be the exact word.\n` +
     `2. CRITICAL: Every question must test a different target word. NEVER generate more than one question for the same word.\n` +
     `3. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
+    `4. IMAGES AND PICTURE QUESTIONS: ONLY use 'picture' type or provide 'imageKeyword' if the target word is a NOUN. For adjectives, verbs, adverbs, etc., do NOT use 'picture' type and do NOT provide 'imageKeyword'.\n` +
     (isDuelMode 
-      ? `4. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
+      ? `5. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
       : isSandwichMode 
-      ? (expectedCount >= 2 
-          ? `4. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question on different words.\n`
-          : `4. Include 1 'picture' question with 1-3 word 'imageKeyword'.\n`)
-      : `4. Include at least 1 'picture' question with 1-3 word 'imageKeyword'.\n`) +
-    `5. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
+      ? (hasAnyNoun && expectedCount >= 2 
+          ? `5. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question for a NOUN target word.\n`
+          : hasAnyNoun
+          ? `5. Include 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
+          : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)
+      : (hasAnyNoun 
+          ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
+          : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)) +
+    `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
 
   const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
 
@@ -2436,25 +2451,31 @@ Output MUST be strictly valid JSON matching this schema:
         }
 
         const isQuestionDuel = isDuelMode || q.type === "duel";
+        const questionType = isQuestionDuel ? 'duel' : (q.type || 'definition');
 
-        const keywordText = q.imageKeyword || (q.type === 'picture' ? getImageKeyword(matchingWord) : undefined);
+        const wordIsNoun = isNoun(matchingWord.partOfSpeech || q.partOfSpeech);
+        const resolvedType = (questionType === "picture" && !wordIsNoun) ? (matchingWord.example ? "sentence" : "definition") : questionType;
 
-        const existingWordImages = [
+        const keywordText = (wordIsNoun && (resolvedType === 'picture' || q.imageKeyword)) 
+          ? (q.imageKeyword || getImageKeyword(matchingWord)) 
+          : undefined;
+
+        const existingWordImages = wordIsNoun ? [
           ...(matchingWord.imageUrls || []),
           ...(matchingWord.imageUrl ? [matchingWord.imageUrl] : [])
-        ].map(u => String(u || "").trim()).filter(Boolean);
+        ].map(u => String(u || "").trim()).filter(Boolean) : [];
 
         let imgUrl: string | undefined = undefined;
-        if (existingWordImages.length > 0 && (q.type === 'picture' || q.imageUrl || keywordText)) {
+        if (wordIsNoun && existingWordImages.length > 0 && (resolvedType === 'picture' || q.imageUrl || keywordText)) {
           imgUrl = existingWordImages[Math.floor(Math.random() * existingWordImages.length)];
-        } else if (q.imageUrl && q.imageUrl.startsWith("http")) {
+        } else if (wordIsNoun && q.imageUrl && q.imageUrl.startsWith("http")) {
           imgUrl = q.imageUrl;
-        } else if (keywordText) {
+        } else if (wordIsNoun && keywordText) {
           imgUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
         }
 
         let resolvedSentence = q.sentence || (matchingWord.example ? matchingWord.example : undefined);
-        if (!resolvedSentence && (q.type === 'sentence' || isQuestionDuel || /_{2,}|\[blank\]|\.\.\./i.test(q.question || ""))) {
+        if (!resolvedSentence && (resolvedType === 'sentence' || isQuestionDuel || /_{2,}|\[blank\]|\.\.\./i.test(q.question || ""))) {
           const cleanedQ = (q.question || "")
             .replace(/^Fill in the blank (?:for the sentence)?:\s*/i, "")
             .replace(/^⚔️ Confuser Duel \(Contrast Match\):\s*/i, "")
@@ -2470,12 +2491,11 @@ Output MUST be strictly valid JSON matching this schema:
 
         const resolvedSentenceTranslation = q.sentenceTranslation || matchingWord.exampleTranslation || undefined;
 
-        const questionType = isQuestionDuel ? 'duel' : (q.type || 'definition');
         let rawQuestion = q.question || (isQuestionDuel
           ? `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`
           : `Which word matches: ${matchingWord.definition}`);
 
-        if (questionType === 'duel' || questionType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestion)) {
+        if (resolvedType === 'duel' || resolvedType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestion)) {
           rawQuestion = ensureQuestionHasBlank(rawQuestion, matchingWord.word);
         }
 
@@ -2548,7 +2568,8 @@ Output MUST be strictly valid JSON matching this schema:
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
           word: matchingWord.word,
-          type: questionType,
+          partOfSpeech: matchingWord.partOfSpeech || q.partOfSpeech,
+          type: resolvedType,
           question: rawQuestion,
           options: cleanOptions.sort(() => 0.5 - Math.random()),
           correctAnswer: correctAns,
@@ -2575,25 +2596,30 @@ Output MUST be strictly valid JSON matching this schema:
         }
       }
 
-      // Guarantee at least one picture or image-based question in the generated quiz (unless duel mode)
-      if (!isDuelMode) {
+      // Guarantee at least one picture or image-based question in the generated quiz ONLY if there is a noun (unless duel mode)
+      if (!isDuelMode && hasAnyNoun) {
         const hasPictureQuestion = validQuestions.some(q => q.type === 'picture');
-        if (!hasPictureQuestion && validQuestions.length > 0 && validQuestions[0]) {
-          const targetQ = validQuestions[0];
-          const matchingWord = (words && (words.find(w => w.id === targetQ.wordId || w.word.toLowerCase() === targetQ.word.toLowerCase()) || words[0])) || { word: "Vocabulary", pronunciation: "" } as Word;
-          targetQ.type = 'picture';
-          targetQ.question = "Which word matches the visual concept shown below?";
-          targetQ.imageKeyword = getImageKeyword(matchingWord);
+        if (!hasPictureQuestion && validQuestions.length > 0) {
+          const nounQ = validQuestions.find(q => {
+            const mw = words.find(w => w.id === q.wordId || w.word.toLowerCase() === q.word.toLowerCase());
+            return isNoun(q.partOfSpeech || mw?.partOfSpeech);
+          });
+          if (nounQ) {
+            const matchingWord = (words && (words.find(w => w.id === nounQ.wordId || w.word.toLowerCase() === nounQ.word.toLowerCase()) || words[0])) || { word: "Vocabulary", pronunciation: "" } as Word;
+            nounQ.type = 'picture';
+            nounQ.question = "Which word matches the visual concept shown below?";
+            nounQ.imageKeyword = getImageKeyword(matchingWord);
 
-          const existingWordImages = [
-            ...(matchingWord.imageUrls || []),
-            ...(matchingWord.imageUrl ? [matchingWord.imageUrl] : [])
-          ].map(u => String(u || "").trim()).filter(Boolean);
+            const existingWordImages = [
+              ...(matchingWord.imageUrls || []),
+              ...(matchingWord.imageUrl ? [matchingWord.imageUrl] : [])
+            ].map(u => String(u || "").trim()).filter(Boolean);
 
-          if (existingWordImages.length > 0) {
-            targetQ.imageUrl = existingWordImages[Math.floor(Math.random() * existingWordImages.length)];
-          } else {
-            targetQ.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(targetQ.imageKeyword)}`;
+            if (existingWordImages.length > 0) {
+              nounQ.imageUrl = existingWordImages[Math.floor(Math.random() * existingWordImages.length)];
+            } else if (nounQ.imageKeyword) {
+              nounQ.imageUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(nounQ.imageKeyword)}`;
+            }
           }
         }
       }

@@ -1,6 +1,6 @@
 import { Word, QuizQuestion } from "../types";
 import { fetchWithTimeout, getStoredAccessCode } from "../utils";
-import { areWordsEquivalent } from "./wordNormalization";
+import { areWordsEquivalent, isNoun } from "./wordNormalization";
 
 // Helper function to detect if text contains native language characters (e.g., Vietnamese, CJK when learning English/Spanish/etc.)
 export function containsNonTargetLanguage(text: string, targetLanguage?: string): boolean {
@@ -18,13 +18,17 @@ export function containsNonTargetLanguage(text: string, targetLanguage?: string)
   return false;
 }
 
-// Helper function to extract a clean image search term from word properties
+// Helper function to extract a clean image search term from word properties (strictly for nouns)
 export function getImageSearchTerm(word: Word): string {
+  if (word.partOfSpeech && !isNoun(word.partOfSpeech)) return "";
   return word.word;
 }
 
-// Helper function to generate relevant visual concept keywords
+// Helper function to generate relevant visual concept keywords (strictly for nouns)
 export function getImageKeyword(word: Word | string): string {
+  if (typeof word === 'object' && word !== null && word.partOfSpeech && !isNoun(word.partOfSpeech)) {
+    return "";
+  }
   if (typeof word === 'string') {
     // If it's a string, clean it up if it has a comma (e.g. "apple, fruit" -> "apple")
     if (word.includes(",")) {
@@ -653,23 +657,33 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
   const allWords = uniqueWords.slice(0, 3);
   const generated: QuizQuestion[] = [];
 
-  // Guarantee at least one picture/image-based question in the generated quiz
-  const pictureQuestionIndex = Math.floor(Math.random() * allWords.length);
+  // Guarantee at least one picture/image-based question ONLY if at least one candidate is a noun
+  const nounIndices = allWords
+    .map((w, idx) => ({ idx, isNoun: isNoun(w.partOfSpeech) }))
+    .filter((item) => item.isNoun)
+    .map((item) => item.idx);
+  const pictureQuestionIndex = nounIndices.length > 0
+    ? nounIndices[Math.floor(Math.random() * nounIndices.length)]
+    : -1;
 
   allWords.forEach((word, index) => {
+    const wordIsNoun = isNoun(word.partOfSpeech);
     const types: ('definition' | 'sentence' | 'listening' | 'picture' | 'duel')[] = [
       'definition', 
       'sentence',
       'listening',
-      'picture',
+      ...(wordIsNoun ? ['picture' as const] : []),
       'duel'
     ];
-    let type = index === pictureQuestionIndex ? 'picture' : types[Math.floor(Math.random() * types.length)];
+    let type = (index === pictureQuestionIndex && wordIsNoun) ? 'picture' : types[Math.floor(Math.random() * types.length)];
 
     // If type is duel, generate a Confuser Duel question directly
     if (type === 'duel') {
       const duelQ = generateDuelQuestionForWord(word, targetLanguage);
-      generated.push(duelQ);
+      generated.push({
+        ...duelQ,
+        partOfSpeech: word.partOfSpeech,
+      });
       return;
     }
 
@@ -678,12 +692,16 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       type = word.example ? 'sentence' : 'listening';
     }
 
+    // Safety check: picture question type is strictly forbidden for non-nouns
+    if (type === 'picture' && !wordIsNoun) {
+      type = word.example ? 'sentence' : 'definition';
+    }
+
     let options: string[] = [];
     let correctAnswer = "";
     let questionText = "";
     let hintText = word.pronunciation;
     let imageUrl: string | undefined = undefined;
-
     let imageKeyword: string | undefined = undefined;
 
     // Generate tricky confuser distractors without pulling wrong answers from other words in the collection
@@ -703,7 +721,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);
       options = [correctAnswer, ...uniqueDistractors].sort(() => 0.5 - Math.random());
     }
-    else if (type === 'picture') {
+    else if (type === 'picture' && wordIsNoun) {
       correctAnswer = word.word;
       questionText = `Which word matches the visual concept shown below?`;
       imageKeyword = getImageKeyword(word);
@@ -767,6 +785,7 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       id: `q-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
       wordId: word.id,
       word: word.word,
+      partOfSpeech: word.partOfSpeech,
       type,
       question: questionText,
       options,
@@ -774,9 +793,9 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       hint: hintText,
       sentence: word.example,
       sentenceTranslation: word.exampleTranslation,
-      imageKeyword,
-      imageUrl,
-      imageUrls: word.imageUrls,
+      imageKeyword: wordIsNoun ? imageKeyword : undefined,
+      imageUrl: wordIsNoun ? imageUrl : undefined,
+      imageUrls: wordIsNoun ? word.imageUrls : undefined,
       suggestedWords: qSuggestions.slice(0, 3)
     });
   });

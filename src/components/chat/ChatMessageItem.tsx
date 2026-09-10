@@ -14,7 +14,7 @@ import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
 import WordChatModal from "./WordChatModal";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
-import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
+import { isWordInCollection, findWordInCollection, isNoun } from "../../utils/wordNormalization";
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -355,6 +355,27 @@ function ChatMessageItem({
   }, [isWelcomeMsg, words]);
 
   const candidateCount = practiceCandidates.length;
+
+  // Practice & Quiz image rule: only show images for words that are nouns
+  const shouldShowQuizImage = useMemo(() => {
+    if (!msg.imageUrl && !msg.imageKeyword) return false;
+    // User-uploaded photo or camera captures (data: or blob:) are not practice/quiz images
+    if (msg.imageUrl && (msg.imageUrl.startsWith("data:") || msg.imageUrl.startsWith("blob:"))) {
+      return true;
+    }
+    // For practice/quiz questions: strictly enforce noun check
+    if (msg.partOfSpeech) {
+      return isNoun(msg.partOfSpeech);
+    }
+    const candidateWordText = msg.audioWord || msg.imageKeyword || "";
+    if (candidateWordText && words && words.length > 0) {
+      const foundWord = findWordInCollection(words, candidateWordText) || words.find(w => w.word.toLowerCase() === candidateWordText.toLowerCase());
+      if (foundWord?.partOfSpeech) {
+        return isNoun(foundWord.partOfSpeech);
+      }
+    }
+    return false;
+  }, [msg.imageUrl, msg.imageKeyword, msg.partOfSpeech, msg.audioWord, words]);
 
   const handleCopy = (textToCopy: string, key: string, toastMessage: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -1015,8 +1036,8 @@ function ChatMessageItem({
                 </div>
               )}
 
-              {/* Image for visual picture questions or photo analysis */}
-              {(msg.imageUrl || msg.imageKeyword) && (
+              {/* Image for visual picture questions or photo analysis (strictly nouns for practice/quiz) */}
+              {shouldShowQuizImage && (
                 <div className="my-2.5 max-w-md rounded-xl border border-stone-200 overflow-hidden bg-stone-100 shadow-2xs">
                   {msg.imageUrl && (msg.imageUrl.startsWith("data:") || msg.imageUrl.startsWith("blob:")) ? (
                     <img 
