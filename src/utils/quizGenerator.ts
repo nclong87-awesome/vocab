@@ -210,14 +210,85 @@ export interface ConfuserPairInfo {
 }
 
 /**
+ * Synthesizes a plausible context sentence with a target word if no example exists.
+ */
+export function getDefaultContextSentence(word: string, partOfSpeech?: string): string {
+  const clean = (word || "").trim();
+  const lower = clean.toLowerCase();
+  const pos = (partOfSpeech || "").toLowerCase().trim();
+
+  if (pos === "adverb" || lower.endsWith("ly")) {
+    return `She ${clean} finishes her tasks on schedule, rarely missing any deadline.`;
+  }
+  if (pos === "verb") {
+    return `The team must ${clean} the necessary requirements before launching.`;
+  }
+  if (pos === "adjective") {
+    return `The speaker provided a very ${clean} explanation for the audience.`;
+  }
+  if (pos === "noun") {
+    return `The committee examined the ${clean} carefully before deciding.`;
+  }
+  return `The team needed to ${clean} the procedure accurately.`;
+}
+
+/**
+ * Verifies whether a question or sentence string contains an actual substantive context sentence,
+ * rather than just a generic instructional prompt or an empty blank placeholder.
+ */
+export function isQuestionSentenceValid(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  // Strip out boilerplate instructions, punctuation, and blanks
+  const stripped = text
+    .replace(/⚔️\s*Confuser Duel\s*(?:\(Contrast Match\))?:?/gi, "")
+    .replace(/Choose the (?:word|term) that (?:accurately|best)?\s*(?:fits|matches)[^:\n]*:?/gi, "")
+    .replace(/Fill in the blank (?:for the sentence)?:?/gi, "")
+    .replace(/Which word matches[^:\n]*:?/gi, "")
+    .replace(/Please select the (?:correct )?word:?/gi, "")
+    .replace(/\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi, "")
+    .replace(/["“”'()]/g, "")
+    .trim();
+
+  // If stripped text has fewer than 3 words, or matches vague templates like "given nuance"
+  const words = stripped.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length < 3) return false;
+  if (/^(?:the\s+)?given\s+nuance\.?$/i.test(stripped)) return false;
+  if (/^(?:the\s+)?context\.?$/i.test(stripped)) return false;
+  return true;
+}
+
+/**
  * Ensures that a fill-in-the-blank question or Confuser Duel question string
  * contains a visible blank (______). If the target word is present in the sentence,
  * it replaces the target word (or its inflected forms) with ______.
  * If no target word or blank placeholder is present, it automatically inserts ______.
  */
-export function ensureQuestionHasBlank(questionText: string, targetWord: string): string {
-  if (!questionText) {
-    return `Choose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`;
+export function ensureQuestionHasBlank(
+  questionText: string,
+  targetWord: string,
+  fallbackSentence?: string,
+  partOfSpeech?: string
+): string {
+  const cleanTarget = (targetWord || "").trim();
+
+  // If questionText is empty or lacks an actual context sentence (e.g. only contains generic instructions like "Choose the word that best matches the given nuance (_____).")
+  if (!questionText || !isQuestionSentenceValid(questionText)) {
+    let baseSentence = "";
+    if (fallbackSentence && isQuestionSentenceValid(fallbackSentence)) {
+      baseSentence = fallbackSentence;
+    } else {
+      const lowerT = cleanTarget.toLowerCase();
+      if (CURATED_CONFUSER_PAIRS[lowerT]?.exampleWithBlank) {
+        baseSentence = CURATED_CONFUSER_PAIRS[lowerT].exampleWithBlank!;
+      } else {
+        baseSentence = getDefaultContextSentence(cleanTarget, partOfSpeech);
+      }
+    }
+
+    const cleanBase = baseSentence.replace(/^["“]|["”]$/g, "").trim();
+    const sentenceWithBlank = ensureQuestionHasBlank(cleanBase, cleanTarget);
+    const cleanFinalSentence = sentenceWithBlank.replace(/^["“]|["”]$/g, "").trim();
+    return `Choose the word that accurately fits the context to break the confusion:\n"${cleanFinalSentence}"`;
   }
 
   // 1. Standardize existing blank placeholders (e.g. [blank], (_____), ..., _____) to ______
@@ -228,7 +299,6 @@ export function ensureQuestionHasBlank(questionText: string, targetWord: string)
     return sanitized;
   }
 
-  const cleanTarget = (targetWord || "").trim();
   if (!cleanTarget) {
     return sanitized + " ______";
   }
@@ -264,6 +334,16 @@ export function ensureQuestionHasBlank(questionText: string, targetWord: string)
 }
 
 export const CURATED_CONFUSER_PAIRS: Record<string, ConfuserPairInfo> = {
+  "normally": {
+    rival: "especially",
+    rule: "'Normally' means usually, typically, or under standard circumstances; 'Especially' means particularly, exceptionally, or to an outstanding degree.",
+    exampleWithBlank: "We ______ finish work by five o'clock, but today we stayed late for a release."
+  },
+  "especially": {
+    rival: "normally",
+    rule: "'Especially' means particularly or in an exceptional manner; 'Normally' means according to standard routine or typical custom.",
+    exampleWithBlank: "She loves outdoor sports in summer, ______ hiking and kayaking in the mountains."
+  },
   "tract": {
     rival: "track",
     rule: "'Tract' (with a 't') is an area or plot of land, or a system of body organs; 'Track' (with a 'k') is a path, course, or railway line.",
@@ -743,9 +823,10 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
     else {
       // sentence type
       correctAnswer = word.word;
-      const hiddenSentence = word.example
-        ? ensureQuestionHasBlank(word.example, word.word)
-        : `Please select the correct word: ______`;
+      const baseSentence = (word.example && isQuestionSentenceValid(word.example))
+        ? word.example
+        : getDefaultContextSentence(word.word, word.partOfSpeech);
+      const hiddenSentence = ensureQuestionHasBlank(baseSentence, word.word);
       questionText = ensureQuestionHasBlank(`Fill in the blank for the sentence:\n"${hiddenSentence.replace(/^["“]|["”]$/g, "").trim()}"`, word.word);
       
       const uniqueDistractors = Array.from(new Set(confusers)).filter(w => w.toLowerCase() !== correctAnswer.toLowerCase()).slice(0, 3);

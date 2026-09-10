@@ -1,5 +1,5 @@
 import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile, QuizSuggestedWord } from "../types";
-import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions } from "../utils/quizGenerator";
+import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions, isQuestionSentenceValid, getDefaultContextSentence } from "../utils/quizGenerator";
 import { areWordsEquivalent, isNoun } from "../utils/wordNormalization";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
@@ -2201,15 +2201,16 @@ CORE RULES:
    - If a word is NOT a noun (e.g. adjective, verb, adverb, preposition), you MUST NEVER use 'picture' type, and 'imageKeyword' MUST be omitted or empty.
    - Do NOT generate a 'picture' question unless the target word is actually a noun.
 6. Question Types:
-   - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}).
+   - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}). The 'question' MUST embed the context sentence containing "______".
    - 'definition': Match word to definition.
    - 'picture': Set concise 1-3 word 'imageKeyword' (ONLY FOR NOUNS).
    - 'duel': Pit target word against rival 'confuserWord' with a crisp 1-sentence 'contrastRule'.
+     CRITICAL REQUIREMENT FOR 'duel': The 'question' MUST be a contextual fill-in-the-blank sentence where "______" represents the target word in a natural context (e.g. 'Choose the word that accurately fits the context:\n"We ______ finish work at five, but today we stayed late."'). NEVER output a vague instruction like 'Choose the word that best matches the given nuance (_____).' without a complete context sentence!
 ${isDuelMode 
-  ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord' and 'contrastRule'." 
+  ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord', 'contrastRule', and a full context sentence containing '______'." 
   : isSandwichMode 
   ? (hasAnyNoun && expectedCount >= 2 
-      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question and 1 'picture' question for a NOUN target word." 
+      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question (with context sentence) and 1 'picture' question for a NOUN target word." 
       : hasAnyNoun 
       ? "   - Balanced Session: Include 1 'picture' question for a NOUN target word with an 'imageKeyword'."
       : "   - Balanced Session: Blend 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")
@@ -2227,7 +2228,7 @@ Output MUST be strictly valid JSON matching this schema:
       "word": "string (the target word being tested)",
       "partOfSpeech": "string (the part of speech of the word)",
       "type": "definition" | "sentence" | "listening" | "picture" | "duel",
-      "question": "string",
+      "question": "string (For 'duel' and 'sentence', MUST be a full context sentence with '______' inside double quotes; NEVER a sentence-less prompt)",
       "options": ["string", "string"],
       "correctAnswer": "string (MUST be exactly the target word itself)",
       "hint": "string",
@@ -2253,10 +2254,10 @@ Output MUST be strictly valid JSON matching this schema:
     `3. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
     `4. IMAGES AND PICTURE QUESTIONS: ONLY use 'picture' type or provide 'imageKeyword' if the target word is a NOUN. For adjectives, verbs, adverbs, etc., do NOT use 'picture' type and do NOT provide 'imageKeyword'.\n` +
     (isDuelMode 
-      ? `5. ALL questions must be 'duel' with 'confuserWord' and 'contrastRule'.\n` 
+      ? `5. ALL questions must be 'duel' with 'confuserWord', 'contrastRule', and a full context sentence containing '______' (never a sentence-less prompt).\n` 
       : isSandwichMode 
       ? (hasAnyNoun && expectedCount >= 2 
-          ? `5. Include 1 'duel' (with 'confuserWord' & 'contrastRule') and 1 'picture' question for a NOUN target word.\n`
+          ? `5. Include 1 'duel' (with 'confuserWord', 'contrastRule', and full context sentence with '______') and 1 'picture' question for a NOUN target word.\n`
           : hasAnyNoun
           ? `5. Include 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
           : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)
@@ -2474,30 +2475,40 @@ Output MUST be strictly valid JSON matching this schema:
           imgUrl = `https://image.nclong87.workers.dev?query=${encodeURIComponent(keywordText)}`;
         }
 
-        let resolvedSentence = q.sentence || (matchingWord.example ? matchingWord.example : undefined);
-        if (!resolvedSentence && (resolvedType === 'sentence' || isQuestionDuel || /_{2,}|\[blank\]|\.\.\./i.test(q.question || ""))) {
-          const cleanedQ = (q.question || "")
-            .replace(/^Fill in the blank (?:for the sentence)?:\s*/i, "")
-            .replace(/^⚔️ Confuser Duel \(Contrast Match\):\s*/i, "")
-            .replace(/^Choose the word that accurately fits the context to break the confusion:\s*/i, "")
-            .replace(/^["“]|["”]$/g, "")
-            .trim();
-          if (/_{2,}|\[blank\]|\.\.\./i.test(cleanedQ)) {
-            resolvedSentence = cleanedQ.replace(/_{2,}|\[blank\]|\.\.\./gi, correctAns);
+        const fallbackSentence = (q.sentence && isQuestionSentenceValid(q.sentence))
+          ? q.sentence
+          : (matchingWord.example && isQuestionSentenceValid(matchingWord.example))
+          ? matchingWord.example
+          : undefined;
+
+        let rawQuestion = q.question;
+        if (!rawQuestion || !isQuestionSentenceValid(rawQuestion)) {
+          if (isQuestionDuel) {
+            rawQuestion = ensureQuestionHasBlank("", matchingWord.word, fallbackSentence, matchingWord.partOfSpeech || q.partOfSpeech);
+          } else if (resolvedType === 'sentence') {
+            rawQuestion = ensureQuestionHasBlank("", matchingWord.word, fallbackSentence, matchingWord.partOfSpeech || q.partOfSpeech);
           } else {
-            resolvedSentence = cleanedQ;
+            rawQuestion = `Which word matches: ${matchingWord.definition || matchingWord.word}`;
+          }
+        } else if (resolvedType === 'duel' || resolvedType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestion)) {
+          rawQuestion = ensureQuestionHasBlank(rawQuestion, matchingWord.word, fallbackSentence, matchingWord.partOfSpeech || q.partOfSpeech);
+        }
+
+        let resolvedSentence = q.sentence || (matchingWord.example ? matchingWord.example : undefined);
+        if (!resolvedSentence || !isQuestionSentenceValid(resolvedSentence)) {
+          if (rawQuestion.includes("______")) {
+            const quoteMatch = rawQuestion.match(/"([^"]+)"/);
+            if (quoteMatch && quoteMatch[1]) {
+              resolvedSentence = quoteMatch[1].replace("______", correctAns);
+            } else {
+              resolvedSentence = rawQuestion.replace("______", correctAns);
+            }
+          } else {
+            resolvedSentence = getDefaultContextSentence(correctAns, matchingWord.partOfSpeech || q.partOfSpeech);
           }
         }
 
         const resolvedSentenceTranslation = q.sentenceTranslation || matchingWord.exampleTranslation || undefined;
-
-        let rawQuestion = q.question || (isQuestionDuel
-          ? `⚔️ Confuser Duel (Contrast Match):\nChoose the word that accurately fits the context to break the confusion:\n"The team must ______ the necessary requirements."`
-          : `Which word matches: ${matchingWord.definition}`);
-
-        if (resolvedType === 'duel' || resolvedType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestion)) {
-          rawQuestion = ensureQuestionHasBlank(rawQuestion, matchingWord.word);
-        }
 
         const rawQuestionSuggestions = Array.isArray(q.suggestedWords)
           ? q.suggestedWords
