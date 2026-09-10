@@ -8,7 +8,8 @@ import {
   Layers,
   Timer,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from "lucide-react";
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -44,8 +45,8 @@ export default function AnalyticsDashboard({
 }: AnalyticsDashboardProps) {
   const safeWords = Array.isArray(words) ? words : [];
 
-  // View Mode: 'breakdown' (Library & Performance) vs 'timeline' (Practice Timeline)
-  const [dashboardView, setDashboardView] = useState<'breakdown' | 'timeline'>('breakdown');
+  // View Mode: 'timeline' (default) vs 'breakdown' vs 'personality'
+  const [dashboardView, setDashboardView] = useState<'timeline' | 'breakdown' | 'personality'>('timeline');
 
   // Filter & Search states for Words breakdown - default to 'all' so mastered words are visible
   const [activeTab, setActiveTab] = useState<'improving' | 'mastered' | 'decayed' | 'all' | 'starred'>('all');
@@ -177,55 +178,63 @@ export default function AnalyticsDashboard({
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto" id="analytics-dashboard-root">
-      {/* AI LEARNER PERSONALITY & PROFILING CARD */}
-      <AiPersonalityProfileCard
-        words={safeWords}
-        stats={stats}
-        llmConfig={llmConfig}
-        appLanguage={appLanguage}
-      />
+      {/* Primary View Switcher: 3 tabs in 1 clean line on mobile (Timeline, Vocabulary, Personality) */}
+      <div 
+        className="flex items-center gap-1.5 sm:gap-2 border-b border-stone-200/80 pb-2.5" 
+        id="analytics-primary-switcher"
+      >
+        {/* 1. Practice Timeline Tab (Default View) */}
+        <button
+          id="tab-practice-timeline"
+          onClick={() => setDashboardView('timeline')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[38px] ${
+            dashboardView === 'timeline'
+              ? 'bg-amber-400 text-stone-950 shadow-xs'
+              : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5 text-stone-800 shrink-0" />
+          <span className="sm:hidden">Timeline</span>
+          <span className="hidden sm:inline">Practice Timeline</span>
+        </button>
 
-      {/* Primary View Switcher: Breakdown vs Practice Timeline */}
-      <div className="flex items-center justify-between gap-3 border-b border-stone-200/80 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setDashboardView('breakdown')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              dashboardView === 'breakdown'
-                ? 'bg-stone-900 text-white shadow-xs'
-                : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Vocabulary & Library</span>
-          </button>
+        {/* 2. Vocabulary & Library Tab */}
+        <button
+          id="tab-vocabulary-breakdown"
+          onClick={() => setDashboardView('breakdown')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[38px] ${
+            dashboardView === 'breakdown'
+              ? 'bg-stone-900 text-white shadow-xs'
+              : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5 shrink-0" />
+          <span className="sm:hidden">Vocabulary</span>
+          <span className="hidden sm:inline">Vocabulary & Library</span>
+        </button>
 
-          <button
-            onClick={() => setDashboardView('timeline')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              dashboardView === 'timeline'
-                ? 'bg-amber-400 text-stone-950 shadow-xs'
-                : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5 text-stone-800" />
-            <span>Practice Timeline</span>
-            {dueWords.length > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono font-black ${
-                dashboardView === 'timeline' ? 'bg-stone-950 text-amber-400' : 'bg-amber-100 text-amber-900 border border-amber-300'
-              }`}>
-                {dueWords.length} due
-              </span>
-            )}
-          </button>
-        </div>
+        {/* 3. Personality Tab (Right after Vocabulary & Library) */}
+        <button
+          id="tab-personality"
+          onClick={() => setDashboardView('personality')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[38px] ${
+            dashboardView === 'personality'
+              ? 'bg-stone-900 text-white shadow-xs'
+              : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
+          }`}
+        >
+          <Sparkles className={`w-3.5 h-3.5 shrink-0 ${dashboardView === 'personality' ? 'text-amber-400' : 'text-indigo-600'}`} />
+          <span>Personality</span>
+        </button>
 
-        <span className="text-[11px] text-stone-400 font-mono hidden sm:inline">
-          {dashboardView === 'timeline' ? 'Scheduled Spaced Intervals' : `${totalWordsCount} Total Vocabulary Items`}
+        <span className="text-[11px] text-stone-400 font-mono hidden md:inline ml-auto">
+          {dashboardView === 'timeline' && 'Spaced Intervals'}
+          {dashboardView === 'breakdown' && `${totalWordsCount} Words`}
+          {dashboardView === 'personality' && 'Cognitive Profiling'}
         </span>
       </div>
 
-      {dashboardView === 'timeline' ? (
+      {dashboardView === 'timeline' && (
         /* PRACTICE TIMELINE VIEW */
         <PracticeTimeline
           words={safeWords}
@@ -235,7 +244,9 @@ export default function AnalyticsDashboard({
           onToggleLearnedWord={onToggleLearnedWord}
           onStartPractice={_onStartPracticeWeakWords}
         />
-      ) : (
+      )}
+
+      {dashboardView === 'breakdown' && (
         /* PERFORMANCE BREAKDOWN VIEW */
         <>
           {/* Primary KPI Metrics Grid */}
@@ -518,6 +529,19 @@ export default function AnalyticsDashboard({
             )}
           </div>
         </>
+      )}
+
+      {dashboardView === 'personality' && (
+        /* PERSONALITY ENGINE VIEW */
+        <div id="analytics-personality-view" className="space-y-6">
+          <AiPersonalityProfileCard
+            words={safeWords}
+            stats={stats}
+            llmConfig={llmConfig}
+            appLanguage={appLanguage}
+            initialShowDetails={true}
+          />
+        </div>
       )}
     </div>
   );

@@ -18,7 +18,10 @@ import {
   ChevronUp,
   Cpu,
   Zap,
-  Clock
+  Clock,
+  X,
+  Eye,
+  Maximize2
 } from "lucide-react";
 import { UserPersonalityProfile, LearnerArchetype, Word, UserStats, LLMConfig } from "../../types";
 import {
@@ -39,6 +42,10 @@ interface AiPersonalityProfileCardProps {
   appLanguage?: string;
   onRefreshStart?: () => void;
   onRefreshEnd?: () => void;
+  initialShowDetails?: boolean;
+  onOpenModal?: () => void;
+  isModal?: boolean;
+  onClose?: () => void;
 }
 
 export default function AiPersonalityProfileCard({
@@ -49,11 +56,16 @@ export default function AiPersonalityProfileCard({
   nativeLanguage = "Vietnamese",
   appLanguage: _appLanguage = "Vietnamese",
   onRefreshStart,
-  onRefreshEnd
+  onRefreshEnd,
+  initialShowDetails = false,
+  onOpenModal,
+  isModal = false,
+  onClose
 }: AiPersonalityProfileCardProps) {
   const [profile, setProfile] = useState<UserPersonalityProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showDetails, setShowDetails] = useState(initialShowDetails);
   const [showPromptPatch, setShowPromptPatch] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<InteractionMilestoneProgress>(() => getMilestoneProgress());
@@ -229,6 +241,18 @@ export default function AiPersonalityProfileCard({
               <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? "animate-spin text-amber-400" : ""}`} />
               <span>{isGenerating ? "Synthesizing..." : "Analyze Activity"}</span>
             </button>
+
+            {isModal && onClose && (
+              <button
+                id="close-personality-modal-btn"
+                onClick={onClose}
+                className="p-2 bg-white/10 hover:bg-white/20 text-stone-300 hover:text-white rounded-xl border border-white/15 transition-all cursor-pointer"
+                title="Close Modal"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -270,8 +294,69 @@ export default function AiPersonalityProfileCard({
         </div>
       )}
 
-      {/* BODY CONTENT */}
-      <div className="p-5 sm:p-6 space-y-6">
+      {/* DETAILS TOGGLE BUTTON BAR */}
+      <div 
+        className="px-5 py-3 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3"
+        id="personality-details-toggle-bar"
+      >
+        <div className="flex items-center gap-2 text-xs text-stone-700">
+          <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="font-medium">
+            {showDetails
+              ? "Displaying complete cognitive preferences, inquiry analytics & pedagogical directives"
+              : "Explore cognitive modalities, inquiry analytics, and diagnostic coaching"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {onOpenModal && !isModal && (
+            <button
+              id="open-personality-modal-action-btn"
+              onClick={onOpenModal}
+              className="px-3 py-1.5 bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+              title="Open full diagnostics in modal"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-stone-500" />
+              <span className="hidden sm:inline">Open Modal</span>
+            </button>
+          )}
+
+          <button
+            id="toggle-personality-details-button"
+            onClick={() => setShowDetails(prev => !prev)}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+              showDetails
+                ? "bg-stone-900 text-white hover:bg-stone-800"
+                : "bg-amber-400 text-stone-950 hover:bg-amber-300"
+            }`}
+          >
+            {showDetails ? (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>Hide Engine Details</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-3.5 h-3.5" />
+                <span>View Engine Details</span>
+                <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* BODY CONTENT - Wrapped in AnimatePresence to toggle visibility on click */}
+      <AnimatePresence>
+        {showDetails && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="p-5 sm:p-6 space-y-6">
         {/* CONTINUOUS BACKGROUND MILESTONE AUTO-REFRESH WIDGET */}
         <div
           id="milestone-auto-refresh-tracker"
@@ -537,6 +622,9 @@ export default function AiPersonalityProfileCard({
           </AnimatePresence>
         </div>
       </div>
+    </motion.div>
+  )}
+</AnimatePresence>
     </div>
   );
 }
