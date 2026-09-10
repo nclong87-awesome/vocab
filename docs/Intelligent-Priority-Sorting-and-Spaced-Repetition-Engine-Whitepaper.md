@@ -97,16 +97,18 @@ $$
 
 Where $K \in [0, 100]$ represents current memory strength.
 
-#### 2.2 Memory Strength Modulation Multiplier
+#### 2.2 Memory Strength Modulation Multiplier & Day Alignment
 
-Firmly consolidated memories retain stability longer than nascent memories. The strength scaling factor $M(K)$ smoothly scales the base interval:
-
-$$
-M(K) = \text{clamp}\left(0.6 + 0.7 \cdot \frac{K}{100}, \, [0.6, \, 1.3]\right)
-$$
-
-- At $K = 0\%$, $M(K) = 0.6$ (shortens review interval by $40\%$).
-- At $K = 100\%$, $M(K) = 1.3$ (expands review interval by $+30\%$).
+To keep reviews synchronized with daily study habits and prevent middle-of-the-night review times:
+- For **positive streaks ($S \ge 1$)**, reviews are scheduled in full-day increments (multiples of 24h, floor of 1 day / 24h). The strength factor scales retention outward ($1.0\times$ at lower strength up to $1.3\times$ at $100\%$ strength) without discounting below 1 day:
+  $$
+  M_{\text{streak}}(K) = \text{clamp}\left(0.7 + 0.6 \cdot \frac{K}{100}, \, [1.0, \, 1.3]\right)
+  $$
+  For $S = 1$, the scheduled interval is guaranteed to be **1 full day (24 hours)**.
+- For **neutral or unstudied items ($S = 0$)**, the base intra-day interval scales smoothly:
+  $$
+  M(K) = \text{clamp}\left(0.6 + 0.7 \cdot \frac{K}{100}, \, [0.6, \, 1.3]\right)
+  $$
 
 #### 2.3 Priority & Remedial Modifiers
 

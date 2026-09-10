@@ -65,9 +65,9 @@ export function getHoursSinceLastReview(word: Word, now: Date = new Date()): num
  *
  * Factors evaluated from strength history:
  * 1. Recent Mistake Factor: If the last practice was incorrect, shortens interval to 4-12 hours for urgent remediation.
- * 2. Consecutive Success Streak: Successive correct reviews expand retention interval exponentially (1d -> 2d -> 4d -> 7d -> 14d -> 30d).
- * 3. Memory Strength Modulation: Higher bounded memory strength expands the interval (firmly mastered words last longer).
- * 4. Priority / Starred Modifier: Starred words receive a 25% interval reduction to surface sooner for extra practice.
+ * 2. Consecutive Success Streak: Successive correct reviews expand retention interval by full days (1d -> 2d -> 4d -> 7d -> 14d -> 30d).
+ * 3. Memory Strength Modulation: Higher memory strength safely scales multi-day intervals while preserving a minimum 1-day (24h) baseline for correct reviews.
+ * 4. Priority / Starred Modifier: Starred words receive an interval reduction to surface sooner for extra practice.
  */
 export function calculateNextReviewIntervalHours(
   word: Word,
@@ -115,36 +115,46 @@ export function calculateNextReviewIntervalHours(
     }
   }
 
-  // 3. Base interval in hours calculated from retention streak:
-  let baseIntervalHours: number;
-  if (consecutiveSuccesses <= 0) {
-    baseIntervalHours = currentStrength >= 50 ? 18 : 12;
-  } else if (consecutiveSuccesses === 1) {
-    baseIntervalHours = 24; // 1 day
-  } else if (consecutiveSuccesses === 2) {
-    baseIntervalHours = 48; // 2 days
-  } else if (consecutiveSuccesses === 3) {
-    baseIntervalHours = 96; // 4 days
-  } else if (consecutiveSuccesses === 4) {
-    baseIntervalHours = 168; // 7 days (1 week)
-  } else if (consecutiveSuccesses === 5) {
-    baseIntervalHours = 336; // 14 days (2 weeks)
-  } else {
-    // Mature long-term retention: exponential expansion up to 30 days (720 hours)
-    baseIntervalHours = Math.min(720, Math.round(336 * Math.pow(1.5, consecutiveSuccesses - 5)));
+  // 3. Positive success streak: Schedule reviews in day increments (minimum 24 hours / 1 day)
+  // This keeps review intervals aligned with daily study routines instead of scheduling odd middle-of-the-night hours.
+  if (consecutiveSuccesses >= 1) {
+    let baseDays: number;
+    if (consecutiveSuccesses === 1) {
+      baseDays = 1; // 1 day (24 hours)
+    } else if (consecutiveSuccesses === 2) {
+      baseDays = 2; // 2 days (48 hours)
+    } else if (consecutiveSuccesses === 3) {
+      baseDays = 4; // 4 days (96 hours)
+    } else if (consecutiveSuccesses === 4) {
+      baseDays = 7; // 7 days (1 week)
+    } else if (consecutiveSuccesses === 5) {
+      baseDays = 14; // 14 days (2 weeks)
+    } else {
+      // Mature long-term retention: exponential expansion up to 30 days
+      baseDays = Math.min(30, Math.round(14 * Math.pow(1.5, consecutiveSuccesses - 5)));
+    }
+
+    // For positive streaks, strength scales retention outward (1.0x at low/normal strength up to 1.3x at 100% strength)
+    // Never shrinks below 1 day (24 hours) for a correct answer
+    const streakStrengthMultiplier = Math.max(1.0, Math.min(1.3, 0.7 + (currentStrength / 100) * 0.6));
+    let calculatedDays = Math.max(1, Math.round(baseDays * streakStrengthMultiplier));
+
+    // Starred modifier: if user marked word as starred, review sooner if > 1 day
+    if (word.starred && calculatedDays > 1) {
+      calculatedDays = Math.max(1, Math.round(calculatedDays * 0.75));
+    }
+
+    return Math.min(720, calculatedDays * 24);
   }
 
-  // 4. Strength Multiplier: (0.6x for 0% strength to 1.3x for 100% strength)
+  // 4. Words with streak = 0 (unpracticed or neutral state without error):
+  const baseIntervalHours = currentStrength >= 50 ? 18 : 12;
   const strengthMultiplier = Math.max(0.6, Math.min(1.3, 0.6 + (currentStrength / 100) * 0.7));
   let calculatedHours = baseIntervalHours * strengthMultiplier;
-
-  // 5. Starred Modifier: If user marked this word with a star, review 25% sooner
   if (word.starred) {
     calculatedHours *= 0.75;
   }
-
-  // Bound interval between 4 hours and 720 hours (30 days)
-  return Math.max(4, Math.min(720, Math.round(calculatedHours)));
+  return Math.max(4, Math.min(24, Math.round(calculatedHours)));
 }
 
 /**
@@ -184,8 +194,19 @@ export function isWordOnReviewCooldown(
     return true;
   }
 
-  // If nextReviewDate is explicitly set in the future, it is on cooldown
-  if (word.nextReviewDate) {
+  // Dynamic scheduled interval check: if before scheduled practice time, it is on cooldown
+  const { lastPracticeDate } = getLastPracticeBaseline(word);
+  const baselineStr = lastPracticeDate || word.lastReviewed;
+  if (baselineStr) {
+    const baselineTime = new Date(baselineStr);
+    if (!isNaN(baselineTime.getTime())) {
+      const intervalHours = calculateNextReviewIntervalHours(word);
+      const scheduledTime = baselineTime.getTime() + intervalHours * 60 * 60 * 1000;
+      if (now.getTime() < scheduledTime) {
+        return true;
+      }
+    }
+  } else if (word.nextReviewDate) {
     const nextReviewTime = new Date(word.nextReviewDate).getTime();
     if (!isNaN(nextReviewTime) && now.getTime() < nextReviewTime) {
       return true;
@@ -216,14 +237,6 @@ export function isWordEligibleForReview(
     }
   }
 
-  // If exact nextReviewDate is present and word has been reviewed, check against it
-  if (word.nextReviewDate) {
-    const reviewTime = new Date(word.nextReviewDate).getTime();
-    if (!isNaN(reviewTime)) {
-      return now.getTime() >= reviewTime;
-    }
-  }
-
   // Compute dynamic next review date from history baseline
   const { lastPracticeDate } = getLastPracticeBaseline(word);
   const baselineStr = lastPracticeDate || word.lastReviewed;
@@ -250,15 +263,20 @@ export interface NextReviewInfo {
  * Returns human-readable review scheduling details and countdown for a word.
  */
 export function getNextReviewInfo(word: Word, now: Date = new Date()): NextReviewInfo {
-  let targetIso = word.nextReviewDate;
+  let targetIso: string;
 
   // Unreviewed words are immediately due for initial study
   if (!word.lastReviewed) {
     targetIso = new Date(now.getTime() - 1000).toISOString();
-  } else if (!targetIso) {
+  } else {
+    // Dynamic recalculation using last practice baseline and current adaptive interval
     const { lastPracticeDate } = getLastPracticeBaseline(word);
-    const fromDate = lastPracticeDate ? new Date(lastPracticeDate) : new Date();
-    targetIso = calculateNextReviewDate(word, word.strength, undefined, fromDate);
+    const fromDate = lastPracticeDate ? new Date(lastPracticeDate) : new Date(word.lastReviewed);
+    if (!isNaN(fromDate.getTime())) {
+      targetIso = calculateNextReviewDate(word, word.strength, undefined, fromDate);
+    } else {
+      targetIso = word.nextReviewDate || new Date().toISOString();
+    }
   }
 
   const targetDate = new Date(targetIso);
@@ -272,9 +290,9 @@ export function getNextReviewInfo(word: Word, now: Date = new Date()): NextRevie
     if (diffHours < 1) {
       const minutes = Math.max(1, Math.round(diffMs / (1000 * 60)));
       formattedCountdown = `In ${minutes}m`;
-    } else if (diffHours < 24) {
+    } else if (diffHours < 20) {
       formattedCountdown = `In ${Math.round(diffHours)}h`;
-    } else if (diffDays === 1) {
+    } else if (diffHours <= 36) {
       formattedCountdown = `In 1 day`;
     } else if (diffDays < 7) {
       formattedCountdown = `In ${diffDays} days`;
