@@ -209,6 +209,294 @@ export interface ConfuserPairInfo {
   exampleWithBlank?: string;
 }
 
+export interface ExtractedCompanionItem {
+  word: string;
+  translation?: string;
+  definition?: string;
+  partOfSpeech?: string;
+  hint?: string;
+  pairedWith?: string;
+}
+
+export const COMMON_PHRASAL_VERB_PATTERNS: Array<{
+  pattern: RegExp;
+  canonical: string;
+  definition: string;
+  translationMap?: Record<string, string>;
+}> = [
+  {
+    pattern: /\b(?:laugh|laughed|laughing|laughs)\s+(?:it|them|this|that|things)?\s*off\b/i,
+    canonical: "laugh it off",
+    definition: "To dismiss an embarrassing, awkward, or difficult situation with laughter",
+    translationMap: { Vietnamese: "cười xòa, xem nhẹ chuyện khó xử", Spanish: "tomarlo a risa, quitarle importancia", French: "en rire, dédramatiser" }
+  },
+  {
+    pattern: /\b(?:trip|tripped|tripping|trips)\s+on\b/i,
+    canonical: "trip on",
+    definition: "To catch one's foot on something and stumble or lose balance",
+    translationMap: { Vietnamese: "vấp phải", Spanish: "tropezar con", French: "trébucher sur" }
+  },
+  {
+    pattern: /\b(?:brush|brushed|brushing|brushes)\s+(?:it|them|this|that|things)?\s*off\b/i,
+    canonical: "brush it off",
+    definition: "To treat something dismissively or ignore criticism or setbacks",
+    translationMap: { Vietnamese: "bỏ ngoài tai, phớt lờ", Spanish: "descartar, no dar importancia", French: "passer outre" }
+  },
+  {
+    pattern: /\b(?:shrug|shrugged|shrugging|shrugs)\s+(?:it|them|this|that|things)?\s*off\b/i,
+    canonical: "shrug it off",
+    definition: "To dismiss something as unimportant or treat it casually",
+    translationMap: { Vietnamese: "nhún vai cho qua, xem nhẹ", Spanish: "encogerse de hombros", French: "hausser les épaules" }
+  },
+  {
+    pattern: /\b(?:look|looked|looking|looks)\s+forward\s+to\b/i,
+    canonical: "look forward to",
+    definition: "To await something eagerly or with anticipation",
+    translationMap: { Vietnamese: "trông mong, mong đợi", Spanish: "esperar con ansias", French: "avoir hâte de" }
+  },
+  {
+    pattern: /\b(?:take|took|taken|taking|takes)\s+into\s+account\b/i,
+    canonical: "take into account",
+    definition: "To consider or remember a fact when making an evaluation",
+    translationMap: { Vietnamese: "tính đến, xem xét đến", Spanish: "tener en cuenta", French: "prendre en compte" }
+  },
+  {
+    pattern: /\b(?:break|broke|broken|breaking|breaks)\s+down\b/i,
+    canonical: "break down",
+    definition: "To stop functioning, collapse emotionally, or analyze in detail",
+    translationMap: { Vietnamese: "hỏng hóc, suy sụp, phân tích nhỏ", Spanish: "desglosar, averiarse", French: "décomposer, tomber en panne" }
+  },
+  {
+    pattern: /\b(?:figure|figured|figuring|figures)\s+out\b/i,
+    canonical: "figure out",
+    definition: "To understand, solve, or deduce a solution",
+    translationMap: { Vietnamese: "hiểu ra, tìm ra cách", Spanish: "averiguar, descifrar", French: "comprendre, trouver" }
+  },
+  {
+    pattern: /\b(?:find|found|finding|finds)\s+out\b/i,
+    canonical: "find out",
+    definition: "To discover or learn information",
+    translationMap: { Vietnamese: "phát hiện, tìm ra", Spanish: "enterarse, descubrir", French: "découvrir" }
+  },
+  {
+    pattern: /\b(?:give|gave|given|giving|gives)\s+up\b/i,
+    canonical: "give up",
+    definition: "To cease an effort, surrender, or quit doing something",
+    translationMap: { Vietnamese: "từ bỏ, bỏ cuộc", Spanish: "rendirse, darse por vencido", French: "abandonner" }
+  },
+  {
+    pattern: /\b(?:carry|carried|carrying|carries)\s+out\b/i,
+    canonical: "carry out",
+    definition: "To perform, execute, or implement a task or plan",
+    translationMap: { Vietnamese: "tiến hành, thực hiện", Spanish: "llevar a cabo", French: "mener à bien" }
+  },
+  {
+    pattern: /\b(?:turn|turned|turning|turns)\s+out\b/i,
+    canonical: "turn out",
+    definition: "To happen in a particular way or prove to be the case",
+    translationMap: { Vietnamese: "hóa ra, kết cục là", Spanish: "resultar", French: "s'avérer" }
+  },
+  {
+    pattern: /\b(?:call|called|calling|calls)\s+off\b/i,
+    canonical: "call off",
+    definition: "To cancel an event, meeting, or plan",
+    translationMap: { Vietnamese: "hủy bỏ", Spanish: "cancelar", French: "annuler" }
+  },
+  {
+    pattern: /\b(?:put|putting|puts)\s+off\b/i,
+    canonical: "put off",
+    definition: "To delay or postpone an action or meeting",
+    translationMap: { Vietnamese: "trì hoãn", Spanish: "posponer", French: "reporter" }
+  },
+  {
+    pattern: /\b(?:cheer|cheered|cheering|cheers)\s+(?:(?:someone|him|her|them|me|us)\s+)?up\b/i,
+    canonical: "cheer up",
+    definition: "To make someone feel happier or less discouraged",
+    translationMap: { Vietnamese: "cổ vũ, làm vui lên", Spanish: "animar", French: "remonter le moral" }
+  },
+  {
+    pattern: /\b(?:come|came|coming|comes)\s+across\b/i,
+    canonical: "come across",
+    definition: "To encounter or discover by chance",
+    translationMap: { Vietnamese: "tình cờ gặp", Spanish: "toparse con", French: "tomber sur" }
+  },
+  {
+    pattern: /\b(?:get|got|getting|gets)\s+along\s+with\b/i,
+    canonical: "get along with",
+    definition: "To have a harmonious relationship with someone",
+    translationMap: { Vietnamese: "hòa thuận với", Spanish: "llevarse bien con", French: "s'entendre avec" }
+  },
+  {
+    pattern: /\b(?:run|ran|running|runs)\s+into\b/i,
+    canonical: "run into",
+    definition: "To meet someone unexpectedly or collide with something",
+    translationMap: { Vietnamese: "tình cờ gặp gỡ, va phải", Spanish: "tropezar con", French: "rencontrer par hasard" }
+  },
+  {
+    pattern: /\b(?:stand|stood|standing|stands)\s+out\b/i,
+    canonical: "stand out",
+    definition: "To be distinctly noticeable or prominent",
+    translationMap: { Vietnamese: "nổi bật", Spanish: "destacar", French: "se démarquer" }
+  },
+  {
+    pattern: /\b(?:show|showed|shown|showing|shows)\s+off\b/i,
+    canonical: "show off",
+    definition: "To display boastfully or draw attention to oneself",
+    translationMap: { Vietnamese: "khoe khoang", Spanish: "presumir", French: "frimer" }
+  },
+  {
+    pattern: /\b(?:set|setting|sets)\s+up\b/i,
+    canonical: "set up",
+    definition: "To establish, assemble, or configure something",
+    translationMap: { Vietnamese: "thiết lập, cài đặt", Spanish: "establecer, configurar", French: "mettre en place" }
+  },
+  {
+    pattern: /\b(?:point|pointed|pointing|points)\s+out\b/i,
+    canonical: "point out",
+    definition: "To draw attention to a notable fact or detail",
+    translationMap: { Vietnamese: "chỉ ra, lưu ý", Spanish: "señalar", French: "faire remarquer" }
+  },
+  {
+    pattern: /\b(?:get|got|getting|gets)\s+over\b/i,
+    canonical: "get over",
+    definition: "To recover from an illness, difficulty, or emotional shock",
+    translationMap: { Vietnamese: "vượt qua, nguôi ngoai", Spanish: "superar", French: "se remettre de" }
+  },
+  {
+    pattern: /\b(?:calm|calmed|calming|calms)\s+down\b/i,
+    canonical: "calm down",
+    definition: "To become less agitated, anxious, or angry",
+    translationMap: { Vietnamese: "bình tĩnh lại", Spanish: "calmarse", French: "se calmer" }
+  },
+  {
+    pattern: /\b(?:carry|carried|carrying|carries)\s+on\b/i,
+    canonical: "carry on",
+    definition: "To continue with an activity despite setbacks",
+    translationMap: { Vietnamese: "tiếp tục tiến bước", Spanish: "continuar", French: "continuer" }
+  },
+  {
+    pattern: /\b(?:hold|held|holding|holds)\s+on\b/i,
+    canonical: "hold on",
+    definition: "To wait for a short time or endure difficult circumstances",
+    translationMap: { Vietnamese: "chờ một chút, giữ vững", Spanish: "esperar, aguantar", French: "attendre, tenir bon" }
+  },
+  {
+    pattern: /\b(?:bring|brought|bringing|brings)\s+up\b/i,
+    canonical: "bring up",
+    definition: "To mention a topic or raise a child",
+    translationMap: { Vietnamese: "đề cập tới, nuôi nấng", Spanish: "mencionar, criar", French: "évoquer, élever" }
+  },
+  {
+    pattern: /\b(?:cut|cutting|cuts)\s+down\s+on\b/i,
+    canonical: "cut down on",
+    definition: "To reduce the amount or consumption of something",
+    translationMap: { Vietnamese: "cắt giảm bớt", Spanish: "reducir el consumo de", French: "réduire la consommation de" }
+  },
+  {
+    pattern: /\b(?:fall|fell|fallen|falling|falls)\s+for\b/i,
+    canonical: "fall for",
+    definition: "To be deceived by a trick or fall in love with someone",
+    translationMap: { Vietnamese: "bị lừa, xiêu lòng vì", Spanish: "enamorarse de, caer en la trampa", French: "se laisser séduire par, se faire avoir" }
+  },
+  {
+    pattern: /\b(?:keep|kept|keeping|keeps)\s+up\s+with\b/i,
+    canonical: "keep up with",
+    definition: "To move or progress at the same rate as someone or something",
+    translationMap: { Vietnamese: "theo kịp, bắt kịp", Spanish: "mantenerse al día con", French: "suivre le rythme" }
+  },
+  {
+    pattern: /\b(?:catch|caught|catching|catches)\s+up\s+with\b/i,
+    canonical: "catch up with",
+    definition: "To reach someone or something ahead, or discuss recent events",
+    translationMap: { Vietnamese: "đuổi kịp, hàn huyên", Spanish: "alcanzar a, ponerse al día con", French: "rattraper" }
+  },
+  {
+    pattern: /\b(?:make|made|making|makes)\s+up\s+for\b/i,
+    canonical: "make up for",
+    definition: "To compensate for something missing, lost, or flawed",
+    translationMap: { Vietnamese: "bù đắp cho", Spanish: "compensar", French: "compenser" }
+  },
+  {
+    pattern: /\b(?:look|looked|looking|looks)\s+into\b/i,
+    canonical: "look into",
+    definition: "To investigate or examine a matter thoroughly",
+    translationMap: { Vietnamese: "nghiên cứu, xem xét, điều tra", Spanish: "investigar", French: "examiner, enquêter" }
+  },
+  {
+    pattern: /\b(?:look|looked|looking|looks)\s+after\b/i,
+    canonical: "look after",
+    definition: "To take care of or supervise someone or something",
+    translationMap: { Vietnamese: "chăm sóc, trông nom", Spanish: "cuidar de", French: "s'occuper de" }
+  },
+  {
+    pattern: /\b(?:work|worked|working|works)\s+out\b/i,
+    canonical: "work out",
+    definition: "To exercise physically or find a successful resolution",
+    translationMap: { Vietnamese: "tập luyện, tiến triển êm đẹp", Spanish: "entrenar, resolverse bien", French: "s'entraîner, s'arranger" }
+  },
+  {
+    pattern: /\b(?:end|ended|ending|ends)\s+up\b/i,
+    canonical: "end up",
+    definition: "To reach a particular state, place, or situation eventually",
+    translationMap: { Vietnamese: "rốt cuộc là, kết cục là", Spanish: "terminar, acabar por", French: "finir par" }
+  }
+];
+
+/**
+ * Extracts high-value phrasal verbs, collocations, or multi-word expressions
+ * from a context sentence so they can be suggested to the learner.
+ */
+export function extractPhrasalVerbsAndCollocationsFromSentence(
+  sentence: string,
+  targetWord: string,
+  existingWords: string[] = [],
+  nativeLanguage: string = "Vietnamese"
+): ExtractedCompanionItem[] {
+  if (!sentence) return [];
+  const results: ExtractedCompanionItem[] = [];
+  const existingSet = new Set(existingWords.map(w => w.toLowerCase().trim()));
+  existingSet.add(targetWord.toLowerCase().trim());
+
+  // 1. Check known high-value phrasal verbs & idioms
+  for (const item of COMMON_PHRASAL_VERB_PATTERNS) {
+    if (item.pattern.test(sentence)) {
+      const canonicalLower = item.canonical.toLowerCase();
+      if (!existingSet.has(canonicalLower)) {
+        existingSet.add(canonicalLower);
+        const trans = item.translationMap?.[nativeLanguage] || item.translationMap?.["Vietnamese"] || "";
+        results.push({
+          word: item.canonical,
+          translation: trans,
+          definition: item.definition,
+          partOfSpeech: "phrasal verb",
+          hint: "Phrasal verb from context sentence",
+          pairedWith: targetWord
+        });
+      }
+    }
+  }
+
+  // 2. Preposition collocation with targetWord itself (e.g. "embarrassed about", "liaise with")
+  const escapedTarget = targetWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prepMatch = sentence.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
+  if (prepMatch && prepMatch[0]) {
+    const colloc = prepMatch[0].trim();
+    if (!existingSet.has(colloc.toLowerCase())) {
+      existingSet.add(colloc.toLowerCase());
+      results.push({
+        word: colloc,
+        translation: "",
+        definition: `Collocation with "${targetWord}"`,
+        partOfSpeech: "collocation",
+        hint: "Appears in context sentence",
+        pairedWith: targetWord
+      });
+    }
+  }
+
+  return results;
+}
+
 /**
  * Synthesizes a plausible context sentence with a target word if no example exists.
  */
@@ -679,19 +967,15 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
   }
 
   if (duelSentence && word.word && qSuggestions.length < 3) {
-    const escapedTarget = word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const prepMatch = duelSentence.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
-    if (prepMatch && prepMatch[0]) {
-      const colloc = prepMatch[0].trim();
-      if (!qSuggestions.some(s => s.word.toLowerCase() === colloc.toLowerCase())) {
-        qSuggestions.push({
-          word: colloc,
-          translation: "",
-          definition: `Common collocation with "${word.word}"`,
-          hint: `Appears in context sentence`,
-          partOfSpeech: "collocation",
-          pairedWith: word.word
-        });
+    const extracted = extractPhrasalVerbsAndCollocationsFromSentence(
+      duelSentence,
+      word.word,
+      qSuggestions.map(s => s.word)
+    );
+    for (const item of extracted) {
+      if (qSuggestions.length >= 3) break;
+      if (!qSuggestions.some(s => s.word.toLowerCase() === item.word.toLowerCase())) {
+        qSuggestions.push(item);
       }
     }
   }
@@ -841,19 +1125,15 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       : [];
 
     if (word.example && word.word && qSuggestions.length < 3) {
-      const escapedTarget = word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const prepMatch = word.example.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
-      if (prepMatch && prepMatch[0]) {
-        const colloc = prepMatch[0].trim();
-        if (!qSuggestions.some(s => s.word.toLowerCase() === colloc.toLowerCase())) {
-          qSuggestions.push({
-            word: colloc,
-            translation: "",
-            definition: `Common collocation with "${word.word}"`,
-            hint: `Appears in context sentence`,
-            partOfSpeech: "collocation",
-            pairedWith: word.word
-          });
+      const extracted = extractPhrasalVerbsAndCollocationsFromSentence(
+        word.example,
+        word.word,
+        qSuggestions.map(s => s.word)
+      );
+      for (const item of extracted) {
+        if (qSuggestions.length >= 3) break;
+        if (!qSuggestions.some(s => s.word.toLowerCase() === item.word.toLowerCase())) {
+          qSuggestions.push(item);
         }
       }
     }

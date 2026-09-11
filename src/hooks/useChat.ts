@@ -33,6 +33,7 @@ import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../ut
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun } from "../utils/wordNormalization";
+import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 
 interface UseChatProps {
@@ -1055,10 +1056,11 @@ export function useChat({
       }));
     }
 
-    // Fallback: If no suggestions pre-populated, derive high-value suggestions (rival duel word & context collocations)
-    if (!questionSuggestions || questionSuggestions.length === 0) {
-      const derived: QuizSuggestedWord[] = [];
-      const seenWords = new Set<string>();
+    // Fallback: If suggestions have fewer than 3 items, derive high-value suggestions (rival duel word & context phrasal verbs/collocations)
+    const sentenceToScan = resolvedSentence || currentQ.sentence || currentQ.question || "";
+    if ((!questionSuggestions || questionSuggestions.length < 3) && sentenceToScan) {
+      const derived: QuizSuggestedWord[] = questionSuggestions ? [...questionSuggestions] : [];
+      const seenWords = new Set<string>(derived.map(d => d.word.toLowerCase()));
       if (currentQ.word) seenWords.add(currentQ.word.toLowerCase());
 
       // 1. For Confuser Duel, include the rival confuser word
@@ -1077,7 +1079,7 @@ export function useChat({
             cleanRivalDef = currentQ.contrastRule;
           }
         }
-        derived.push({
+        derived.unshift({
           word: rival,
           translation: "",
           definition: cleanRivalDef,
@@ -1086,29 +1088,30 @@ export function useChat({
         });
       }
 
-      // 2. Extract preposition collocation from resolvedSentence or question (e.g. "liaise with")
-      const sentenceToScan = resolvedSentence || currentQ.sentence || currentQ.question || "";
-      if (sentenceToScan && currentQ.word) {
-        const escapedWord = currentQ.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const prepRegex = new RegExp(`\\b(${escapedWord})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i");
-        const prepMatch = sentenceToScan.match(prepRegex);
-        if (prepMatch && prepMatch[0]) {
-          const combo = prepMatch[0].trim();
-          if (!seenWords.has(combo.toLowerCase())) {
-            seenWords.add(combo.toLowerCase());
-            derived.push({
-              word: combo,
-              translation: "",
-              definition: "",
-              partOfSpeech: "collocation",
-              pairedWith: currentQ.word,
-            });
-          }
+      // 2. Extract phrasal verbs and collocations from sentenceToScan
+      const extracted = extractPhrasalVerbsAndCollocationsFromSentence(
+        sentenceToScan,
+        currentQ.word,
+        derived.map(d => d.word),
+        nativeLanguage
+      );
+      for (const item of extracted) {
+        if (derived.length >= 3) break;
+        if (!seenWords.has(item.word.toLowerCase())) {
+          seenWords.add(item.word.toLowerCase());
+          derived.push({
+            word: item.word,
+            translation: item.translation || "",
+            definition: item.definition || "",
+            hint: item.hint || `Appears in context sentence`,
+            partOfSpeech: item.partOfSpeech,
+            pairedWith: currentQ.word,
+          });
         }
       }
 
       if (derived.length > 0) {
-        questionSuggestions = derived;
+        questionSuggestions = derived.slice(0, 3);
       }
     }
 

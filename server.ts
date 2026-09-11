@@ -5,6 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "./src/utils/jsonSanitizer";
 import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
+import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quizGenerator";
 import { PROVIDER_OPTIONS } from "./src/config/llmProviders";
 
 dotenv.config();
@@ -2381,9 +2382,12 @@ ${isDuelMode
   : (hasAnyNoun 
       ? "   - Include at least 1 'picture' question with an 'imageKeyword' for a target word that is a NOUN."
       : "   - Use 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")}
-7. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
-   For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} relevant to that question.
-   SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
+7. Suggested Words & Phrasal Verbs (FOR EACH INDIVIDUAL QUESTION):
+   For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, phrasal verbs, collocations, idioms, or paired expressions in ${targetLanguage} directly relevant to that question.
+   - PHRASAL VERBS & COLLOCATIONS IN CONTEXT: If the question's context sentence contains a high-value phrasal verb, multi-word expression, or idiom (e.g., "laugh it off", "trip on", "look forward to", "break down", "take into account", "figure out"), YOU MUST PRIORITIZE including that phrasal verb or expression in "suggestedWords"!
+   - MULTI-WORD INTEGRITY RULE: For any multi-word expression, phrasal verb, collocation, or idiom, KEEP THE ENTIRE PHRASE INTACT (e.g., "laugh it off", not just "laugh"; "look forward to", not just "look"). DO NOT strip prepositions, pronouns, or particles!
+   - For 'duel' questions, include the rival 'confuserWord' or contrasting expression, and balance remaining suggestions with valuable phrasal verbs or collocations from the context sentence.
+   - SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -2403,7 +2407,7 @@ Output MUST be strictly valid JSON matching this schema:
       "contrastRule": "string (for duel type)",
       "suggestedWords": [
         {
-          "word": "string (companion word or collocation)",
+          "word": "string (companion word, phrasal verb e.g. 'laugh it off', collocation, or idiom intact)",
           "translation": "string (concise translation in ${nativeLanguage} or definition)"
         }
       ]
@@ -2428,9 +2432,10 @@ Output MUST be strictly valid JSON matching this schema:
         : (hasAnyNoun 
             ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
             : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)) +
-      `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
+      `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition). CRITICAL: Actively include high-value phrasal verbs (e.g., "laugh it off", "look forward to", "trip on"), collocations, idioms, or contrasting rival terms used in or directly relevant to the context sentence! Keep multi-word phrasal verbs intact (do NOT strip prepositions or shorten phrases).\n` +
+      `7. CRITICAL NO-BLANK REQUIREMENT FOR SENTENCE & TRANSLATION: "sentence" must be the complete, natural sentence with the target word in place (no blanks). "sentenceTranslation" must be the natural full sentence translation in ${nativeLanguage} with NO blanks, underscores, or placeholders (NEVER put "______" or "(_____)" in sentenceTranslation).`;
 
-    const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
+    const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" [companion word, phrasal verb e.g. 'laugh it off', or collocation] and "translation" or definition).`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
@@ -2779,6 +2784,51 @@ Output MUST be strictly valid JSON matching this schema:
         // Fallback: check matchingWord.suggestedWords if question didn't yield suggestions
         if (qSuggestions.length === 0 && matchingWord && Array.isArray(matchingWord.suggestedWords) && matchingWord.suggestedWords.length > 0) {
           qSuggestions = normalizeSuggestionsForQuestion(matchingWord.suggestedWords, targetWordText);
+        }
+
+        // Fallback: for Duel questions, ensure rival confuser word is included in suggested words!
+        if (isQuestionDuel || q.confuserWord) {
+          const confuserStr = String(q.confuserWord || "").trim();
+          if (confuserStr && !qSuggestions.some(s => s.word.toLowerCase() === confuserStr.toLowerCase())) {
+            let cleanRivalDef = "";
+            if (q.contrastRule) {
+              const escapedRival = confuserStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const m = q.contrastRule.match(
+                new RegExp(`(?:while|whereas)?\\s*(?:a|an)?\\s*['"]?${escapedRival}['"]?\\s*(?:refers to|means|is defined as|denotes|is)\\s*([^.;]+)`, "i")
+              );
+              if (m && m[1]) {
+                cleanRivalDef = m[1].trim();
+              } else {
+                cleanRivalDef = q.contrastRule;
+              }
+            }
+            qSuggestions.unshift({
+              word: confuserStr,
+              translation: "",
+              definition: cleanRivalDef,
+              partOfSpeech: matchingWord?.partOfSpeech || q.partOfSpeech,
+              pairedWith: targetWordText
+            });
+          }
+        }
+
+        // Fallback: Extract phrasal verbs, idioms, and collocations from resolvedSentence (e.g. "laugh it off", "trip on", "liaise with")
+        if (resolvedSentence && targetWordText) {
+          const extracted = extractPhrasalVerbsAndCollocationsFromSentence(
+            resolvedSentence,
+            targetWordText,
+            qSuggestions.map(s => s.word),
+            nativeLanguage
+          );
+          for (const item of extracted) {
+            if (qSuggestions.some(s => s.word.toLowerCase() === item.word.toLowerCase())) continue;
+            if (qSuggestions.length < 3) {
+              qSuggestions.push(item);
+            } else if (item.partOfSpeech === "phrasal verb") {
+              // Prioritize a vivid phrasal verb from the context sentence over a trailing generic synonym
+              qSuggestions[qSuggestions.length - 1] = item;
+            }
+          }
         }
 
         const wordIsNoun = isNoun(q.partOfSpeech || matchingWord.partOfSpeech);
