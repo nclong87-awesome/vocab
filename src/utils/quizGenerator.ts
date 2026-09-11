@@ -670,7 +670,14 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
     });
   }
 
-  const duelSentence = word.example || sentenceText.replace("______", word.word);
+  const blankPlaceholderRegex = /\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi;
+  let duelSentence = (word.example || sentenceText).replace(blankPlaceholderRegex, word.word);
+  let duelSentenceTranslation = word.exampleTranslation;
+  if (duelSentenceTranslation && blankPlaceholderRegex.test(duelSentenceTranslation)) {
+    const primaryTrans = (word.translation || "").split(/[;,\/]/)[0].trim() || word.translation || word.word;
+    duelSentenceTranslation = duelSentenceTranslation.replace(blankPlaceholderRegex, primaryTrans);
+  }
+
   if (duelSentence && word.word && qSuggestions.length < 3) {
     const escapedTarget = word.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const prepMatch = duelSentence.match(new RegExp(`\\b(${escapedTarget})\\s+(with|to|for|on|in|about|from|at|into|up|out|down|of|off|by|between|against)\\b`, "i"));
@@ -699,7 +706,7 @@ export function generateDuelQuestionForWord(word: Word, _targetLanguage?: string
     correctAnswer: word.word,
     hint: `Contrast Duel: '${word.word}' vs '${confuserWord}'. Pay attention to the subtle semantic boundary!`,
     sentence: duelSentence,
-    sentenceTranslation: word.exampleTranslation,
+    sentenceTranslation: duelSentenceTranslation,
     confuserWord,
     contrastRule,
     suggestedWords: qSuggestions.slice(0, 3)
@@ -862,6 +869,14 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       }
     }
 
+    const blankPlaceholderRegex = /\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi;
+    let fallbackSentence = word.example ? word.example.replace(blankPlaceholderRegex, word.word) : undefined;
+    let fallbackSentenceTranslation = word.exampleTranslation;
+    if (fallbackSentenceTranslation && blankPlaceholderRegex.test(fallbackSentenceTranslation)) {
+      const primaryTrans = (word.translation || "").split(/[;,\/]/)[0].trim() || word.translation || word.word;
+      fallbackSentenceTranslation = fallbackSentenceTranslation.replace(blankPlaceholderRegex, primaryTrans);
+    }
+
     generated.push({
       id: `q-${word.id}-${Math.random().toString(36).substring(2, 7)}`,
       wordId: word.id,
@@ -872,8 +887,8 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
       options,
       correctAnswer,
       hint: hintText,
-      sentence: word.example,
-      sentenceTranslation: word.exampleTranslation,
+      sentence: fallbackSentence,
+      sentenceTranslation: fallbackSentenceTranslation,
       imageKeyword: wordIsNoun ? imageKeyword : undefined,
       imageUrl: wordIsNoun ? imageUrl : undefined,
       imageUrls: wordIsNoun ? word.imageUrls : undefined,

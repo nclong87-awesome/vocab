@@ -244,15 +244,23 @@ function FormattedMessage({
   const renderedContent = React.useMemo(() => {
     const lines = safeText.split("\n");
 
-    // Scan for potential target words in this message block
+    // Scan for potential target words and translations in this message block
     let globalDetectedWord = targetWord || "";
-    if (!globalDetectedWord) {
-      // 1. Look for explicit *Word*: ... or *Từ*: ... lines
-      for (const l of lines) {
-        const wMatch = l.match(/^\s*\*(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)\*:\s*(?:\*\*)?([^*(\n\r]+)/i);
+    let globalDetectedTranslation = "";
+
+    // 1. Look for explicit *Word*: ... or *Từ*: ... lines
+    for (const l of lines) {
+      if (!globalDetectedWord) {
+        const wMatch = l.match(/^\s*(?:\*)?(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)(?:\*)?:\s*(?:\*\*)?([^*(\n\r]+)/i);
         if (wMatch) {
           globalDetectedWord = wMatch[1].replace(/\*\*/g, "").trim();
-          break;
+        }
+      }
+      if (!globalDetectedTranslation) {
+        const transMatch = l.match(/^\s*(?:\*)?(?:Translation|Dịch nghĩa|Nghĩa|Bản dịch|Traducción|Traduction|Übersetzung|번역|翻译|訳)(?:\*)?:\s*(?:\*\*)?["“]?([^"”\n\r*]+)["”]?/i);
+        if (transMatch) {
+          const raw = transMatch[1].replace(/\*\*/g, "").replace(/^["“]|["”]$/g, "").trim();
+          globalDetectedTranslation = raw.split(/[;,\/]/)[0].trim();
         }
       }
     }
@@ -275,6 +283,7 @@ function FormattedMessage({
     }
 
     let currentSectionWord = globalDetectedWord;
+    let currentSectionTranslation = globalDetectedTranslation;
 
     const blocks: React.ReactNode[] = [];
     let i = 0;
@@ -283,9 +292,15 @@ function FormattedMessage({
       const line = lines[i];
 
       // Check if line specifies a new word context
-      const wMatch = line.match(/^\s*\*(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)\*:\s*(?:\*\*)?([^*(\n\r]+)/i);
+      const wMatch = line.match(/^\s*(?:\*)?(?:Word|Từ|Wort|Mot|Palabra|Parola|Palavra|단어|単語|词|单词)(?:\*)?:\s*(?:\*\*)?([^*(\n\r]+)/i);
       if (wMatch) {
         currentSectionWord = wMatch[1].replace(/\*\*/g, "").trim();
+      }
+
+      const transMatch = line.match(/^\s*(?:\*)?(?:Translation|Dịch nghĩa|Nghĩa|Bản dịch|Traducción|Traduction|Übersetzung|번역|翻译|訳)(?:\*)?:\s*(?:\*\*)?["“]?([^"”\n\r*]+)["”]?/i);
+      if (transMatch) {
+        const raw = transMatch[1].replace(/\*\*/g, "").replace(/^["“]|["”]$/g, "").trim();
+        currentSectionTranslation = raw.split(/[;,\/]/)[0].trim();
       }
 
       const hMatch = line.match(/^\s*###\s*(?:\d+\.\s*)?\*\*([^*]+)\*\*/i);
@@ -429,7 +444,18 @@ function FormattedMessage({
 
       // Handle Bullet Points
       if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-        const content = line.trim().substring(2);
+        let content = line.trim().substring(2);
+        if (/^\s*\*\*(?:Example Translation|Sentence Translation|Dịch câu|Dịch câu mẫu|Traducción de la frase|例句翻译|문장 번역|Traduction de la phrase|Satzübersetzung)\*\*:/i.test(content)) {
+          const blankPlaceholderRegex = /(\(\s*_{2,}\s*\)|_{2,}|\[blank\]|\[BLANK\]|\.{3,})/gi;
+          const repl = currentSectionTranslation || globalDetectedTranslation || "";
+          if (blankPlaceholderRegex.test(content)) {
+            if (repl) {
+              content = content.replace(blankPlaceholderRegex, `**${repl}**`);
+            } else {
+              content = content.replace(blankPlaceholderRegex, "").replace(/\s{2,}/g, " ").trim();
+            }
+          }
+        }
         const matchingAction = findMatchingAction(content, suggestedActions);
 
         blocks.push(
@@ -550,16 +576,30 @@ function FormattedMessage({
       }
 
       // Handle Sentence line with audio button
-      const sentenceLineMatch = line.match(/^\s*\*(?:Sentence|Câu hoàn chỉnh|Câu mẫu|例文|Frase|Vollständiger Satz|完整例句|완성된 문장|Phrase complète)\*:\s*(?:\*\*)?["“]?([^"”\n\r]+)["”]?/i);
-      if (sentenceLineMatch && onPlayAudio) {
-        const rawSentence = sentenceLineMatch[1].replace(/\*\*/g, "").trim();
+      const sentenceLineMatch = line.match(/^\s*\*(?:Sentence|Câu hoàn chỉnh|Câu mẫu|例文|Frase|Vollständiger Satz|完整例句|완성된 문장|Phrase complète)\*:\s*(.*)/i);
+      if (sentenceLineMatch) {
+        let sentenceContent = sentenceLineMatch[1].trim();
+        const blankPlaceholderRegex = /(\(\s*_{2,}\s*\)|_{2,}|\[blank\]|\[BLANK\]|\.{3,})/gi;
+        const targetW = currentSectionWord || globalDetectedWord;
+        if (blankPlaceholderRegex.test(sentenceContent) && targetW) {
+          sentenceContent = sentenceContent.replace(blankPlaceholderRegex, `**${targetW}**`);
+        }
+        const cleanRawSentence = sentenceContent
+          .replace(/\*\*/g, "")
+          .replace(/^["“]|["”]$/g, "")
+          .trim();
+
+        const colonIdx = line.indexOf(":");
+        const prefix = line.substring(0, colonIdx + 1);
+        const formattedLine = `${prefix} ${sentenceContent}`;
+
         blocks.push(
           <div key={i} className="flex items-center gap-1.5 flex-wrap my-0.5">
-            <p className="text-stone-800 m-0">{parseInlineMarkdown(line)}</p>
-            {rawSentence && (
+            <p className="text-stone-800 m-0">{parseInlineMarkdown(formattedLine)}</p>
+            {cleanRawSentence && onPlayAudio && (
               <button
                 type="button"
-                onClick={() => onPlayAudio(rawSentence)}
+                onClick={() => onPlayAudio(cleanRawSentence)}
                 className="p-1 rounded-md bg-stone-100 hover:bg-amber-100 hover:border-amber-400 text-stone-700 hover:text-amber-950 border border-stone-200/80 transition-all cursor-pointer shadow-3xs inline-flex items-center justify-center shrink-0 active:scale-95 ml-0.5"
                 title="Listen to sentence"
                 aria-label="Listen to sentence"
@@ -569,6 +609,27 @@ function FormattedMessage({
             )}
           </div>
         );
+        i++;
+        continue;
+      }
+
+      // Handle Sentence Translation line - MUST NEVER DISPLAY BLANKS
+      const sentenceTranslationLineMatch = line.match(/^\s*\*(?:Sentence Translation|Dịch câu|Dịch câu mẫu|Traducción de la frase|例句翻译|문장 번역|Traduction de la phrase|Satzübersetzung)\*:\s*(.*)/i);
+      if (sentenceTranslationLineMatch) {
+        let transContent = sentenceTranslationLineMatch[1].trim();
+        const blankPlaceholderRegex = /(\(\s*_{2,}\s*\)|_{2,}|\[blank\]|\[BLANK\]|\.{3,})/gi;
+        const replacementWord = currentSectionTranslation || globalDetectedTranslation || "";
+        if (blankPlaceholderRegex.test(transContent)) {
+          if (replacementWord) {
+            transContent = transContent.replace(blankPlaceholderRegex, `**${replacementWord}**`);
+          } else {
+            transContent = transContent.replace(blankPlaceholderRegex, "").replace(/\s{2,}/g, " ").trim();
+          }
+        }
+        const colonIdx = line.indexOf(":");
+        const prefix = line.substring(0, colonIdx + 1);
+        const formattedLine = `${prefix} ${transContent}`;
+        blocks.push(<p key={i} className="text-stone-800 my-0.5">{parseInlineMarkdown(formattedLine)}</p>);
         i++;
         continue;
       }

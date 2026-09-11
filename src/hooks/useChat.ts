@@ -1037,25 +1037,27 @@ export function useChat({
     }
 
     // Determine complete sentence and its translation to display in feedback
+    const blankPattern = /\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi;
+
     let resolvedSentence = currentQ.sentence;
     if (!resolvedSentence) {
       const qText = currentQ.question || "";
-      if (currentQ.type === "sentence" || /_{2,}|\[blank\]|\.\.\./i.test(qText)) {
+      if (currentQ.type === "sentence" || blankPattern.test(qText)) {
         const cleanQ = qText
           .replace(/^Fill in the blank (?:for the sentence)?:\s*/i, "")
+          .replace(/^Choose the (?:word|term)[^:\n]*:?\s*/i, "")
           .replace(/^["“]|["”]$/g, "")
           .trim();
-        if (/_{2,}|\[blank\]|\.\.\./i.test(cleanQ)) {
-          resolvedSentence = cleanQ.replace(/_{2,}|\[blank\]|\.\.\./gi, currentQ.correctAnswer);
-        } else {
-          resolvedSentence = cleanQ;
-        }
+        resolvedSentence = cleanQ;
       } else if (targetWordObj?.example) {
         resolvedSentence = targetWordObj.example;
       }
     }
 
     if (resolvedSentence) {
+      if (blankPattern.test(resolvedSentence)) {
+        resolvedSentence = resolvedSentence.replace(blankPattern, currentQ.correctAnswer);
+      }
       // Highlight/bold the target word in the sentence if not already formatted with bold
       if (!resolvedSentence.includes("**")) {
         const escapedWord = currentQ.correctAnswer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1066,7 +1068,21 @@ export function useChat({
       }
       resolvedSentence = resolvedSentence.replace(/^["“]|["”]$/g, "").trim();
 
-      const resolvedSentenceTranslation = (currentQ.sentenceTranslation || targetWordObj?.exampleTranslation || "").replace(/^["“]|["”]$/g, "").trim();
+      let resolvedSentenceTranslation = (currentQ.sentenceTranslation || targetWordObj?.exampleTranslation || "").replace(/^["“]|["”]$/g, "").trim();
+
+      if (resolvedSentenceTranslation) {
+        if (blankPattern.test(resolvedSentenceTranslation)) {
+          const primaryTrans = targetWordObj?.translation
+            ? targetWordObj.translation.split(/[;,\/]/)[0].trim()
+            : (currentQ.word || currentQ.correctAnswer);
+          if (primaryTrans) {
+            resolvedSentenceTranslation = resolvedSentenceTranslation.replace(blankPattern, primaryTrans);
+          } else {
+            resolvedSentenceTranslation = resolvedSentenceTranslation.replace(blankPattern, "").replace(/\s{2,}/g, " ").trim();
+          }
+        }
+        resolvedSentenceTranslation = resolvedSentenceTranslation.replace(/^["“]|["”]$/g, "").trim();
+      }
 
       if (resolvedSentenceTranslation) {
         feedback += t("chat_quiz_sentence_details", currentAppLang, {

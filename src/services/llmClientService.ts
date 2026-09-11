@@ -2201,7 +2201,7 @@ CORE RULES:
    - If a word is NOT a noun (e.g. adjective, verb, adverb, preposition), you MUST NEVER use 'picture' type, and 'imageKeyword' MUST be omitted or empty.
    - Do NOT generate a 'picture' question unless the target word is actually a noun.
 6. Question Types:
-   - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' and 'sentenceTranslation' (${nativeLanguage}). The 'question' MUST embed the context sentence containing "______".
+   - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' (with target word filled in, NEVER with blanks) and 'sentenceTranslation' (${nativeLanguage} full natural translation, NEVER with blanks or placeholders). The 'question' MUST embed the context sentence containing "______".
    - 'definition': Match word to definition.
    - 'picture': Set concise 1-3 word 'imageKeyword' (ONLY FOR NOUNS).
    - 'duel': Pit target word against rival 'confuserWord' with a crisp 1-sentence 'contrastRule'.
@@ -2232,8 +2232,8 @@ Output MUST be strictly valid JSON matching this schema:
       "options": ["string", "string"],
       "correctAnswer": "string (MUST be exactly the target word itself)",
       "hint": "string",
-      "sentence": "string (complete sentence)",
-      "sentenceTranslation": "string (translation in ${nativeLanguage})",
+      "sentence": "string (complete sentence with target word filled in, NEVER with '______' or blanks)",
+      "sentenceTranslation": "string (translation in ${nativeLanguage} of complete sentence, NEVER contain blanks or '______')",
       "imageKeyword": "string (ONLY for nouns: 1-3 word English search term, omit/empty for non-nouns)",
       "confuserWord": "string (for duel type)",
       "contrastRule": "string (for duel type)",
@@ -2264,7 +2264,8 @@ Output MUST be strictly valid JSON matching this schema:
       : (hasAnyNoun 
           ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
           : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)) +
-    `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).`;
+    `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).\n` +
+    `7. CRITICAL NO-BLANK REQUIREMENT FOR SENTENCE & TRANSLATION: "sentence" must be the complete, natural sentence with the target word in place (no blanks). "sentenceTranslation" must be the natural full sentence translation in ${nativeLanguage} with NO blanks, underscores, or placeholders (NEVER put "______" or "(_____)" in sentenceTranslation).`;
 
   const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" and "translation" or definition).`;
 
@@ -2495,6 +2496,7 @@ Output MUST be strictly valid JSON matching this schema:
         }
 
         let resolvedSentence = q.sentence || (matchingWord.example ? matchingWord.example : undefined);
+        const blankPlaceholderRegex = /\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi;
         if (!resolvedSentence || !isQuestionSentenceValid(resolvedSentence)) {
           if (rawQuestion.includes("______")) {
             const quoteMatch = rawQuestion.match(/"([^"]+)"/);
@@ -2507,8 +2509,15 @@ Output MUST be strictly valid JSON matching this schema:
             resolvedSentence = getDefaultContextSentence(correctAns, matchingWord.partOfSpeech || q.partOfSpeech);
           }
         }
+        if (resolvedSentence && blankPlaceholderRegex.test(resolvedSentence)) {
+          resolvedSentence = resolvedSentence.replace(blankPlaceholderRegex, correctAns);
+        }
 
-        const resolvedSentenceTranslation = q.sentenceTranslation || matchingWord.exampleTranslation || undefined;
+        let resolvedSentenceTranslation = q.sentenceTranslation || matchingWord.exampleTranslation || undefined;
+        if (resolvedSentenceTranslation && blankPlaceholderRegex.test(resolvedSentenceTranslation)) {
+          const primaryTrans = (matchingWord.translation || "").split(/[;,\/]/)[0].trim() || matchingWord.translation || correctAns;
+          resolvedSentenceTranslation = resolvedSentenceTranslation.replace(blankPlaceholderRegex, primaryTrans);
+        }
 
         const rawQuestionSuggestions = Array.isArray(q.suggestedWords)
           ? q.suggestedWords
