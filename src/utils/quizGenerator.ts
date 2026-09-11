@@ -755,24 +755,13 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
 
   allWords.forEach((word, index) => {
     const wordIsNoun = isNoun(word.partOfSpeech);
-    const types: ('definition' | 'sentence' | 'listening' | 'picture' | 'duel')[] = [
+    const types: ('definition' | 'sentence' | 'listening' | 'picture')[] = [
       'definition', 
       'sentence',
       'listening',
-      ...(wordIsNoun ? ['picture' as const] : []),
-      'duel'
+      ...(wordIsNoun ? ['picture' as const] : [])
     ];
     let type = (index === pictureQuestionIndex && wordIsNoun) ? 'picture' : types[Math.floor(Math.random() * types.length)];
-
-    // If type is duel, generate a Confuser Duel question directly
-    if (type === 'duel') {
-      const duelQ = generateDuelQuestionForWord(word, targetLanguage);
-      generated.push({
-        ...duelQ,
-        partOfSpeech: word.partOfSpeech,
-      });
-      return;
-    }
 
     // If definition contains native non-target language, avoid definition type to preserve target language restriction
     if (type === 'definition' && containsNonTargetLanguage(word.definition, targetLanguage)) {

@@ -481,121 +481,6 @@ export function useChat({
       return;
     }
 
-    // --- BALANCED LEARNING LOOP STEP 3: Retrieval Quiz (Core Reviews + Immediate Warm-up Check) ---
-    if (practiceMode === "sandwich_quiz") {
-      const warmupIds = new Set(options?.warmupWordIds || []);
-      const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
-      
-      // Select core review words (excluding warm-up words from Step 1)
-      const nonWarmupWords = activeWords.filter((w) => !warmupIds.has(w.id));
-      const nonCooldownNonWarmup = nonWarmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
-      const coreReviewWords = getQuizCandidateWords(nonCooldownNonWarmup, { maxCandidates: 3 });
-
-      // Build balanced session quiz words (max 3):
-      // Exclude warm-up words that are on review cooldown from immediate quiz re-testing
-      const eligibleWarmup = warmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
-      const selectedWarmup = eligibleWarmup.slice(0, 1);
-      const combinedWords = [...coreReviewWords.slice(0, 2)];
-      for (const w of selectedWarmup) {
-        if (!combinedWords.some((cw) => cw.id === w.id)) {
-          combinedWords.push(w);
-        }
-      }
-      const effectiveQuizWords = (combinedWords.length > 0
-        ? combinedWords
-        : (coreReviewWords.length > 0 ? coreReviewWords : nonCooldownNonWarmup)).slice(0, 3);
-
-      const actualReviewCount = coreReviewWords.length;
-      const actualWarmupCount = effectiveQuizWords.filter((w) => warmupIds.has(w.id)).length;
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      const configForServer = startTypingWithConfig(configToUse);
-
-      try {
-        const quizResult = await generateAiQuizQuestionsService({
-          words: effectiveQuizWords.slice(0, 3),
-          targetLanguage,
-          nativeLanguage,
-          llmConfig: configForServer,
-          stats,
-          signal: controller.signal,
-          practiceMode: "sandwich_quiz",
-        });
-
-        const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
-        const generatedQuestions = rawQuestions.slice(0, 3);
-        const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
-        const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
-        const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
-
-        if (!generatedQuestions || generatedQuestions.length === 0) {
-          throw new Error("No quiz questions were generated.");
-        }
-
-        const firstQ = generatedQuestions[0];
-        const isFirstQWarmup = warmupIds.has(firstQ.wordId);
-        const qTag = firstQ.type === "duel"
-          ? t("chat_sandwich_q_duel_tag", currentAppLang)
-          : isFirstQWarmup
-          ? t("chat_sandwich_q_warmup_tag", currentAppLang)
-          : t("chat_sandwich_q_review_tag", currentAppLang);
-
-        setActiveQuiz({
-          questions: generatedQuestions,
-          currentIndex: 0,
-          score: 0,
-          correctIds: [],
-          incorrectIds: [],
-          isSandwichSession: true,
-          sandwichStep: 2,
-          warmupWordIds: Array.from(warmupIds),
-        });
-
-        const introMsg: ChatMessage = {
-          id: `sandwich-quiz-start-${Date.now()}`,
-          role: "assistant",
-          content: t("chat_sandwich_quiz_intro", currentAppLang, {
-            reviewCount: String(actualReviewCount),
-            warmupCount: String(actualWarmupCount),
-            total: String(generatedQuestions.length),
-            question: firstQ.question,
-            qTag: qTag,
-          }),
-          timestamp: new Date().toISOString(),
-          audioWord: firstQ.type === "listening" ? firstQ.word : undefined,
-          quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
-          imageUrl: firstQ.imageUrl,
-          imageKeyword: firstQ.imageKeyword,
-          partOfSpeech: firstQ.partOfSpeech,
-          suggestedActions: firstQ.options?.map((opt: any) => ({
-            label: opt,
-            action: "quiz_answer",
-            payload: { answer: opt, wordId: firstQ.wordId },
-          })) || [
-            { label: firstQ.correctAnswer, action: "quiz_answer", payload: { answer: firstQ.correctAnswer, wordId: firstQ.wordId } },
-          ],
-          provider,
-          model,
-          responseTimeMs,
-        };
-
-        setChatMessages([introMsg]);
-      } catch (e: any) {
-        if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
-          console.log("Quiz generation was cancelled by user.");
-          return;
-        }
-        console.error("Error starting sandwich quiz:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode, options), "quiz-error");
-      } finally {
-        setIsTyping(false);
-      }
-      return;
-    }
-
-
-
     // --- CONFUSER DUEL (CONTRAST MATCH) MODE ---
     if (practiceMode === "confuser_duel") {
       // Candidate pool: strictly new/unlearned words OR words with unresolved quiz mistakes
@@ -717,15 +602,16 @@ export function useChat({
       return;
     }
 
-    // Determine if we should launch Quiz mode (only for quiz_only)
-    if (practiceMode === "quiz_only") {
+    // Determine if we should launch Quiz mode (quiz_only OR sandwich_quiz Step 2)
+    if (practiceMode === "quiz_only" || practiceMode === "sandwich_quiz") {
+      const isSandwich = practiceMode === "sandwich_quiz";
       const dueReviews = getDueReviewCandidates(activeWords);
       const learnedWords = activeWords.filter(isWordLearnedOrStudied);
 
       // Prefer due reviews first; fallback to all learned/review words
       const candidateReviewPool = dueReviews.length > 0 ? dueReviews : learnedWords;
 
-      if (candidateReviewPool.length === 0) {
+      if (candidateReviewPool.length === 0 && !isSandwich) {
         const noCandidateMsg: ChatMessage = {
           id: `practice-no-candidates-${Date.now()}`,
           role: "assistant",
@@ -750,6 +636,28 @@ export function useChat({
         effectiveQuizWords = candidateReviewPool.slice(0, 3);
       }
 
+      // Top up to guarantee exactly 3 questions if more words are available in candidate pool or activeWords
+      if (effectiveQuizWords.length < 3) {
+        const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
+        for (const w of candidateReviewPool) {
+          if (!existingIds.has(w.id)) {
+            effectiveQuizWords.push(w);
+            existingIds.add(w.id);
+            if (effectiveQuizWords.length >= 3) break;
+          }
+        }
+      }
+      if (effectiveQuizWords.length < 3) {
+        const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
+        for (const w of activeWords) {
+          if (!existingIds.has(w.id)) {
+            effectiveQuizWords.push(w);
+            existingIds.add(w.id);
+            if (effectiveQuizWords.length >= 3) break;
+          }
+        }
+      }
+
       if (effectiveQuizWords.length === 0) {
         const noCandidateMsg: ChatMessage = {
           id: `practice-no-candidates-${Date.now()}`,
@@ -765,7 +673,7 @@ export function useChat({
         return;
       }
 
-      // Found Quiz candidates: proceed to generate and start Quiz
+      // Found Quiz candidates: proceed to generate and start Quiz using standard quiz generator
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const configForServer = startTypingWithConfig(configToUse);
@@ -778,6 +686,7 @@ export function useChat({
           llmConfig: configForServer,
           stats,
           signal: controller.signal,
+          practiceMode: "quiz_only",
         });
 
         const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
@@ -798,15 +707,26 @@ export function useChat({
           score: 0,
           correctIds: [],
           incorrectIds: [],
+          isSandwichSession: isSandwich,
+          sandwichStep: isSandwich ? 2 : undefined,
+          warmupWordIds: options?.warmupWordIds,
         });
 
         const introMsg: ChatMessage = {
-          id: `quiz-start-${Date.now()}`,
+          id: isSandwich ? `sandwich-quiz-start-${Date.now()}` : `quiz-start-${Date.now()}`,
           role: "assistant",
-          content: t("chat_quiz_intro", currentAppLang, {
-            count: String(generatedQuestions.length),
-            question: firstQ.question,
-          }),
+          content: isSandwich
+            ? t("chat_sandwich_quiz_intro", currentAppLang, {
+                reviewCount: String(effectiveQuizWords.length),
+                warmupCount: "0",
+                total: String(generatedQuestions.length),
+                question: firstQ.question,
+                qTag: t("chat_sandwich_q_review_tag", currentAppLang),
+              })
+            : t("chat_quiz_intro", currentAppLang, {
+                count: String(generatedQuestions.length),
+                question: firstQ.question,
+              }),
           timestamp: new Date().toISOString(),
           audioWord: firstQ.type === "listening" ? firstQ.word : undefined,
           quizSpeechText: (firstQ.type === "listening" || firstQ.type === "spelling") ? firstQ.word : firstQ.question,
@@ -831,8 +751,8 @@ export function useChat({
           console.log("Quiz generation was cancelled by user.");
           return;
         }
-        console.error("Error starting chat quiz:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "quiz-error");
+        console.error("Error starting quiz:", e);
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode, options), "quiz-error");
       } finally {
         setIsTyping(false);
       }
@@ -1228,7 +1148,7 @@ export function useChat({
       const nextQ = activeQuiz.questions[nextIndex];
       const isNextQWarmup = activeQuiz.isSandwichSession && activeQuiz.warmupWordIds?.includes(nextQ.wordId);
       const qTag = activeQuiz.isSandwichSession
-        ? ` (${nextQ.type === "duel" ? t("chat_sandwich_q_duel_tag", currentAppLang) : isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
+        ? ` (${activeQuiz.sandwichStep === 1 ? t("chat_sandwich_q_duel_tag", currentAppLang) : isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
         : "";
 
       const now = Date.now();

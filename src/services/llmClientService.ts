@@ -2168,7 +2168,6 @@ export async function generateAiQuizQuestionsService(
   }
 
   const isDuelMode = practiceMode === "confuser_duel" || practiceMode === "sandwich_duel";
-  const isSandwichMode = practiceMode === "sandwich_quiz" || practiceMode === "balanced";
 
   // Strictly deduplicate target words so no equivalent or duplicate words are sent to the AI
   const uniqueInputWords: Word[] = [];
@@ -2208,15 +2207,9 @@ CORE RULES:
      CRITICAL REQUIREMENT FOR 'duel': The 'question' MUST be a contextual fill-in-the-blank sentence where "______" represents the target word in a natural context (e.g. 'Choose the word that accurately fits the context:\n"We ______ finish work at five, but today we stayed late."'). NEVER output a vague instruction like 'Choose the word that best matches the given nuance (_____).' without a complete context sentence!
 ${isDuelMode 
   ? "   - Duel Mode: ALL questions MUST be 'duel' type with 'confuserWord', 'contrastRule', and a full context sentence containing '______'." 
-  : isSandwichMode 
-  ? (hasAnyNoun && expectedCount >= 2 
-      ? "   - Balanced Session: Blend question types across the different words; include 1 'duel' question (with context sentence) and 1 'picture' question for a NOUN target word." 
-      : hasAnyNoun 
-      ? "   - Balanced Session: Include 1 'picture' question for a NOUN target word with an 'imageKeyword'."
-      : "   - Balanced Session: Blend 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")
   : (hasAnyNoun 
-      ? "   - Include at least 1 'picture' question with an 'imageKeyword' for a target word that is a NOUN."
-      : "   - Use 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")}
+      ? "   - Include at least 1 'picture' question with an 'imageKeyword' for a target word that is a NOUN. Other questions must be 'sentence', 'definition', or 'listening' (NEVER use 'duel' type)."
+      : "   - Use 'sentence', 'definition', or 'listening' questions (NEVER use 'duel' type, no picture questions since no word is a noun).")}
 7. Suggested Words (FOR EACH INDIVIDUAL QUESTION):
    For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, collocations, or paired words in ${targetLanguage} relevant to that question.
    SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
@@ -2255,15 +2248,9 @@ Output MUST be strictly valid JSON matching this schema:
     `4. IMAGES AND PICTURE QUESTIONS: ONLY use 'picture' type or provide 'imageKeyword' if the target word is a NOUN. For adjectives, verbs, adverbs, etc., do NOT use 'picture' type and do NOT provide 'imageKeyword'.\n` +
     (isDuelMode 
       ? `5. ALL questions must be 'duel' with 'confuserWord', 'contrastRule', and a full context sentence containing '______' (never a sentence-less prompt).\n` 
-      : isSandwichMode 
-      ? (hasAnyNoun && expectedCount >= 2 
-          ? `5. Include 1 'duel' (with 'confuserWord', 'contrastRule', and full context sentence with '______') and 1 'picture' question for a NOUN target word.\n`
-          : hasAnyNoun
-          ? `5. Include 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
-          : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)
       : (hasAnyNoun 
-          ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
-          : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)) +
+          ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word. Other questions must be 'sentence', 'definition', or 'listening' (do NOT use 'duel').\n`
+          : `5. Use 'sentence', 'definition', or 'listening' questions (do NOT use 'duel').\n`)) +
     `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition).\n` +
     `7. CRITICAL NO-BLANK REQUIREMENT FOR SENTENCE & TRANSLATION: "sentence" must be the complete, natural sentence with the target word in place (no blanks). "sentenceTranslation" must be the natural full sentence translation in ${nativeLanguage} with NO blanks, underscores, or placeholders (NEVER put "______" or "(_____)" in sentenceTranslation).`;
 
@@ -2410,7 +2397,7 @@ Output MUST be strictly valid JSON matching this schema:
         const rawOptions = Array.isArray(q.options) ? q.options : [];
 
         // If duel, ensure rival confuser word is present in options
-        if ((isDuelMode || q.type === "duel") && q.confuserWord) {
+        if (isDuelMode && q.confuserWord) {
           const confuserStr = String(q.confuserWord).trim();
           if (confuserStr && confuserStr.toLowerCase() !== correctAnsLower) {
             cleanOptions.push(confuserStr);
@@ -2429,7 +2416,7 @@ Output MUST be strictly valid JSON matching this schema:
         }
 
         // 2. If distractors were insufficient or rejected, generate quality confusers
-        const minOptionsNeeded = (isDuelMode || q.type === "duel") ? 2 : 4;
+        const minOptionsNeeded = isDuelMode ? 2 : 4;
         if (cleanOptions.length < minOptionsNeeded) {
           const extraDistractors = generateConfusers(matchingWord.word);
           for (const d of extraDistractors) {
@@ -2452,8 +2439,8 @@ Output MUST be strictly valid JSON matching this schema:
           }
         }
 
-        const isQuestionDuel = isDuelMode || q.type === "duel";
-        const questionType = isQuestionDuel ? 'duel' : (q.type || 'definition');
+        const isQuestionDuel = isDuelMode;
+        const questionType = isQuestionDuel ? 'duel' : (q.type === 'duel' ? (matchingWord.example ? 'sentence' : 'definition') : (q.type || 'definition'));
 
         const wordIsNoun = isNoun(matchingWord.partOfSpeech || q.partOfSpeech);
         const resolvedType = (questionType === "picture" && !wordIsNoun) ? (matchingWord.example ? "sentence" : "definition") : questionType;
@@ -2599,8 +2586,8 @@ Output MUST be strictly valid JSON matching this schema:
           imageKeyword: keywordText,
           imageUrl: imgUrl,
           suggestedWords: qSuggestions.length > 0 ? qSuggestions.slice(0, 3) : [],
-          confuserWord: q.confuserWord || undefined,
-          contrastRule: q.contrastRule || undefined
+          confuserWord: isQuestionDuel ? (q.confuserWord || undefined) : undefined,
+          contrastRule: isQuestionDuel ? (q.contrastRule || undefined) : undefined
         });
       }
 
