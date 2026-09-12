@@ -3220,6 +3220,7 @@ IF INTENT IS "submission":
 - Evaluate their translation against the native sentence and ideal target translation.
 - Calculate an overall accuracy score from 0 to 100.
 - Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
+- Provide "userTranslation": the learner's submitted translation attempt.
 - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing.
 - List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
 - Provide "correctedSentence": the optimal target translation.
@@ -3235,6 +3236,7 @@ Return STRICTLY raw JSON matching:
   "evaluation": {
     "score": 85,
     "scoreLabel": "Great Job! 👏",
+    "userTranslation": "learner's submitted translation text",
     "whatWentWell": "Praise paragraph...",
     "areasForImprovement": "Improvement paragraph...",
     "correctedSentence": "Optimal target translation",
@@ -3254,12 +3256,15 @@ Return STRICTLY raw JSON matching:
 }`;
 
     const systemInstruction = `You are an AI Language Evaluation Coach. Classify intent as assistance or submission and return strict JSON output.`;
-    const schemaDescription = `JSON object with intent ("assistance" | "submission"), agentReply, askedWord, and evaluation object if submission.`;
+    const schemaDescription = `JSON object with intent ("assistance" | "submission"), agentReply, askedWord, and evaluation object (including userTranslation) if submission.`;
 
     const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, controller.signal);
     const parsed = cleanAndParseJson(rawResult);
 
     if (parsed && (parsed.intent === "assistance" || parsed.intent === "submission")) {
+      if (parsed.evaluation) {
+        parsed.evaluation.userTranslation = parsed.evaluation.userTranslation?.trim() || userMessage.trim();
+      }
       return res.json(parsed);
     }
     throw new Error("Failed to parse valid challenge turn response from LLM");

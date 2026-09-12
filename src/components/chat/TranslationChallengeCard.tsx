@@ -24,6 +24,7 @@ interface TranslationChallengeCardProps {
   responseTimeMs?: number;
   words?: Word[];
   onAddWord?: (wordText?: string, hint?: string, extraData?: Partial<Word>) => void;
+  onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   showToast?: (msg: string) => void;
 }
@@ -31,11 +32,13 @@ interface TranslationChallengeCardProps {
 export default function TranslationChallengeCard({
   challenge,
   evaluation,
+  appLanguage: _appLanguage,
   provider,
   model,
   responseTimeMs,
   words = [],
   onAddWord,
+  onAddIncompleteWord,
   onAddMultipleWords,
   showToast,
 }: TranslationChallengeCardProps) {
@@ -46,11 +49,30 @@ export default function TranslationChallengeCard({
   const activeModel = model || challenge?.model || evaluation?.model;
   const activeResponseTimeMs = responseTimeMs ?? challenge?.responseTimeMs ?? evaluation?.responseTimeMs;
 
-  const handleAddSingleWord = (item: ChallengeSuggestedVocab | { word: string; translation: string; hint?: string; partOfSpeech?: string }) => {
+  const handleAddSingleWord = (
+    item:
+      | ChallengeSuggestedVocab
+      | { word: string; translation: string; hint?: string; partOfSpeech?: string; definition?: string }
+  ) => {
     const wordKey = item.word.toLowerCase();
     if (addedWordKeys[wordKey] || isWordInCollection(words, item.word)) return;
 
-    if (onAddWord) {
+    if (onAddIncompleteWord) {
+      onAddIncompleteWord({
+        word: item.word.trim(),
+        translation: item.translation || "",
+        definition: (item as any).definition || item.translation || `Key term from translation challenge`,
+        partOfSpeech: item.partOfSpeech || "expression",
+        category: "Challenge Practice",
+        completed: false,
+        context: challenge?.nativeSentence
+          ? `From challenge: "${challenge.nativeSentence}"`
+          : evaluation?.correctedSentence
+          ? `From challenge: "${evaluation.correctedSentence}"`
+          : undefined,
+      });
+      setAddedWordKeys((prev) => ({ ...prev, [wordKey]: true }));
+    } else if (onAddWord) {
       onAddWord(item.word, (item as any).hint || item.translation, {
         translation: item.translation,
         definition: (item as any).definition || `Key term from translation challenge`,
@@ -63,33 +85,57 @@ export default function TranslationChallengeCard({
   };
 
   const handleAddAllVocab = (vocabList: ChallengeSuggestedVocab[]) => {
-    if (!onAddMultipleWords) return;
     const itemsToAdd = vocabList.filter(
       (v) => !addedWordKeys[v.word.toLowerCase()] && !isWordInCollection(words, v.word)
     );
     if (itemsToAdd.length === 0) return;
 
-    const formattedWords = itemsToAdd.map((v) => ({
-      word: v.word,
-      translation: v.translation,
-      definition: v.definition || `Key term from translation challenge`,
-      partOfSpeech: v.partOfSpeech || "expression",
-      category: "Challenge Practice",
-      learned: false,
-      starred: false,
-      createdAt: new Date().toISOString(),
-      lastReviewed: null,
-      strength: 0,
-    }));
+    if (onAddIncompleteWord) {
+      itemsToAdd.forEach((v) => {
+        onAddIncompleteWord({
+          word: v.word.trim(),
+          translation: v.translation || "",
+          definition: v.definition || v.translation || `Key term from translation challenge`,
+          partOfSpeech: v.partOfSpeech || "expression",
+          category: "Challenge Practice",
+          completed: false,
+          context: evaluation?.correctedSentence
+            ? `From challenge: "${evaluation.correctedSentence}"`
+            : undefined,
+        });
+      });
+      const newKeys = { ...addedWordKeys };
+      itemsToAdd.forEach((v) => {
+        newKeys[v.word.toLowerCase()] = true;
+      });
+      setAddedWordKeys(newKeys);
+      return;
+    }
 
-    onAddMultipleWords(formattedWords);
+    if (onAddMultipleWords) {
+      const formattedWords = itemsToAdd.map((v) => ({
+        word: v.word,
+        translation: v.translation,
+        definition: v.definition || `Key term from translation challenge`,
+        partOfSpeech: v.partOfSpeech || "expression",
+        category: "Challenge Practice",
+        learned: false,
+        starred: false,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        lastReviewed: null,
+        strength: 0,
+      }));
 
-    const newKeys = { ...addedWordKeys };
-    itemsToAdd.forEach((v) => {
-      newKeys[v.word.toLowerCase()] = true;
-    });
-    setAddedWordKeys(newKeys);
-    showToast?.(`Added ${itemsToAdd.length} words to your collection!`);
+      onAddMultipleWords(formattedWords);
+
+      const newKeys = { ...addedWordKeys };
+      itemsToAdd.forEach((v) => {
+        newKeys[v.word.toLowerCase()] = true;
+      });
+      setAddedWordKeys(newKeys);
+      showToast?.(`Added ${itemsToAdd.length} words to your collection!`);
+    }
   };
 
   // 1. RENDER CHALLENGE PROMPT CARD
@@ -157,17 +203,28 @@ export default function TranslationChallengeCard({
                 return (
                   <div
                     key={i}
-                    className="px-2.5 py-1 bg-stone-50 border border-stone-200 rounded-lg flex items-center gap-2"
+                    onClick={() => {
+                      if (!inCol) handleAddSingleWord(kw);
+                    }}
+                    title={inCol ? "Saved in collection" : "Click to temporarily add to collection as incomplete word"}
+                    className={`px-2.5 py-1 rounded-lg flex items-center gap-2 border transition-all ${
+                      inCol
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-default"
+                        : "bg-stone-50 hover:bg-amber-50/70 border-stone-200 hover:border-amber-300 cursor-pointer active:scale-95"
+                    }`}
                   >
                     <span className="font-bold text-stone-900">{kw.word}</span>
                     <span className="text-stone-500">({kw.translation})</span>
-                    {onAddWord && (
+                    {(onAddIncompleteWord || onAddWord) && (
                       <button
                         type="button"
-                        onClick={() => handleAddSingleWord(kw)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddSingleWord(kw);
+                        }}
                         disabled={inCol}
-                        className="ml-1 text-amber-600 hover:text-amber-800 disabled:text-stone-300 transition-colors cursor-pointer"
-                        title={inCol ? "Saved" : "Add to collection"}
+                        className="ml-1 text-amber-600 hover:text-amber-800 disabled:text-emerald-700 transition-colors cursor-pointer"
+                        title={inCol ? "Saved" : "Add to collection (incomplete)"}
                       >
                         {inCol ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Plus className="w-3.5 h-3.5" />}
                       </button>
@@ -224,25 +281,32 @@ export default function TranslationChallengeCard({
         </div>
 
         {/* Translation Comparison Block */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="p-3 bg-stone-50 border border-stone-200/70 rounded-xl space-y-1">
-            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider font-mono block">
-              Your Submission
-            </span>
-            <p className="text-xs sm:text-sm font-medium text-stone-800 break-words">
-              "{evaluation.userTranslation}"
-            </p>
-          </div>
+        {(() => {
+          const userSub = evaluation.userTranslation?.trim();
+          return (
+            <div className={`grid grid-cols-1 ${userSub ? "md:grid-cols-2" : ""} gap-3`}>
+              {userSub && (
+                <div className="p-3 bg-stone-50 border border-stone-200/70 rounded-xl space-y-1">
+                  <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider font-mono block">
+                    Your Submission
+                  </span>
+                  <p className="text-xs sm:text-sm font-medium text-stone-800 break-words">
+                    "{userSub}"
+                  </p>
+                </div>
+              )}
 
-          <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider font-mono block">
-              Ideal Target Translation
-            </span>
-            <p className="text-xs sm:text-sm font-bold text-emerald-950 break-words">
-              "{evaluation.correctedSentence}"
-            </p>
-          </div>
-        </div>
+              <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1">
+                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider font-mono block">
+                  Ideal Target Translation
+                </span>
+                <p className="text-xs sm:text-sm font-bold text-emerald-950 break-words">
+                  "{evaluation.correctedSentence}"
+                </p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Insights Section */}
         <div className="space-y-2 text-xs">
@@ -275,7 +339,7 @@ export default function TranslationChallengeCard({
                 <Brain className="w-3.5 h-3.5 text-amber-600" />
                 <span>Featured Challenge Vocabulary</span>
               </span>
-              {onAddMultipleWords && !allVocabAdded && (
+              {(onAddIncompleteWord || onAddMultipleWords) && !allVocabAdded && (
                 <button
                   type="button"
                   onClick={() => handleAddAllVocab(evaluation.suggestedVocabulary)}
@@ -293,7 +357,15 @@ export default function TranslationChallengeCard({
                 return (
                   <div
                     key={idx}
-                    className="p-2.5 bg-stone-50 border border-stone-200/80 rounded-xl flex items-center justify-between gap-2"
+                    onClick={() => {
+                      if (!inCol) handleAddSingleWord(v);
+                    }}
+                    title={inCol ? "Saved in collection" : "Click to temporarily add to collection as incomplete word"}
+                    className={`p-2.5 border rounded-xl flex items-center justify-between gap-2 transition-all ${
+                      inCol
+                        ? "bg-stone-50/90 border-stone-200/80 cursor-default"
+                        : "bg-stone-50 hover:bg-amber-50/70 border-stone-200/80 hover:border-amber-300 cursor-pointer active:scale-[0.99]"
+                    }`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -305,14 +377,17 @@ export default function TranslationChallengeCard({
                       <p className="text-[11px] text-stone-600 truncate">{v.translation}</p>
                     </div>
 
-                    {onAddWord && (
+                    {(onAddIncompleteWord || onAddWord) && (
                       <button
                         type="button"
-                        onClick={() => handleAddSingleWord(v)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddSingleWord(v);
+                        }}
                         disabled={inCol}
                         className={`px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
                           inCol
-                            ? "bg-emerald-100 text-emerald-800 opacity-80"
+                            ? "bg-emerald-100 text-emerald-800 opacity-80 cursor-default"
                             : "bg-stone-900 hover:bg-stone-800 text-amber-400 shadow-2xs active:scale-95"
                         }`}
                       >

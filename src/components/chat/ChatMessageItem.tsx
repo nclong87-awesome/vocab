@@ -883,13 +883,30 @@ function ChatMessageItem({
           ) : (msg.challengeData || msg.challengeEvaluation) ? (
             <TranslationChallengeCard
               challenge={msg.challengeData}
-              evaluation={msg.challengeEvaluation}
+              evaluation={(() => {
+                if (!msg.challengeEvaluation) return undefined;
+                if (!msg.challengeEvaluation.userTranslation?.trim() && messages && messages.length > 0) {
+                  const myIdx = messages.findIndex((m) => m.id === msg.id);
+                  if (myIdx > 0) {
+                    for (let i = myIdx - 1; i >= 0; i--) {
+                      if (messages[i].role === "user" && messages[i].content?.trim()) {
+                        return {
+                          ...msg.challengeEvaluation,
+                          userTranslation: messages[i].content.trim(),
+                        };
+                      }
+                    }
+                  }
+                }
+                return msg.challengeEvaluation;
+              })()}
               appLanguage={currentAppLang}
               provider={msg.provider || msg.challengeData?.provider}
               model={msg.model || msg.challengeData?.model}
               responseTimeMs={msg.responseTimeMs ?? msg.challengeData?.responseTimeMs}
               words={words}
               onAddWord={onAddWord}
+              onAddIncompleteWord={onAddIncompleteWord}
               onAddMultipleWords={onAddMultipleWords}
               showToast={showToast}
             />
@@ -1231,7 +1248,22 @@ function ChatMessageItem({
                           key={idx}
                           className="px-3 py-2 sm:py-2.5 bg-stone-50/90 hover:bg-stone-50 border border-stone-200/90 rounded-xl flex items-center justify-between gap-2.5 transition-all shadow-3xs"
                         >
-                          <div className="min-w-0 flex-1">
+                          <div
+                            onClick={() => {
+                              if (!isAlreadyInWords) {
+                                const isPv = isPhrasalVerb(sw.word, sw.partOfSpeech, sw.category);
+                                handleAddSuggestedWord(sw.word, displayMeaning || sw.translation || sw.definition, {
+                                  word: sw.word,
+                                  translation: sw.translation || displayMeaning || "",
+                                  definition: sw.definition || displayMeaning || "",
+                                  partOfSpeech: isPv ? "phrasal verb" : sw.partOfSpeech,
+                                  category: isPv ? "Phrasal Verbs" : sw.category,
+                                });
+                              }
+                            }}
+                            className={`min-w-0 flex-1 ${!isAlreadyInWords ? "cursor-pointer hover:opacity-85 transition-opacity" : ""}`}
+                            title={isAlreadyInWords ? undefined : "Click to temporarily add to collection as incomplete word"}
+                          >
                             {(() => {
                               const isPv = isPhrasalVerb(sw.word, sw.partOfSpeech, sw.category);
                               return (

@@ -1720,12 +1720,19 @@ export function useChat({
         } else {
           // Submission completed!
           const evalRes = result.evaluation!;
+          if (!evalRes.userTranslation || !evalRes.userTranslation.trim()) {
+            evalRes.userTranslation = userText;
+          }
           setActiveChallenge(null); // Challenge completed
+
+          const yourTranslationLine = evalRes.userTranslation?.trim()
+            ? `\n\n**Your Translation:** "${evalRes.userTranslation.trim()}"`
+            : "";
 
           const evalMsg: ChatMessage = {
             id: `challenge-eval-${Date.now()}`,
             role: "assistant",
-            content: `### 🎯 Challenge Evaluation: ${evalRes.scoreLabel} (${evalRes.score}/100)\n\n**Your Translation:** "${evalRes.userTranslation}"\n**Ideal Translation:** "${evalRes.correctedSentence}"\n\n**✨ What Went Well:**\n${evalRes.whatWentWell}\n\n**💡 Areas for Improvement:**\n${evalRes.areasForImprovement}`,
+            content: `### 🎯 Challenge Evaluation: ${evalRes.scoreLabel} (${evalRes.score}/100)${yourTranslationLine}\n**Ideal Translation:** "${evalRes.correctedSentence}"\n\n**✨ What Went Well:**\n${evalRes.whatWentWell}\n\n**💡 Areas for Improvement:**\n${evalRes.areasForImprovement}`,
             timestamp: new Date().toISOString(),
             challengeEvaluation: evalRes,
             provider: result.provider || configForServer?.provider || "google",
