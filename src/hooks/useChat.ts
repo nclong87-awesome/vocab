@@ -635,14 +635,15 @@ export function useChat({
       }).slice(0, 3);
 
       if (effectiveQuizWords.length === 0) {
-        effectiveQuizWords = candidateReviewPool.slice(0, 3);
+        const nonCooldownPool = candidateReviewPool.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+        effectiveQuizWords = nonCooldownPool.slice(0, 3);
       }
 
-      // Top up to guarantee exactly 3 questions if more words are available in candidate pool or activeWords
+      // Top up to guarantee exactly 3 questions if non-cooldown words are available
       if (effectiveQuizWords.length < 3) {
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
         for (const w of candidateReviewPool) {
-          if (!existingIds.has(w.id)) {
+          if (!existingIds.has(w.id) && !isWordOnReviewCooldown(w, new Date(), 2)) {
             effectiveQuizWords.push(w);
             existingIds.add(w.id);
             if (effectiveQuizWords.length >= 3) break;
@@ -652,7 +653,7 @@ export function useChat({
       if (effectiveQuizWords.length < 3) {
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
         for (const w of activeWords) {
-          if (!existingIds.has(w.id)) {
+          if (!existingIds.has(w.id) && !isWordOnReviewCooldown(w, new Date(), 2)) {
             effectiveQuizWords.push(w);
             existingIds.add(w.id);
             if (effectiveQuizWords.length >= 3) break;

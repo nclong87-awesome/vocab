@@ -362,7 +362,8 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
   }
 
   const days = getDaysSinceLastReview(word, now);
-  if (word.learned && (days >= 5 || (word.strength < 80 && word.lastReviewed !== null && days >= 1))) {
+  const isDueOrOverdue = isWordEligibleForReview(word, now) || (word.lastReviewed !== null && days >= 1);
+  if (isDueOrOverdue || (word.learned && days >= 5)) {
     return { tier: "memoryDecay", weight: 4 };
   }
 
@@ -415,13 +416,16 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   const { maxCandidates = 10, candidatePoolSize = 30, includeUnstudied = true } = options;
   const now = new Date();
 
+  // Sweep memory decay so fresh decayed strengths are evaluated
+  const { updatedWords: freshWords } = recalculateWordsMemoryDecay(validWords, now);
+
   // Helper to check if a word is already represented in a list (by id or vocabulary equivalence)
   const isAlreadySelected = (candidate: Word, list: Word[]): boolean => {
     return list.some(w => w.id === candidate.id || areWordsEquivalent(w.word, candidate.word));
   };
 
   // 1. Find words that have been studied and are currently due for spaced repetition review (excluding cooldown)
-  const learnedWords = validWords.filter(isWordLearnedOrStudied);
+  const learnedWords = freshWords.filter(isWordLearnedOrStudied);
   const eligibleDueWords = learnedWords.filter(word => isWordEligibleForReview(word, now, MIN_REVIEW_COOLDOWN_HOURS));
 
   let selectedWords: Word[] = [];
@@ -532,13 +536,13 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
   daysSinceReview: number;
   decayAmount: number;
 } {
-  const { baselineStrength } = getLastPracticeBaseline(word);
+  const { baselineStrength, lastPracticeDate } = getLastPracticeBaseline(word);
   const daysSinceReview = getDaysSinceLastReview(word, now);
   const currentStrength = word.strength ?? 0;
   
-  // Memory decay applies to mastered (learned) words or words whose last practice baseline was mastered (>= 80)
-  const isMasteredBaseline = word.learned || baselineStrength >= 80;
-  if (!isMasteredBaseline || daysSinceReview <= 0) {
+  // Memory decay applies to any word that has been studied/practiced (has a last practice date or review date)
+  const isStudied = word.learned || baselineStrength > 0 || lastPracticeDate !== null || word.lastReviewed !== null;
+  if (!isStudied || daysSinceReview <= 0) {
     return {
       newStrength: currentStrength,
       newLearned: word.learned,
