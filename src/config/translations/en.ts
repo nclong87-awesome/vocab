@@ -182,6 +182,7 @@ export const enTranslations: LanguageTranslations = {
     action_suggest_another: "💬 Suggest Another Casual Reply",
     action_add_all_remaining: "✨ Add All ({count}) Remaining Words to Collection",
     action_confirm_add_word: "✨ + Confirm & Add \"{word}\" ({details})",
+    action_complete_adding_word: "✅ Complete adding \"{word}\"",
     chat_confirm_word_preview_prompt: "📖 **Vocabulary Definition Found**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **Translation**: {translation}\n- **Definition**: *{definition}*{exampleSection}\n\n👉 **Please confirm:** Would you like to add **\"{word}\"** to your vocabulary collection?",
     chat_cancelled_add_word: "✕ **Cancelled adding \"{word}\".**\n\nType another word or ask a question to continue!",
     action_cancel: "✕ Cancel",
@@ -426,5 +427,11 @@ export const enTranslations: LanguageTranslations = {
     action_next_balanced_session: "⚡ Next Balanced Session",
     action_confuser_duel: "⚔️ Confuser Duel (Contrast Match)",
     action_confuser_duel_count: "⚔️ Confuser Duel ({count} {label})",
-    action_quiz_practice_count: "🏆 Quiz Practice ({count} review {label})"
+    action_quiz_practice_count: "🏆 Quiz Practice ({count} review {label})",
+    toast_added_incomplete_word: "Added '{word}' to collection (incomplete). Tap it in Collection to complete details!",
+    incomplete_words_section_title: "Draft & Incomplete Words ({count})",
+    incomplete_words_section_desc: "Suggested words added from practice. Tap any word to finalize details and include it in practice.",
+    incomplete_word_badge: "Draft / Incomplete",
+    incomplete_word_click_prompt: "Tap to complete definition and details",
+    incomplete_filter_label: "Incomplete ({count})"
   };

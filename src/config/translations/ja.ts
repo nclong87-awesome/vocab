@@ -151,6 +151,7 @@ export const jaTranslations: LanguageTranslations = {
     action_suggest_another: "💬 別の返信案をリクエスト",
     action_add_all_remaining: "✨ すべての残り ({count}) 単語を単語帳に追加",
     action_confirm_add_word: "✨ + 確認して「{word}」を追加 ({details})",
+    action_complete_adding_word: "✅ 「{word}」の追加を完了する",
     chat_confirm_word_preview_prompt: "📖 **語彙の定義が見つかりました**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **翻訳**: {translation}\n- **定義**: *{definition}*{exampleSection}\n\n👉 **確認:** **「{word}」** を単語帳に追加しますか？",
     chat_cancelled_add_word: "✕ **「{word}」の追加をキャンセルしました。**\n\n別の単語を入力するか、質問してください！",
     action_cancel: "✕ キャンセル",

@@ -23,7 +23,7 @@ interface VirtualizedWordCollectionProps {
   nativeLanguage?: string;
   ttsConfig?: TTSConfig;
   allWords?: Word[];
-  onAddWord?: (word: string, hint?: string) => void;
+  onAddWord?: (word: string, hint?: string, initialData?: Partial<Word>) => void;
   containerHeight?: number;
 }
 
@@ -43,7 +43,7 @@ interface ListRowSharedProps {
   nativeLanguage?: string;
   ttsConfig?: TTSConfig;
   allWords?: Word[];
-  onAddWord?: (word: string, hint?: string) => void;
+  onAddWord?: (word: string, hint?: string, initialData?: Partial<Word>) => void;
 }
 
 interface GridRowSharedProps extends ListRowSharedProps {

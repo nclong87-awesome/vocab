@@ -189,6 +189,7 @@ export type TranslationKey =
   | "action_suggest_another"
   | "action_add_all_remaining"
   | "action_confirm_add_word"
+  | "action_complete_adding_word"
   | "chat_confirm_word_preview_prompt"
   | "chat_cancelled_add_word"
   | "action_cancel"
@@ -433,7 +434,13 @@ export type TranslationKey =
   | "action_next_balanced_session"
   | "action_confuser_duel"
   | "action_confuser_duel_count"
-  | "action_quiz_practice_count";
+  | "action_quiz_practice_count"
+  | "toast_added_incomplete_word"
+  | "incomplete_words_section_title"
+  | "incomplete_words_section_desc"
+  | "incomplete_word_badge"
+  | "incomplete_word_click_prompt"
+  | "incomplete_filter_label";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

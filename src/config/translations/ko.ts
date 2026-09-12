@@ -151,6 +151,7 @@ export const koTranslations: LanguageTranslations = {
     action_suggest_another: "💬 다른 답장 추천받기",
     action_add_all_remaining: "✨ 남은 단어 ({count}개) 모두 단어장에 추가",
     action_confirm_add_word: "✨ + 확인 및 \"{word}\" 추가 ({details})",
+    action_complete_adding_word: "✅ \"{word}\" 추가 완료하기",
     chat_confirm_word_preview_prompt: "📖 **어휘 정의를 찾았습니다**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **번역**: {translation}\n- **뜻/정의**: *{definition}*{exampleSection}\n\n👉 **확인 필요:** **\"{word}\"** 단어를 어휘 단어장에 추가하시겠습니까?",
     chat_cancelled_add_word: "✕ **\"{word}\" 추가가 취소되었습니다.**\n\n계속하려면 다른 단어를 입력하거나 질문하세요!",
     action_cancel: "✕ 취소",

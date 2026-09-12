@@ -14,7 +14,7 @@ import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
 import WordChatModal from "./WordChatModal";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
-import { isWordInCollection, findWordInCollection, isNoun, isPhrasalVerb } from "../../utils/wordNormalization";
+import { isWordInCollection, findWordInCollection, isNoun, isPhrasalVerb, isCompletedWord, isIncompleteWord } from "../../utils/wordNormalization";
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -31,6 +31,7 @@ interface ChatMessageItemProps {
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
   onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
+  onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
   startPractice: (
@@ -149,6 +150,7 @@ function ChatMessageItem({
   llmConfig,
   onSendMessage,
   onAddWord,
+  onAddIncompleteWord,
   onAddMultipleWords,
   onGenerateByTopic,
   startPractice,
@@ -190,7 +192,23 @@ function ChatMessageItem({
   const handleAddSuggestedWord = (wordText: string, hint?: string, extraData?: Partial<Word>) => {
     const isAlreadyInWords = words && isWordInCollection(words, wordText);
     if (isAlreadyInWords) return;
-    onAddWord(wordText, hint, extraData);
+    if (onAddIncompleteWord) {
+      onAddIncompleteWord({
+        word: wordText,
+        definition: extraData?.definition || hint || "",
+        translation: extraData?.translation || "",
+        partOfSpeech: extraData?.partOfSpeech || "",
+        category: extraData?.category || "General",
+        context: extraData?.context || hint || "",
+        pronunciation: extraData?.pronunciation,
+        example: extraData?.example,
+        exampleTranslation: extraData?.exampleTranslation,
+        suggestedWords: extraData?.suggestedWords,
+        ...extraData,
+      });
+    } else {
+      onAddWord(wordText, hint, extraData);
+    }
   };
 
   const handleModalWordUpdate = (updated: Word) => {
@@ -578,19 +596,24 @@ function ChatMessageItem({
         return false;
       }
 
-      // Filter out confirm_save_word if word is already in words collection
+      // Filter out confirm_save_word if word is already in words collection and is fully completed
       if (act.action === "confirm_save_word") {
         const actWord = (act.payload?.word || act.payload?.targetWord || (act as any).word || "").trim();
-        if (actWord && words && Array.isArray(words) && isWordInCollection(words, actWord)) {
-          return false;
+        if (actWord && words && Array.isArray(words)) {
+          const matched = findWordInCollection(words, actWord);
+          if (matched && isCompletedWord(matched)) {
+            return false;
+          }
         }
       }
 
-      // Filter out add_multiplewords if all individual words are already in the collection
+      // Filter out add_multiplewords if all individual words are already in the collection and completed
       if (act.action === "add_multiplewords" && act.payload && Array.isArray(act.payload.words)) {
         const unsavedCount = act.payload.words.filter((w: any) => {
           const wText = (w?.word || "").trim();
-          return wText && words && Array.isArray(words) && !isWordInCollection(words, wText);
+          if (!wText || !words || !Array.isArray(words)) return false;
+          const matched = findWordInCollection(words, wText);
+          return !matched || isIncompleteWord(matched);
         }).length;
         if (unsavedCount === 0) {
           return false;
@@ -849,6 +872,7 @@ function ChatMessageItem({
               words={words}
               onUpdateWords={onUpdateWords}
               onAddWord={onAddWord}
+              onAddIncompleteWord={onAddIncompleteWord}
               onAddMultipleWords={onAddMultipleWords}
               showToast={showToast}
             />

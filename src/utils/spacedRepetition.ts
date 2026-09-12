@@ -224,6 +224,11 @@ export function isWordEligibleForReview(
   now: Date = new Date(),
   minCooldownHours: number = MIN_REVIEW_COOLDOWN_HOURS
 ): boolean {
+  // Incomplete words are never eligible for review or practice
+  if (word.completed === false) {
+    return false;
+  }
+
   // If never reviewed, it is immediately eligible for initial review/practice
   if (!word.lastReviewed) {
     return true;
@@ -328,6 +333,7 @@ export interface WeightedCandidate {
  * Checks whether a word has ever been learned or studied (prior exposure).
  */
 export function isWordLearnedOrStudied(word: Word): boolean {
+  if (word.completed === false) return false;
   if (word.learned) return true;
   if (word.lastReviewed) return true;
   if ((word.strength ?? 0) > 0) return true;
@@ -402,6 +408,10 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
 
+  // Incomplete words are strictly excluded from practice
+  const validWords = words.filter(w => w.completed !== false);
+  if (validWords.length === 0) return [];
+
   const { maxCandidates = 10, candidatePoolSize = 30, includeUnstudied = true } = options;
   const now = new Date();
 
@@ -411,7 +421,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   };
 
   // 1. Find words that have been studied and are currently due for spaced repetition review (excluding cooldown)
-  const learnedWords = words.filter(isWordLearnedOrStudied);
+  const learnedWords = validWords.filter(isWordLearnedOrStudied);
   const eligibleDueWords = learnedWords.filter(word => isWordEligibleForReview(word, now, MIN_REVIEW_COOLDOWN_HOURS));
 
   let selectedWords: Word[] = [];
@@ -458,7 +468,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   // 2. If we need more candidates to reach maxCandidates and includeUnstudied is enabled,
   // pull from unstudied / new words that are NOT on cooldown (strictly preventing duplicate words)
   if (includeUnstudied && selectedWords.length < maxCandidates) {
-    const unstudied = words.filter(
+    const unstudied = validWords.filter(
       w => !isAlreadySelected(w, selectedWords) && !isWordLearnedOrStudied(w) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
     );
 
@@ -476,7 +486,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   // 3. If still under maxCandidates (e.g. all unstudied and due words are exhausted),
   // supplement with any other available words that are NOT on review cooldown (shuffled and deduplicated)
   if (selectedWords.length < maxCandidates) {
-    const otherAvailable = words.filter(
+    const otherAvailable = validWords.filter(
       w => !isAlreadySelected(w, selectedWords) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
     );
     if (otherAvailable.length > 0) {
@@ -638,6 +648,7 @@ export function sortUnstudiedWordsOldestFirst(words: Word[]): Word[] {
  * Checks whether a word is brand new and has never been studied/practiced.
  */
 export function isNewUnstudiedWord(word: Word): boolean {
+  if (word.completed === false) return false;
   return !isWordLearnedOrStudied(word);
 }
 
@@ -648,6 +659,9 @@ export function isNewUnstudiedWord(word: Word): boolean {
  *    or when custom cooldown hours (if specified) have elapsed.
  */
 export function isImmersionCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
+  // Incomplete words are strictly excluded from practice
+  if (word.completed === false) return false;
+
   // 1. Never studied / brand new words are immediately eligible for initial immersion introduction
   if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
     return true;
@@ -679,8 +693,9 @@ export function getCandidateWordsForImmersion(
 ): Word[] {
   if (!words || words.length === 0) return [];
 
-  // Filter ONLY words that meet the candidate criteria
-  const eligibleWords = words.filter(word => isImmersionCandidate(word, now, customCooldownHours));
+  // Filter ONLY words that meet the candidate criteria (incomplete words are excluded)
+  const validWords = words.filter(w => w.completed !== false);
+  const eligibleWords = validWords.filter(word => isImmersionCandidate(word, now, customCooldownHours));
 
   if (eligibleWords.length === 0) {
     return [];
@@ -734,11 +749,15 @@ export function getCandidateWordForImmersion(words: Word[], now: Date = new Date
 
 /**
  * Checks whether a word is an eligible potential candidate for taking a quiz.
- * 1. Words on review cooldown (e.g. reviewed within the last 2 hours) are strictly excluded.
- * 2. Unstudied / new words are immediately eligible to be practiced and introduced via quiz.
- * 3. Previously studied words are eligible when their scheduled review date is reached.
+ * 1. Incomplete words are strictly excluded.
+ * 2. Words on review cooldown (e.g. reviewed within the last 2 hours) are strictly excluded.
+ * 3. Unstudied / new words are immediately eligible to be practiced and introduced via quiz.
+ * 4. Previously studied words are eligible when their scheduled review date is reached.
  */
 export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
+  // Incomplete words are strictly excluded from practice
+  if (word.completed === false) return false;
+
   const cooldown = customCooldownHours !== undefined ? customCooldownHours : MIN_REVIEW_COOLDOWN_HOURS;
   if (cooldown > 0) {
     const hours = getHoursSinceLastReview(word, now);
@@ -759,6 +778,7 @@ export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldo
  * Checks whether a previously studied word is strictly due for spaced repetition review.
  */
 export function isDueReviewCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
+  if (word.completed === false) return false;
   if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
     return false;
   }
@@ -777,7 +797,7 @@ export function isDueReviewCandidate(word: Word, now: Date = new Date(), customC
  */
 export function getDueReviewCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  return words.filter(word => isDueReviewCandidate(word, now, customCooldownHours));
+  return words.filter(word => word.completed !== false && isDueReviewCandidate(word, now, customCooldownHours));
 }
 
 /**
@@ -785,7 +805,7 @@ export function getDueReviewCandidates(words: Word[], now: Date = new Date(), cu
  */
 export function getQuizCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  return words.filter(word => isQuizCandidate(word, now, customCooldownHours));
+  return words.filter(word => word.completed !== false && isQuizCandidate(word, now, customCooldownHours));
 }
 
 /**
@@ -793,7 +813,7 @@ export function getQuizCandidates(words: Word[], now: Date = new Date(), customC
  */
 export function getImmersionCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
-  return words.filter(word => isImmersionCandidate(word, now, customCooldownHours));
+  return words.filter(word => word.completed !== false && isImmersionCandidate(word, now, customCooldownHours));
 }
 
 /**
@@ -801,16 +821,17 @@ export function getImmersionCandidates(words: Word[], now: Date = new Date(), cu
  */
 export function getAllPracticeCandidates(words: Word[], now: Date = new Date(), customCooldownHours?: number): Word[] {
   if (!words || words.length === 0) return [];
+  const validWords = words.filter(w => w.completed !== false);
   const practiceList: Word[] = [];
 
-  const quizList = getQuizCandidates(words, now, customCooldownHours);
+  const quizList = getQuizCandidates(validWords, now, customCooldownHours);
   for (const w of quizList) {
     if (!practiceList.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
       practiceList.push(w);
     }
   }
 
-  const immersionList = getImmersionCandidates(words, now, customCooldownHours);
+  const immersionList = getImmersionCandidates(validWords, now, customCooldownHours);
   for (const w of immersionList) {
     if (!practiceList.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
       practiceList.push(w);

@@ -15,6 +15,7 @@ interface MessageListProps {
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
   onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
+  onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
   startPractice: (
@@ -53,6 +54,7 @@ function MessageList({
   llmConfig,
   onSendMessage,
   onAddWord,
+  onAddIncompleteWord,
   onAddMultipleWords,
   onGenerateByTopic,
   startPractice,
@@ -102,6 +104,7 @@ function MessageList({
               llmConfig={llmConfig}
               onSendMessage={onSendMessage}
               onAddWord={onAddWord}
+              onAddIncompleteWord={onAddIncompleteWord}
               onAddMultipleWords={onAddMultipleWords}
               onGenerateByTopic={onGenerateByTopic}
               startPractice={startPractice}

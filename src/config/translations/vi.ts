@@ -182,6 +182,7 @@ export const viTranslations: LanguageTranslations = {
     action_suggest_another: "💬 Gợi Ý Câu Trả Lời Khác",
     action_add_all_remaining: "✨ Thêm tất cả ({count}) từ còn lại vào bộ từ vựng",
     action_confirm_add_word: "✨ + Xác nhận & Thêm \"{word}\" ({details})",
+    action_complete_adding_word: "✅ Hoàn tất thêm từ \"{word}\"",
     chat_confirm_word_preview_prompt: "📖 **Đã tìm thấy định nghĩa từ vựng**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **Bản dịch**: {translation}\n- **Định nghĩa**: *{definition}*{exampleSection}\n\n👉 **Vui lòng xác nhận:** Bạn có muốn thêm từ **\"{word}\"** vào bộ từ vựng của mình không?",
     chat_cancelled_add_word: "✕ **Đã hủy thêm từ \"{word}\".**\n\nNhập một từ khác hoặc đặt câu hỏi để tiếp tục!",
     action_cancel: "✕ Hủy bỏ",
@@ -426,5 +427,11 @@ export const viTranslations: LanguageTranslations = {
     action_next_balanced_session: "⚡ Phiên Cân Bằng Tiếp Theo",
     action_confuser_duel: "⚔️ Confuser Duel (Đối Đầu Từ Dễ Nhầm)",
     action_confuser_duel_count: "⚔️ Confuser Duel ({count} từ)",
-    action_quiz_practice_count: "🏆 Quiz Practice ({count} từ ôn tập)"
+    action_quiz_practice_count: "🏆 Quiz Practice ({count} từ ôn tập)",
+    toast_added_incomplete_word: "Đã tạm thêm '{word}' vào bộ sưu tập (chưa hoàn thiện). Nhấn vào từ trong Bộ sưu tập để hoàn thiện!",
+    incomplete_words_section_title: "Từ chưa hoàn thiện ({count})",
+    incomplete_words_section_desc: "Các từ gợi ý đã tạm thêm từ luyện tập. Nhấn vào từ để hoàn tất chi tiết và mở khóa ôn tập.",
+    incomplete_word_badge: "Chưa hoàn thiện",
+    incomplete_word_click_prompt: "Nhấn để hoàn thiện định nghĩa và ví dụ",
+    incomplete_filter_label: "Chưa hoàn thiện ({count})"
   };

@@ -23,7 +23,7 @@ import {
 } from "../../services/userInquiryService";
 import { getUserPersonalityProfileFromDB } from "../../db/indexedDB";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
-import { findWordInCollection, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
+import { findWordInCollection, isCompletedWord, isIncompleteWord, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../../utils/llmEvents";
@@ -308,7 +308,12 @@ export default function WordAddModal({
       const wordToLookup = (targetText ?? wordInput).trim();
       if (!wordToLookup) return;
 
-      const effectiveHint = targetHint?.trim();
+      const effectiveHint =
+        targetHint?.trim() ||
+        overrideData?.context?.trim() ||
+        (overrideData?.translation && overrideData.translation !== overrideData.word ? overrideData.translation.trim() : undefined) ||
+        (overrideData?.definition && overrideData.definition !== overrideData.word ? overrideData.definition.trim() : undefined);
+
       pendingRetryRef.current = { word: wordToLookup, hint: effectiveHint || undefined };
 
       // Abort previous lookup if running
@@ -335,9 +340,9 @@ export default function WordAddModal({
       setActiveModelInfo(activeInfo);
       scrollToBottom();
 
-      // Check if already in collection
+      // Check if already in collection (only completed words count as existing)
       const existingMatch = findWordInCollection(words, wordToLookup);
-      if (existingMatch) {
+      if (existingMatch && isCompletedWord(existingMatch)) {
         setIsTyping(false);
         setActiveModelInfo(null);
         setCurrentWord(existingMatch);
@@ -372,8 +377,14 @@ export default function WordAddModal({
         return;
       }
 
-      // Check if overrideData already has full details
-      if (overrideData && overrideData.definition && overrideData.translation) {
+      // Check if overrideData is ALREADY a fully completed word card (not a draft) with valid pronunciation and example sentence
+      const isCompleteData =
+        overrideData &&
+        isCompletedWord(overrideData) &&
+        overrideData.completed === true &&
+        !(overrideData as any).forceLlmLookup;
+
+      if (isCompleteData) {
         setIsTyping(false);
         setActiveModelInfo(null);
         const rawPos = overrideData.partOfSpeech || "word";
@@ -405,12 +416,16 @@ export default function WordAddModal({
 
         setCurrentWord(newWordObj);
 
+        const isUpgradingIncomplete = Boolean(overrideData && isIncompleteWord(overrideData)) || Boolean(existingMatch && isIncompleteWord(existingMatch));
+
         const confirmActions = [
           {
-            label: t("action_confirm_add_word", currentAppLang, {
-              word: newWordObj.word,
-              details: newWordObj.translation,
-            }),
+            label: isUpgradingIncomplete
+              ? t("action_complete_adding_word", currentAppLang, { word: newWordObj.word })
+              : t("action_confirm_add_word", currentAppLang, {
+                  word: newWordObj.word,
+                  details: newWordObj.translation,
+                }),
             action: "confirm_save_word" as const,
             payload: newWordObj,
           },
@@ -548,7 +563,7 @@ export default function WordAddModal({
         const contextVal = sense?.context || data.context || effectiveHint || definitionVal;
 
         const newWordObj: Word = {
-          id: `word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          id: overrideData?.id || existingMatch?.id || `word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           word: targetWordStr,
           pronunciation: pronunciationVal,
           partOfSpeech: partOfSpeechVal,
@@ -561,9 +576,10 @@ export default function WordAddModal({
           suggestedWords: sense?.suggestedWords || data.suggestedWords || undefined,
           learned: false,
           starred: false,
-          createdAt: new Date().toISOString(),
+          createdAt: overrideData?.createdAt || existingMatch?.createdAt || new Date().toISOString(),
           lastReviewed: null,
           strength: 0,
+          completed: true,
           imageKeyword: isNoun(partOfSpeechVal) ? (sense?.imageKeyword || data.imageKeyword || undefined) : undefined,
           imageUrls: isNoun(partOfSpeechVal) ? (sense?.imageUrls || data.imageUrls || undefined) : undefined,
           imageUrl: isNoun(partOfSpeechVal) ? (sense?.imageUrl || data.imageUrl || undefined) : undefined,
@@ -571,12 +587,16 @@ export default function WordAddModal({
 
         setCurrentWord(newWordObj);
 
+        const isUpgradingIncomplete = Boolean(overrideData && isIncompleteWord(overrideData)) || Boolean(existingMatch && isIncompleteWord(existingMatch));
+
         const confirmActions = [
           {
-            label: t("action_confirm_add_word", currentAppLang, {
-              word: targetWordStr,
-              details: translationVal,
-            }),
+            label: isUpgradingIncomplete
+              ? t("action_complete_adding_word", currentAppLang, { word: targetWordStr })
+              : t("action_confirm_add_word", currentAppLang, {
+                  word: targetWordStr,
+                  details: translationVal,
+                }),
             action: "confirm_save_word" as const,
             payload: newWordObj,
           },
@@ -696,7 +716,7 @@ export default function WordAddModal({
 
       const targetWord = (sense.word || word).trim();
       const existingMatch = findWordInCollection(words, targetWord);
-      if (existingMatch) {
+      if (existingMatch && isCompletedWord(existingMatch)) {
         setCurrentWord(existingMatch);
         const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
         const existsMsg: ChatMessage = {
@@ -752,12 +772,16 @@ export default function WordAddModal({
 
       setCurrentWord(newWord);
 
+      const isUpgradingIncomplete = Boolean(existingMatch && isIncompleteWord(existingMatch));
+
       const confirmActions = [
         {
-          label: t("action_confirm_add_word", currentAppLang, {
-            word: targetWord,
-            details: newWord.translation,
-          }),
+          label: isUpgradingIncomplete
+            ? t("action_complete_adding_word", currentAppLang, { word: targetWord })
+            : t("action_confirm_add_word", currentAppLang, {
+                word: targetWord,
+                details: newWord.translation,
+              }),
           action: "confirm_save_word" as const,
           payload: newWord,
         },
@@ -807,6 +831,7 @@ export default function WordAddModal({
       const isPv = isPhrasalVerb(rawWord.word, rawWord.partOfSpeech, rawWord.category);
       const newWord: Word = {
         ...rawWord,
+        completed: true,
         partOfSpeech: normalizeWordPartOfSpeech(rawWord.partOfSpeech, rawWord.word, rawWord.category),
         category: isPv
           ? normalizeWordCategory(rawWord.category, rawWord.word, rawWord.partOfSpeech)

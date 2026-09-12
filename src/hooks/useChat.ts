@@ -32,7 +32,7 @@ import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
-import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun } from "../utils/wordNormalization";
+import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord } from "../utils/wordNormalization";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 
@@ -145,24 +145,25 @@ export function useChat({
     wordsRef.current = words;
   }, [words]);
 
-  const getEffectiveWords = async (): Promise<Word[]> => {
+  const getEffectiveWords = async (includeIncomplete = false): Promise<Word[]> => {
+    let result: Word[] = [];
     if (wordsRef.current && wordsRef.current.length > 0) {
-      return wordsRef.current;
-    }
-    if (words && words.length > 0) {
-      return words;
-    }
-    try {
-      const dbWords = await getAllWordsFromDB();
-      if (dbWords && dbWords.length > 0) {
-        setWords(dbWords);
-        wordsRef.current = dbWords;
-        return dbWords;
+      result = wordsRef.current;
+    } else if (words && words.length > 0) {
+      result = words;
+    } else {
+      try {
+        const dbWords = await getAllWordsFromDB();
+        if (dbWords && dbWords.length > 0) {
+          setWords(dbWords);
+          wordsRef.current = dbWords;
+          result = dbWords;
+        }
+      } catch (e) {
+        console.error("Failed to load words from DB in getEffectiveWords:", e);
       }
-    } catch (e) {
-      console.error("Failed to load words from DB in getEffectiveWords:", e);
     }
-    return [];
+    return includeIncomplete ? result : result.filter(w => w.completed !== false);
   };
 
   // Sync to local storage
@@ -1439,7 +1440,7 @@ export function useChat({
         }
 
         const finalMatch = findWordInCollection(words, targetWordStr);
-        if (finalMatch) {
+        if (finalMatch && isCompletedWord(finalMatch)) {
           const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, currentAppLang);
           const existingDetails = formatExistingWordDetails(finalMatch, currentAppLang);
           setChatMessages((prev) => {
@@ -1494,9 +1495,13 @@ export function useChat({
         const remainingActions = getRemainingWordActions(chatMessages, words, targetWordStr, currentAppLang);
         const sessionActions = remainingActions.filter((a: any) => a?.action === "start_sandwich_quiz");
 
+        const isUpgradingIncomplete = Boolean(finalMatch && isIncompleteWord(finalMatch));
+
         const confirmActions = [
           {
-            label: t("action_confirm_add_word", currentAppLang, { word: targetWordStr, details: translationVal }),
+            label: isUpgradingIncomplete
+              ? t("action_complete_adding_word", currentAppLang, { word: targetWordStr })
+              : t("action_confirm_add_word", currentAppLang, { word: targetWordStr, details: translationVal }),
             action: "confirm_save_word",
             payload: newWordObj,
           },

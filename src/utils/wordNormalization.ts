@@ -68,6 +68,27 @@ export function isWordInCollection(words: Word[], targetWord?: string | null): b
 }
 
 /**
+ * Checks if a word is marked as incomplete (temporarily added from suggestions, pending completion, or missing details like pronunciation or example).
+ */
+export function isIncompleteWord(word?: Partial<Word> | null): boolean {
+  if (!word) return true;
+  if (word.completed === false) return true;
+  if (!word.pronunciation || word.pronunciation === "/.../" || word.pronunciation === "/ ... /" || !word.pronunciation.trim()) return true;
+  if (!word.definition || !word.definition.trim()) return true;
+  if (!word.translation || !word.translation.trim()) return true;
+  if (!word.example || !word.example.trim()) return true;
+  return false;
+}
+
+/**
+ * Checks if a word is fully completed.
+ */
+export function isCompletedWord(word?: Partial<Word> | null): boolean {
+  if (!word) return false;
+  return !isIncompleteWord(word);
+}
+
+/**
  * Checks if a given part-of-speech string indicates that the word is a noun.
  * Supports standard English POS tags ("noun", "proper noun", "countable noun", "n.", "n"),
  * compound phrases ("noun, verb"), and common multilingual variants.

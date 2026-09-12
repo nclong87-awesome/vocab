@@ -9,7 +9,7 @@ import {
 } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
-import { isWordInCollection, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../utils/wordNormalization";
+import { isWordInCollection, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech, areWordsEquivalent } from "../utils/wordNormalization";
 import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 
 export function useVocabulary() {
@@ -63,6 +63,7 @@ export function useVocabulary() {
 
   const handleAddCustomWord = useCallback((
     wordData: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
+      id?: string;
       createdAt?: string;
       lastReviewed?: string | null;
     },
@@ -71,11 +72,6 @@ export function useVocabulary() {
     targetLanguage?: string
   ) => {
     setWords(prev => {
-      const exists = isWordInCollection(prev, wordData.word);
-      if (exists) {
-        console.warn(`Word "${wordData.word}" already exists in collection (exact or singular/plural). Skipping duplicate.`);
-        return prev;
-      }
       const defaultUrls = wordData.imageUrls && wordData.imageUrls.length > 0
         ? wordData.imageUrls
         : (wordData.imageUrl ? [wordData.imageUrl] : undefined);
@@ -86,6 +82,45 @@ export function useVocabulary() {
         ? normalizeWordCategory(wordData.category, wordData.word, normalizedPos)
         : (wordData.category || "General");
 
+      // Check if word already exists in collection (including incomplete words)
+      const existingIndex = prev.findIndex(w => 
+        (wordData.id && w.id === wordData.id) || areWordsEquivalent(w.word, wordData.word)
+      );
+
+      if (existingIndex >= 0) {
+        const existingWord = prev[existingIndex];
+        const updatedWord: Word = {
+          ...existingWord,
+          ...wordData,
+          id: existingWord.id,
+          completed: true, // Marked as fully completed
+          partOfSpeech: normalizedPos,
+          category: normalizedCategory,
+          imageUrls: defaultUrls || existingWord.imageUrls,
+          imageUrl: wordData.imageUrl || defaultUrls?.[0] || existingWord.imageUrl,
+          learned: existingWord.learned || false,
+          starred: wordData.starred !== undefined ? wordData.starred : existingWord.starred,
+          lastReviewed: existingWord.lastReviewed || null,
+        };
+        const updated = [...prev];
+        updated[existingIndex] = updatedWord;
+        saveAllWordsToDB(updated).catch(e => console.error("IndexedDB complete word save error:", e));
+
+        // Auto-play audio if autoPlayAudioInChat setting is enabled
+        const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? ttsConfig?.autoPlayAudioOnWordAdded ?? true;
+        if (ttsConfig && isAutoPlayEnabled && updatedWord.word) {
+          const timerId = window.setTimeout(() => {
+            const textToSpeak = updatedWord.definition && updatedWord.definition.trim()
+              ? `${updatedWord.word}. ${updatedWord.definition}`
+              : (updatedWord.translation && updatedWord.translation.trim() ? `${updatedWord.word}. ${updatedWord.translation}` : updatedWord.word);
+            speakTextService(textToSpeak, ttsConfig, llmConfig, targetLanguage || "English");
+          }, 150);
+          registerSpeechTimer(timerId);
+        }
+
+        return updated;
+      }
+
       const newWord: Word = recordStrengthHistory(
         {
           ...wordData,
@@ -93,10 +128,11 @@ export function useVocabulary() {
           category: normalizedCategory,
           imageUrls: defaultUrls,
           imageUrl: wordData.imageUrl || defaultUrls?.[0] || undefined,
-          id: `manual-word-${Date.now()}`,
+          id: wordData.id || `manual-word-${Date.now()}`,
           learned: false,
           starred: wordData.starred || false,
-          createdAt: new Date().toISOString(),
+          completed: true,
+          createdAt: wordData.createdAt || new Date().toISOString(),
           lastReviewed: null,
           strength: 0
         },
@@ -118,6 +154,60 @@ export function useVocabulary() {
         registerSpeechTimer(timerId);
       }
 
+      return updated;
+    });
+  }, []);
+
+  const handleAddIncompleteWord = useCallback((
+    wordData: {
+      word: string;
+      translation?: string;
+      definition?: string;
+      partOfSpeech?: string;
+      category?: string;
+      context?: string;
+      pronunciation?: string;
+      example?: string;
+      exampleTranslation?: string;
+      suggestedWords?: any[];
+    }
+  ) => {
+    setWords(prev => {
+      const exists = isWordInCollection(prev, wordData.word);
+      if (exists) {
+        return prev;
+      }
+      const isPv = isPhrasalVerb(wordData.word, wordData.partOfSpeech, wordData.category);
+      const normalizedPos = normalizeWordPartOfSpeech(wordData.partOfSpeech, wordData.word, wordData.category);
+      const normalizedCategory = isPv
+        ? normalizeWordCategory(wordData.category, wordData.word, normalizedPos)
+        : (wordData.category || "General");
+
+      const newWord: Word = recordStrengthHistory(
+        {
+          id: `incomplete-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          word: wordData.word.trim(),
+          pronunciation: wordData.pronunciation || undefined,
+          partOfSpeech: normalizedPos,
+          category: normalizedCategory,
+          definition: wordData.definition || "",
+          translation: wordData.translation || "",
+          example: wordData.example || undefined,
+          exampleTranslation: wordData.exampleTranslation || undefined,
+          context: wordData.context || undefined,
+          suggestedWords: wordData.suggestedWords || undefined,
+          learned: false,
+          starred: false,
+          completed: false, // Mark as NOT completed
+          createdAt: new Date().toISOString(),
+          lastReviewed: null,
+          strength: 0,
+        },
+        0,
+        "created"
+      );
+      const updated = [newWord, ...prev];
+      saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add incomplete word save error:", e));
       return updated;
     });
   }, []);
@@ -188,6 +278,7 @@ export function useVocabulary() {
     handleToggleStar,
     handleToggleLearned,
     handleAddCustomWord,
+    handleAddIncompleteWord,
     handleDeleteWord,
     handleUpdateWords,
     handleFinishQuiz,

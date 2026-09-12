@@ -151,6 +151,7 @@ export const deTranslations: LanguageTranslations = {
     action_suggest_another: "💬 Weitere Antwort Vorschlagen",
     action_add_all_remaining: "✨ Alle ({count}) verbleibenden Wörter zur Sammlung hinzufügen",
     action_confirm_add_word: "✨ + Bestätigen & \"{word}\" ({details}) hinzufügen",
+    action_complete_adding_word: "✅ Hinzufügen von \"{word}\" abschließen",
     chat_confirm_word_preview_prompt: "📖 **Vokabeldefinition gefunden**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **Übersetzung**: {translation}\n- **Definition**: *{definition}*{exampleSection}\n\n👉 **Bitte bestätigen:** Möchten Sie **\"{word}\"** zu Ihrer Vokabelsammlung hinzufügen?",
     chat_cancelled_add_word: "✕ **Hinzufügen von \"{word}\" abgebrochen.**\n\nGeben Sie ein anderes Wort ein oder stellen Sie eine Frage!",
     action_cancel: "✕ Abbrechen",

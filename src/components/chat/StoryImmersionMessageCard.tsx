@@ -43,6 +43,7 @@ interface StoryImmersionMessageCardProps {
   words?: Word[];
   onUpdateWords?: (updated: Word[]) => void;
   onAddWord?: (wordOrData: any, hint?: string) => void;
+  onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   showToast?: (msg: string) => void;
 }
@@ -60,6 +61,7 @@ export default function StoryImmersionMessageCard({
   words = [],
   onUpdateWords: _onUpdateWords,
   onAddWord,
+  onAddIncompleteWord,
   showToast
 }: StoryImmersionMessageCardProps) {
   const [currentStory, setCurrentStory] = useState<ImmersionStory>(initialStory);
@@ -204,7 +206,19 @@ export default function StoryImmersionMessageCard({
   }, [currentStory, nativeLanguage, targetLanguage]);
 
   const handleAddSuggestedWord = (sw: ImmersionStoryWord) => {
-    if (onAddWord) {
+    if (onAddIncompleteWord) {
+      onAddIncompleteWord({
+        word: sw.word,
+        translation: sw.translation || "",
+        definition: sw.definition || "",
+        partOfSpeech: sw.partOfSpeech || "collocation",
+        pronunciation: sw.pronunciation || undefined,
+        example: `From story "${currentStory.title}"`,
+        context: `From story "${currentStory.title}"`,
+        starred: false,
+        learned: false,
+      });
+    } else if (onAddWord) {
       onAddWord({
         word: sw.word,
         translation: sw.translation || "",

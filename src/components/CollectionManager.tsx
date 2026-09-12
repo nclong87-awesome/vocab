@@ -10,7 +10,11 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Zap
+  Zap,
+  Clock,
+  Edit3,
+  Trash2,
+  Volume2
 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -24,10 +28,9 @@ import { t } from "../config/i18n";
 interface CollectionManagerProps {
   words: Word[];
   onAddWord?: (
-    word: Omit<Word, "id" | "learned" | "strength" | "createdAt" | "lastReviewed"> & {
-      createdAt?: string;
-      lastReviewed?: string | null;
-    }
+    wordOrData?: string | any,
+    hint?: string,
+    initialData?: Partial<Word>
   ) => void;
   onDeleteWord: (wordId: string) => void;
   onToggleStar: (wordId: string) => void;
@@ -43,7 +46,7 @@ interface CollectionManagerProps {
 
 function CollectionManager({
   words,
-  onAddWord: _onAddWord,
+  onAddWord,
   onDeleteWord,
   onToggleStar,
   onToggleLearned,
@@ -143,9 +146,17 @@ function CollectionManager({
     }
   }, [onUpdateWords]);
 
-  const handleCardAddWord = useCallback((wText: string, hint?: string) => {
-    _onAddWord?.({ word: wText, hint: hint || "" } as any);
-  }, [_onAddWord]);
+  const incompleteWords = useMemo(() => {
+    return words.filter(w => w.completed === false);
+  }, [words]);
+
+  const handleOpenIncompleteWord = useCallback((incWord: Word) => {
+    onAddWord?.(incWord.word, incWord.context || incWord.definition || incWord.translation, incWord);
+  }, [onAddWord]);
+
+  const handleCardAddWord = useCallback((wText: string, hint?: string, initialData?: Partial<Word>) => {
+    onAddWord?.(wText, hint || "", initialData);
+  }, [onAddWord]);
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
@@ -181,6 +192,13 @@ function CollectionManager({
     }
 
     list.sort((a, b) => {
+      // Incomplete words are sorted to the very top
+      const aIncomplete = a.word.completed === false;
+      const bIncomplete = b.word.completed === false;
+      if (aIncomplete !== bIncomplete) {
+        return aIncomplete ? -1 : 1;
+      }
+
       const tA = a.timestamp;
       const tB = b.timestamp;
 
@@ -368,9 +386,100 @@ function CollectionManager({
                   <span>{targetLanguage} ↔ {nativeLanguage}</span>
                   <span className="text-stone-300">•</span>
                   <span className="text-stone-900">{words.length} {t("col_terms_count", appLanguage)}</span>
+                  {incompleteWords.length > 0 && (
+                    <span className="ml-2 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      <span>{incompleteWords.length} {t("incomplete_word_badge", appLanguage)}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* Incomplete / Draft Words Section at the Top */}
+            {incompleteWords.length > 0 && (
+              <div className="bg-gradient-to-br from-amber-50/95 via-orange-50/50 to-amber-50/80 border border-amber-300 rounded-xl p-4 space-y-3 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-400/40 flex items-center justify-center text-amber-700 shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-bold text-stone-900 tracking-tight">
+                          {t("incomplete_words_section_title", appLanguage, { count: String(incompleteWords.length) })}
+                        </h3>
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-200 text-amber-900 border border-amber-300">
+                          {t("incomplete_word_badge", appLanguage)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 mt-0.5">
+                        {t("incomplete_words_section_desc", appLanguage)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                  {incompleteWords.map((incWord) => (
+                    <div
+                      key={incWord.id}
+                      onClick={() => handleOpenIncompleteWord(incWord)}
+                      className="group relative flex items-start justify-between gap-2.5 p-3 bg-white/95 hover:bg-white border border-amber-200/90 hover:border-amber-400 rounded-lg transition-all cursor-pointer shadow-3xs hover:shadow-2xs hover:-translate-y-0.5"
+                      title={t("incomplete_word_click_prompt", appLanguage)}
+                    >
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-stone-900 group-hover:text-amber-900 tracking-tight">
+                            {incWord.word}
+                          </span>
+                          {incWord.partOfSpeech && incWord.partOfSpeech !== "word" && (
+                            <span className="text-[9px] font-mono px-1 py-0.2 bg-stone-100 text-stone-600 rounded border border-stone-200">
+                              {incWord.partOfSpeech}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-stone-600 truncate">
+                          {incWord.translation || incWord.definition || (
+                            <span className="text-amber-700 italic text-[10px]">
+                              {t("incomplete_word_click_prompt", appLanguage)}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            speakWord(incWord.word);
+                          }}
+                          className="p-1 rounded text-stone-400 hover:text-stone-900 hover:bg-stone-100 transition-colors"
+                          title="Listen"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteWord(incWord.id);
+                          }}
+                          className="p-1 rounded text-stone-300 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Discard"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="p-1 rounded text-amber-600 group-hover:text-amber-800 transition-colors" title="Complete Word">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Search, Sort & Layout View Bar */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-50 p-3 border border-stone-200">
@@ -474,7 +583,7 @@ function CollectionManager({
                     nativeLanguage={nativeLanguage}
                     ttsConfig={ttsConfig}
                     allWords={words}
-                    onAddWord={_onAddWord ? handleCardAddWord : undefined}
+                    onAddWord={onAddWord ? handleCardAddWord : undefined}
                   />
                 ) : viewMode === "grid" ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="words-grid-container">
@@ -497,7 +606,7 @@ function CollectionManager({
                         nativeLanguage={nativeLanguage}
                         ttsConfig={ttsConfig}
                         words={words}
-                        onAddWord={_onAddWord ? handleCardAddWord : undefined}
+                        onAddWord={onAddWord ? handleCardAddWord : undefined}
                       />
                     ))}
                   </div>
@@ -521,7 +630,7 @@ function CollectionManager({
                         nativeLanguage={nativeLanguage}
                         ttsConfig={ttsConfig}
                         words={words}
-                        onAddWord={_onAddWord ? handleCardAddWord : undefined}
+                        onAddWord={onAddWord ? handleCardAddWord : undefined}
                       />
                     ))}
                   </div>

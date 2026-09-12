@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon, MessageSquare } from "lucide-react";
+import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon, MessageSquare, Clock, Edit3 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
+import { isIncompleteWord } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import WordChatModal from "../chat/WordChatModal";
 
@@ -22,7 +23,7 @@ interface WordRowProps {
   nativeLanguage?: string;
   ttsConfig?: TTSConfig;
   words?: Word[];
-  onAddWord?: (word: string, hint?: string) => void;
+  onAddWord?: (word: string, hint?: string, initialData?: Partial<Word>) => void;
 }
 
 function WordRow({
@@ -69,6 +70,20 @@ function WordRow({
           <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex items-baseline gap-2 flex-wrap">
               <h4 className="text-base font-bold text-stone-900 tracking-tight">{word.word}</h4>
+              {(word.completed === false || isIncompleteWord(word)) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddWord?.(word.word, word.definition || word.translation, word);
+                  }}
+                  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Draft word - Click to complete"
+                >
+                  <Clock className="w-2.5 h-2.5 text-amber-600" />
+                  <span>Draft • Complete adding</span>
+                </button>
+              )}
               {word.pronunciation && (
                 <span className="text-[10px] font-mono text-stone-400">/{word.pronunciation}/</span>
               )}
@@ -130,6 +145,19 @@ function WordRow({
           </div>
 
           <div className="flex items-center gap-1 bg-stone-50 p-1 border border-stone-150 rounded-lg shrink-0 shadow-3xs">
+            {word.completed === false && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddWord?.(word.word, word.definition || word.translation, word);
+                }}
+                className="p-1.5 rounded-md text-amber-600 hover:text-amber-950 hover:bg-amber-100/70 transition-all cursor-pointer"
+                title="Complete Word"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={(e) => {

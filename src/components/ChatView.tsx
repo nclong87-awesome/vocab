@@ -20,6 +20,7 @@ interface ChatViewProps {
   nativeLanguage: string;
   appLanguage?: string;
   onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
+  onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic: () => void;
   startPractice: () => void;
@@ -53,6 +54,7 @@ function ChatView({
   nativeLanguage,
   appLanguage = "Vietnamese",
   onAddWord,
+  onAddIncompleteWord,
   onAddMultipleWords,
   onGenerateByTopic,
   startPractice,
@@ -441,6 +443,7 @@ function ChatView({
         llmConfig={llmConfig}
         onSendMessage={onSendMessage}
         onAddWord={onAddWord}
+        onAddIncompleteWord={onAddIncompleteWord}
         onAddMultipleWords={onAddMultipleWords}
         onGenerateByTopic={onGenerateByTopic}
         startPractice={startPractice}

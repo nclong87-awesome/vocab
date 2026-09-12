@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, MessageSquare } from "lucide-react";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, MessageSquare, Clock, Edit3 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
+import { isIncompleteWord } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 import { WordImageGallery } from "../common/WordImageGallery";
@@ -25,7 +26,7 @@ interface WordCardProps {
   nativeLanguage?: string;
   ttsConfig?: TTSConfig;
   words?: Word[];
-  onAddWord?: (word: string, hint?: string) => void;
+  onAddWord?: (word: string, hint?: string, initialData?: Partial<Word>) => void;
 }
 
 function WordCard({
@@ -89,10 +90,37 @@ function WordCard({
           <div className="flex items-start justify-between gap-2.5">
             <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
               <h4 className="text-lg font-bold text-stone-900 tracking-tight leading-snug break-words max-w-full">{word.word}</h4>
+              {(word.completed === false || isIncompleteWord(word)) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddWord?.(word.word, word.definition || word.translation, word);
+                  }}
+                  className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Draft word - Click to complete"
+                >
+                  <Clock className="w-3 h-3 text-amber-600" />
+                  <span>Draft • Complete adding</span>
+                </button>
+              )}
             </div>
 
             {/* Action Buttons Bar */}
             <div className="flex items-center gap-0.5 bg-stone-50/80 p-0.5 border border-stone-200/80 rounded-lg shrink-0 shadow-2xs">
+              {word.completed === false && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddWord?.(word.word, word.definition || word.translation, word);
+                  }}
+                  className="p-1.5 rounded-md text-amber-600 hover:text-amber-950 hover:bg-amber-50 transition-all cursor-pointer"
+                  title="Complete Word"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => {

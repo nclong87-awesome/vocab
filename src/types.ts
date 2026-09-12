@@ -98,6 +98,7 @@ export interface Word {
   exampleTranslation: string | undefined;
   learned: boolean;
   starred: boolean;
+  completed?: boolean; // false indicates an incomplete/draft word temporarily added from suggestions
   createdAt: string;
   lastReviewed: string | null;
   nextReviewDate?: string | null; // Exact ISO timestamp when this word becomes eligible for next review/quiz

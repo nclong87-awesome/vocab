@@ -79,6 +79,7 @@ export default function App() {
     handleToggleStar,
     handleToggleLearned,
     handleAddCustomWord,
+    handleAddIncompleteWord,
     handleDeleteWord,
     handleUpdateWords,
     handleFinishQuiz,
@@ -89,6 +90,26 @@ export default function App() {
     setToastMessage(msgText);
     setTimeout(() => setToastMessage(null), 3500);
   }, []);
+
+  const handleAddIncompleteWordToCollection = useCallback((wordData: Partial<Word>) => {
+    if (!wordData || !wordData.word) return;
+    handleAddIncompleteWord({
+      word: wordData.word,
+      translation: wordData.translation || "",
+      definition: wordData.definition || "",
+      partOfSpeech: wordData.partOfSpeech || "",
+      category: wordData.category || "General",
+      context: wordData.context || "",
+      pronunciation: wordData.pronunciation,
+      example: wordData.example,
+      exampleTranslation: wordData.exampleTranslation,
+      suggestedWords: wordData.suggestedWords,
+    });
+    showToast(
+      t("toast_added_incomplete_word", appLanguage, { word: wordData.word }) ||
+      `Added "${wordData.word}" to collection (incomplete).`
+    );
+  }, [handleAddIncompleteWord, showToast, appLanguage]);
 
   useEffect(() => {
     const handleToastEvent = (e: any) => {
@@ -473,6 +494,7 @@ export default function App() {
                     onCancelTyping={handleCancelTyping}
                     onSendMessage={handleSendChatMessage}
                     onAddWord={handleOpenAddWordModal}
+                    onAddIncompleteWord={handleAddIncompleteWordToCollection}
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
                     startPractice={startPractice}
                     onFixGrammar={handlePromptFixGrammar}

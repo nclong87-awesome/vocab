@@ -151,6 +151,7 @@ export const esTranslations: LanguageTranslations = {
     action_suggest_another: "💬 Sugerir Otra Respuesta Informal",
     action_add_all_remaining: "✨ Añadir todas las ({count}) palabras restantes a la colección",
     action_confirm_add_word: "✨ + Confirmar y añadir \"{word}\" ({details})",
+    action_complete_adding_word: "✅ Completar adición de \"{word}\"",
     chat_confirm_word_preview_prompt: "📖 **Definición de vocabulario encontrada**\n\n### **{word}** `{pronunciation}` ({partOfSpeech})\n- **Traducción**: {translation}\n- **Definición**: *{definition}*{exampleSection}\n\n👉 **Por favor confirma:** ¿Deseas agregar **\"{word}\"** a tu colección de vocabulario?",
     chat_cancelled_add_word: "✕ **Se canceló la adición de \"{word}\".**\n\n¡Escribe otra palabra o haz una pregunta para continuar!",
     action_cancel: "✕ Cancelar",
