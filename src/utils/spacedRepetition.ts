@@ -386,9 +386,12 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
     tier = "starred";
     baseWeight = 5;
   } else {
-    const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
-    const isDueOrOverdue = isWordEligibleForReview(word, now) || (lastReviewedTime !== null && days >= 1);
-    if (isDueOrOverdue || (word.learned && days >= 5) || (days >= 2 && reviewCount <= 2)) {
+    const { baselineStrength } = getLastPracticeBaseline(word);
+    const wasMastered = word.learned || baselineStrength >= 80;
+
+    // Tier 2: Memory Decay - Only applies to words that reached mastery and are at risk of forgetting
+    // (e.g. neglected for >= 5 days or decayed below 80%)
+    if (wasMastered && (days >= 5 || (word.strength ?? 0) < 80)) {
       tier = "memoryDecay";
       baseWeight = 4;
     } else if ((word.strength ?? 0) < 50) {
@@ -589,17 +592,22 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
   daysSinceReview: number;
   decayAmount: number;
 } {
-  const { baselineStrength, lastPracticeDate } = getLastPracticeBaseline(word);
+  const { baselineStrength } = getLastPracticeBaseline(word);
   const daysSinceReview = getDaysSinceLastReview(word, now);
   const currentStrength = word.strength ?? 0;
   const reviewCount = getWordReviewCount(word);
-  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed || lastPracticeDate || null;
 
-  // Memory decay applies to any word that has been studied/practiced (has a last practice date or review date)
-  const isStudied = word.learned || baselineStrength > 0 || lastPracticeDate !== null || lastReviewedTime !== null;
-  if (!isStudied || daysSinceReview <= 0) {
+  // Memory decay STRICTLY applies ONLY to words that have achieved Mastered status (learned === true or baselineStrength >= 80)
+  const isMastered = word.learned || baselineStrength >= 80;
+  if (!isMastered || daysSinceReview <= 0) {
+    // Unmastered words retain their earned baseline strength without passive decay.
+    // If an unmastered word previously had its strength reduced below baseline due to old decay, restore it.
+    const restoredStrength = !isMastered && baselineStrength > currentStrength
+      ? baselineStrength
+      : currentStrength;
+
     return {
-      newStrength: currentStrength,
+      newStrength: restoredStrength,
       newLearned: word.learned,
       hasDecayed: false,
       daysSinceReview: 0,
@@ -641,6 +649,7 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
   decayedCount: number;
 } {
   let decayedCount = 0;
+  let healedCount = 0;
 
   const updatedWords = words.map(word => {
     const { newStrength, newLearned, hasDecayed, daysSinceReview, decayAmount } = calculateDecayedWordStrength(word, now);
@@ -648,17 +657,29 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
       decayedCount++;
       const { lastPracticeDate } = getLastPracticeBaseline(word);
       const baselineMs = lastPracticeDate ? new Date(lastPracticeDate).getTime() : 0;
-      const stableId = `hist-decay-${word.id || word.word}-${baselineMs}-${Math.floor(daysSinceReview)}`;
-      const note = `Memory decayed by -${decayAmount}% (${daysSinceReview} day${daysSinceReview > 1 ? 's' : ''} since last practice)`;
+      const elapsedDays = Math.floor(daysSinceReview);
+      const stableId = `hist-decay-${word.id || word.word}-${baselineMs}-${elapsedDays}`;
+      const note = `Memory decayed by -${decayAmount}% (${elapsedDays} day${elapsedDays === 1 ? '' : 's'} since last practice)`;
       return recordStrengthHistory(word, newStrength, "memory_decay", note, stableId);
-    } else if (newStrength !== word.strength || newLearned !== word.learned) {
-      // Self-heal corrupted strength levels from previous reloads
-      return sanitizeAndHealWordHistory(word, newStrength, newLearned);
+    } else {
+      // Check if word needs healing:
+      // 1. Unmastered word with memory_decay entries in strengthHistory
+      // 2. Unmastered word with strength lower than baseline due to old decay
+      // 3. Mismatch between newStrength/newLearned and word.strength/word.learned
+      const { baselineStrength } = getLastPracticeBaseline(word);
+      const isMastered = word.learned || baselineStrength >= 80;
+      const history = word.strengthHistory || [];
+      const hasUnwantedDecayHistory = !isMastered && history.some(t => Array.isArray(t) && t[2] === "memory_decay");
+
+      if (hasUnwantedDecayHistory || newStrength !== word.strength || newLearned !== word.learned) {
+        healedCount++;
+        return sanitizeAndHealWordHistory(word, newStrength, newLearned);
+      }
+      return word;
     }
-    return word;
   });
 
-  return { updatedWords, decayedCount };
+  return { updatedWords, decayedCount: decayedCount + healedCount };
 }
 
 /**

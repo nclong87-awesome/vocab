@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Word } from "../../types";
 import { getEffectiveStrengthHistory } from "../../utils/strengthHistoryHelpers";
-import { getDaysSinceLastReview, getNextReviewInfo } from "../../utils/spacedRepetition";
+import { getDaysSinceLastReview, getNextReviewInfo, getLastPracticeBaseline } from "../../utils/spacedRepetition";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 
 interface StrengthHistoryModalProps {
@@ -44,8 +44,18 @@ export default function StrengthHistoryModal({
   const historyEntries = getEffectiveStrengthHistory(word);
   const currentStrength = word.strength ?? 0;
   const daysSincePractice = getDaysSinceLastReview(word);
-  const estimatedDecay = daysSincePractice * 10;
+  const { baselineStrength, lastPracticeDate } = getLastPracticeBaseline(word);
+  const hasPracticeRecord = Boolean(word.lastReviewedAt || lastPracticeDate || word.lastReviewed || historyEntries.some(e => e.reason !== "created"));
+  const elapsedDays = Math.floor(daysSincePractice);
+  const isMastered = word.learned || baselineStrength >= 80;
+  const estimatedDecay = isMastered ? elapsedDays * 10 : 0;
   const reviewInfo = getNextReviewInfo(word);
+
+  const formattedLastPracticed = !hasPracticeRecord
+    ? "Never"
+    : elapsedDays <= 0
+      ? "Today"
+      : `${elapsedDays}d ago`;
   
   // Calculate peak and lowest strength from history
   const strengths = historyEntries.map(e => e.strength);
@@ -194,9 +204,9 @@ export default function StrengthHistoryModal({
               <span className="text-[8px] sm:text-[9px] font-bold text-stone-400 uppercase tracking-wider block">Last Practiced</span>
               <div className="flex items-baseline gap-1">
                 <span className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
-                  {daysSincePractice === 0 ? "Today" : `${daysSincePractice}d ago`}
+                  {formattedLastPracticed}
                 </span>
-                {daysSincePractice > 0 && (
+                {hasPracticeRecord && elapsedDays > 0 && isMastered && estimatedDecay > 0 && (
                   <span className="text-[9px] font-bold text-rose-600">(-{estimatedDecay}%)</span>
                 )}
               </div>
@@ -461,7 +471,7 @@ export default function StrengthHistoryModal({
         <div className="bg-stone-50 border-t border-stone-200 p-3 sm:p-4 flex items-center justify-between text-xs text-stone-500 shrink-0">
           <div className="flex items-center gap-1 text-[10px] sm:text-[11px]">
             <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="line-clamp-1">Strength decreases by 10 points per day without practice (1 day = -10 points). Practicing in quizzes or flashcards restores strength.</span>
+            <span className="line-clamp-1">Memory decay only applies to mastered words to protect long-term retention (~10%/day when neglected). In-progress words retain their strength.</span>
           </div>
           <button
             onClick={onClose}

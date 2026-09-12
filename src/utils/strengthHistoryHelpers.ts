@@ -95,9 +95,16 @@ export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] 
     }
   }
 
+  // Memory decay only applies to words that have achieved mastered status.
+  // If the word was never mastered, filter out spurious memory_decay tuples.
+  const wasEverMastered = word.learned || (word.strength ?? 0) >= 80 || sortedTuples.some(t => t[1] >= 80);
+  const candidateTuples = wasEverMastered
+    ? sortedTuples
+    : sortedTuples.filter(t => t[2] !== "memory_decay");
+
   // Deduplicate adjacent decay entries with identical strength
   const dedupedTuples: StrengthHistoryTuple[] = [];
-  for (const tuple of sortedTuples) {
+  for (const tuple of candidateTuples) {
     const last = dedupedTuples[dedupedTuples.length - 1];
     if (
       last &&
@@ -142,7 +149,9 @@ export function sanitizeAndHealWordHistory(
 
   if (practiceTuples.length > 0) {
     const lastPractice = practiceTuples[practiceTuples.length - 1];
-    if (targetStrength < lastPractice[1]) {
+    const isMasteredBaseline = targetLearned || (lastPractice && lastPractice[1] >= 80);
+    // Memory decay only applies if word reached mastered baseline
+    if (isMasteredBaseline && targetStrength < lastPractice[1]) {
       cleanHistory.push([lastPractice[0], targetStrength, "memory_decay"]);
     }
   }
@@ -203,6 +212,14 @@ export function recordStrengthHistory(
 
   const sortedTuples = [...existingTuples].sort((a, b) => (a?.[0] ?? 0) - (b?.[0] ?? 0));
   const lastTuple = sortedTuples[sortedTuples.length - 1];
+
+  // Defensive guard: Memory decay only applies to words that are or were mastered
+  if (reason === "memory_decay") {
+    const isMastered = word.learned || (word.strength ?? 0) >= 80 || existingTuples.some(t => t[1] >= 80);
+    if (!isMastered) {
+      return word;
+    }
+  }
 
   // Prevent duplicate decay entries if the last entry is already a memory_decay entry with the exact same strength
   if (

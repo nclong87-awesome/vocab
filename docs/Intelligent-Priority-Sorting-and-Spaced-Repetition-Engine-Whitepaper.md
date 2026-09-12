@@ -161,6 +161,8 @@ $$
 \end{cases}
 $$
 
+> **Scope Constraint (Mastered Words Only):** In-progress and unmastered words ($K_{\text{baseline}} < 80$ and $\text{learned} = \text{false}$) are strictly exempt from passive memory decay. This prevents vocabulary backlogs (e.g. collections with thousands of words) from artificially wiping earned progress before learners can revisit them. In-progress words retain their earned baseline strength until actively tested or practiced.
+
 #### 3.2 Idempotent History Auditing
 
 When a decay event is detected:

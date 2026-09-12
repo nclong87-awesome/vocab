@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { Volume2, RefreshCw, History, Timer, CheckCircle2, MessageSquare } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
-import { getDaysSinceLastReview, getNextReviewInfo } from "../../utils/spacedRepetition";
+import { getDaysSinceLastReview, getNextReviewInfo, getLastPracticeBaseline } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "./StrengthHistoryModal";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 import WordChatModal from "../chat/WordChatModal";
@@ -46,7 +46,9 @@ function WordAnalyticsCard({
   const isMastered = word.learned || word.strength >= 80;
   const strengthLevel = word.strength ?? 0;
   const daysSinceReview = getDaysSinceLastReview(word);
-  const isMemoryDecayed = daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80 && daysSinceReview >= 1);
+  const { baselineStrength } = getLastPracticeBaseline(word);
+  const wasMastered = word.learned || baselineStrength >= 80;
+  const isMemoryDecayed = wasMastered && (daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80 && daysSinceReview >= 1));
   const reviewInfo = getNextReviewInfo(word);
 
   const handleModalWordUpdate = (updated: Word) => {
@@ -74,9 +76,12 @@ function WordAnalyticsCard({
               <h4 className="text-lg font-bold text-stone-900 tracking-tight flex flex-wrap items-center gap-2">
                 <span className="truncate">{word.word}</span>
                 {isMemoryDecayed && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-mono shrink-0" title={`Last reviewed ${daysSinceReview} day(s) ago. Refresher recommended!`}>
+                  <span
+                    className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-mono shrink-0"
+                    title={`Last reviewed ${Math.floor(daysSinceReview)} day(s) ago. Refresher recommended!`}
+                  >
                     <RefreshCw className="w-2.5 h-2.5 text-amber-600 animate-spin-slow" />
-                    <span>{daysSinceReview > 0 ? `${daysSinceReview}d ago` : "Refresher"}</span>
+                    <span>{Math.floor(daysSinceReview) > 0 ? `${Math.floor(daysSinceReview)}d ago` : "Refresher"}</span>
                   </span>
                 )}
                 {!isMemoryDecayed && (
