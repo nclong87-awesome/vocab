@@ -456,12 +456,12 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
       className="fixed inset-0 z-50 bg-white flex flex-col h-full w-full overflow-hidden"
     >
       {/* Clean Full-Screen Header */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-stone-200 bg-white shrink-0 shadow-2xs z-10">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 border-b border-stone-200 bg-white shrink-0 shadow-2xs z-10">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={handleCloseModal}
-            className="p-2 -ml-1 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 -ml-1 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
             aria-label="Back"
             title="Close"
           >
@@ -469,30 +469,30 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
           </button>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 id="word-chat-title" className="text-base sm:text-lg font-bold text-stone-900 tracking-tight truncate">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h2 id="word-chat-title" className="text-sm sm:text-lg font-bold text-stone-900 tracking-tight truncate">
                 {isSentence ? "Polished Sentence" : isReply ? "Suggested Reply" : isQuizFeedback ? "Quiz Feedback" : word.word}
               </h2>
               {isSentence ? (
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                <span className="text-[9px] sm:text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
                   Grammar & Polish
                 </span>
               ) : isReply ? (
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                <span className="text-[9px] sm:text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
                   Casual Reply
                 </span>
               ) : isQuizFeedback ? (
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                <span className="text-[9px] sm:text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
                   Quiz Review
                 </span>
               ) : word.partOfSpeech ? (
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 font-mono">
+                <span className="text-[9px] sm:text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 font-mono">
                   {word.partOfSpeech}
                 </span>
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-stone-500 truncate">
+            <div className="flex items-center gap-2 text-[11px] sm:text-xs text-stone-500 truncate leading-tight">
               {isSentence || isReply || isQuizFeedback ? (
                 <span className="text-stone-700 font-medium truncate font-serif italic">"{word.word}"</span>
               ) : (
@@ -509,11 +509,11 @@ ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage i
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={(e) => handleSpeak(word.word, e)}
-            className="p-2 rounded-full text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
             title={`Pronounce "${word.word}"`}
           >
             <Volume2 className="w-5 h-5" />

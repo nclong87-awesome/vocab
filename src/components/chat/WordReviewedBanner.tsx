@@ -24,10 +24,10 @@ export default function WordReviewedBanner({
 
   return (
     <div 
-      className={`my-2 p-2.5 px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs ${className}`}
+      className={`my-1.5 sm:my-2 p-2 sm:p-2.5 px-2.5 sm:px-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs ${className}`}
       id={`word-reviewed-banner-${word.id || word.word.replace(/\s+/g, "_")}`}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 font-mono">
             {prefixLabel}

@@ -1078,12 +1078,12 @@ export default function WordAddModal({
       className="fixed inset-0 z-50 bg-white flex flex-col h-full w-full overflow-hidden"
     >
       {/* Full-Screen Header identical to WordChatModal (Ask AI) */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-stone-200 bg-white shrink-0 shadow-2xs z-10">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 border-b border-stone-200 bg-white shrink-0 shadow-2xs z-10">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={handleCloseModal}
-            className="p-2 -ml-1 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 -ml-1 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
             aria-label="Back"
             title="Close"
           >
@@ -1091,15 +1091,15 @@ export default function WordAddModal({
           </button>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 id="word-add-modal-title" className="text-base sm:text-lg font-bold text-stone-900 tracking-tight truncate">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h2 id="word-add-modal-title" className="text-sm sm:text-lg font-bold text-stone-900 tracking-tight truncate">
                 {currentAppLang === "vi" ? "Thêm từ vựng & Hỏi AI" : "Add Vocabulary & Ask AI"}
               </h2>
-              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+              <span className="text-[9px] sm:text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
                 {targetLanguage}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-stone-500 truncate">
+            <div className="flex items-center gap-2 text-[11px] sm:text-xs text-stone-500 truncate leading-tight">
               <span>{targetLanguage} &bull; {nativeLanguage}</span>
             </div>
           </div>
@@ -1117,50 +1117,62 @@ export default function WordAddModal({
 
       {/* Active Word & Phrasal Verb Tag Bar */}
       {currentWord && (
-        <div className="bg-amber-50/70 border-b border-amber-200/70 px-4 sm:px-6 py-2 shrink-0 flex items-center justify-between gap-3 flex-wrap transition-all">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <span className="text-xs font-bold text-stone-900 tracking-tight">
-              {currentWord.word}
-            </span>
-            {currentWord.pronunciation && (
-              <span className="text-[11px] text-stone-500 font-mono">
-                {currentWord.pronunciation}
-              </span>
+        <div className="bg-amber-50/80 border-b border-amber-200/70 px-3 sm:px-6 py-1 sm:py-1.5 shrink-0 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-3 max-w-4xl w-full mx-auto">
+            {/* Top row on mobile / Left group on desktop */}
+            <div className="flex items-center justify-between sm:justify-start gap-2 min-w-0 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <span className="text-xs sm:text-sm font-bold text-stone-900 tracking-tight truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none shrink-0">
+                  {currentWord.word}
+                </span>
+                {currentWord.pronunciation && (
+                  <span className="text-[10px] sm:text-[11px] text-stone-500 font-mono shrink-0 hidden xs:inline">
+                    {currentWord.pronunciation}
+                  </span>
+                )}
+                {currentWord.partOfSpeech && (
+                  <span className="text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded bg-white text-stone-600 font-medium border border-stone-200/90 shrink-0 truncate max-w-[120px] sm:max-w-none">
+                    {currentWord.partOfSpeech}
+                  </span>
+                )}
+                {currentWord.category && currentWord.category !== "Phrasal Verbs" && currentWord.category !== "General" && (
+                  <span className="hidden md:inline text-[9.5px] px-1.5 py-0.2 rounded-full bg-white text-stone-600 border border-stone-200/90 shrink-0">
+                    {currentWord.category}
+                  </span>
+                )}
+              </div>
+
+              {/* Phrasal Verb Tag Badge / Toggle Button */}
+              <button
+                type="button"
+                onClick={handleTogglePhrasalVerbTag}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium border transition-all cursor-pointer shadow-3xs active:scale-95 shrink-0 select-none ${
+                  isCurrentWordPhrasalVerb
+                    ? "bg-amber-200/90 text-amber-950 border-amber-400 font-semibold"
+                    : "bg-white text-stone-600 border-stone-300 hover:bg-amber-100/70 hover:text-amber-900 hover:border-amber-300"
+                }`}
+                title={
+                  isCurrentWordPhrasalVerb
+                    ? (currentAppLang === "vi" ? "Thẻ: Cụm động từ (nhấp để bỏ gắn thẻ)" : "Tagged: Phrasal Verb (click to toggle off)")
+                    : (currentAppLang === "vi" ? "Nhấp để gắn thẻ Cụm động từ (Phrasal Verb)" : "Click to tag as Phrasal Verb")
+                }
+              >
+                <span className="text-[10px]">🏷️</span>
+                <span className="whitespace-nowrap">
+                  {isCurrentWordPhrasalVerb
+                    ? (currentAppLang === "vi" ? "Cụm động từ" : "Phrasal Verb")
+                    : (currentAppLang === "vi" ? "+ Cụm ĐT" : "+ Phrasal Verb")}
+                </span>
+              </button>
+            </div>
+
+            {/* Bottom row on mobile / Right group on desktop */}
+            {currentWord.translation && (
+              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-stone-600 font-medium truncate min-w-0">
+                <span className="text-stone-400 hidden sm:inline">•</span>
+                <span className="truncate">{currentWord.translation}</span>
+              </div>
             )}
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-stone-700 font-medium border border-stone-200">
-              {currentWord.partOfSpeech || "word"}
-            </span>
-
-            {/* Phrasal Verb Tag Badge / Toggle Button */}
-            <button
-              type="button"
-              onClick={handleTogglePhrasalVerbTag}
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all cursor-pointer shadow-3xs active:scale-95 ${
-                isCurrentWordPhrasalVerb
-                  ? "bg-amber-200/90 text-amber-950 border-amber-400 font-semibold"
-                  : "bg-white text-stone-600 border-stone-300 hover:bg-amber-100/70 hover:text-amber-900 hover:border-amber-300"
-              }`}
-              title={
-                isCurrentWordPhrasalVerb
-                  ? (currentAppLang === "vi" ? "Thẻ: Cụm động từ (nhấp để bỏ gắn thẻ)" : "Tagged: Phrasal Verb (click to toggle off)")
-                  : (currentAppLang === "vi" ? "Nhấp để gắn thẻ Cụm động từ (Phrasal Verb)" : "Click to tag as Phrasal Verb")
-              }
-            >
-              <span>🏷️</span>
-              <span>{isCurrentWordPhrasalVerb ? (currentAppLang === "vi" ? "Cụm động từ" : "Phrasal Verb") : (currentAppLang === "vi" ? "+ Thẻ Cụm động từ" : "+ Tag Phrasal Verb")}</span>
-            </button>
-
-            {currentWord.category && currentWord.category !== "Phrasal Verbs" && currentWord.category !== "General" && (
-              <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-white text-stone-700 border border-stone-200">
-                {currentWord.category}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-stone-600 truncate max-w-xs sm:max-w-md font-medium">
-              {currentWord.translation}
-            </span>
           </div>
         </div>
       )}
