@@ -1,6 +1,10 @@
 import pluralize from "pluralize";
 import { Word } from "../types";
 
+const singularCache = new Map<string, string>();
+const pluralCache = new Map<string, string>();
+const equivalentCache = new Map<string, boolean>();
+
 /**
  * Normalizes a word for loose vocabulary comparison.
  * Trims whitespace, converts to lowercase, and converts to singular form.
@@ -10,13 +14,33 @@ export function normalizeWordForComparison(word?: string | null): string {
   const cleaned = word.trim().toLowerCase();
   if (!cleaned) return "";
 
-  // Use pluralize.singular to get the canonical singular form
+  const cached = singularCache.get(cleaned);
+  if (cached !== undefined) return cached;
+
+  let singular = cleaned;
   try {
-    const singular = pluralize.singular(cleaned);
-    return singular || cleaned;
+    singular = pluralize.singular(cleaned) || cleaned;
   } catch {
-    return cleaned;
+    singular = cleaned;
   }
+  singularCache.set(cleaned, singular);
+  return singular;
+}
+
+/**
+ * Gets the plural form of a word for comparison, with caching.
+ */
+export function getPluralForComparison(word: string): string {
+  const cached = pluralCache.get(word);
+  if (cached !== undefined) return cached;
+  let p = word;
+  try {
+    p = pluralize.plural(word) || word;
+  } catch {
+    p = word;
+  }
+  pluralCache.set(word, p);
+  return p;
 }
 
 /**
@@ -33,22 +57,30 @@ export function areWordsEquivalent(word1?: string | null, word2?: string | null)
   if (w1 === w2) return true;
   if (!w1 || !w2) return false;
 
+  const cacheKey = w1 < w2 ? `${w1}|||${w2}` : `${w2}|||${w1}`;
+  const cached = equivalentCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  let result = false;
   // 2. Normalized singular comparison
   const s1 = normalizeWordForComparison(w1);
   const s2 = normalizeWordForComparison(w2);
-  if (s1 && s2 && s1 === s2) return true;
-
-  // 3. Plural check
-  try {
-    const p1 = pluralize.plural(w1);
-    const p2 = pluralize.plural(w2);
-    if (p1 && p2 && p1 === p2) return true;
-    if (p1 === w2 || p2 === w1 || s1 === w2 || s2 === w1) return true;
-  } catch {
-    // Fallback to strict comparison
+  if (s1 && s2 && s1 === s2) {
+    result = true;
+  } else {
+    // 3. Plural check
+    try {
+      const p1 = getPluralForComparison(w1);
+      const p2 = getPluralForComparison(w2);
+      if (p1 && p2 && p1 === p2) result = true;
+      else if (p1 === w2 || p2 === w1 || s1 === w2 || s2 === w1) result = true;
+    } catch {
+      result = false;
+    }
   }
 
-  return false;
+  equivalentCache.set(cacheKey, result);
+  return result;
 }
 
 /**
@@ -57,7 +89,38 @@ export function areWordsEquivalent(word1?: string | null, word2?: string | null)
  */
 export function findWordInCollection(words: Word[], targetWord?: string | null): Word | undefined {
   if (!words || !Array.isArray(words) || words.length === 0 || !targetWord) return undefined;
-  return words.find((w) => areWordsEquivalent(w.word, targetWord));
+  const targetClean = targetWord.trim().toLowerCase();
+  if (!targetClean) return undefined;
+
+  // Fast path 1: Exact string match (no pluralize needed)
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (w.word && w.word.trim().toLowerCase() === targetClean) {
+      return w;
+    }
+  }
+
+  // Fast path 2: Normalized singular match
+  const targetSingular = normalizeWordForComparison(targetClean);
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (w.word) {
+      const wSingular = normalizeWordForComparison(w.word);
+      if (wSingular === targetSingular) {
+        return w;
+      }
+    }
+  }
+
+  // Fast path 3: Full equivalence check
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (areWordsEquivalent(w.word, targetClean)) {
+      return w;
+    }
+  }
+
+  return undefined;
 }
 
 /**

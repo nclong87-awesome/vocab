@@ -1,6 +1,6 @@
 import { Word, StrengthHistoryReason, StrengthHistoryTuple } from "../types";
 import { recordStrengthHistory, sanitizeAndHealWordHistory } from "./strengthHistoryHelpers";
-import { areWordsEquivalent } from "./wordNormalization";
+import { areWordsEquivalent, normalizeWordForComparison } from "./wordNormalization";
 
 export interface BaselinePracticeInfo {
   baselineStrength: number;
@@ -428,11 +428,17 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 
   sampled.sort((a, b) => b.key - a.key);
   const result: Word[] = [];
+  const seenIds = new Set<string>();
+  const seenNorm = new Set<string>();
+
   for (const s of sampled) {
-    if (!result.some(w => w.id === s.word.id || areWordsEquivalent(w.word, s.word.word))) {
-      result.push(s.word);
-      if (result.length >= count) break;
-    }
+    if (seenIds.has(s.word.id)) continue;
+    const norm = normalizeWordForComparison(s.word.word);
+    if (norm && seenNorm.has(norm)) continue;
+    seenIds.add(s.word.id);
+    if (norm) seenNorm.add(norm);
+    result.push(s.word);
+    if (result.length >= count) break;
   }
   return result;
 }
@@ -483,6 +489,9 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     // Gather candidate pool across all priority tiers, sorting within each tier by neglect ratio descending
     // so older / less-reviewed words (like 'knit') take priority over frequently appearing words (like 'express')
     const candidatePool: WeightedCandidate[] = [];
+    const poolSeenIds = new Set<string>();
+    const poolSeenNorm = new Set<string>();
+
     const addTierToPool = (tierWords: Word[], tierName: "starred" | "memoryDecay" | "weak" | "rest") => {
       const sortedByNeglect = [...tierWords].sort((a, b) => {
         const daysA = getDaysSinceLastReview(a, now);
@@ -496,10 +505,13 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
 
       for (const word of sortedByNeglect) {
         if (candidatePool.length >= candidatePoolSize) break;
-        if (!candidatePool.some(item => item.word.id === word.id || areWordsEquivalent(item.word.word, word.word))) {
-          const { weight } = getWordTierAndWeight(word, now);
-          candidatePool.push({ word, tier: tierName, weight });
-        }
+        if (poolSeenIds.has(word.id)) continue;
+        const norm = normalizeWordForComparison(word.word);
+        if (norm && poolSeenNorm.has(norm)) continue;
+        poolSeenIds.add(word.id);
+        if (norm) poolSeenNorm.add(norm);
+        const { weight } = getWordTierAndWeight(word, now);
+        candidatePool.push({ word, tier: tierName, weight });
       }
     };
 
@@ -826,11 +838,17 @@ export function getCandidateWordsForImmersion(
   ];
 
   const prioritized: Word[] = [];
+  const seenIds = new Set<string>();
+  const seenNorm = new Set<string>();
+
   for (const w of rawPrioritized) {
-    if (!prioritized.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
-      prioritized.push(w);
-      if (prioritized.length >= count) break;
-    }
+    if (seenIds.has(w.id)) continue;
+    const norm = normalizeWordForComparison(w.word);
+    if (norm && seenNorm.has(norm)) continue;
+    seenIds.add(w.id);
+    if (norm) seenNorm.add(norm);
+    prioritized.push(w);
+    if (prioritized.length >= count) break;
   }
 
   return prioritized;
@@ -923,19 +941,26 @@ export function getAllPracticeCandidates(words: Word[], now: Date = new Date(), 
   if (!words || words.length === 0) return [];
   const validWords = words.filter(w => w.completed !== false);
   const practiceList: Word[] = [];
+  const seenIds = new Set<string>();
+  const seenNorm = new Set<string>();
+
+  const addWord = (w: Word) => {
+    if (seenIds.has(w.id)) return;
+    const norm = normalizeWordForComparison(w.word);
+    if (norm && seenNorm.has(norm)) return;
+    seenIds.add(w.id);
+    if (norm) seenNorm.add(norm);
+    practiceList.push(w);
+  };
 
   const quizList = getQuizCandidates(validWords, now, customCooldownHours);
-  for (const w of quizList) {
-    if (!practiceList.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
-      practiceList.push(w);
-    }
+  for (let i = 0; i < quizList.length; i++) {
+    addWord(quizList[i]);
   }
 
   const immersionList = getImmersionCandidates(validWords, now, customCooldownHours);
-  for (const w of immersionList) {
-    if (!practiceList.some(p => p.id === w.id || areWordsEquivalent(p.word, w.word))) {
-      practiceList.push(w);
-    }
+  for (let i = 0; i < immersionList.length; i++) {
+    addWord(immersionList[i]);
   }
 
   return practiceList;
