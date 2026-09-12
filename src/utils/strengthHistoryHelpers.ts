@@ -228,11 +228,19 @@ export function recordStrengthHistory(
     ? boundedStrength >= 80
     : (boundedStrength >= 80 ? true : boundedStrength === 0 ? false : word.learned);
 
+  const isPracticeReason = reason !== "memory_decay" && reason !== "created" && reason !== "manual_adjust";
+  const prevReviewCount = typeof word.reviewCount === "number" ? word.reviewCount : (
+    sortedTuples.filter(t => t[2] !== "created" && t[2] !== "manual_adjust" && t[2] !== "memory_decay").length
+  );
+  const newReviewCount = isPracticeReason ? prevReviewCount + 1 : prevReviewCount;
+
   const interimWord: Word = {
     ...word,
     strength: boundedStrength,
     learned: newLearnedState,
     lastReviewed: reason === "memory_decay" ? word.lastReviewed : nowIso,
+    lastReviewedAt: reason === "memory_decay" ? (word.lastReviewedAt || word.lastReviewed) : nowIso,
+    reviewCount: newReviewCount,
     strengthHistory: updatedHistory
   };
 

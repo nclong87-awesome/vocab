@@ -8,6 +8,23 @@ export interface BaselinePracticeInfo {
 }
 
 /**
+ * Calculates or retrieves the total review/practice count for a word.
+ * Evaluates explicitly set word.reviewCount or counts active practice events in strength history.
+ */
+export function getWordReviewCount(word: Word): number {
+  if (typeof word.reviewCount === "number" && !isNaN(word.reviewCount) && word.reviewCount >= 0) {
+    return word.reviewCount;
+  }
+  const history: StrengthHistoryTuple[] = (word.strengthHistory || []).filter(
+    (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+  );
+  const practiceEntries = history.filter(
+    t => t[2] !== "created" && t[2] !== "manual_adjust" && t[2] !== "memory_decay"
+  );
+  return practiceEntries.length;
+}
+
+/**
  * Gets the baseline strength and timestamp from the last non-decay practice/review event.
  */
 export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
@@ -31,8 +48,8 @@ export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
     }
   }
 
-  // Fallback if no practice history exists yet:
-  const practiceDate = word.lastReviewed || null;
+  // Fallback if no practice history exists yet (checking lastReviewedAt or lastReviewed):
+  const practiceDate = word.lastReviewedAt || word.lastReviewed || null;
   const fallbackStrength = word.learned
     ? Math.max(80, word.strength ?? 100)
     : (word.strength ?? 0);
@@ -48,7 +65,7 @@ export function getLastPracticeBaseline(word: Word): BaselinePracticeInfo {
  */
 export function getHoursSinceLastReview(word: Word, now: Date = new Date()): number {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const dateStr = lastPracticeDate || word.lastReviewed || null;
+  const dateStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed || null;
   if (!dateStr) return Infinity; // Never reviewed
 
   const reviewDate = new Date(dateStr);
@@ -60,10 +77,10 @@ export function getHoursSinceLastReview(word: Word, now: Date = new Date()): num
 }
 
 /**
- * Adaptive Spaced Repetition Algorithm based on Strength History:
+ * Adaptive Spaced Repetition Algorithm based on Strength History & Review Count:
  * Computes the optimal review interval (in hours) before a word should be reintroduced.
  *
- * Factors evaluated from strength history:
+ * Factors evaluated:
  * 1. Recent Mistake Factor: If the last practice was incorrect, shortens interval to 4-12 hours for urgent remediation.
  * 2. Consecutive Success Streak: Successive correct reviews expand retention interval by full days (1d -> 2d -> 4d -> 7d -> 14d -> 30d).
  * 3. Memory Strength Modulation: Higher memory strength safely scales multi-day intervals while preserving a minimum 1-day (24h) baseline for correct reviews.
@@ -116,7 +133,6 @@ export function calculateNextReviewIntervalHours(
   }
 
   // 3. Positive success streak: Schedule reviews in day increments (minimum 24 hours / 1 day)
-  // This keeps review intervals aligned with daily study routines instead of scheduling odd middle-of-the-night hours.
   if (consecutiveSuccesses >= 1) {
     let baseDays: number;
     if (consecutiveSuccesses === 1) {
@@ -135,7 +151,6 @@ export function calculateNextReviewIntervalHours(
     }
 
     // For positive streaks, strength scales retention outward (1.0x at low/normal strength up to 1.3x at 100% strength)
-    // Never shrinks below 1 day (24 hours) for a correct answer
     const streakStrengthMultiplier = Math.max(1.0, Math.min(1.3, 0.7 + (currentStrength / 100) * 0.6));
     let calculatedDays = Math.max(1, Math.round(baseDays * streakStrengthMultiplier));
 
@@ -186,7 +201,8 @@ export function isWordOnReviewCooldown(
   now: Date = new Date(),
   minCooldownHours: number = MIN_REVIEW_COOLDOWN_HOURS
 ): boolean {
-  if (!word.lastReviewed) return false;
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
+  if (!lastReviewedTime) return false;
 
   // Strict time check: if reviewed within the minimum cooldown window, it is on cooldown
   const hoursSince = getHoursSinceLastReview(word, now);
@@ -196,7 +212,7 @@ export function isWordOnReviewCooldown(
 
   // Dynamic scheduled interval check: if before scheduled practice time, it is on cooldown
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const baselineStr = lastPracticeDate || word.lastReviewed;
+  const baselineStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed;
   if (baselineStr) {
     const baselineTime = new Date(baselineStr);
     if (!isNaN(baselineTime.getTime())) {
@@ -229,8 +245,9 @@ export function isWordEligibleForReview(
     return false;
   }
 
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
   // If never reviewed, it is immediately eligible for initial review/practice
-  if (!word.lastReviewed) {
+  if (!lastReviewedTime) {
     return true;
   }
 
@@ -244,7 +261,7 @@ export function isWordEligibleForReview(
 
   // Compute dynamic next review date from history baseline
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const baselineStr = lastPracticeDate || word.lastReviewed;
+  const baselineStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed;
   if (!baselineStr) return true;
 
   const baselineTime = new Date(baselineStr);
@@ -269,14 +286,16 @@ export interface NextReviewInfo {
  */
 export function getNextReviewInfo(word: Word, now: Date = new Date()): NextReviewInfo {
   let targetIso: string;
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
 
   // Unreviewed words are immediately due for initial study
-  if (!word.lastReviewed) {
+  if (!lastReviewedTime) {
     targetIso = new Date(now.getTime() - 1000).toISOString();
   } else {
     // Dynamic recalculation using last practice baseline and current adaptive interval
     const { lastPracticeDate } = getLastPracticeBaseline(word);
-    const fromDate = lastPracticeDate ? new Date(lastPracticeDate) : new Date(word.lastReviewed);
+    const fromDateStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed;
+    const fromDate = fromDateStr ? new Date(fromDateStr) : new Date();
     if (!isNaN(fromDate.getTime())) {
       targetIso = calculateNextReviewDate(word, word.strength, undefined, fromDate);
     } else {
@@ -288,7 +307,7 @@ export function getNextReviewInfo(word: Word, now: Date = new Date()): NextRevie
   const diffMs = targetDate.getTime() - now.getTime();
   const diffHours = diffMs / (1000 * 60 * 60);
   const diffDays = Math.ceil(diffHours / 24);
-  const isDue = !word.lastReviewed || diffMs <= 0;
+  const isDue = !lastReviewedTime || diffMs <= 0;
 
   let formattedCountdown = "Ready for Review";
   if (!isDue) {
@@ -335,8 +354,9 @@ export interface WeightedCandidate {
 export function isWordLearnedOrStudied(word: Word): boolean {
   if (word.completed === false) return false;
   if (word.learned) return true;
-  if (word.lastReviewed) return true;
+  if (word.lastReviewedAt || word.lastReviewed) return true;
   if ((word.strength ?? 0) > 0) return true;
+  if (typeof word.reviewCount === "number" && word.reviewCount > 0) return true;
   if (word.strengthHistory && word.strengthHistory.length > 0) {
     const hasStudyHistory = word.strengthHistory.some(
       t => Array.isArray(t) && t[2] !== "created" && t[2] !== "manual_adjust"
@@ -347,31 +367,48 @@ export function isWordLearnedOrStudied(word: Word): boolean {
 }
 
 /**
- * Assigns probability weight based on word urgency tier for learned/studied words:
- * - Starred: weight 5
- * - Memory Decay: weight 4
- * - Weak (strength < 50): weight 3
- * - Rest: weight 1
+ * Assigns probability weight based on word urgency tier, incorporating
+ * the 'lastReviewedAt' timestamp and 'reviewCount'.
+ * Older words (high elapsed days since lastReviewedAt, lower reviewCount, e.g. 'knit') receive
+ * higher priority selection weights than frequently appearing words (recent lastReviewedAt, high reviewCount, e.g. 'express').
  */
 export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
   tier: "starred" | "memoryDecay" | "weak" | "rest";
   weight: number;
 } {
-  if (word.starred) {
-    return { tier: "starred", weight: 5 };
-  }
-
   const days = getDaysSinceLastReview(word, now);
-  const isDueOrOverdue = isWordEligibleForReview(word, now) || (word.lastReviewed !== null && days >= 1);
-  if (isDueOrOverdue || (word.learned && days >= 5)) {
-    return { tier: "memoryDecay", weight: 4 };
+  const reviewCount = getWordReviewCount(word);
+
+  let tier: "starred" | "memoryDecay" | "weak" | "rest";
+  let baseWeight: number;
+
+  if (word.starred) {
+    tier = "starred";
+    baseWeight = 5;
+  } else {
+    const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
+    const isDueOrOverdue = isWordEligibleForReview(word, now) || (lastReviewedTime !== null && days >= 1);
+    if (isDueOrOverdue || (word.learned && days >= 5) || (days >= 2 && reviewCount <= 2)) {
+      tier = "memoryDecay";
+      baseWeight = 4;
+    } else if ((word.strength ?? 0) < 50) {
+      tier = "weak";
+      baseWeight = 3;
+    } else {
+      tier = "rest";
+      baseWeight = 1;
+    }
   }
 
-  if ((word.strength ?? 0) < 50) {
-    return { tier: "weak", weight: 3 };
-  }
+  // Calculate Neglect Ratio: days elapsed since last review relative to total review count.
+  // Older words with lower review counts (e.g. 'knit', days = 10, reviewCount = 1 -> ratio = 10)
+  // receive a significantly higher priority multiplier compared to frequently appearing words
+  // (e.g. 'express', days = 1, reviewCount = 8 -> ratio = 0.125).
+  const neglectRatio = days / Math.max(1, reviewCount);
+  const priorityMultiplier = Math.min(3.0, 1.0 + neglectRatio * 0.4);
+  const finalWeight = Math.max(1, Math.round(baseWeight * priorityMultiplier));
 
-  return { tier: "rest", weight: 1 };
+  return { tier, weight: finalWeight };
 }
 
 /**
@@ -398,13 +435,8 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 }
 
 /**
- * Selects candidate words for a new quiz based on dynamic spaced repetition eligibility and vocabulary backlog.
- * 1. Prioritizes words that have been learned or studied previously and are due for review (isWordEligibleForReview),
- *    applying A-Res weighted sampling across priority tiers (starred: 5, memoryDecay: 4, weak: 3, rest: 1).
- * 2. If due review words are insufficient to meet maxCandidates (or if the user has thousands of unstudied words
- *    waiting to be practiced), seamlessly fills remaining slots from unstudied words (sorted oldest/starred first),
- *    strictly excluding any words on review cooldown.
- * 3. Never returns words that were reviewed within the mandatory review cooldown window unless no other words exist.
+ * Selects candidate words for a new quiz based on dynamic spaced repetition eligibility,
+ * 'lastReviewedAt' timestamp, and 'reviewCount'.
  */
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
@@ -445,25 +477,33 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
       else rest.push(word);
     }
 
-    // Helper to shuffle an array randomly
-    const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => 0.5 - Math.random());
-
-    // Gather candidate pool across all priority tiers (ensuring no duplicate equivalent words in the pool)
+    // Gather candidate pool across all priority tiers, sorting within each tier by neglect ratio descending
+    // so older / less-reviewed words (like 'knit') take priority over frequently appearing words (like 'express')
     const candidatePool: WeightedCandidate[] = [];
-    const addTierToPool = (tierWords: Word[], tier: "starred" | "memoryDecay" | "weak" | "rest", weight: number) => {
-      const shuffled = shuffle(tierWords);
-      for (const word of shuffled) {
+    const addTierToPool = (tierWords: Word[], tierName: "starred" | "memoryDecay" | "weak" | "rest") => {
+      const sortedByNeglect = [...tierWords].sort((a, b) => {
+        const daysA = getDaysSinceLastReview(a, now);
+        const daysB = getDaysSinceLastReview(b, now);
+        const countA = getWordReviewCount(a);
+        const countB = getWordReviewCount(b);
+        const ratioA = daysA / Math.max(1, countA);
+        const ratioB = daysB / Math.max(1, countB);
+        return ratioB - ratioA; // Higher neglect ratio first
+      });
+
+      for (const word of sortedByNeglect) {
         if (candidatePool.length >= candidatePoolSize) break;
         if (!candidatePool.some(item => item.word.id === word.id || areWordsEquivalent(item.word.word, word.word))) {
-          candidatePool.push({ word, tier, weight });
+          const { weight } = getWordTierAndWeight(word, now);
+          candidatePool.push({ word, tier: tierName, weight });
         }
       }
     };
 
-    addTierToPool(starred, "starred", 5);
-    addTierToPool(memoryDecay, "memoryDecay", 4);
-    addTierToPool(weak, "weak", 3);
-    addTierToPool(rest, "rest", 1);
+    addTierToPool(starred, "starred");
+    addTierToPool(memoryDecay, "memoryDecay");
+    addTierToPool(weak, "weak");
+    addTierToPool(rest, "rest");
 
     // Perform Weighted Random Sampling from the candidate pool
     selectedWords = sampleWeightedCandidates(candidatePool, maxCandidates);
@@ -494,8 +534,14 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
       w => !isAlreadySelected(w, selectedWords) && !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS)
     );
     if (otherAvailable.length > 0) {
-      const shuffled = [...otherAvailable].sort(() => 0.5 - Math.random());
-      for (const w of shuffled) {
+      const sortedByNeglect = [...otherAvailable].sort((a, b) => {
+        const daysA = getDaysSinceLastReview(a, now);
+        const daysB = getDaysSinceLastReview(b, now);
+        const countA = getWordReviewCount(a);
+        const countB = getWordReviewCount(b);
+        return (daysB / Math.max(1, countB)) - (daysA / Math.max(1, countA));
+      });
+      for (const w of sortedByNeglect) {
         if (selectedWords.length >= maxCandidates) break;
         if (!isAlreadySelected(w, selectedWords)) {
           selectedWords.push(w);
@@ -508,26 +554,33 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
 }
 
 /**
- * Calculates days elapsed since the word was last reviewed or practiced.
+ * Calculates days elapsed since the word was last reviewed or practiced (using lastReviewedAt or lastReviewed).
  */
 export function getDaysSinceLastReview(word: Word, now: Date = new Date()): number {
   const { lastPracticeDate } = getLastPracticeBaseline(word);
-  const dateStr = lastPracticeDate || word.lastReviewed || null;
+  const dateStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed || null;
   if (!dateStr) return 0;
 
   const reviewDate = new Date(dateStr);
   if (isNaN(reviewDate.getTime())) return 0;
 
   const diffMs = now.getTime() - reviewDate.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
   return Math.max(0, diffDays);
 }
 
 /**
- * Evaluates memory decay based on spaced repetition principles.
- * Returns the recalculated strength (0 to 100) and learned flag for a word.
- * Rule: Starting from the last practice baseline, strength decreases
- * by 10 points per day elapsed (1 day = -10 points).
+ * Evaluates memory decay based on spaced repetition principles, incorporating
+ * the 'lastReviewedAt' timestamp and 'reviewCount'.
+ *
+ * Mathematical formulation:
+ * 1. Time Delta: Days elapsed since the last review timestamp (lastReviewedAt / lastReviewed / practice baseline).
+ * 2. Review Count Modulation (Memory Stability):
+ *    Words reviewed many times (high reviewCount, e.g. frequently appearing 'express') have higher stability,
+ *    reducing their daily decay rate (e.g., 10 / (1 + 0.25 * (reviewCount - 1))).
+ * 3. Neglect Penalty & Demotion:
+ *    Older words with low reviewCount (e.g., 'knit') decay faster per day when neglected,
+ *    causing their strength to decrease more rapidly so they are flagged for remediation and higher review priority.
  */
 export function calculateDecayedWordStrength(word: Word, now: Date = new Date()): {
   newStrength: number;
@@ -539,9 +592,11 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
   const { baselineStrength, lastPracticeDate } = getLastPracticeBaseline(word);
   const daysSinceReview = getDaysSinceLastReview(word, now);
   const currentStrength = word.strength ?? 0;
-  
+  const reviewCount = getWordReviewCount(word);
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed || lastPracticeDate || null;
+
   // Memory decay applies to any word that has been studied/practiced (has a last practice date or review date)
-  const isStudied = word.learned || baselineStrength > 0 || lastPracticeDate !== null || word.lastReviewed !== null;
+  const isStudied = word.learned || baselineStrength > 0 || lastPracticeDate !== null || lastReviewedTime !== null;
   if (!isStudied || daysSinceReview <= 0) {
     return {
       newStrength: currentStrength,
@@ -552,9 +607,15 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
     };
   }
 
-  // Decay 10 points per day since last practice (1 day = -10 points)
-  const decayAmount = daysSinceReview * 10;
-  const targetStrength = Math.max(0, baselineStrength - decayAmount);
+  // Memory Stability Factor (S): High reviewCount moderates daily decay (higher retention stability).
+  // Low reviewCount words decay at standard rate (~10% per day), whereas high reviewCount words (e.g. 5+ reviews) decay slower.
+  const stabilityFactor = Math.max(1.0, Math.min(3.0, 1.0 + 0.25 * Math.max(0, reviewCount - 1)));
+  const effectiveDailyDecayRate = 10 / stabilityFactor;
+
+  // Total decay amount based on days elapsed since lastReviewedAt / lastPracticeDate
+  const rawDecayAmount = daysSinceReview * effectiveDailyDecayRate;
+  const decayAmount = Math.round(rawDecayAmount);
+  const targetStrength = Math.max(0, Math.round(baselineStrength - decayAmount));
 
   // A word remains mastered only if strength >= 80
   const newLearned = targetStrength >= 80;
@@ -567,7 +628,7 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
     newStrength: targetStrength,
     newLearned,
     hasDecayed,
-    daysSinceReview,
+    daysSinceReview: Math.round(daysSinceReview * 10) / 10,
     decayAmount
   };
 }
@@ -587,8 +648,8 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
       decayedCount++;
       const { lastPracticeDate } = getLastPracticeBaseline(word);
       const baselineMs = lastPracticeDate ? new Date(lastPracticeDate).getTime() : 0;
-      const stableId = `hist-decay-${word.id || word.word}-${baselineMs}-${daysSinceReview}`;
-      const note = `Memory decayed by -${decayAmount}% (${daysSinceReview} day${daysSinceReview > 1 ? 's' : ''} since last practice at -10%/day)`;
+      const stableId = `hist-decay-${word.id || word.word}-${baselineMs}-${Math.floor(daysSinceReview)}`;
+      const note = `Memory decayed by -${decayAmount}% (${daysSinceReview} day${daysSinceReview > 1 ? 's' : ''} since last practice)`;
       return recordStrengthHistory(word, newStrength, "memory_decay", note, stableId);
     } else if (newStrength !== word.strength || newLearned !== word.learned) {
       // Self-heal corrupted strength levels from previous reloads
@@ -666,8 +727,9 @@ export function isImmersionCandidate(word: Word, now: Date = new Date(), customC
   // Incomplete words are strictly excluded from practice
   if (word.completed === false) return false;
 
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
   // 1. Never studied / brand new words are immediately eligible for initial immersion introduction
-  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+  if (!isWordLearnedOrStudied(word) || !lastReviewedTime) {
     return true;
   }
 
@@ -705,30 +767,41 @@ export function getCandidateWordsForImmersion(
     return [];
   }
 
-  // Categorize eligible words by priority to give the most impactful words first:
+  // Categorize eligible words by priority:
   // 1. Words with unresolved quiz errors (urgent remedial review)
   // 2. Never learned / unreviewed words
-  // 3. Due spaced repetition reviews
+  // 3. Due spaced repetition reviews (sorted by neglect ratio descending)
   const quizErrorWords: Word[] = [];
   const neverLearnedWords: Word[] = [];
   const srsDueWords: Word[] = [];
 
   for (const word of eligibleWords) {
+    const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
     if (hasUnresolvedQuizMistake(word)) {
       quizErrorWords.push(word);
-    } else if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+    } else if (!isWordLearnedOrStudied(word) || !lastReviewedTime) {
       neverLearnedWords.push(word);
     } else {
       srsDueWords.push(word);
     }
   }
 
-  // Prioritize unstudied words chronologically FIFO (oldest added first, e.g. yesterday before today)
+  // Prioritize unstudied words chronologically FIFO and SRS due words by neglect ratio descending
   const sortedNeverLearned = sortUnstudiedWordsOldestFirst(neverLearnedWords);
+  const sortedSrsDue = [...srsDueWords].sort((a, b) => {
+    const daysA = getDaysSinceLastReview(a, now);
+    const daysB = getDaysSinceLastReview(b, now);
+    const countA = getWordReviewCount(a);
+    const countB = getWordReviewCount(b);
+    const ratioA = daysA / Math.max(1, countA);
+    const ratioB = daysB / Math.max(1, countB);
+    return ratioB - ratioA; // Higher neglect ratio (older / less reviewed) first
+  });
+
   const rawPrioritized = [
     ...quizErrorWords,
     ...sortedNeverLearned,
-    ...srsDueWords,
+    ...sortedSrsDue,
   ];
 
   const prioritized: Word[] = [];
@@ -770,8 +843,9 @@ export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldo
     }
   }
 
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
   // Brand new, unstudied words are eligible for initial quiz practice
-  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+  if (!isWordLearnedOrStudied(word) || !lastReviewedTime) {
     return true;
   }
 
@@ -783,7 +857,8 @@ export function isQuizCandidate(word: Word, now: Date = new Date(), customCooldo
  */
 export function isDueReviewCandidate(word: Word, now: Date = new Date(), customCooldownHours?: number): boolean {
   if (word.completed === false) return false;
-  if (!isWordLearnedOrStudied(word) || !word.lastReviewed) {
+  const lastReviewedTime = word.lastReviewedAt || word.lastReviewed;
+  if (!isWordLearnedOrStudied(word) || !lastReviewedTime) {
     return false;
   }
   const cooldown = customCooldownHours !== undefined ? customCooldownHours : MIN_REVIEW_COOLDOWN_HOURS;

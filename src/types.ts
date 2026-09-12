@@ -101,6 +101,8 @@ export interface Word {
   completed?: boolean; // false indicates an incomplete/draft word temporarily added from suggestions
   createdAt: string;
   lastReviewed: string | null;
+  lastReviewedAt?: string | null;
+  reviewCount?: number;
   nextReviewDate?: string | null; // Exact ISO timestamp when this word becomes eligible for next review/quiz
   strength: number; // 0 to 100
   imageUrl?: string;
