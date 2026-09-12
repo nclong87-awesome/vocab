@@ -234,7 +234,7 @@ export function getPersonalizedInitialActions(
       actions.push({
         label: `✨ Explain why "${correctAns}" fits best`,
         action: "send_message",
-        payload: { message: `Explain why "${correctAns}" is the best choice for this question and highlight key grammar/collocation patterns.` }
+        payload: { message: `Explain why "${correctAns}" is the best choice for this question.` }
       });
       actions.push({
         label: `📝 3 natural example sentences with "${correctAns}"`,
