@@ -132,7 +132,19 @@ export default function WordChatModal({
       let welcomeText = `Hello! How can I help you with the word **${word.word}**${word.translation ? ` (*${word.translation}*)` : ""}?
 You can ask for natural examples, collocations, grammar patterns, or synonyms.`;
 
-      if (isSentence) {
+      if (word.quizContext) {
+        const qc = word.quizContext;
+        const statusBadge = qc.isCorrect ? "✅ Correct" : "❌ Incorrect";
+        const questionText = qc.question ? `\n📌 **Question:** ${qc.question}` : "";
+        const userAnswerText = qc.userAnswer ? `\n📝 **Your Answer:** "${qc.userAnswer}" (${statusBadge})` : "";
+        const correctAnswerText = `\n✨ **Correct Answer:** "**${qc.correctAnswer || word.word}**"${word.translation ? ` (*${word.translation}*)` : ""}`;
+        const sentenceText = qc.sentence ? `\n💬 **Sentence Context:** "${qc.sentence}"` : "";
+
+        welcomeText = `Hello! Let's examine this quiz question in detail:
+${questionText}${userAnswerText}${correctAnswerText}${sentenceText}
+
+How can I help you understand this question or why **${qc.correctAnswer || word.word}** fits best here?`;
+      } else if (isSentence) {
         welcomeText = `Hello! Let's explore this polished sentence: **"${word.word}"**${word.translation ? ` (*${word.translation}*)` : ""}.
 You can ask about grammar structures, nuances, formal vs casual phrasing, or conversational contexts.`;
       } else if (isReply) {
@@ -143,12 +155,15 @@ You can ask about its tone, when to use it, or how to adapt it for different peo
 ${word.context ? `Context: ${word.context}\n` : ""}You can ask about its usage in questions, collocations, or memory tips.`;
       }
 
+      const initialActions = getPersonalizedInitialActions(word, nativeLanguage).actions;
+
       setMessages([
         {
           id: `welcome-${word.id || word.word}-${Date.now()}`,
           role: "assistant",
           content: welcomeText,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          suggestedActions: initialActions
         }
       ]);
       setInputText("");

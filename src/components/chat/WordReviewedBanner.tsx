@@ -16,7 +16,7 @@ export default function WordReviewedBanner({
   onPlayAudio,
   onAskAi,
   onViewHistory,
-  hideAskAiButton = false,
+  hideAskAiButton = true,
   className = "",
   prefixLabel = "Word Reviewed:"
 }: WordReviewedBannerProps) {

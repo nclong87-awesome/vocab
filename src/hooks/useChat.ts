@@ -963,6 +963,7 @@ export function useChat({
     const blankPattern = /\[blank\]|\[BLANK\]|\(\s*_{2,}\s*\)|\(_+\)|_{2,}|\.{3,}/gi;
 
     let resolvedSentence = currentQ.sentence;
+    let resolvedSentenceTranslation = "";
     if (!resolvedSentence) {
       const qText = currentQ.question || "";
       if (currentQ.type === "sentence" || blankPattern.test(qText)) {
@@ -991,7 +992,7 @@ export function useChat({
       }
       resolvedSentence = resolvedSentence.replace(/^["“]|["”]$/g, "").trim();
 
-      let resolvedSentenceTranslation = (currentQ.sentenceTranslation || targetWordObj?.exampleTranslation || "").replace(/^["“]|["”]$/g, "").trim();
+      resolvedSentenceTranslation = (currentQ.sentenceTranslation || targetWordObj?.exampleTranslation || "").replace(/^["“]|["”]$/g, "").trim();
 
       if (resolvedSentenceTranslation) {
         if (blankPattern.test(resolvedSentenceTranslation)) {
@@ -1127,6 +1128,15 @@ export function useChat({
         ? t("chat_quiz_speech_correct", targetLanguage, { answer: currentQ.correctAnswer })
         : t("chat_quiz_speech_incorrect", targetLanguage, { answer: currentQ.correctAnswer }),
       answeredQuizWordId: wordId,
+      quizContext: {
+        question: currentQ.question,
+        userAnswer: userAnswer,
+        correctAnswer: currentQ.correctAnswer,
+        isCorrect: isCorrect,
+        sentence: resolvedSentence,
+        sentenceTranslation: resolvedSentenceTranslation,
+        questionType: currentQ.type,
+      },
       isConfuserDuel: currentQ.type === "duel" || Boolean(currentQ.confuserWord),
       confuserWord: currentQ.confuserWord,
       contrastRule: currentQ.contrastRule,

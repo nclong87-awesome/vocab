@@ -1,4 +1,5 @@
 import { recordLearningInteraction } from "./userPersonalityProfileService";
+import { QuizContextData } from "../types";
 
 export type InquirySource = "main_chat" | "ask_ai_dialog" | "quiz_intervention" | "quick_action" | "add_word_modal";
 
@@ -195,7 +196,7 @@ export function analyzeUserInquiryPatterns(): InquiryProfile {
  * and the target word's grammatical properties (verb, noun, adjective, sentence, etc.).
  */
 export function getPersonalizedInitialActions(
-  word: { word: string; partOfSpeech?: string; translation?: string; category?: string },
+  word: { word: string; partOfSpeech?: string; translation?: string; category?: string; quizContext?: QuizContextData },
   _nativeLanguage = "Vietnamese"
 ): {
   actions: Array<{ label: string; action: "send_message"; payload: { message: string } }>;
@@ -206,6 +207,47 @@ export function getPersonalizedInitialActions(
   const w = word.word;
 
   const actions: Array<{ label: string; action: "send_message"; payload: { message: string } }> = [];
+
+  // Quiz context default actions (highest priority when opening from quiz feedback)
+  if (word.quizContext) {
+    const qc = word.quizContext;
+    const userAns = qc.userAnswer || "my answer";
+    const correctAns = qc.correctAnswer || w;
+
+    if (qc.isCorrect === false) {
+      actions.push({
+        label: `✨ Explain why "${correctAns}" is correct instead of "${userAns}"`,
+        action: "send_message",
+        payload: { message: `Please explain why "${correctAns}" is the correct answer for this question, and why my answer "${userAns}" is incorrect.` }
+      });
+      actions.push({
+        label: `💡 Why is my answer "${userAns}" incorrect here?`,
+        action: "send_message",
+        payload: { message: `Analyze why "${userAns}" is incorrect or unnatural in this specific question context.` }
+      });
+      actions.push({
+        label: `🔍 Compare "${correctAns}" vs "${userAns}"`,
+        action: "send_message",
+        payload: { message: `Compare "${correctAns}" and "${userAns}" side-by-side with examples showing when to use each.` }
+      });
+    } else {
+      actions.push({
+        label: `✨ Explain why "${correctAns}" fits best`,
+        action: "send_message",
+        payload: { message: `Explain why "${correctAns}" is the best choice for this question and highlight key grammar/collocation patterns.` }
+      });
+      actions.push({
+        label: `📝 3 natural example sentences with "${correctAns}"`,
+        action: "send_message",
+        payload: { message: `Provide 3 natural example sentences using "${correctAns}" in similar real-world contexts.` }
+      });
+    }
+
+    return {
+      actions,
+      themeLabel: "Quiz Analysis"
+    };
+  }
 
   // Theme-specific customization
   switch (profile.primaryTheme) {

@@ -943,9 +943,63 @@ function ChatMessageItem({
                 <WordReviewedBanner
                   word={answeredWord}
                   onPlayAudio={(text) => speakText(text, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
-                  onAskAi={!hideAskAiButton ? (w) => setSelectedChatWord(w) : undefined}
                   onViewHistory={(w) => setSelectedHistoryWord(w)}
                 />
+              )}
+
+              {/* Ask AI button for Quiz Question Context - placed prominently outside the word banner at the bottom of quiz feedback */}
+              {!hideAskAiButton && (msg.answeredQuizWordId || msg.id.startsWith("quiz-feedback-") || msg.quizContext || answeredWord) && (
+                <div className="my-2.5 p-2.5 px-3 bg-[#f5f3ff] border border-indigo-200/90 rounded-xl flex items-center justify-between gap-2 flex-wrap shadow-2xs">
+                  <div className="flex items-center gap-1.5 text-xs text-indigo-950 font-medium">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span>Have questions about this quiz question or answer?</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const msgIdx = messages ? messages.findIndex(m => m.id === msg.id) : -1;
+                      let qText = "";
+                      let uAns = "";
+                      if (msgIdx > 0 && messages?.[msgIdx - 1]?.role === "user") {
+                        uAns = messages[msgIdx - 1].content.trim();
+                      }
+                      if (msgIdx > 1 && messages?.[msgIdx - 2]?.role === "assistant") {
+                        qText = messages[msgIdx - 2].content.replace(/^###\s*Question[^:]*:\s*/i, "").replace(/\*\*/g, "").trim();
+                      }
+
+                      const quizCtx = msg.quizContext || {
+                        question: qText || undefined,
+                        userAnswer: uAns || undefined,
+                        correctAnswer: msg.audioWord || answeredWord?.word || "",
+                        isCorrect: msg.content ? (msg.content.includes("Correct!") && !msg.content.includes("Incorrect!")) : false,
+                      };
+                      const targetWordText = quizCtx.correctAnswer || (answeredWord ? answeredWord.word : msg.audioWord) || "quiz word";
+                      const wordForAskAi: Word = {
+                        ...(answeredWord || createAdHocWord({
+                          id: `quiz-word-${msg.id}`,
+                          word: targetWordText,
+                          definition: answeredWord?.definition || "",
+                          translation: answeredWord?.translation || "",
+                          partOfSpeech: answeredWord?.partOfSpeech || "",
+                          category: "Quiz Recommendation",
+                          learned: false,
+                          createdAt: new Date().toISOString(),
+                          lastReviewed: null,
+                          strength: 0
+                        })),
+                        word: targetWordText,
+                        category: "Quiz Recommendation",
+                        quizContext: quizCtx
+                      };
+                      setSelectedChatWord(wordForAskAi);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-3xs transition-all hover:scale-102 active:scale-95 cursor-pointer"
+                    title="Open Ask AI dialog with full quiz question context"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-200" />
+                    <span>Ask AI about this question</span>
+                  </button>
+                </div>
               )}
 
               {nextQuestionPart && (

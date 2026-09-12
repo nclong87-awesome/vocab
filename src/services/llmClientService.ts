@@ -1917,6 +1917,24 @@ CRITICAL VOCABULARY COACHING INSTRUCTIONS:
 - ABSOLUTELY NO QUIZZES OR PRACTICE TESTS: Do NOT offer, mention, or suggest quizzes, test questions, practice tests, "Start a quick practice", or "practice with a short quiz" in this dialog.
 - Do NOT ask the user if they want to practice with a quiz. Instead, offer choices like exploring nuances, seeing more examples, asking follow-up questions, or adding related vocabulary.
 - Do NOT include "start_practice" or quiz/practice actions in suggestedActions.`;
+
+    if (wordContext.quizContext) {
+      const qc = wordContext.quizContext;
+      wordContextInstruction += `\n\nQUIZ QUESTION CONTEXT & LEARNER ANSWER:
+The user opened this AI assistant dialog specifically to ask about a quiz question:
+- Quiz Question: "${qc.question || "N/A"}"
+- User's Submitted Answer: "${qc.userAnswer || "N/A"}"
+- Correct Answer: "${qc.correctAnswer || wordContext.word}"
+- Question Result Status: ${qc.isCorrect ? "CORRECT" : "INCORRECT"}
+- Sentence Context: "${qc.sentence || "N/A"}"
+- Sentence Translation: "${qc.sentenceTranslation || "N/A"}"
+
+CRITICAL INSTRUCTIONS FOR QUIZ QUESTION CONTEXT:
+- The user may ask why their answer was correct or incorrect, or why the correct answer fits best.
+- Provide a clear, encouraging, and precise breakdown explaining why "${qc.correctAnswer || wordContext.word}" is correct.
+- If the user's answer ("${qc.userAnswer}") was incorrect, clearly explain why it does not fit in this specific context or sentence structure.
+- Compare nuances between "${qc.correctAnswer || wordContext.word}" and "${qc.userAnswer}" if applicable.`;
+    }
   }
 
   let userInquiryInstruction = "";

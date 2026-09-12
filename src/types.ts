@@ -110,6 +110,7 @@ export interface Word {
   imageKeyword?: string;
   category?: string;
   context?: string;
+  quizContext?: QuizContextData;
   suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string; partOfSpeech?: string })[];
   strengthHistory?: StrengthHistoryTuple[];
 }
@@ -131,6 +132,17 @@ export interface WordSense {
 }
 
 
+
+export interface QuizContextData {
+  question?: string;
+  userAnswer?: string;
+  correctAnswer?: string;
+  isCorrect?: boolean;
+  sentence?: string;
+  sentenceTranslation?: string;
+  explanation?: string;
+  questionType?: string;
+}
 
 export interface QuizSuggestedWord {
   word: string;
@@ -237,6 +249,7 @@ export interface ChatMessage {
   suggestedWords?: QuizSuggestedWord[];
   wordLibraries?: boolean;
   answeredQuizWordId?: string;
+  quizContext?: QuizContextData;
   isConfuserDuel?: boolean;
   confuserWord?: string;
   contrastRule?: string;
