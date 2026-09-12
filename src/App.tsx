@@ -510,6 +510,9 @@ export default function App() {
                     llmConfig={llmConfig}
                     words={words}
                     onUpdateWords={handleUpdateWords}
+                    onToggleStarWord={handleToggleStar}
+                    onToggleLearnedWord={handleToggleLearned}
+                    onDeleteWord={handleDeleteWord}
                     onAnalyzeImageVocab={handleAnalyzeImageVocab}
                     onAddMultipleWords={handleAddMultipleWords}
                     onSuggestCasualReplyPrompt={handlePromptSuggestCasualReply}

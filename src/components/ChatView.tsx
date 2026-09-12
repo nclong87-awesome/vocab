@@ -8,6 +8,9 @@ import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 import MessageList from "./chat/MessageList";
 import QuickActionsSection from "./chat/QuickActionsSection";
 import ChatInputForm from "./chat/ChatInputForm";
+import WordSearchModal from "./chat/WordSearchModal";
+import WordChatModal from "./chat/WordChatModal";
+import WordDetailsModal from "./deckManager/WordDetailsModal";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -36,6 +39,9 @@ interface ChatViewProps {
   llmConfig: LLMConfig;
   words: Word[];
   onUpdateWords?: (updatedWords: Word[]) => void;
+  onToggleStarWord?: (wordId: string) => void;
+  onToggleLearnedWord?: (wordId: string) => void;
+  onDeleteWord?: (wordId: string) => void;
   conversationalState?: string;
   toast?: string | null;
   onToast?: (msg: string) => void;
@@ -70,6 +76,9 @@ function ChatView({
   llmConfig,
   words,
   onUpdateWords,
+  onToggleStarWord,
+  onToggleLearnedWord,
+  onDeleteWord,
   conversationalState = "none",
   toast: externalToast,
   onToast: onExternalToast,
@@ -79,6 +88,9 @@ function ChatView({
   const [inputText, setInputText] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ dataUrl: string; name: string } | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isWordSearchModalOpen, setIsWordSearchModalOpen] = useState(false);
+  const [selectedWordForChat, setSelectedWordForChat] = useState<Word | null>(null);
+  const [selectedWordForDetails, setSelectedWordForDetails] = useState<Word | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [internalToast, setInternalToast] = useState<string | null>(null);
   const toast = externalToast !== undefined ? externalToast : internalToast;
@@ -88,6 +100,33 @@ function ChatView({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+
+  // Global shortcut to open Word Search Modal (Cmd+K, Ctrl+K, or "/" when not typing)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isTyping = activeEl && (
+        activeEl.tagName === "INPUT" || 
+        activeEl.tagName === "TEXTAREA" || 
+        (activeEl instanceof HTMLElement && activeEl.isContentEditable)
+      );
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsWordSearchModalOpen(true);
+        return;
+      }
+
+      if (e.key === "/" && !isTyping) {
+        e.preventDefault();
+        setIsWordSearchModalOpen(true);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   const focusInput = useCallback(() => {
     // if mobile, skip focusing to avoid keyboard pop-up
@@ -111,6 +150,20 @@ function ChatView({
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
     }, 50);
+  }, []);
+
+  const handleInsertToChatInput = useCallback((textToInsert: string) => {
+    setInputText(prev => {
+      const trimmed = prev.trim();
+      return trimmed ? `${trimmed} ${textToInsert}` : textToInsert;
+    });
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+  }, []);
+
+  const handleOpenWordSearch = useCallback(() => {
+    setIsWordSearchModalOpen(true);
   }, []);
 
   const processImageFile = useCallback((file: File, defaultName?: string) => {
@@ -482,6 +535,7 @@ function ChatView({
         onViewStoryImmersion={onViewStoryImmersion}
         onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
         onOpenWordLibrary={onOpenWordLibrary}
+        onOpenWordSearch={handleOpenWordSearch}
         onSwitchProvider={onSwitchProvider}
         showToast={showToast}
         scrollToBottom={scrollToBottom}
@@ -510,6 +564,27 @@ function ChatView({
         inputRef={inputRef}
       />
 
+      {/* Quick Word Search Modal (Opened via Quick Actions) */}
+      {isWordSearchModalOpen && (
+        <WordSearchModal
+          isOpen={isWordSearchModalOpen}
+          onClose={() => setIsWordSearchModalOpen(false)}
+          words={words}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          onOpenWordChat={(w) => setSelectedWordForChat(w)}
+          onOpenWordDetails={(w) => setSelectedWordForDetails(w)}
+          onInsertToChat={handleInsertToChatInput}
+          onSendMessage={onSendMessage}
+          onAddWord={onAddWord}
+          onToggleStarWord={onToggleStarWord}
+          onToast={showToast}
+        />
+      )}
+
       {/* Photo Capture & Upload Modal */}
       <PhotoCaptureModal
         isOpen={isPhotoModalOpen}
@@ -526,6 +601,62 @@ function ChatView({
         onToast={showToast}
         modeType={conversationalState === "suggesting_reply" ? "reply" : "vocab"}
       />
+
+      {/* Word Card Details Modal */}
+      {selectedWordForDetails && (
+        <WordDetailsModal
+          word={selectedWordForDetails}
+          isOpen={Boolean(selectedWordForDetails)}
+          onClose={() => setSelectedWordForDetails(null)}
+          onUpdateWord={(updated) => {
+            if (onUpdateWords && words) {
+              const nextWords = words.map(w => w.id === updated.id ? updated : w);
+              onUpdateWords(nextWords);
+            }
+            setSelectedWordForDetails(updated);
+          }}
+          onToggleStar={(wId) => {
+            onToggleStarWord?.(wId);
+            setSelectedWordForDetails(prev => prev && prev.id === wId ? { ...prev, starred: !prev.starred } : prev);
+          }}
+          onToggleLearned={(wId) => {
+            onToggleLearnedWord?.(wId);
+            setSelectedWordForDetails(prev => prev && prev.id === wId ? { ...prev, learned: !prev.learned } : prev);
+          }}
+          onDeleteWord={(wId) => {
+            onDeleteWord?.(wId);
+            setSelectedWordForDetails(null);
+          }}
+          speakWord={(txt) => speakText(txt, ttsConfig, llmConfig, targetLanguage)}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+        />
+      )}
+
+      {/* Word Interactive AI Chat Modal */}
+      {selectedWordForChat && (
+        <WordChatModal
+          word={selectedWordForChat}
+          isOpen={Boolean(selectedWordForChat)}
+          onClose={() => setSelectedWordForChat(null)}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+          words={words}
+          onUpdateWord={(updated) => {
+            if (onUpdateWords && words) {
+              const nextWords = words.map(w => w.id === updated.id ? updated : w);
+              onUpdateWords(nextWords);
+            }
+            setSelectedWordForChat(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, BookOpen } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, BookOpen, Search } from "lucide-react";
 import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
@@ -29,6 +29,7 @@ export interface QuickActionItem {
     onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
     onSuggestCasualReplyPrompt?: () => void;
     onOpenWordLibrary?: () => void;
+    onOpenWordSearch?: () => void;
   }) => void;
 }
 
@@ -116,6 +117,20 @@ export function getRotatedDefaultModel(defaultModels: string[]): { provider: LLM
 export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickActionItem[] {
   return [
     {
+      id: "search_word",
+      label: t("qa_search_word_label", appLanguage) || "Search Word",
+      category: "vocab",
+      categoryLabel: t("qa_cat_vocab", appLanguage),
+      icon: <Search className="w-4 h-4 text-indigo-600" />,
+      title: t("qa_search_word_title", appLanguage) || "Quick & Smart Word Search",
+      description: t("qa_search_word_desc", appLanguage) || "Search words, translations, pronunciation, or lookup new terms with AI",
+      className: "bg-indigo-50/90 hover:bg-indigo-100 text-indigo-950 border border-indigo-200/90 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 0,
+      getAction: ({ onOpenWordSearch }) => {
+        onOpenWordSearch?.();
+      }
+    },
+    {
       id: "add_word",
       label: t("qa_add_word_label", appLanguage),
       category: "vocab",
@@ -124,7 +139,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_add_word_title", appLanguage),
       description: t("qa_add_word_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 0,
+      defaultIndex: 1,
       getAction: ({ onAddWord }) => {
         onAddWord();
       }

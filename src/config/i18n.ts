@@ -440,7 +440,11 @@ export type TranslationKey =
   | "incomplete_words_section_desc"
   | "incomplete_word_badge"
   | "incomplete_word_click_prompt"
-  | "incomplete_filter_label";
+  | "incomplete_filter_label"
+  | "qa_search_word_label"
+  | "qa_search_word_title"
+  | "qa_search_word_desc"
+  | "chat_search_word_placeholder";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 
