@@ -245,6 +245,8 @@ export interface ChatMessage {
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
   storyData?: ImmersionStory;
+  challengeData?: ChallengeData;
+  challengeEvaluation?: ChallengeEvaluation;
   quizFinishedData?: QuizFinishedData;
   suggestedWords?: QuizSuggestedWord[];
   wordLibraries?: boolean;
@@ -353,3 +355,86 @@ export interface MinedSentence {
   createdAt: string;
   userNotes?: string;
 }
+
+// ==========================================
+// Personalized Translation Challenge Types
+// ==========================================
+
+export interface ChallengeKeyWord {
+  word: string;
+  translation: string;
+  partOfSpeech?: string;
+  hint?: string;
+}
+
+export interface ChallengeData {
+  id: string;
+  nativeSentence: string;
+  targetLanguage: string;
+  nativeLanguage: string;
+  topicContext?: string;
+  idealTranslation?: string;
+  keyTargetWords?: ChallengeKeyWord[];
+  personalityNote?: string;
+  createdAt: string;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
+}
+
+export interface ChallengeSuggestedVocab {
+  word: string;
+  translation: string;
+  definition?: string;
+  partOfSpeech?: string;
+  hint?: string;
+  example?: string;
+  exampleTranslation?: string;
+  askedByUser?: boolean;
+}
+
+export interface ChallengeEvaluation {
+  score: number; // 0 - 100
+  scoreLabel: string;
+  whatWentWell: string;
+  areasForImprovement: string;
+  correctedSentence: string;
+  userTranslation: string;
+  suggestedVocabulary: ChallengeSuggestedVocab[];
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
+}
+
+export interface ChallengeTurnResult {
+  intent: "assistance" | "submission";
+  agentReply?: string;
+  askedWord?: {
+    word: string;
+    translation?: string;
+    definition?: string;
+    partOfSpeech?: string;
+    hint?: string;
+  };
+  evaluation?: ChallengeEvaluation;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
+}
+
+export interface ChallengeMessage {
+  id: string;
+  sender: "agent" | "user";
+  text: string;
+  timestamp: string;
+  intent?: "assistance" | "submission";
+  evaluation?: ChallengeEvaluation;
+  askedWord?: {
+    word: string;
+    translation?: string;
+    definition?: string;
+    partOfSpeech?: string;
+    hint?: string;
+  };
+}
+

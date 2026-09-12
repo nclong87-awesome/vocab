@@ -437,5 +437,19 @@ export const enTranslations: LanguageTranslations = {
     incomplete_words_section_desc: "Suggested words added from practice. Tap any word to finalize details and include it in practice.",
     incomplete_word_badge: "Draft / Incomplete",
     incomplete_word_click_prompt: "Tap to complete definition and details",
-    incomplete_filter_label: "Incomplete ({count})"
+    incomplete_filter_label: "Incomplete ({count})",
+    qa_challenge_label: "Translation Challenge",
+    qa_challenge_title: "Personalized Translation Challenge",
+    qa_challenge_desc: "Translate sentences tailored to your profile, ask for hints, and get AI feedback & vocabulary suggestions",
+    challenge_modal_title: "Interactive Translation Challenge",
+    challenge_tagline: "Personalized by your Learner Personality Profile & recent study history",
+    challenge_score: "Score",
+    challenge_what_went_well: "What Went Well",
+    challenge_areas_for_improvement: "Areas for Improvement",
+    challenge_suggested_words: "Suggested Vocabulary (From Conversation & Challenge)",
+    challenge_add_to_collection: "Add to Collection",
+    challenge_ask_hint: "💡 Ask for Hint",
+    challenge_translate_word: "🔤 Ask Word Translation",
+    challenge_submit_final: "🚀 Submit Final Answer",
+    challenge_next: "🎯 Try Next Challenge"
   };

@@ -9,6 +9,7 @@ import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import QuizImage from "../quiz/QuizImage";
 import StoryImmersionMessageCard from "./StoryImmersionMessageCard";
+import TranslationChallengeCard from "./TranslationChallengeCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
@@ -36,7 +37,7 @@ interface ChatMessageItemProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel",
+    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel" | "translation_challenge",
     options?: { warmupWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
@@ -759,6 +760,9 @@ function ChatMessageItem({
     ) {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "story_immersion");
+    } else if (act.action === "start_translation_challenge") {
+      handleRecordActionUse("start_practice");
+      startPractice(undefined, "translation_challenge");
     } else if (act.action === "start_sandwich_duel") {
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
@@ -835,7 +839,7 @@ function ChatMessageItem({
       <div className="space-y-2 w-full flex flex-col">
         <div 
           className={
-            msg.storyData
+            msg.storyData || msg.challengeData || msg.challengeEvaluation
               ? "w-full"
               : `p-4 rounded-2xl w-full ${
                   isUser 
@@ -873,6 +877,19 @@ function ChatMessageItem({
               onUpdateWords={onUpdateWords}
               onAddWord={onAddWord}
               onAddIncompleteWord={onAddIncompleteWord}
+              onAddMultipleWords={onAddMultipleWords}
+              showToast={showToast}
+            />
+          ) : (msg.challengeData || msg.challengeEvaluation) ? (
+            <TranslationChallengeCard
+              challenge={msg.challengeData}
+              evaluation={msg.challengeEvaluation}
+              appLanguage={currentAppLang}
+              provider={msg.provider || msg.challengeData?.provider}
+              model={msg.model || msg.challengeData?.model}
+              responseTimeMs={msg.responseTimeMs ?? msg.challengeData?.responseTimeMs}
+              words={words}
+              onAddWord={onAddWord}
               onAddMultipleWords={onAddMultipleWords}
               showToast={showToast}
             />

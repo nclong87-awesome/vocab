@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, BookOpen, Search } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, BookOpen, Search, Target } from "lucide-react";
 import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
@@ -30,6 +30,7 @@ export interface QuickActionItem {
     onSuggestCasualReplyPrompt?: () => void;
     onOpenWordLibrary?: () => void;
     onOpenWordSearch?: () => void;
+    onOpenChallenge?: () => void;
   }) => void;
 }
 
@@ -172,6 +173,21 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       getAction: ({ onOpenWordLibrary, onClearHistory }) => {
         onClearHistory();
         onOpenWordLibrary?.();
+      }
+    },
+    {
+      id: "translation_challenge",
+      label: t("qa_challenge_label", appLanguage) || "Translation Challenge",
+      category: "study",
+      categoryLabel: t("qa_cat_study", appLanguage),
+      icon: <Target className="w-4 h-4 text-amber-500" />,
+      title: t("qa_challenge_title", appLanguage) || "Personalized Translation Challenge",
+      description: t("qa_challenge_desc", appLanguage) || "Translate native sentences tailored to your profile, ask for hints, and get AI feedback & vocabulary",
+      className: "bg-amber-50/90 hover:bg-amber-100 text-amber-950 border border-amber-300/90 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
+      defaultIndex: 2,
+      getAction: ({ onOpenChallenge, onClearHistory }) => {
+        onClearHistory();
+        onOpenChallenge?.();
       }
     },
     {

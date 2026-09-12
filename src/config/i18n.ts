@@ -444,7 +444,21 @@ export type TranslationKey =
   | "qa_search_word_label"
   | "qa_search_word_title"
   | "qa_search_word_desc"
-  | "chat_search_word_placeholder";
+  | "chat_search_word_placeholder"
+  | "qa_challenge_label"
+  | "qa_challenge_title"
+  | "qa_challenge_desc"
+  | "challenge_modal_title"
+  | "challenge_tagline"
+  | "challenge_score"
+  | "challenge_what_went_well"
+  | "challenge_areas_for_improvement"
+  | "challenge_suggested_words"
+  | "challenge_add_to_collection"
+  | "challenge_ask_hint"
+  | "challenge_translate_word"
+  | "challenge_submit_final"
+  | "challenge_next";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

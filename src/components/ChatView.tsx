@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Upload } from "lucide-react";
-import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider } from "../types";
+import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider, UserPersonalityProfile } from "../types";
 import { speakText, stopSpeech, getLanguageCode } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
 import PhotoCaptureModal from "./chat/PhotoCaptureModal";
@@ -22,11 +22,12 @@ interface ChatViewProps {
   targetLanguage: string;
   nativeLanguage: string;
   appLanguage?: string;
+  personalityProfile?: UserPersonalityProfile | null;
   onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic: () => void;
-  startPractice: () => void;
+  startPractice: (overrideConfig?: any, mode?: any, options?: any) => void;
   onFixGrammar: () => void;
   onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onOpenWordLibrary?: () => void;
@@ -59,6 +60,7 @@ function ChatView({
   targetLanguage,
   nativeLanguage,
   appLanguage = "Vietnamese",
+  personalityProfile: _personalityProfile,
   onAddWord,
   onAddIncompleteWord,
   onAddMultipleWords,
@@ -536,6 +538,7 @@ function ChatView({
         onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
         onOpenWordLibrary={onOpenWordLibrary}
         onOpenWordSearch={handleOpenWordSearch}
+        onOpenChallenge={() => startPractice(undefined, "translation_challenge")}
         onSwitchProvider={onSwitchProvider}
         showToast={showToast}
         scrollToBottom={scrollToBottom}

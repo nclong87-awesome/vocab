@@ -35,6 +35,9 @@ import { speakText as speakTextService, registerSpeechTimer } from "../utils/tts
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord } from "../utils/wordNormalization";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
+import { ChallengeData } from "../types";
+import { generateChallenge, processChallengeTurn } from "../services/challengeService";
+import { getUserPersonalityProfile } from "../services/userPersonalityProfileService";
 
 interface UseChatProps {
   words: Word[];
@@ -139,6 +142,9 @@ export function useChat({
     sandwichStep?: 1 | 2;
     warmupWordIds?: string[];
   } | null>(null);
+
+  // In-Chat translation challenge state
+  const [activeChallenge, setActiveChallenge] = useState<ChallengeData | null>(null);
 
   const wordsRef = useRef(words);
   useEffect(() => {
@@ -252,11 +258,14 @@ export function useChat({
   // Start the unified Practice flow: checks Quiz candidates first, then Immersion candidates, or displays no-words message
   const startPractice = async (
     overrideConfig?: LLMConfig,
-    practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" = "auto",
+    practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
     options?: { warmupWordIds?: string[] }
   ) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
+    if (practiceMode !== "translation_challenge") {
+      setActiveChallenge(null);
+    }
     setConversationalState("none");
     setPendingWordSenses(null);
     setPendingTopicSubject("");
@@ -265,7 +274,7 @@ export function useChat({
     const activeWords = await getEffectiveWords();
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
-    if (activeWords.length === 0) {
+    if (activeWords.length === 0 && practiceMode !== "translation_challenge") {
       const noWordsMsg: ChatMessage = {
         id: `practice-no-words-${Date.now()}`,
         role: "assistant",
@@ -286,6 +295,7 @@ export function useChat({
     const nonCooldownActive = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
 
     const hasAvailablePractice =
+      practiceMode === "translation_challenge" ||
       unstudiedCandidates.length > 0 ||
       dueQuizCandidates.length > 0 ||
       immersionCandidates.length > 0 ||
@@ -359,6 +369,11 @@ export function useChat({
           action: "start_practice_story_immersion",
         });
       }
+
+      actions.push({
+        label: `🎯 Translation Challenge (Personalized)`,
+        action: "start_translation_challenge",
+      });
 
       const breakdownText =
         unstudiedCount > 0 && dueCount > 0
@@ -756,6 +771,48 @@ export function useChat({
         }
         console.error("Error starting quiz:", e);
         triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode, options), "quiz-error");
+      } finally {
+        setIsTyping(false);
+      }
+      return;
+    }
+
+    // --- TRANSLATION CHALLENGE MODE ---
+    if (practiceMode === "translation_challenge") {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const configForServer = startTypingWithConfig(configToUse);
+
+      try {
+        const personalityProfile = getUserPersonalityProfile(activeWords);
+        const challengeData = await generateChallenge({
+          nativeLanguage,
+          targetLanguage,
+          personalityProfile,
+          words: activeWords,
+          llmConfig: configForServer,
+        });
+
+        setActiveChallenge(challengeData);
+
+        const challengeMsg: ChatMessage = {
+          id: `challenge-start-${Date.now()}`,
+          role: "assistant",
+          content: `### 🎯 Translation Challenge\n\n**Translate into ${targetLanguage}:**\n> "${challengeData.nativeSentence}"\n\n*Topic:* \`${challengeData.topicContext || "General"}\` • *Profile Match:* ${challengeData.personalityNote || "Tailored for your archetype"}\n\n💡 *Type your translation in English in the chat below, or ask for a hint!*`,
+          timestamp: new Date().toISOString(),
+          challengeData,
+          suggestedActions: [
+            { label: "💡 Request a Hint", action: "send_message", payload: { message: "Can you give me a hint for this sentence?" } },
+            { label: "🔑 Key Target Words", action: "send_message", payload: { message: "What are the key target vocabulary words in this sentence?" } },
+            { label: "🎯 Next Challenge", action: "start_translation_challenge" },
+            { label: "🏆 Practice Overview", action: "start_practice" },
+          ],
+        };
+
+        setChatMessages([challengeMsg]);
+      } catch (e: any) {
+        console.error("Error generating translation challenge:", e);
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
       } finally {
         setIsTyping(false);
       }
@@ -1606,6 +1663,95 @@ export function useChat({
         return;
       }
       handleQuizAnswer(text.trim());
+      return;
+    }
+
+    if (activeChallenge) {
+      const userText = text.trim();
+      const lowerText = userText.toLowerCase();
+
+      if (lowerText === "start practice" || lowerText === "practice overview" || lowerText === "🏆 practice overview") {
+        setActiveChallenge(null);
+        startPractice();
+        return;
+      }
+
+      setIsTyping(true);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const configForServer = startTypingWithConfig(configToUse);
+
+      try {
+        const chatHistory = chatMessages.slice(-6).map((m) => ({
+          sender: (m.role === "user" ? "user" : "agent") as "user" | "agent",
+          text: m.content,
+        }));
+
+        const result = await processChallengeTurn({
+          challenge: activeChallenge,
+          userMessage: userText,
+          chatHistory,
+          nativeLanguage,
+          targetLanguage,
+          llmConfig: configForServer,
+        });
+
+        if (result.intent === "assistance") {
+          const assistMsg: ChatMessage = {
+            id: `challenge-assist-${Date.now()}`,
+            role: "assistant",
+            content: result.agentReply || "Here is a hint for your translation.",
+            timestamp: new Date().toISOString(),
+            provider: result.provider || configForServer?.provider || "google",
+            model: result.model || configForServer?.model || "gemini-2.5-flash",
+            responseTimeMs: result.responseTimeMs,
+            suggestedWords: result.askedWord ? [{
+              word: result.askedWord.word,
+              translation: result.askedWord.translation || "",
+              definition: result.askedWord.definition || "",
+              hint: result.askedWord.hint || "Asked during challenge",
+            }] : undefined,
+            suggestedActions: [
+              { label: "🎯 Next Challenge", action: "start_translation_challenge" },
+              { label: "🏆 Practice Overview", action: "start_practice" },
+            ],
+          };
+          setChatMessages((prev) => [...prev, assistMsg]);
+        } else {
+          // Submission completed!
+          const evalRes = result.evaluation!;
+          setActiveChallenge(null); // Challenge completed
+
+          const evalMsg: ChatMessage = {
+            id: `challenge-eval-${Date.now()}`,
+            role: "assistant",
+            content: `### 🎯 Challenge Evaluation: ${evalRes.scoreLabel} (${evalRes.score}/100)\n\n**Your Translation:** "${evalRes.userTranslation}"\n**Ideal Translation:** "${evalRes.correctedSentence}"\n\n**✨ What Went Well:**\n${evalRes.whatWentWell}\n\n**💡 Areas for Improvement:**\n${evalRes.areasForImprovement}`,
+            timestamp: new Date().toISOString(),
+            challengeEvaluation: evalRes,
+            provider: result.provider || configForServer?.provider || "google",
+            model: result.model || configForServer?.model || "gemini-2.5-flash",
+            responseTimeMs: result.responseTimeMs,
+            suggestedWords: (evalRes.suggestedVocabulary || []).map((v) => ({
+              word: v.word,
+              translation: v.translation || "",
+              definition: v.definition || "",
+              hint: v.hint || "Key vocabulary from challenge",
+              partOfSpeech: v.partOfSpeech,
+            })),
+            suggestedActions: [
+              { label: "🎯 Next Translation Challenge", action: "start_translation_challenge" },
+              { label: "🥪 Smart Balanced Session", action: "start_practice_balanced" },
+              { label: "🏆 Practice Overview", action: "start_practice" },
+            ],
+          };
+          setChatMessages((prev) => [...prev, evalMsg]);
+        }
+      } catch (err: any) {
+        console.error("Error processing challenge turn:", err);
+        triggerChatErrorWithCountdown(err, configToUse, (newConfig) => handleSendChatMessage(userText, newConfig), "challenge-turn-error");
+      } finally {
+        setIsTyping(false);
+      }
       return;
     }
 

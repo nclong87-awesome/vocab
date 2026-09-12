@@ -31,6 +31,13 @@ export interface ActivityDigestData {
 }
 
 /**
+ * Convenience helper to get current personality profile or fallback.
+ */
+export function getUserPersonalityProfile(words: Word[] = []): UserPersonalityProfile {
+  return generateFallbackPersonalityProfile({ words });
+}
+
+/**
  * Builds a compact, token-efficient digest (~800-1200 tokens) of user learning activity
  * consolidating both Main Chat and "Ask AI" in-situ queries.
  */

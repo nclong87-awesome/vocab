@@ -30,6 +30,8 @@ import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
 import AiErrorFallbackModal from "./components/layout/AiErrorFallbackModal";
 
+import { getUserPersonalityProfile } from "./services/userPersonalityProfileService";
+
 import { useLanguages } from "./hooks/useLanguages";
 import { useLlmAndTtsConfig } from "./hooks/useLlmAndTtsConfig";
 import { useVocabulary } from "./hooks/useVocabulary";
@@ -506,6 +508,7 @@ export default function App() {
                     targetLanguage={targetLanguage}
                     nativeLanguage={nativeLanguage}
                     appLanguage={appLanguage}
+                    personalityProfile={getUserPersonalityProfile(words)}
                     ttsConfig={ttsConfig}
                     llmConfig={llmConfig}
                     words={words}

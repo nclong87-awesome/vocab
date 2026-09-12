@@ -23,12 +23,13 @@ interface QuickActionsSectionProps {
   onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
   onGenerateByTopic?: () => void;
-  startPractice: () => void;
+  startPractice: (overrideConfig?: any, mode?: any, options?: any) => void;
   onFixGrammar: () => void;
   onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onOpenWordLibrary?: () => void;
   onOpenWordSearch?: () => void;
+  onOpenChallenge?: () => void;
   onSwitchProvider?: (provider: LLMProvider, model?: string) => void;
   showToast: (msg: string) => void;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
@@ -69,6 +70,7 @@ function QuickActionsSection({
   onSuggestCasualReplyPrompt,
   onOpenWordLibrary,
   onOpenWordSearch,
+  onOpenChallenge,
   onSwitchProvider,
   showToast,
   scrollToBottom,
@@ -110,6 +112,7 @@ function QuickActionsSection({
     onSuggestCasualReplyPrompt,
     onOpenWordLibrary,
     onOpenWordSearch,
+    onOpenChallenge,
     onSwitchProvider,
     showToast,
     scrollToBottom,
@@ -135,6 +138,7 @@ function QuickActionsSection({
       onSuggestCasualReplyPrompt,
       onOpenWordLibrary,
       onOpenWordSearch,
+      onOpenChallenge,
       onSwitchProvider,
       showToast,
       scrollToBottom,
@@ -174,6 +178,7 @@ function QuickActionsSection({
           },
           onOpenWordLibrary: p.onOpenWordLibrary,
           onOpenWordSearch: p.onOpenWordSearch,
+          onOpenChallenge: p.onOpenChallenge,
         });
         setIsActionsPanelOpen(false);
         p.scrollToBottom("smooth");
