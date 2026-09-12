@@ -14,7 +14,7 @@ import { WordLibraryChatCard } from "./WordLibraryChatCard";
 import { WordAddGalleryPreview } from "./WordAddGalleryPreview";
 import WordChatModal from "./WordChatModal";
 import { extractOrGenerateTopicActions } from "../../utils/actionExtractor";
-import { isWordInCollection, findWordInCollection, isNoun } from "../../utils/wordNormalization";
+import { isWordInCollection, findWordInCollection, isNoun, isPhrasalVerb } from "../../utils/wordNormalization";
 import { t } from "../../config/i18n";
 import { getAllPracticeCandidates } from "../../utils/spacedRepetition";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -30,7 +30,7 @@ interface ChatMessageItemProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
-  onAddWord: (word?: string, hint?: string) => void;
+  onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
   startPractice: (
@@ -187,10 +187,10 @@ function ChatMessageItem({
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
-  const handleAddSuggestedWord = (wordText: string, hint?: string) => {
+  const handleAddSuggestedWord = (wordText: string, hint?: string, extraData?: Partial<Word>) => {
     const isAlreadyInWords = words && isWordInCollection(words, wordText);
     if (isAlreadyInWords) return;
-    onAddWord(wordText, hint);
+    onAddWord(wordText, hint, extraData);
   };
 
   const handleModalWordUpdate = (updated: Word) => {
@@ -710,7 +710,7 @@ function ChatMessageItem({
     } else if (act.action === "add_word") {
       handleRecordActionUse("add_word");
       if (act.payload?.word) {
-        onAddWord(act.payload.word, act.payload?.hint);
+        onAddWord(act.payload.word, act.payload?.hint, act.payload);
       } else {
         onAddWord();
       }
@@ -1137,16 +1137,30 @@ function ChatMessageItem({
                           className="px-3 py-2 sm:py-2.5 bg-stone-50/90 hover:bg-stone-50 border border-stone-200/90 rounded-xl flex items-center justify-between gap-2.5 transition-all shadow-3xs"
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-bold text-stone-950 font-sans tracking-tight">
-                                {sw.word}
-                              </span>
-                              {sw.partOfSpeech && (
-                                <span className="text-[9.5px] font-medium px-1.5 py-0.2 rounded bg-stone-200/80 text-stone-600 lowercase">
-                                  {sw.partOfSpeech}
-                                </span>
-                              )}
-                            </div>
+                            {(() => {
+                              const isPv = isPhrasalVerb(sw.word, sw.partOfSpeech, sw.category);
+                              return (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-sm font-bold text-stone-950 font-sans tracking-tight">
+                                    {sw.word}
+                                  </span>
+                                  {isPv ? (
+                                    <span className="text-[9.5px] font-semibold px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-300/80">
+                                      {currentAppLang === "vi" ? "cụm động từ" : "phrasal verb"}
+                                    </span>
+                                  ) : sw.partOfSpeech ? (
+                                    <span className="text-[9.5px] font-medium px-1.5 py-0.2 rounded bg-stone-200/80 text-stone-600 lowercase">
+                                      {sw.partOfSpeech}
+                                    </span>
+                                  ) : null}
+                                  {sw.category && sw.category !== "General" && sw.category !== "phrasal verb" && sw.category !== "Phrasal Verbs" && (
+                                    <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 border border-stone-200">
+                                      {sw.category}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {displayMeaning && (
                               <p className="text-xs text-stone-600 mt-0.5 leading-snug break-words">
                                 {displayMeaning}
@@ -1167,11 +1181,13 @@ function ChatMessageItem({
                               <button
                                 type="button"
                                 onClick={() => {
+                                  const isPv = isPhrasalVerb(sw.word, sw.partOfSpeech, sw.category);
                                   const matched = words ? findWordInCollection(words, sw.word) : undefined;
                                   setSelectedChatWord(matched || createAdHocWord({
                                     id: `quiz-suggested-${sw.word}-${idx}`,
                                     word: sw.word,
-                                    partOfSpeech: sw.partOfSpeech || "vocabulary",
+                                    partOfSpeech: isPv ? "phrasal verb" : (sw.partOfSpeech || "vocabulary"),
+                                    category: isPv ? "Phrasal Verbs" : sw.category,
                                     definition: displayMeaning || `Recommended vocabulary word for ${targetLanguage}`,
                                     translation: sw.translation || "",
                                     strength: 0,
@@ -1205,7 +1221,16 @@ function ChatMessageItem({
                             <button
                               type="button"
                               disabled={Boolean(isAlreadyInWords)}
-                              onClick={() => handleAddSuggestedWord(sw.word, displayMeaning || sw.translation || sw.definition)}
+                              onClick={() => {
+                                const isPv = isPhrasalVerb(sw.word, sw.partOfSpeech, sw.category);
+                                handleAddSuggestedWord(sw.word, displayMeaning || sw.translation || sw.definition, {
+                                  word: sw.word,
+                                  translation: sw.translation || displayMeaning || "",
+                                  definition: sw.definition || displayMeaning || "",
+                                  partOfSpeech: isPv ? "phrasal verb" : sw.partOfSpeech,
+                                  category: isPv ? "Phrasal Verbs" : sw.category,
+                                });
+                              }}
                               className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
                                 isAlreadyInWords
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80 cursor-default"

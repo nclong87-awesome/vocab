@@ -137,6 +137,7 @@ export interface QuizSuggestedWord {
   pairedWith?: string;
   relationship?: string;
   partOfSpeech?: string;
+  category?: string;
 }
 
 export interface QuizFinishedData {

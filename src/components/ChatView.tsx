@@ -19,7 +19,7 @@ interface ChatViewProps {
   targetLanguage: string;
   nativeLanguage: string;
   appLanguage?: string;
-  onAddWord: (word?: string, hint?: string) => void;
+  onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic: () => void;
   startPractice: () => void;

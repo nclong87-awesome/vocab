@@ -14,7 +14,7 @@ interface MessageListProps {
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
   onSendMessage: (text: string) => Promise<void>;
-  onAddWord: (word?: string, hint?: string) => void;
+  onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
   onGenerateByTopic?: () => void;
   startPractice: (

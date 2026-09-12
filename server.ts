@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "./src/utils/jsonSanitizer";
 import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quizGenerator";
+import { isPhrasalVerb } from "./src/utils/wordNormalization";
 import { PROVIDER_OPTIONS } from "./src/config/llmProviders";
 
 dotenv.config();
@@ -2384,10 +2385,13 @@ ${isDuelMode
       : "   - Use 'sentence', 'definition', or 'duel' questions (no picture questions since no word is a noun).")}
 7. Suggested Words & Phrasal Verbs (FOR EACH INDIVIDUAL QUESTION):
    For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, phrasal verbs, collocations, idioms, or paired expressions in ${targetLanguage} directly relevant to that question.
-   - PHRASAL VERBS & COLLOCATIONS IN CONTEXT: If the question's context sentence contains a high-value phrasal verb, multi-word expression, or idiom (e.g., "laugh it off", "trip on", "look forward to", "break down", "take into account", "figure out"), YOU MUST PRIORITIZE including that phrasal verb or expression in "suggestedWords"!
+   - CRITICAL REQUIREMENT FOR CONFUSER DUEL:
+     * When generating Confuser Duel practice ('duel' questions), you MUST specifically examine and scan the generated context sentence and example for natural phrasal verbs.
+     * Actively incorporate or look for high-value phrasal verbs (e.g., "look forward to", "laugh it off", "trip on", "give up", "break down", "carry out", "turn into", "put off") directly in the context sentence or example.
+     * Include the phrasal verb in "suggestedWords", and explicitly categorize it with "category": "phrasal verb" and "partOfSpeech": "phrasal verb"!
    - MULTI-WORD INTEGRITY RULE: For any multi-word expression, phrasal verb, collocation, or idiom, KEEP THE ENTIRE PHRASE INTACT (e.g., "laugh it off", not just "laugh"; "look forward to", not just "look"). DO NOT strip prepositions, pronouns, or particles!
-   - For 'duel' questions, include the rival 'confuserWord' or contrasting expression, and balance remaining suggestions with valuable phrasal verbs or collocations from the context sentence.
-   - SPEED OPTIMIZATION: To maximize response speed, each suggested word item must ONLY contain "word" and "translation" (or concise "definition" if translation is unavailable). Do NOT output hints, part of speech, or pairedWith.
+   - For 'duel' questions: include the rival 'confuserWord' (categorized as "contrast_pair"), and specifically look for and categorize phrasal verbs from the context sentence as "phrasal verb".
+   - Each suggested word item should provide "word", "translation" (or concise "definition"), "partOfSpeech" (e.g., "phrasal verb"), and "category" (e.g., "phrasal verb", "contrast_pair", "collocation").
 
 Output MUST be strictly valid JSON matching this schema:
 {
@@ -2408,7 +2412,9 @@ Output MUST be strictly valid JSON matching this schema:
       "suggestedWords": [
         {
           "word": "string (companion word, phrasal verb e.g. 'laugh it off', collocation, or idiom intact)",
-          "translation": "string (concise translation in ${nativeLanguage} or definition)"
+          "translation": "string (concise translation in ${nativeLanguage} or definition)",
+          "partOfSpeech": "string (e.g. 'phrasal verb' when applicable)",
+          "category": "string (explicit category/tag: 'phrasal verb', 'contrast_pair', or 'collocation')"
         }
       ]
     }
@@ -2432,10 +2438,10 @@ Output MUST be strictly valid JSON matching this schema:
         : (hasAnyNoun 
             ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word.\n`
             : `5. Use 'sentence', 'definition', or 'duel' questions.\n`)) +
-      `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing ONLY "word" and "translation" (or concise definition). CRITICAL: Actively include high-value phrasal verbs (e.g., "laugh it off", "look forward to", "trip on"), collocations, idioms, or contrasting rival terms used in or directly relevant to the context sentence! Keep multi-word phrasal verbs intact (do NOT strip prepositions or shorten phrases).\n` +
+      `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing "word", "translation", "partOfSpeech", and "category". CRITICAL FOR CONFUSER DUEL: Specifically examine and scan the generated context sentence and example for phrasal verbs (e.g., "laugh it off", "look forward to", "trip on", "give up", "break down"). Actively include phrasal verbs in "suggestedWords" and explicitly categorize them with category: "phrasal verb" and partOfSpeech: "phrasal verb"! Keep multi-word phrasal verbs intact (do NOT strip prepositions or shorten phrases).\n` +
       `7. CRITICAL NO-BLANK REQUIREMENT FOR SENTENCE & TRANSLATION: "sentence" must be the complete, natural sentence with the target word in place (no blanks). "sentenceTranslation" must be the natural full sentence translation in ${nativeLanguage} with NO blanks, underscores, or placeholders (NEVER put "______" or "(_____)" in sentenceTranslation).`;
 
-    const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing only "word" [companion word, phrasal verb e.g. 'laugh it off', or collocation] and "translation" or definition).`;
+    const schemaDesc = `Object with questions: array of exactly ${expectedCount} QuizQuestion objects (1 per word) each containing word, type, question, options, correctAnswer, hint, sentence, sentenceTranslation, imageKeyword, confuserWord, contrastRule, and suggestedWords (array of 2 to 3 items each containing "word", "translation", "partOfSpeech", and "category", explicitly identifying and categorizing phrasal verbs as category "phrasal verb").`;
 
     const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
@@ -2474,13 +2480,19 @@ Output MUST be strictly valid JSON matching this schema:
 
         const trans = typeof item === "object" ? (item.translation || item.meaning || "") : "";
         const def = typeof item === "object" ? (item.definition || "") : "";
+        const rawPos = typeof item === "object" ? item.partOfSpeech : undefined;
+        const rawCat = typeof item === "object" ? item.category : undefined;
+        const isPv = isPhrasalVerb(w, rawPos, rawCat);
+        const finalPos = isPv ? "phrasal verb" : rawPos;
+        const finalCat = isPv ? "phrasal verb" : (rawCat || undefined);
 
         resList.push({
           word: w,
           translation: trans || (!def ? "" : trans),
           definition: def,
           hint: typeof item === "object" ? (item.hint || item.reason || item.relationship || item.usage || "") : "",
-          partOfSpeech: typeof item === "object" ? item.partOfSpeech : undefined,
+          partOfSpeech: finalPos,
+          category: finalCat,
           pairedWith: typeof item === "object" && item.pairedWith ? item.pairedWith : undefined
         });
 
@@ -2807,6 +2819,7 @@ Output MUST be strictly valid JSON matching this schema:
               translation: "",
               definition: cleanRivalDef,
               partOfSpeech: matchingWord?.partOfSpeech || q.partOfSpeech,
+              category: "contrast_pair",
               pairedWith: targetWordText
             });
           }
@@ -2822,6 +2835,9 @@ Output MUST be strictly valid JSON matching this schema:
           );
           for (const item of extracted) {
             if (qSuggestions.some(s => s.word.toLowerCase() === item.word.toLowerCase())) continue;
+            if (item.partOfSpeech === "phrasal verb") {
+              item.category = "phrasal verb";
+            }
             if (qSuggestions.length < 3) {
               qSuggestions.push(item);
             } else if (item.partOfSpeech === "phrasal verb") {

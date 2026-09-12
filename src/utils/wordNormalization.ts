@@ -91,3 +91,99 @@ export function isNoun(partOfSpeech?: string | null): boolean {
   return false;
 }
 
+/**
+ * Checks if a word, part-of-speech string, or category indicates a phrasal verb.
+ * Detects explicit tags/POS ("phrasal verb", "cụm động từ", etc.),
+ * multi-word verb phrases with known particles (e.g. "laugh it off", "look forward to", "break down"),
+ * or category tags matching phrasal verbs.
+ */
+export function isPhrasalVerb(
+  word?: string | null,
+  partOfSpeech?: string | null,
+  category?: string | null
+): boolean {
+  if (partOfSpeech && typeof partOfSpeech === "string") {
+    const pos = partOfSpeech.trim().toLowerCase();
+    if (
+      pos.includes("phrasal verb") ||
+      pos.includes("phrasal") ||
+      pos.includes("cụm động từ") ||
+      pos.includes("verbo frasal") ||
+      pos.includes("verbe à particule") ||
+      pos === "pv"
+    ) {
+      return true;
+    }
+  }
+
+  if (category && typeof category === "string") {
+    const cat = category.trim().toLowerCase();
+    if (
+      cat.includes("phrasal verb") ||
+      cat.includes("phrasal") ||
+      cat.includes("cụm động từ")
+    ) {
+      return true;
+    }
+  }
+
+  if (word && typeof word === "string") {
+    const trimmed = word.trim().toLowerCase();
+    // Common English phrasal verb particles
+    const particleRegex = /\b(off|out|up|down|in|on|away|over|through|back|into|around|along|across|by|for)\b/i;
+    if (particleRegex.test(trimmed) && trimmed.includes(" ")) {
+      const parts = trimmed.split(/\s+/);
+      // Typical phrasal verbs have between 2 and 4 tokens (e.g. "look into", "laugh it off", "look forward to")
+      if (parts.length >= 2 && parts.length <= 4) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Normalizes word category to explicitly include 'Phrasal Verbs' if detected.
+ */
+export function normalizeWordCategory(
+  category?: string | null,
+  word?: string | null,
+  partOfSpeech?: string | null
+): string {
+  if (isPhrasalVerb(word, partOfSpeech, category)) {
+    if (!category || category === "General" || category === "Vocabulary" || category === "word" || category.trim() === "") {
+      return "Phrasal Verbs";
+    }
+    if (/phrasal/i.test(category)) {
+      return "Phrasal Verbs";
+    }
+    return category;
+  }
+  return category || "General";
+}
+
+/**
+ * Normalizes part-of-speech string to 'phrasal verb' if the word is recognized as a phrasal verb.
+ */
+export function normalizeWordPartOfSpeech(
+  partOfSpeech?: string | null,
+  word?: string | null,
+  category?: string | null
+): string {
+  if (isPhrasalVerb(word, partOfSpeech, category)) {
+    if (
+      !partOfSpeech ||
+      partOfSpeech === "word" ||
+      partOfSpeech === "verb" ||
+      partOfSpeech === "expression" ||
+      partOfSpeech === "phrase" ||
+      partOfSpeech.trim() === ""
+    ) {
+      return "phrasal verb";
+    }
+  }
+  return partOfSpeech || "word";
+}
+
+

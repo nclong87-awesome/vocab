@@ -9,7 +9,7 @@ import {
 } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
-import { isWordInCollection } from "../utils/wordNormalization";
+import { isWordInCollection, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../utils/wordNormalization";
 import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 
 export function useVocabulary() {
@@ -80,9 +80,17 @@ export function useVocabulary() {
         ? wordData.imageUrls
         : (wordData.imageUrl ? [wordData.imageUrl] : undefined);
 
+      const isPv = isPhrasalVerb(wordData.word, wordData.partOfSpeech, wordData.category);
+      const normalizedPos = normalizeWordPartOfSpeech(wordData.partOfSpeech, wordData.word, wordData.category);
+      const normalizedCategory = isPv
+        ? normalizeWordCategory(wordData.category, wordData.word, normalizedPos)
+        : (wordData.category || "General");
+
       const newWord: Word = recordStrengthHistory(
         {
           ...wordData,
+          partOfSpeech: normalizedPos,
+          category: normalizedCategory,
           imageUrls: defaultUrls,
           imageUrl: wordData.imageUrl || defaultUrls?.[0] || undefined,
           id: `manual-word-${Date.now()}`,

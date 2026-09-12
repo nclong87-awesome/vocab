@@ -214,6 +214,7 @@ export interface ExtractedCompanionItem {
   translation?: string;
   definition?: string;
   partOfSpeech?: string;
+  category?: string;
   hint?: string;
   pairedWith?: string;
 }
@@ -469,6 +470,7 @@ export function extractPhrasalVerbsAndCollocationsFromSentence(
           translation: trans,
           definition: item.definition,
           partOfSpeech: "phrasal verb",
+          category: "Phrasal Verbs",
           hint: "Phrasal verb from context sentence",
           pairedWith: targetWord
         });

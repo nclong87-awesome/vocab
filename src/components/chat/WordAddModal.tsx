@@ -23,7 +23,7 @@ import {
 } from "../../services/userInquiryService";
 import { getUserPersonalityProfileFromDB } from "../../db/indexedDB";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
-import { findWordInCollection, isNoun } from "../../utils/wordNormalization";
+import { findWordInCollection, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../../utils/llmEvents";
@@ -376,16 +376,22 @@ export default function WordAddModal({
       if (overrideData && overrideData.definition && overrideData.translation) {
         setIsTyping(false);
         setActiveModelInfo(null);
+        const rawPos = overrideData.partOfSpeech || "word";
+        const rawCat = overrideData.category || "General";
+        const isPv = isPhrasalVerb(wordToLookup, rawPos, rawCat);
+        const normPos = normalizeWordPartOfSpeech(rawPos, wordToLookup, rawCat);
+        const normCat = isPv ? normalizeWordCategory(rawCat, wordToLookup, normPos) : rawCat;
+
         const newWordObj: Word = {
           id: overrideData.id || `word-${Date.now()}`,
           word: overrideData.word || wordToLookup,
           pronunciation: overrideData.pronunciation || "/.../",
-          partOfSpeech: overrideData.partOfSpeech || "word",
+          partOfSpeech: normPos,
           definition: overrideData.definition || "",
           translation: overrideData.translation || "",
           example: overrideData.example || undefined,
           exampleTranslation: overrideData.exampleTranslation || undefined,
-          category: overrideData.category || "General",
+          category: normCat,
           context: overrideData.context || effectiveHint || undefined,
           suggestedWords: overrideData.suggestedWords || undefined,
           learned: false,
@@ -425,6 +431,11 @@ export default function WordAddModal({
             translation: newWordObj.translation,
             definition: newWordObj.definition,
             exampleSection:
+              (isPv
+                ? `\n- **${currentAppLang === "vi" ? "Thẻ" : "Tag"}**: 🏷️ **${currentAppLang === "vi" ? "Cụm động từ (Phrasal Verb)" : "Phrasal Verb"}**`
+                : (normCat && normCat !== "General"
+                  ? `\n- **${currentAppLang === "vi" ? "Chủ đề / Phân loại" : "Category"}**: 🏷️ ${normCat}`
+                  : "")) +
               (newWordObj.example ? `\n- **${t("label_example", currentAppLang)}**: "${newWordObj.example}"` : "") +
               (newWordObj.exampleTranslation
                 ? `\n- **${t("label_example_translation", currentAppLang)}**: "${newWordObj.exampleTranslation}"`
@@ -504,7 +515,12 @@ export default function WordAddModal({
 
         // Single sense or resolved sense
         const sense = validSenses[0];
-        const partOfSpeechVal = sense?.partOfSpeech || data.partOfSpeech || "word";
+        const targetWordStr = sense?.word || data.word || wordToLookup;
+        const rawPos = sense?.partOfSpeech || data.partOfSpeech || overrideData?.partOfSpeech || "word";
+        const rawCat = sense?.category || data.category || overrideData?.category || "General";
+        const isPv = isPhrasalVerb(targetWordStr, rawPos, rawCat);
+        const partOfSpeechVal = normalizeWordPartOfSpeech(rawPos, targetWordStr, rawCat);
+        const categoryVal = isPv ? normalizeWordCategory(rawCat, targetWordStr, partOfSpeechVal) : rawCat;
         const pronunciationVal = sense?.pronunciation || data.pronunciation || "/.../";
         const definitionVal = sense?.definition || data.definition;
         const translationVal = sense?.translation || data.translation;
@@ -529,9 +545,7 @@ export default function WordAddModal({
           return;
         }
 
-        const categoryVal = sense?.category || data.category || "General";
         const contextVal = sense?.context || data.context || effectiveHint || definitionVal;
-        const targetWordStr = sense?.word || data.word || wordToLookup;
 
         const newWordObj: Word = {
           id: `word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -583,6 +597,11 @@ export default function WordAddModal({
             translation: translationVal,
             definition: definitionVal,
             exampleSection:
+              (isPv
+                ? `\n- **${currentAppLang === "vi" ? "Thẻ" : "Tag"}**: 🏷️ **${currentAppLang === "vi" ? "Cụm động từ (Phrasal Verb)" : "Phrasal Verb"}**`
+                : (categoryVal && categoryVal !== "General"
+                  ? `\n- **${currentAppLang === "vi" ? "Chủ đề / Phân loại" : "Category"}**: 🏷️ ${categoryVal}`
+                  : "")) +
               (exampleVal ? `\n- **${t("label_example", currentAppLang)}**: "${exampleVal}"` : "") +
               (exampleTranslationVal
                 ? `\n- **${t("label_example_translation", currentAppLang)}**: "${exampleTranslationVal}"`
@@ -703,16 +722,22 @@ export default function WordAddModal({
           ? sense.translation
           : targetWord;
 
+      const rawPos = sense.partOfSpeech || "noun";
+      const rawCat = sense.category || "General";
+      const isPv = isPhrasalVerb(targetWord, rawPos, rawCat);
+      const normPos = normalizeWordPartOfSpeech(rawPos, targetWord, rawCat);
+      const normCat = isPv ? normalizeWordCategory(rawCat, targetWord, normPos) : rawCat;
+
       const newWord: Word = {
         id: `word-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         word: targetWord,
         pronunciation: sense.pronunciation || "/.../",
-        partOfSpeech: sense.partOfSpeech || "noun",
+        partOfSpeech: normPos,
         definition: sense.definition,
         translation: finalTranslation,
         example: sense.example || undefined,
         exampleTranslation: sense.exampleTranslation || undefined,
-        category: sense.category || "General",
+        category: normCat,
         context: sense.context || sense.definition,
         suggestedWords: sense.suggestedWords || pending.suggestedWords || undefined,
         learned: false,
@@ -720,9 +745,9 @@ export default function WordAddModal({
         createdAt: new Date().toISOString(),
         lastReviewed: null,
         strength: 0,
-        imageKeyword: isNoun(sense.partOfSpeech) ? sense.imageKeyword : undefined,
-        imageUrls: isNoun(sense.partOfSpeech) ? sense.imageUrls : undefined,
-        imageUrl: isNoun(sense.partOfSpeech) ? sense.imageUrl : undefined,
+        imageKeyword: isNoun(normPos) ? sense.imageKeyword : undefined,
+        imageUrls: isNoun(normPos) ? sense.imageUrls : undefined,
+        imageUrl: isNoun(normPos) ? sense.imageUrl : undefined,
       };
 
       setCurrentWord(newWord);
@@ -753,6 +778,11 @@ export default function WordAddModal({
           translation: newWord.translation,
           definition: newWord.definition,
           exampleSection:
+            (isPv
+              ? `\n- **${currentAppLang === "vi" ? "Thẻ" : "Tag"}**: 🏷️ **${currentAppLang === "vi" ? "Cụm động từ (Phrasal Verb)" : "Phrasal Verb"}**`
+              : (normCat && normCat !== "General"
+                ? `\n- **${currentAppLang === "vi" ? "Chủ đề / Phân loại" : "Category"}**: 🏷️ ${normCat}`
+                : "")) +
             (newWord.example ? `\n- **${t("label_example", currentAppLang)}**: "${newWord.example}"` : "") +
             (newWord.exampleTranslation
               ? `\n- **${t("label_example_translation", currentAppLang)}**: "${newWord.exampleTranslation}"`
@@ -773,7 +803,15 @@ export default function WordAddModal({
   const handleConfirmAddWord = useCallback(
     (wordsToAdd: any[]) => {
       if (!wordsToAdd || wordsToAdd.length === 0) return;
-      const newWord = wordsToAdd[0] as Word;
+      const rawWord = wordsToAdd[0] as Word;
+      const isPv = isPhrasalVerb(rawWord.word, rawWord.partOfSpeech, rawWord.category);
+      const newWord: Word = {
+        ...rawWord,
+        partOfSpeech: normalizeWordPartOfSpeech(rawWord.partOfSpeech, rawWord.word, rawWord.category),
+        category: isPv
+          ? normalizeWordCategory(rawWord.category, rawWord.word, rawWord.partOfSpeech)
+          : (rawWord.category || "General"),
+      };
 
       setCurrentWord(newWord);
 
@@ -965,6 +1003,42 @@ export default function WordAddModal({
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
   }, []);
 
+  const isCurrentWordPhrasalVerb = currentWord
+    ? isPhrasalVerb(currentWord.word, currentWord.partOfSpeech, currentWord.category)
+    : false;
+
+  const handleTogglePhrasalVerbTag = useCallback(() => {
+    if (!currentWord) return;
+    const isPvNow = isPhrasalVerb(currentWord.word, currentWord.partOfSpeech, currentWord.category);
+    const updatedWord: Word = {
+      ...currentWord,
+      partOfSpeech: isPvNow ? "verb" : "phrasal verb",
+      category: isPvNow ? "General" : "Phrasal Verbs",
+    };
+    setCurrentWord(updatedWord);
+
+    // Also update any pending confirm_save_word action in the chat stream so saving captures the new category & POS
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.suggestedActions && m.suggestedActions.some((a) => a.action === "confirm_save_word")) {
+          return {
+            ...m,
+            suggestedActions: m.suggestedActions.map((a) =>
+              a.action === "confirm_save_word" ? { ...a, payload: updatedWord } : a
+            ),
+          };
+        }
+        return m;
+      })
+    );
+
+    showToast?.(
+      isPvNow
+        ? (currentAppLang === "vi" ? `Đã bỏ thẻ "Cụm động từ" cho "${currentWord.word}"` : `Removed "Phrasal Verb" tag from "${currentWord.word}"`)
+        : (currentAppLang === "vi" ? `Đã gắn thẻ "Cụm động từ" cho "${currentWord.word}"` : `Tagged "${currentWord.word}" as Phrasal Verb`)
+    );
+  }, [currentWord, currentAppLang, showToast]);
+
   if (!isOpen) return null;
 
   return createPortal(
@@ -1016,6 +1090,56 @@ export default function WordAddModal({
         </button>
       </header>
 
+      {/* Active Word & Phrasal Verb Tag Bar */}
+      {currentWord && (
+        <div className="bg-amber-50/70 border-b border-amber-200/70 px-4 sm:px-6 py-2 shrink-0 flex items-center justify-between gap-3 flex-wrap transition-all">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="text-xs font-bold text-stone-900 tracking-tight">
+              {currentWord.word}
+            </span>
+            {currentWord.pronunciation && (
+              <span className="text-[11px] text-stone-500 font-mono">
+                {currentWord.pronunciation}
+              </span>
+            )}
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-stone-700 font-medium border border-stone-200">
+              {currentWord.partOfSpeech || "word"}
+            </span>
+
+            {/* Phrasal Verb Tag Badge / Toggle Button */}
+            <button
+              type="button"
+              onClick={handleTogglePhrasalVerbTag}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all cursor-pointer shadow-3xs active:scale-95 ${
+                isCurrentWordPhrasalVerb
+                  ? "bg-amber-200/90 text-amber-950 border-amber-400 font-semibold"
+                  : "bg-white text-stone-600 border-stone-300 hover:bg-amber-100/70 hover:text-amber-900 hover:border-amber-300"
+              }`}
+              title={
+                isCurrentWordPhrasalVerb
+                  ? (currentAppLang === "vi" ? "Thẻ: Cụm động từ (nhấp để bỏ gắn thẻ)" : "Tagged: Phrasal Verb (click to toggle off)")
+                  : (currentAppLang === "vi" ? "Nhấp để gắn thẻ Cụm động từ (Phrasal Verb)" : "Click to tag as Phrasal Verb")
+              }
+            >
+              <span>🏷️</span>
+              <span>{isCurrentWordPhrasalVerb ? (currentAppLang === "vi" ? "Cụm động từ" : "Phrasal Verb") : (currentAppLang === "vi" ? "+ Thẻ Cụm động từ" : "+ Tag Phrasal Verb")}</span>
+            </button>
+
+            {currentWord.category && currentWord.category !== "Phrasal Verbs" && currentWord.category !== "General" && (
+              <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-white text-stone-700 border border-stone-200">
+                {currentWord.category}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-stone-600 truncate max-w-xs sm:max-w-md font-medium">
+              {currentWord.translation}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Main Conversation Stream */}
       <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 max-w-4xl w-full mx-auto">
         {messages.map((msg, idx) => (
@@ -1030,7 +1154,7 @@ export default function WordAddModal({
             ttsConfig={ttsConfig}
             llmConfig={llmConfig}
             onSendMessage={handleSendMessage}
-            onAddWord={(w, h) => handleLookup(w, h)}
+            onAddWord={(w, h, extra) => handleLookup(w, h, extra)}
             onAddMultipleWords={handleConfirmAddWord}
             onSelectDefinition={handleSelectDefinition}
             onRetryErrorMessage={handleRetryErrorMessage}
@@ -1120,10 +1244,17 @@ export default function WordAddModal({
                 </button>
 
                 {currentWord && (
-                  <span className="text-[11px] text-stone-400 truncate hidden sm:inline">
-                    {currentAppLang === "vi"
-                      ? `Từ hiện tại: "${currentWord.word}"`
-                      : `Current word: "${currentWord.word}"`}
+                  <span className="text-[11px] text-stone-500 truncate hidden sm:inline-flex items-center gap-1.5">
+                    <span>
+                      {currentAppLang === "vi"
+                        ? `Từ hiện tại: "${currentWord.word}"`
+                        : `Current word: "${currentWord.word}"`}
+                    </span>
+                    {isCurrentWordPhrasalVerb && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-semibold">
+                        {currentAppLang === "vi" ? "🏷️ Cụm động từ" : "🏷️ Phrasal Verb"}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
