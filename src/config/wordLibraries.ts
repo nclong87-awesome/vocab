@@ -1,3 +1,5 @@
+import { fetchWithTimeout, safeParseResponseJson } from "../utils";
+
 export interface WordLibrarySet {
   id: string;
   name: string;
@@ -247,10 +249,10 @@ export async function fetchWordLibrarySetData(url: string): Promise<any> {
     cleanUrl = cleanUrl.replace("gist.github.com/", "gist.githubusercontent.com/");
   }
 
-  const res = await fetch(cleanUrl);
+  const res = await fetchWithTimeout(cleanUrl, { timeoutMs: 15000 });
   if (!res.ok) {
     throw new Error(`Failed to download library data (HTTP ${res.status})`);
   }
-  const data = await res.json();
+  const data = await safeParseResponseJson(res);
   return data;
 }

@@ -119,7 +119,6 @@ export async function fetchWithTimeout(
     });
 
     const originalText = response.text.bind(response);
-    const originalJson = response.json.bind(response);
 
     response.text = async () => {
       try {
@@ -139,19 +138,31 @@ export async function fetchWithTimeout(
     };
 
     response.json = async () => {
+      const text = await response.text();
+      const contentType = response.headers.get("content-type") || "";
+      const trimmed = (text || "").trim();
+
+      if (!trimmed) {
+        if (!response.ok) {
+          throw new Error(`Server returned error status ${response.status} (${response.statusText || "Error"}) with empty body.`);
+        }
+        return {} as any;
+      }
+
+      if (trimmed.startsWith("<") || trimmed.startsWith("<!DOCTYPE") || (!contentType.includes("application/json") && (trimmed.startsWith("<html") || trimmed.startsWith("<head")))) {
+        let msg = `Server error (${response.status}): Unexpected HTML response received.`;
+        if (response.status === 502) msg = "Server or gateway is temporarily unavailable (502 Bad Gateway).";
+        else if (response.status === 503) msg = "Service temporarily unavailable (503 Service Unavailable).";
+        else if (response.status === 504) msg = "Gateway timeout waiting for server response (504 Gateway Timeout).";
+        else if (response.status === 404) msg = "API endpoint not found on server (404 Not Found).";
+        else if (response.status >= 500) msg = `Server error (${response.status}): Internal server error.`;
+        throw new Error(msg);
+      }
+
       try {
-        const jsonPromise = originalJson();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          if (controller.signal.aborted) {
-            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
-          }
-          controller.signal.addEventListener("abort", () => {
-            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
-          });
-        });
-        return await Promise.race([jsonPromise, timeoutPromise]);
-      } finally {
-        clearTimeout(id);
+        return JSON.parse(text);
+      } catch (err) {
+        throw new Error(`Invalid JSON response from server (${response.status}): ${text.substring(0, 80)}...`);
       }
     };
 
@@ -175,4 +186,36 @@ export function isStaticHost(): boolean {
     host.endsWith("vercel.app") ||
     window.location.protocol === "file:"
   );
+}
+
+/**
+ * Safely parse JSON from any fetch Response object, gracefully handling HTML/non-JSON error pages
+ */
+export async function safeParseResponseJson<T = any>(res: Response): Promise<T> {
+  const text = await res.text().catch(() => "");
+  const contentType = res.headers.get("content-type") || "";
+  const trimmed = (text || "").trim();
+
+  if (!trimmed) {
+    if (!res.ok) {
+      throw new Error(`Server returned status ${res.status} (${res.statusText || "Error"}) with an empty response.`);
+    }
+    return {} as T;
+  }
+
+  if (trimmed.startsWith("<") || trimmed.startsWith("<!DOCTYPE") || (!contentType.includes("application/json") && (trimmed.startsWith("<html") || trimmed.startsWith("<head")))) {
+    let msg = `Server error (${res.status}): Unexpected HTML response received.`;
+    if (res.status === 502) msg = "Server or gateway is temporarily unavailable (502 Bad Gateway).";
+    else if (res.status === 503) msg = "Service temporarily unavailable (503 Service Unavailable).";
+    else if (res.status === 504) msg = "Gateway timeout waiting for server response (504 Gateway Timeout).";
+    else if (res.status === 404) msg = "API endpoint not found on server (404 Not Found).";
+    else if (res.status >= 500) msg = `Server error (${res.status}): Internal server error.`;
+    throw new Error(msg);
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch (err) {
+    throw new Error(`Invalid JSON response from server (${res.status}): ${text.substring(0, 80)}...`);
+  }
 }

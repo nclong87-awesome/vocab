@@ -3273,6 +3273,26 @@ Return STRICTLY raw JSON matching:
   }
 });
 
+// Fallback for unmatched API routes - ALWAYS return JSON 404, never HTML
+app.all("/api/*", (_req, res) => {
+  res.status(404).json({
+    error: "API endpoint not found",
+    statusCode: 404,
+    errorType: "NOT_FOUND"
+  });
+});
+
+// Global Express error handler for API requests - ensure JSON response instead of default HTML error page
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Unhandled Express error on route", req.path, err);
+  if (res.headersSent) return;
+  res.status(err.status || err.statusCode || 500).json({
+    error: err?.message || "Internal server error occurred on server.",
+    statusCode: err.status || err.statusCode || 500,
+    errorType: "SERVER_ERROR"
+  });
+});
+
 // Start express server with Vite configuration
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

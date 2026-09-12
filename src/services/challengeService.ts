@@ -1,4 +1,5 @@
 import { ChallengeData, ChallengeTurnResult, UserPersonalityProfile, Word, LLMConfig } from "../types";
+import { fetchWithTimeout, safeParseResponseJson } from "../utils";
 
 export interface GenerateChallengeParams {
   nativeLanguage?: string;
@@ -98,13 +99,13 @@ export function generateFallbackChallenge(params: GenerateChallengeParams): Chal
  * Generate a new personalized translation challenge via backend API
  */
 export async function generateChallenge(params: GenerateChallengeParams): Promise<ChallengeData> {
-  const res = await fetch("/api/generate-challenge", {
+  const res = await fetchWithTimeout("/api/generate-challenge", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params)
   });
 
-  const data = await res.json();
+  const data = await safeParseResponseJson(res);
 
   if (!res.ok) {
     throw new Error(data?.error || `Failed to generate translation challenge (Status ${res.status})`);
@@ -134,13 +135,13 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
  * Process a turn in the interactive challenge (assistance vs submission evaluation)
  */
 export async function processChallengeTurn(params: ChallengeTurnParams): Promise<ChallengeTurnResult> {
-  const res = await fetch("/api/challenge-turn", {
+  const res = await fetchWithTimeout("/api/challenge-turn", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params)
   });
 
-  const data = await res.json();
+  const data = await safeParseResponseJson(res);
 
   if (!res.ok) {
     throw new Error(data?.error || `Failed to evaluate challenge response (Status ${res.status})`);
