@@ -1,6 +1,12 @@
 import { IndexedDBExportData, StoredRecord, StoredSetting } from "../db/indexedDB";
 import { Word, UserStats, StrengthHistoryTuple, UserPersonalityProfile } from "../types";
 import { recalculateWordsMemoryDecay } from "./spacedRepetition";
+import {
+  isCompletedWord,
+  normalizeWordPartOfSpeech,
+  normalizeWordCategory,
+  isPhrasalVerb
+} from "./wordNormalization";
 
 export interface DeletedWordRecord {
   id: string;
@@ -215,20 +221,38 @@ export function autoMergeLocalAndRemote(
 
     if (!match) {
       // Local word missing in remote
-      newLocalWords.push(lWord);
-      mergedWordsMap.set(lWord.id || `local-${normKey}`, lWord);
+      const normalizedLocalWord = isCompletedWord(lWord) && lWord.completed === undefined
+        ? { ...lWord, completed: true }
+        : lWord;
+      newLocalWords.push(normalizedLocalWord);
+      mergedWordsMap.set(lWord.id || `local-${normKey}`, normalizedLocalWord);
     } else {
       // Record key processed
       if (match.id) processedRemoteKeys.add(match.id);
       if (match.word) processedRemoteKeys.add(match.word.trim().toLowerCase());
 
+      // Evaluate completion status for both local and remote words
+      const lIsCompleted = (lWord.completed === true || isCompletedWord(lWord)) && lWord.completed !== false;
+      const rIsCompleted = (match.completed === true || isCompletedWord(match)) && match.completed !== false;
+      const mergedCompleted = Boolean(lIsCompleted || rIsCompleted);
+
       // Compare local vs remote timestamps & properties
       const localReviewTime = Math.max(parseTime(lWord.lastReviewed), parseTime(lWord.createdAt));
       const remoteReviewTime = Math.max(parseTime(match.lastReviewed), parseTime(match.createdAt));
 
-      // Choose base record from whichever was updated / reviewed most recently
-      const baseIsLocal = localReviewTime >= remoteReviewTime;
+      // Choose base record:
+      // If one device completed the draft word, prioritize the completed record
+      let baseIsLocal: boolean;
+      if (lIsCompleted && !rIsCompleted) {
+        baseIsLocal = true;
+      } else if (!lIsCompleted && rIsCompleted) {
+        baseIsLocal = false;
+      } else {
+        baseIsLocal = localReviewTime >= remoteReviewTime;
+      }
+
       const primary = baseIsLocal ? lWord : match;
+      const secondary = baseIsLocal ? match : lWord;
 
       // Merge combined fields:
       // - Starred: if starred anywhere, keep true
@@ -310,26 +334,105 @@ export function autoMergeLocalAndRemote(
 
       const chosenImageUrl =
         primary.imageUrl ||
-        lWord.imageUrl ||
-        match.imageUrl ||
+        secondary.imageUrl ||
         (mergedImageUrls.length > 0 ? mergedImageUrls[0] : undefined);
+
+      // Content field reconciliation with fallback to non-empty secondary fields
+      const mergedDefinition = (primary.definition && primary.definition.trim())
+        ? primary.definition
+        : ((secondary.definition && secondary.definition.trim()) ? secondary.definition : "");
+
+      const mergedTranslation = (primary.translation && primary.translation.trim())
+        ? primary.translation
+        : ((secondary.translation && secondary.translation.trim()) ? secondary.translation : "");
+
+      const isGoodPron = (p?: string) => Boolean(p && p !== "/.../" && p !== "/ ... /" && p.trim());
+      const mergedPronunciation = isGoodPron(primary.pronunciation)
+        ? primary.pronunciation
+        : (isGoodPron(secondary.pronunciation) ? secondary.pronunciation : (primary.pronunciation || secondary.pronunciation || undefined));
+
+      const mergedExample = (primary.example && primary.example.trim())
+        ? primary.example
+        : ((secondary.example && secondary.example.trim()) ? secondary.example : undefined);
+
+      const mergedExampleTranslation = (primary.exampleTranslation && primary.exampleTranslation.trim())
+        ? primary.exampleTranslation
+        : ((secondary.exampleTranslation && secondary.exampleTranslation.trim()) ? secondary.exampleTranslation : undefined);
+
+      const isGoodPos = (pos?: string) => Boolean(pos && pos !== "word" && pos.trim());
+      const rawPos = isGoodPos(primary.partOfSpeech)
+        ? primary.partOfSpeech
+        : (isGoodPos(secondary.partOfSpeech) ? secondary.partOfSpeech : (primary.partOfSpeech || secondary.partOfSpeech || "word"));
+      const wordText = primary.word || lWord.word || match.word || "";
+      const isPv = isPhrasalVerb(wordText, rawPos, primary.category || secondary.category);
+      const normalizedPos = normalizeWordPartOfSpeech(rawPos, wordText, primary.category || secondary.category);
+
+      const isGoodCat = (cat?: string) => Boolean(cat && cat !== "General" && cat !== "Vocabulary" && cat.trim());
+      const rawCat = isGoodCat(primary.category)
+        ? primary.category
+        : (isGoodCat(secondary.category) ? secondary.category : (primary.category || secondary.category || "General"));
+      const normalizedCategory = isPv ? normalizeWordCategory(rawCat, wordText, normalizedPos) : rawCat;
+
+      // Reconcile senses, multiple definitions & enrichment status
+      const primarySenses = (primary.senses && primary.senses.length > 0) ? primary.senses : undefined;
+      const secondarySenses = (secondary.senses && secondary.senses.length > 0) ? secondary.senses : undefined;
+      const mergedSenses = primarySenses || secondarySenses;
+
+      let mergedHasMultipleDefinitions = false;
+      let mergedEnrichmentStatus: 'idle' | 'enriching' | 'completed' | 'has_multiple_definitions' | 'error' = 'idle';
+
+      if (mergedCompleted) {
+        mergedHasMultipleDefinitions = Boolean(primary.hasMultipleDefinitions && mergedSenses && mergedSenses.length > 1);
+        mergedEnrichmentStatus = 'completed';
+      } else {
+        mergedHasMultipleDefinitions = Boolean(primary.hasMultipleDefinitions || secondary.hasMultipleDefinitions || (mergedSenses && mergedSenses.length > 1));
+        mergedEnrichmentStatus = mergedHasMultipleDefinitions ? 'has_multiple_definitions' : (primary.enrichmentStatus || secondary.enrichmentStatus || 'idle');
+      }
 
       const mergedWordItem: Word = {
         ...primary,
         id: lWord.id || match.id,
+        word: wordText,
+        completed: mergedCompleted,
+        definition: mergedDefinition,
+        translation: mergedTranslation,
+        pronunciation: mergedPronunciation,
+        example: mergedExample,
+        exampleTranslation: mergedExampleTranslation,
+        partOfSpeech: normalizedPos,
+        category: normalizedCategory,
+        context: primary.context || secondary.context || undefined,
+        imageKeyword: primary.imageKeyword || secondary.imageKeyword || undefined,
+        senses: mergedSenses,
+        hasMultipleDefinitions: mergedHasMultipleDefinitions,
+        enrichmentStatus: mergedEnrichmentStatus,
+        enrichmentError: mergedCompleted ? undefined : (primary.enrichmentError || secondary.enrichmentError || undefined),
+        suggestedWords: primary.suggestedWords || secondary.suggestedWords || undefined,
         starred: mergedStarred,
         strength: mergedStrength,
         learned: mergedLearned,
         imageUrl: chosenImageUrl,
         imageUrls: mergedImageUrls.length > 0 ? mergedImageUrls : undefined,
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
-        nextReviewDate: primary.nextReviewDate || lWord.nextReviewDate || match.nextReviewDate,
+        nextReviewDate: primary.nextReviewDate || secondary.nextReviewDate || null,
         createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt,
         strengthHistory: cappedHistoryList.length > 0 ? cappedHistoryList : undefined
       };
 
       // Detect differences
       const changesList: string[] = [];
+
+      // Check if completion status changed or draft was finished
+      if (Boolean(lWord.completed) !== Boolean(match.completed) || (lWord.completed === false && mergedCompleted)) {
+        if (!lIsCompleted && rIsCompleted) {
+          changesList.push("Word completed & definition synced from cloud (Draft → Completed)");
+        } else if (lIsCompleted && !rIsCompleted) {
+          changesList.push("Word completion synced to cloud (Draft → Completed)");
+        } else {
+          changesList.push(`Completion status updated (${mergedCompleted ? "Completed" : "Draft"})`);
+        }
+      }
+
       if (Boolean(lWord.starred) !== Boolean(match.starred)) {
         changesList.push(`Starred status synced (${mergedStarred ? "Starred" : "Unstarred"})`);
       }
@@ -418,8 +521,11 @@ export function autoMergeLocalAndRemote(
         if (normKey) tombstoneLookupMap.set(normKey, newRec);
       }
     } else {
-      newRemoteWords.push(rWord);
-      mergedWordsMap.set(rWord.id || `remote-${normKey}`, rWord);
+      const normalizedRemoteWord = isCompletedWord(rWord) && rWord.completed === undefined
+        ? { ...rWord, completed: true }
+        : rWord;
+      newRemoteWords.push(normalizedRemoteWord);
+      mergedWordsMap.set(rWord.id || `remote-${normKey}`, normalizedRemoteWord);
     }
   }
 
