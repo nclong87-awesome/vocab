@@ -10,6 +10,11 @@ import { koTranslations } from "./translations/ko";
 export type TranslationKey =
   | "app_title"
   | "nav_collection"
+  | "nav_drafts"
+  | "drafts_page_title"
+  | "drafts_empty_title"
+  | "drafts_empty_desc"
+  | "toast_view_drafts_shortcut"
   | "nav_analytics"
   | "nav_settings"
   | "nav_dashboard"

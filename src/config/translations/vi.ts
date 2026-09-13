@@ -3,6 +3,11 @@ import { LanguageTranslations } from "../i18n";
 export const viTranslations: LanguageTranslations = {
     app_title: "Học Từ Vựng AI",
     nav_collection: "Bộ Từ Vựng",
+    nav_drafts: "Từ Bản Nháp",
+    drafts_page_title: "Từ Bản Nháp & Chờ Bổ Sung",
+    drafts_empty_title: "Không Có Từ Bản Nháp Nào",
+    drafts_empty_desc: "Tất cả từ vựng của bạn đã được hoàn thiện đầy đủ và sẵn sàng để luyện tập! Khi bạn thêm từ nhanh hoặc quét ảnh, các từ chờ bổ sung định nghĩa sẽ xuất hiện tại đây.",
+    toast_view_drafts_shortcut: "📝 Xem Bản Nháp",
     nav_analytics: "Phân Tích",
     nav_settings: "Cài Đặt",
     nav_dashboard: "Trang Chủ",

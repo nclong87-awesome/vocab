@@ -46,6 +46,8 @@ export default function MobileSideDrawer({
                 <span className="font-bold text-sm tracking-tight capitalize">
                   {title === "collection"
                     ? "My Collection"
+                    : title === "drafts"
+                    ? "Draft Words"
                     : title === "analytics"
                     ? "Learning Analytics"
                     : title}

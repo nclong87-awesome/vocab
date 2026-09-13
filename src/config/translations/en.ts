@@ -3,6 +3,11 @@ import { LanguageTranslations } from "../i18n";
 export const enTranslations: LanguageTranslations = {
     app_title: "Vocab Learner",
     nav_collection: "Collection",
+    nav_drafts: "Drafts",
+    drafts_page_title: "Draft & Incomplete Words",
+    drafts_empty_title: "No Draft Words to Complete",
+    drafts_empty_desc: "All your vocabulary words are complete and ready for practice! When you add new words or capture photos without full definitions, they will appear here.",
+    toast_view_drafts_shortcut: "📝 View Drafts",
     nav_analytics: "Analytics",
     nav_settings: "Settings",
     nav_dashboard: "Dashboard",

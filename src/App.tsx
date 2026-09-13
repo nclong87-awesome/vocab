@@ -20,6 +20,7 @@ import {
 
 import ChatView from "./components/ChatView";
 import CollectionManager from "./components/CollectionManager";
+import DraftsManager from "./components/DraftsManager";
 import SettingsView from "./components/SettingsView";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
@@ -40,8 +41,8 @@ import { useChat } from "./hooks/useChat";
 import { useBackgroundEnrichment } from "./hooks/useBackgroundEnrichment";
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<"chatview" | "manage" | "analytics" | "settings">("chatview");
-  const [sidePanelTab, setSidePanelTab] = useState<"collection" | "analytics" | "settings">("collection");
+  const [currentView, setCurrentView] = useState<"chatview" | "manage" | "drafts" | "analytics" | "settings">("chatview");
+  const [sidePanelTab, setSidePanelTab] = useState<"collection" | "drafts" | "analytics" | "settings">("collection");
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
@@ -408,9 +409,12 @@ export default function App() {
   }, [setLlmConfig, setTargetLanguage, setNativeLanguage, setIsLlmModalOpen]);
 
   // Unified setter to map old page views to side panel operations
-  const handleSetView = (view: "chatview" | "manage" | "analytics" | "settings") => {
+  const handleSetView = (view: "chatview" | "manage" | "drafts" | "analytics" | "settings") => {
     if (view === "manage") {
       setSidePanelTab("collection");
+      setIsSidePanelOpen(true);
+    } else if (view === "drafts") {
+      setSidePanelTab("drafts");
       setIsSidePanelOpen(true);
     } else if (view === "analytics") {
       setSidePanelTab("analytics");
@@ -526,6 +530,24 @@ export default function App() {
               nativeLanguage={nativeLanguage}
               appLanguage={appLanguage}
               onLlmApiError={handleAiApiError}
+            />
+          )}
+
+          {sidePanelTab === "drafts" && (
+            <DraftsManager
+              words={words}
+              llmConfig={llmConfig}
+              ttsConfig={ttsConfig}
+              onAddWord={handleOpenAddWordModal}
+              onDeleteWord={handleDeleteWord}
+              onToggleStar={handleToggleStar}
+              onToggleLearned={handleToggleLearned}
+              onUpdateWords={handleUpdateWords}
+              onUpdateWord={handleUpdateSingleWord}
+              targetLanguage={targetLanguage}
+              nativeLanguage={nativeLanguage}
+              appLanguage={appLanguage}
+              onLlmApiError={handleAiApiError}
               autoEnrichEnabled={autoEnrichEnabled}
               onToggleAutoEnrich={toggleAutoEnrich}
               onEnrichWord={enrichWord}
@@ -533,6 +555,7 @@ export default function App() {
               onCancelEnrichment={cancelEnrichment}
               enrichmentProgress={batchEnrichProgress}
               activeEnrichingIds={activeEnrichingIds}
+              onNavigateToCollection={() => setSidePanelTab("collection")}
             />
           )}
 
@@ -589,6 +612,7 @@ export default function App() {
         onReloadData={reloadAllDataFromDB}
         sidePanelTab={sidePanelTab}
         isSidePanelOpen={isSidePanelOpen}
+        incompleteCount={words.filter((w) => w.completed === false).length}
       />
 
       {/* Main Viewport Container */}

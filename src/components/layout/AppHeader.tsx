@@ -7,8 +7,8 @@ import QuickCloudSync from "./QuickCloudSync";
 import { t } from "../../config/i18n";
 
 interface AppHeaderProps {
-  currentView: "chatview" | "manage" | "analytics" | "settings";
-  setCurrentView: (view: "chatview" | "manage" | "analytics" | "settings") => void;
+  currentView: "chatview" | "manage" | "drafts" | "analytics" | "settings";
+  setCurrentView: (view: "chatview" | "manage" | "drafts" | "analytics" | "settings") => void;
   setIsLlmModalOpen: (open: boolean) => void;
   llmConfig: LLMConfig;
   stats: UserStats;
@@ -19,8 +19,9 @@ interface AppHeaderProps {
   appLanguage?: string;
   onSelectLanguages?: (targetLang: string, nativeLang: string, appLang?: string) => void;
   onReloadData?: () => Promise<void>;
-  sidePanelTab?: "collection" | "analytics" | "settings";
+  sidePanelTab?: "collection" | "drafts" | "analytics" | "settings";
   isSidePanelOpen?: boolean;
+  incompleteCount?: number;
 }
 
 export default function AppHeader({
@@ -37,7 +38,8 @@ export default function AppHeader({
   onSelectLanguages,
   onReloadData,
   sidePanelTab = "collection",
-  isSidePanelOpen = false
+  isSidePanelOpen = false,
+  incompleteCount = 0
 }: AppHeaderProps) {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== "undefined") {
@@ -117,7 +119,7 @@ export default function AppHeader({
   );
 
   const renderNavLinks = () => (
-    <div className="flex items-center gap-4 sm:gap-7">
+    <div className="flex items-center gap-3 sm:gap-6">
       <button
         onClick={() => {
           setCurrentView("manage");
@@ -127,6 +129,23 @@ export default function AppHeader({
         }`}
       >
         {t("nav_collection", appLanguage)}
+      </button>
+
+      <button
+        onClick={() => {
+          setCurrentView("drafts");
+        }}
+        className={`transition-colors cursor-pointer flex items-center gap-1.5 font-semibold ${
+          isSidePanelOpen && sidePanelTab === "drafts" ? "text-stone-950 font-bold underline underline-offset-4 decoration-2" : "text-stone-500 hover:text-stone-950"
+        }`}
+        id="nav-drafts-btn"
+      >
+        <span>{t("nav_drafts", appLanguage) || "Drafts"}</span>
+        {incompleteCount > 0 && (
+          <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+            {incompleteCount}
+          </span>
+        )}
       </button>
 
       <button
