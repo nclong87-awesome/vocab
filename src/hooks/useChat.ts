@@ -21,6 +21,7 @@ import {
   getDueReviewCandidates,
   hasUnresolvedQuizMistake,
   sortWordsByLastPracticeTime,
+  MIN_REVIEW_COOLDOWN_HOURS,
 } from "../utils/spacedRepetition";
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB, getUserPersonalityProfileFromDB } from "../db/indexedDB";
@@ -259,7 +260,7 @@ export function useChat({
   const startPractice = async (
     overrideConfig?: LLMConfig,
     practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
-    options?: { warmupWordIds?: string[] }
+    options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
   ) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
@@ -399,10 +400,11 @@ export function useChat({
       const warmupIds = new Set(options?.warmupWordIds || []);
       const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
 
-      // Prioritize the warm-up words from Step 1 to test contrast and eliminate confusions
-      let duelWords = [...warmupWords];
+      // Prioritize the warm-up words, excluding any that are currently on review cooldown
+      let duelWords = warmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
       if (duelWords.length === 0) {
-        duelWords = getCandidateWordsForImmersion(activeWords, 3);
+        const nonCooldownPool = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
+        duelWords = getCandidateWordsForImmersion(nonCooldownPool.length >= 3 ? nonCooldownPool : activeWords, 3);
       }
       if (duelWords.length < 3) {
         const existingIds = new Set(duelWords.map((w) => w.id));
@@ -497,9 +499,12 @@ export function useChat({
 
     // --- CONFUSER DUEL (CONTRAST MATCH) MODE ---
     if (practiceMode === "confuser_duel") {
-      // Candidate pool: strictly new/unlearned words OR words with unresolved quiz mistakes
+      // Candidate pool: strictly new/unlearned words OR words with unresolved quiz mistakes whose cooldown has elapsed
       const confuserCandidates = activeWords.filter(
-        (w) => !isWordLearnedOrStudied(w) || hasUnresolvedQuizMistake(w)
+        (w) =>
+          (!isWordLearnedOrStudied(w) ||
+            (hasUnresolvedQuizMistake(w) && !isWordOnReviewCooldown(w, new Date(), 2))) &&
+          !isWordOnReviewCooldown(w, new Date(), 2)
       );
 
       if (confuserCandidates.length === 0) {
@@ -617,6 +622,7 @@ export function useChat({
     if (practiceMode === "quiz_only" || practiceMode === "sandwich_quiz") {
       const isSandwich = practiceMode === "sandwich_quiz";
       const warmupIds = new Set(options?.warmupWordIds || []);
+      const incorrectIds = new Set(options?.incorrectWordIds || []);
       const warmupWords = activeWords.filter((w) => warmupIds.has(w.id));
 
       if (activeWords.length === 0) {
@@ -636,15 +642,33 @@ export function useChat({
 
       let effectiveQuizWords: Word[] = [];
 
-      // In sandwich mode, prioritize the warm-up words from Step 1
+      // In sandwich mode, NEVER re-test words that were answered incorrectly in Step 1 (or any recent quiz)
+      // and NEVER re-test words currently on review cooldown!
       if (isSandwich && warmupWords.length > 0) {
-        effectiveQuizWords.push(...warmupWords.slice(0, 3));
+        const eligibleWarmup = warmupWords.filter(
+          (w) =>
+            !incorrectIds.has(w.id) &&
+            !hasUnresolvedQuizMistake(w) &&
+            !isWordOnReviewCooldown(w, new Date(), MIN_REVIEW_COOLDOWN_HOURS)
+        );
+        effectiveQuizWords.push(...eligibleWarmup.slice(0, 2));
       }
 
       if (effectiveQuizWords.length < 3) {
         const remainingNeeded = 3 - effectiveQuizWords.length;
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
-        const availableWords = activeWords.filter((w) => !existingIds.has(w.id));
+        let availableWords = activeWords.filter(
+          (w) =>
+            !existingIds.has(w.id) &&
+            !incorrectIds.has(w.id) &&
+            !isWordOnReviewCooldown(w, new Date(), MIN_REVIEW_COOLDOWN_HOURS)
+        );
+
+        if (availableWords.length === 0) {
+          availableWords = activeWords.filter(
+            (w) => !existingIds.has(w.id) && !incorrectIds.has(w.id)
+          );
+        }
 
         // Select candidates prioritized by most recent time appeared in practice
         // (unlearned/unstudied words first, then oldest practiced reviews)
@@ -666,7 +690,12 @@ export function useChat({
       if (effectiveQuizWords.length < 3) {
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
         const nonCooldownCandidates = sortWordsByLastPracticeTime(
-          activeWords.filter((w) => !existingIds.has(w.id) && !isWordOnReviewCooldown(w, new Date(), 2))
+          activeWords.filter(
+            (w) =>
+              !existingIds.has(w.id) &&
+              !incorrectIds.has(w.id) &&
+              !isWordOnReviewCooldown(w, new Date(), 2)
+          )
         );
         for (const w of nonCooldownCandidates) {
           if (!existingIds.has(w.id)) {
@@ -677,11 +706,11 @@ export function useChat({
         }
       }
 
-      // Final fallback to any available words in collection sorted by last practice time
+      // Final fallback to any available words in collection sorted by last practice time (excluding words answered incorrectly)
       if (effectiveQuizWords.length < 3) {
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
         const allCandidatesSorted = sortWordsByLastPracticeTime(
-          activeWords.filter((w) => !existingIds.has(w.id))
+          activeWords.filter((w) => !existingIds.has(w.id) && !incorrectIds.has(w.id))
         );
         for (const w of allCandidatesSorted) {
           if (!existingIds.has(w.id)) {
@@ -1296,6 +1325,7 @@ export function useChat({
       const wasSandwichStep2 = Boolean(activeQuiz.isSandwichSession && activeQuiz.sandwichStep === 2);
       const wasSandwich = Boolean(activeQuiz.isSandwichSession);
       const sandwichWarmupIds = activeQuiz.warmupWordIds || [];
+      const sandwichIncorrectIds = activeQuiz.incorrectIds || [];
       setActiveQuiz(null);
 
       handleFinishQuiz(newScore, totalQs);
@@ -1328,7 +1358,10 @@ export function useChat({
             {
               label: t("chat_sandwich_start_quiz_action", currentAppLang),
               action: "start_sandwich_quiz",
-              payload: { warmupWordIds: sandwichWarmupIds },
+              payload: {
+                warmupWordIds: sandwichWarmupIds.filter((id) => !sandwichIncorrectIds.includes(id)),
+                incorrectWordIds: sandwichIncorrectIds,
+              },
             },
             { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
             { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },

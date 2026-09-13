@@ -38,7 +38,7 @@ interface ChatMessageItemProps {
   startPractice: (
     overrideConfig?: any,
     mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel" | "translation_challenge",
-    options?: { warmupWordIds?: string[] }
+    options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
@@ -780,7 +780,8 @@ function ChatMessageItem({
         const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_quiz" || a?.action === "start_sandwich_duel");
         warmupWordIds = origAction?.payload?.warmupWordIds || [];
       }
-      startPractice(undefined, "sandwich_quiz", { warmupWordIds });
+      const incorrectWordIds = act.payload?.incorrectWordIds;
+      startPractice(undefined, "sandwich_quiz", { warmupWordIds, incorrectWordIds });
     } else if (act.action === "quiz_answer" && act.payload?.answer) {
       onSendMessage(act.payload.answer);
       return;

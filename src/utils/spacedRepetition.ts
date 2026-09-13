@@ -400,7 +400,7 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
     if (wasMastered && (days >= 5 || (word.strength ?? 0) < 80)) {
       tier = "memoryDecay";
       baseWeight = 5;
-    } else if ((word.strength ?? 0) < 50 || hasUnresolvedQuizMistake(word)) {
+    } else if ((word.strength ?? 0) < 50 || (hasUnresolvedQuizMistake(word) && !isWordOnReviewCooldown(word, now))) {
       tier = "weak";
       baseWeight = 4;
     } else {
@@ -410,11 +410,14 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
   }
 
   // Recency penalty: words that have appeared in practice very recently (within 12-48 hours)
-  // receive a steep weight reduction to prevent them from repeating continually
+  // receive a steep weight reduction to prevent them from repeating continually.
+  // Words currently in review cooldown (e.g. practiced < 2h ago or remedial error cooldown) receive an extreme penalty.
   let recencyMultiplier = 1.0;
   if (lastPractice !== null) {
     const hoursSincePractice = (now.getTime() - lastPractice) / (1000 * 60 * 60);
-    if (hoursSincePractice < 12) {
+    if (hoursSincePractice < 2 || isWordOnReviewCooldown(word, now)) {
+      recencyMultiplier = 0.01; // Cooldown shield: practically zero weight during cooldown
+    } else if (hoursSincePractice < 12) {
       recencyMultiplier = 0.2; // Steep penalty for words practiced in last 12 hours
     } else if (hoursSincePractice < 24) {
       recencyMultiplier = 0.4; // Moderate penalty for words practiced in last 24 hours
@@ -795,19 +798,26 @@ export function sortWordsByLastPracticeTime(words: Word[], now: Date = new Date(
     }
 
     // Both words have appeared in practice:
-    // Sort ascending by last practice timestamp (oldest practice date first)
+    // 1. Cooldown Shield: Words that are NOT currently on review cooldown always take precedence over words on cooldown
+    const cooldownA = isWordOnReviewCooldown(a, now);
+    const cooldownB = isWordOnReviewCooldown(b, now);
+    if (!cooldownA && cooldownB) return -1;
+    if (cooldownA && !cooldownB) return 1;
+
+    // 2. Sort ascending by last practice timestamp (oldest practice date first)
     const diffTime = (timeA as number) - (timeB as number);
-    // If the difference is more than 6 hours, strictly sort by oldest practice date
-    if (Math.abs(diffTime) > 6 * 60 * 60 * 1000) {
+    // If the difference is more than 2 hours, strictly sort by oldest practice date
+    if (Math.abs(diffTime) > 2 * 60 * 60 * 1000) {
       return diffTime;
     }
 
-    // Secondary criteria for words practiced in similar timeframe:
+    // 3. Secondary criteria for words practiced in similar timeframe:
     if (a.starred && !b.starred) return -1;
     if (!a.starred && b.starred) return 1;
 
-    const mistakeA = hasUnresolvedQuizMistake(a);
-    const mistakeB = hasUnresolvedQuizMistake(b);
+    // Unresolved quiz mistakes are prioritized ONLY IF the word is not on review cooldown
+    const mistakeA = hasUnresolvedQuizMistake(a) && !cooldownA;
+    const mistakeB = hasUnresolvedQuizMistake(b) && !cooldownB;
     if (mistakeA && !mistakeB) return -1;
     if (!mistakeA && mistakeB) return 1;
 
