@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Upload } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider, UserPersonalityProfile } from "../types";
-import { speakText, stopSpeech, getLanguageCode } from "../utils/ttsService";
+import { speakText, stopSpeech, getLanguageCode, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
 import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 import MessageList from "./chat/MessageList";
@@ -364,10 +364,20 @@ function ChatView({
 
       const lastMsg = messages[messages.length - 1];
 
+      let quizSpeechText = lastMsg.quizSpeechText?.trim();
+      if (!quizSpeechText && lastMsg.challengeEvaluation) {
+        const evalRes = lastMsg.challengeEvaluation;
+        const targetWordText = evalRes.targetWordUsed || lastMsg.challengeData?.targetWordFromCollection?.word || lastMsg.audioWord;
+        quizSpeechText = buildEssentialChallengeAudioText(
+          evalRes.score,
+          evalRes.scoreLabel,
+          evalRes.correctedSentence,
+          targetWordText
+        );
+      }
 
-      const quizSpeechText = lastMsg.quizSpeechText?.trim();
       const nextQuestionText = lastMsg.nextQuestionSpeechText?.trim();
-      const fallbackText = lastMsg.audioWord || quizSpeechText;
+      const fallbackText = quizSpeechText || lastMsg.audioWord;
 
       const autoPlayInChat = ttsConfig.autoPlayAudioInChat ?? ttsConfig.autoPlayAudioInQuiz ?? true;
 

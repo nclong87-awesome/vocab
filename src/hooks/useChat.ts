@@ -1891,6 +1891,13 @@ export function useChat({
 
           const finalTargetWord = targetWordText || evalRes.targetWordUsed || currentChallenge?.targetWordFromCollection?.word;
 
+          const essentialAudioText = buildEssentialChallengeAudioText(
+            evalRes.score,
+            evalRes.scoreLabel,
+            evalRes.correctedSentence,
+            finalTargetWord
+          );
+
           const evalMsg: ChatMessage = {
             id: `challenge-eval-${Date.now()}`,
             role: "assistant",
@@ -1898,7 +1905,8 @@ export function useChat({
             timestamp: new Date().toISOString(),
             challengeData: currentChallenge,
             challengeEvaluation: evalRes,
-            audioWord: finalTargetWord || evalRes.correctedSentence,
+            audioWord: finalTargetWord,
+            quizSpeechText: essentialAudioText,
             provider: result.provider || configForServer?.provider || "google",
             model: result.model || configForServer?.model || "gemini-2.5-flash",
             responseTimeMs: result.responseTimeMs,
@@ -1916,21 +1924,6 @@ export function useChat({
             ],
           };
           setChatMessages((prev) => [...prev, evalMsg]);
-
-          // Audio feedback: speak strictly essential information (score, ideal translation, target word)
-          const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? true;
-          if (ttsConfig && isAutoPlayEnabled) {
-            const timerId = window.setTimeout(() => {
-              const audioText = buildEssentialChallengeAudioText(
-                evalRes.score,
-                evalRes.scoreLabel,
-                evalRes.correctedSentence,
-                finalTargetWord
-              );
-              speakTextService(audioText, ttsConfig, llmConfig, targetLanguage || "English");
-            }, 300);
-            registerSpeechTimer(timerId);
-          }
         }
       } catch (err: any) {
         console.error("Error processing challenge turn:", err);
