@@ -872,10 +872,8 @@ export function useChat({
           timestamp: new Date().toISOString(),
           challengeData,
           suggestedActions: [
-            { label: "💡 Request a Hint", action: "send_message", payload: { message: "Can you give me a hint for this sentence?" } },
-            { label: "🔑 Key Target Words", action: "send_message", payload: { message: "What are the key target vocabulary words in this sentence?" } },
-            { label: "🎯 Next Challenge", action: "start_translation_challenge" },
-            { label: "🏆 Practice Overview", action: "start_practice" },
+            { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
+            { label: "🏆 Practice overview", action: "start_practice" },
           ],
         };
 
@@ -1791,8 +1789,8 @@ export function useChat({
               hint: result.askedWord.hint || "Asked during challenge",
             }] : undefined,
             suggestedActions: [
-              { label: "🎯 Next Challenge", action: "start_translation_challenge" },
-              { label: "🏆 Practice Overview", action: "start_practice" },
+              { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
+              { label: "🏆 Practice overview", action: "start_practice" },
             ],
           };
           setChatMessages((prev) => [...prev, assistMsg]);
@@ -1918,9 +1916,8 @@ export function useChat({
               partOfSpeech: v.partOfSpeech,
             })),
             suggestedActions: [
-              { label: "🎯 Next Translation Challenge", action: "start_translation_challenge" },
-              { label: "🥪 Smart Balanced Session", action: "start_practice_balanced" },
-              { label: "🏆 Practice Overview", action: "start_practice" },
+              { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
+              { label: "🏆 Practice overview", action: "start_practice" },
             ],
           };
           setChatMessages((prev) => [...prev, evalMsg]);

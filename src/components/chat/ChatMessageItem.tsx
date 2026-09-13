@@ -1437,10 +1437,10 @@ function ChatMessageItem({
 
         {/* AI Suggested Actions Render */}
         {!isUser && effectiveActions && effectiveActions.length > 0 && (() => {
-          const isChallengePrompt = Boolean(msg.challengeData && !msg.challengeEvaluation);
+          const isChallengeMessage = Boolean(msg.challengeData || msg.challengeEvaluation);
 
           return (
-            <div className={isChallengePrompt ? "flex flex-wrap items-center gap-1.5 pt-1.5 w-full" : "flex flex-col gap-1.5 pt-1 w-full"}>
+            <div className={isChallengeMessage ? "flex flex-wrap items-center gap-1.5 pt-1.5 w-full" : "flex flex-col gap-1.5 pt-1 w-full"}>
               {effectiveActions.map((act, aIdx) => {
                 const actLbl = (act && typeof act.label === "string") ? act.label.toLowerCase() : "";
                 const isNextQ = act.action === "next_quiz_question" || (act.action === "send_message" && (
@@ -1461,7 +1461,7 @@ function ChatMessageItem({
                   act.action === "next_story";
                 const currentPayload = customActionPayloads[aIdx] || act.payload;
 
-                if (isChallengePrompt) {
+                if (isChallengeMessage) {
                   return (
                     <button
                       key={aIdx}
@@ -1470,7 +1470,7 @@ function ChatMessageItem({
                       className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-full text-xs font-semibold bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 text-stone-800 hover:text-white focus:text-white border border-stone-200/90 hover:border-stone-900 shadow-3xs transition-all duration-150 cursor-pointer active:scale-95 group shrink-0"
                     >
                       <Sparkles className="w-3 h-3 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0" />
-                      <span className="truncate max-w-[200px]">
+                      <span className="truncate max-w-[220px]">
                         {formatActionLabel(act, currentAppLang)}
                       </span>
                     </button>
