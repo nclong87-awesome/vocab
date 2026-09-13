@@ -116,6 +116,7 @@ export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined 
       apiKey: savedProfile?.apiKey || llmConfig?.apiKey || "",
       baseUrl: savedProfile?.baseUrl || llmConfig?.baseUrl || "",
       isLoggedIn: savedProfile?.isLoggedIn ?? llmConfig?.isLoggedIn ?? true,
+      savedProviders: llmConfig?.savedProviders,
     };
   }
   return overrideConfig || llmConfig;

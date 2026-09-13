@@ -8,7 +8,7 @@ import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quizGenerator";
 import { isPhrasalVerb, findWordInCollection, hasUserIncorporatedWord } from "./src/utils/wordNormalization";
 import { sortWordsByLastPracticeTime } from "./src/utils/spacedRepetition";
-import { PROVIDER_OPTIONS } from "./src/config/llmProviders";
+import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "./src/config/llmProviders";
 
 dotenv.config();
 
@@ -597,7 +597,10 @@ async function callLLMAutoCandidates(
   initialExcludedKeys?: Set<string>,
   signal?: AbortSignal
 ): Promise<string> {
-  const candidates = getServerAutoModelCandidates(llmConfig);
+  let candidates = getServerAutoModelCandidates(llmConfig);
+  if ((llmConfig as any)?.onlyReliableModels) {
+    candidates = candidates.filter(c => RELIABLE_MODELS.some(m => m === c.model));
+  }
   const excludedKeys = new Set<string>(initialExcludedKeys || []);
   let lastError: any = null;
 
@@ -3232,7 +3235,13 @@ Return STRICTLY raw JSON-only matching this schema:
     const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. Ensure sentences are concise (6-14 words) and endeavor to feature the most suitable word from the user's collection.`;
     const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
-    const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, controller.signal);
+    let effectiveLlmConfig = llmConfig ? { ...llmConfig, onlyReliableModels: true } : { onlyReliableModels: true };
+    if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
+      delete effectiveLlmConfig.model;
+      delete effectiveLlmConfig.provider;
+    }
+
+    const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
     const parsed = cleanAndParseJson(rawResult);
 
     if (parsed && parsed.nativeSentence && parsed.idealTranslation) {

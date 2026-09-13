@@ -1,6 +1,6 @@
 import { ChallengeData, ChallengeTurnResult, UserPersonalityProfile, Word, LLMConfig } from "../types";
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
-import { callLLMClientSideWithMeta, cleanJsonResponse } from "./llmClientService";
+import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { sortWordsByLastPracticeTime } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 
@@ -214,6 +214,7 @@ function resolveTargetWordFromCollection(
  * Client-side LLM call using Cloudflare Workers / direct provider for translation challenge generation
  */
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
+  const effectiveConfig = getOverrideConfig(params.llmConfig);
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
   const { prompt, chosenTheme, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
@@ -222,7 +223,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
-  const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, params.llmConfig);
+  const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, effectiveConfig);
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);
 
@@ -255,10 +256,12 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
  */
 export async function generateChallenge(params: GenerateChallengeParams): Promise<ChallengeData> {
   const randomSeed = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  const effectiveConfig = getOverrideConfig(params.llmConfig);
+  const effectiveParams = { ...params, llmConfig: effectiveConfig };
 
   // 1. Static host environment (e.g. GitHub Pages): use Cloudflare Worker / client-side LLM directly
   if (isStaticHost()) {
-    return generateChallengeClientSide(params, randomSeed);
+    return generateChallengeClientSide(effectiveParams, randomSeed);
   }
 
   // 2. Full-stack host environment: try Express backend with automatic fallback to Cloudflare Worker LLM
@@ -266,22 +269,22 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
     const res = await fetchWithTimeout("/api/generate-challenge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params)
+      body: JSON.stringify(effectiveParams)
     });
 
     const data = await safeParseResponseJson(res);
 
     if (res.ok && data && data.nativeSentence) {
       let targetWord = data.targetWordFromCollection;
-      if (!targetWord && params.words && params.words.length > 0) {
-        targetWord = resolveTargetWordFromCollection(data, params.words);
+      if (!targetWord && effectiveParams.words && effectiveParams.words.length > 0) {
+        targetWord = resolveTargetWordFromCollection(data, effectiveParams.words);
       }
 
       return {
         id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         nativeSentence: data.nativeSentence,
-        targetLanguage: params.targetLanguage || "English",
-        nativeLanguage: params.nativeLanguage || "Vietnamese",
+        targetLanguage: effectiveParams.targetLanguage || "English",
+        nativeLanguage: effectiveParams.nativeLanguage || "Vietnamese",
         topicContext: data.topicContext || "Personalized Practice",
         idealTranslation: data.idealTranslation,
         targetWordFromCollection: targetWord,
@@ -296,7 +299,7 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
     throw new Error(data?.error || `Server returned status ${res.status}`);
   } catch (err: any) {
     console.warn("Backend /api/generate-challenge endpoint unavailable, falling back to Cloudflare Worker / client-side LLM:", err);
-    return generateChallengeClientSide(params, randomSeed);
+    return generateChallengeClientSide(effectiveParams, randomSeed);
   }
 }
 
