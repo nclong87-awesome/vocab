@@ -89,6 +89,23 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
    */
   const enrichWord = useCallback(
     async (word: Word): Promise<EnrichmentResult> => {
+      // If the word already has multiple definitions, do not auto-enhance
+      if (word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions") {
+        if (showToast) {
+          const isVi = appLanguage === "vi";
+          showToast(
+            isVi
+              ? `⚠️ "${word.word}" có nhiều định nghĩa. Vui lòng bấm vào từ để chọn nghĩa thủ công.`
+              : `⚠️ "${word.word}" has multiple definitions. Please click the word to review and select a definition.`
+          );
+        }
+        return {
+          updatedWord: word,
+          hasMultipleDefinitions: true,
+          definitionCount: word.senses?.length || 2
+        };
+      }
+
       setActiveEnrichingIds((prev) => new Set(prev).add(word.id));
       try {
         const result = await enrichSingleWord(word, {
@@ -144,7 +161,23 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
       const incomplete = customIncompleteList || wordsRef.current.filter((w) => w.completed === false);
       if (incomplete.length === 0) return;
 
-      incomplete.forEach((w) => {
+      const enrichable = incomplete.filter(
+        (w) => !(w.hasMultipleDefinitions === true || (w.senses && w.senses.length > 1) || w.enrichmentStatus === "has_multiple_definitions")
+      );
+
+      if (enrichable.length === 0) {
+        if (showToast) {
+          const isVi = appLanguage === "vi";
+          showToast(
+            isVi
+              ? `⚠️ Tất cả ${incomplete.length} từ nháp đều có nhiều định nghĩa. Vui lòng bấm vào từng từ để duyệt thủ công.`
+              : `⚠️ All ${incomplete.length} draft words have multiple definitions. Please click each word to review manually.`
+          );
+        }
+        return;
+      }
+
+      enrichable.forEach((w) => {
         setActiveEnrichingIds((prev) => new Set(prev).add(w.id));
       });
 

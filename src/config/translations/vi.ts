@@ -447,13 +447,17 @@ export const viTranslations: LanguageTranslations = {
     incomplete_word_click_prompt: "Nhấn để hoàn thiện định nghĩa và ví dụ",
     incomplete_filter_label: "Chưa hoàn thiện ({count})",
     auto_enrich_all_btn: "Tự động làm giàu ({count})",
-    auto_enrich_all_tooltip: "Tự động hoàn thiện tất cả từ nháp bằng AI trong nền",
+    auto_enrich_all_tooltip: "Tự động hoàn thiện các từ có 1 định nghĩa bằng AI trong nền (bỏ qua từ có nhiều định nghĩa)",
+    auto_enrich_manual_review_needed: "Cần duyệt thủ công ({count})",
     auto_enrich_stop: "Dừng",
     auto_enrich_single_title: "Tự động làm giàu từ này bằng AI trong nền",
+    auto_enrich_manual_review_title: "Có nhiều định nghĩa — nhấn để duyệt và chọn nghĩa thủ công",
     auto_enrich_progress_label: "Đang làm giàu {processed}/{total}: \"{currentWord}\"...",
     multiple_definitions_badge: "{count} định nghĩa",
     badge_need_selection: "cần chọn định nghĩa",
     badge_multiple_definitions_short: "Nhiều định nghĩa",
+    badge_multiple_defs_review: "Nhiều nghĩa • Cần chọn",
+    badge_manual_review_required: "Cần duyệt thủ công",
     multiple_definitions_select_prompt: "Tìm thấy {count} định nghĩa — bấm để chọn nghĩa phù hợp",
-    incomplete_multiple_defs_tooltip: "AI tìm thấy nhiều định nghĩa. Bấm để chọn định nghĩa bạn muốn học."
+    incomplete_multiple_defs_tooltip: "AI tìm thấy nhiều định nghĩa. Đã chặn tự động làm giàu. Bấm để duyệt và chọn định nghĩa bạn muốn học."
   };

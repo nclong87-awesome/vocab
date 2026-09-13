@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon, MessageSquare, Clock, Edit3 } from "lucide-react";
+import { Volume2, RefreshCw, Star, CheckCircle, Trash2, History, Image as ImageIcon, MessageSquare, Clock, Edit3, AlertCircle } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
 import { isIncompleteWord } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -71,18 +71,33 @@ function WordRow({
             <div className="flex items-baseline gap-2 flex-wrap">
               <h4 className="text-base font-bold text-stone-900 tracking-tight">{word.word}</h4>
               {(word.completed === false || isIncompleteWord(word)) && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddWord?.(word.word, word.definition || word.translation, word);
-                  }}
-                  className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
-                  title="Draft word - Click to complete"
-                >
-                  <Clock className="w-2.5 h-2.5 text-amber-600" />
-                  <span>Draft • Complete adding</span>
-                </button>
+                word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions" ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddWord?.(word.word, word.definition || word.translation, word);
+                    }}
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300 hover:bg-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Multiple definitions identified by AI — Click to review and select meaning"
+                  >
+                    <AlertCircle className="w-2.5 h-2.5 text-purple-600" />
+                    <span>{word.senses?.length ? `${word.senses.length} defs` : "Multiple defs"} • Review</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddWord?.(word.word, word.definition || word.translation, word);
+                    }}
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Draft word - Click to complete"
+                  >
+                    <Clock className="w-2.5 h-2.5 text-amber-600" />
+                    <span>Draft • Complete adding</span>
+                  </button>
+                )
               )}
               {word.pronunciation && (
                 <span className="text-[10px] font-mono text-stone-400">/{word.pronunciation}/</span>
@@ -152,8 +167,16 @@ function WordRow({
                   e.stopPropagation();
                   onAddWord?.(word.word, word.definition || word.translation, word);
                 }}
-                className="p-1.5 rounded-md text-amber-600 hover:text-amber-950 hover:bg-amber-100/70 transition-all cursor-pointer"
-                title="Complete Word"
+                className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                  word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions"
+                    ? "text-purple-700 hover:text-purple-950 hover:bg-purple-100/70"
+                    : "text-amber-600 hover:text-amber-950 hover:bg-amber-100/70"
+                }`}
+                title={
+                  word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions"
+                    ? "Review & Select Definition"
+                    : "Complete Word"
+                }
               >
                 <Edit3 className="w-3.5 h-3.5" />
               </button>

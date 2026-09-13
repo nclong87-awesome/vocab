@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { AnimatePresence } from "motion/react";
-import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, MessageSquare, Clock, Edit3 } from "lucide-react";
+import { Volume2, RefreshCw, CheckCircle, Trash2, History, Languages, MessageSquare, Clock, Edit3, AlertCircle } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
 import { isIncompleteWord } from "../../utils/wordNormalization";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
@@ -91,18 +91,33 @@ function WordCard({
             <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
               <h4 className="text-lg font-bold text-stone-900 tracking-tight leading-snug break-words max-w-full">{word.word}</h4>
               {(word.completed === false || isIncompleteWord(word)) && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddWord?.(word.word, word.definition || word.translation, word);
-                  }}
-                  className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
-                  title="Draft word - Click to complete"
-                >
-                  <Clock className="w-3 h-3 text-amber-600" />
-                  <span>Draft • Complete adding</span>
-                </button>
+                word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions" ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddWord?.(word.word, word.definition || word.translation, word);
+                    }}
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-purple-100 text-purple-900 border border-purple-300 hover:bg-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Multiple definitions identified by AI — Click to review and select meaning"
+                  >
+                    <AlertCircle className="w-3 h-3 text-purple-600" />
+                    <span>{word.senses?.length ? `${word.senses.length} defs` : "Multiple defs"} • Review</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddWord?.(word.word, word.definition || word.translation, word);
+                    }}
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Draft word - Click to complete"
+                  >
+                    <Clock className="w-3 h-3 text-amber-600" />
+                    <span>Draft • Complete adding</span>
+                  </button>
+                )
               )}
             </div>
 
@@ -115,8 +130,16 @@ function WordCard({
                     e.stopPropagation();
                     onAddWord?.(word.word, word.definition || word.translation, word);
                   }}
-                  className="p-1.5 rounded-md text-amber-600 hover:text-amber-950 hover:bg-amber-50 transition-all cursor-pointer"
-                  title="Complete Word"
+                  className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                    word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions"
+                      ? "text-purple-700 hover:text-purple-950 hover:bg-purple-50"
+                      : "text-amber-600 hover:text-amber-950 hover:bg-amber-50"
+                  }`}
+                  title={
+                    word.hasMultipleDefinitions || (word.senses && word.senses.length > 1) || word.enrichmentStatus === "has_multiple_definitions"
+                      ? "Review & Select Definition"
+                      : "Complete Word"
+                  }
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                 </button>

@@ -179,7 +179,11 @@ function CollectionManager({
   }, [words]);
 
   const wordsWithMultipleDefinitions = useMemo(() => {
-    return incompleteWords.filter(w => w.hasMultipleDefinitions || (w.senses && w.senses.length > 1));
+    return incompleteWords.filter(w => w.hasMultipleDefinitions || (w.senses && w.senses.length > 1) || w.enrichmentStatus === "has_multiple_definitions");
+  }, [incompleteWords]);
+
+  const autoEnrichableWords = useMemo(() => {
+    return incompleteWords.filter(w => !(w.hasMultipleDefinitions || (w.senses && w.senses.length > 1) || w.enrichmentStatus === "has_multiple_definitions"));
   }, [incompleteWords]);
 
   const [localBatchProgress, setLocalBatchProgress] = useState<BatchEnrichmentProgress>({
@@ -574,7 +578,7 @@ function CollectionManager({
                         <X className="w-3.5 h-3.5" />
                         <span>{t("auto_enrich_stop", appLanguage)}</span>
                       </button>
-                    ) : (
+                    ) : autoEnrichableWords.length > 0 ? (
                       <button
                         type="button"
                         onClick={handleEnrichAll}
@@ -582,8 +586,16 @@ function CollectionManager({
                         title={t("auto_enrich_all_tooltip", appLanguage)}
                       >
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>{t("auto_enrich_all_btn", appLanguage, { count: String(incompleteWords.length) })}</span>
+                        <span>{t("auto_enrich_all_btn", appLanguage, { count: String(autoEnrichableWords.length) })}</span>
                       </button>
+                    ) : (
+                      <div
+                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1.5 cursor-default"
+                        title={t("incomplete_multiple_defs_tooltip", appLanguage)}
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                        <span>{t("auto_enrich_manual_review_needed", appLanguage, { count: String(wordsWithMultipleDefinitions.length) })}</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -685,27 +697,41 @@ function CollectionManager({
                         </div>
 
                         <div className="flex items-center gap-0.5 shrink-0">
-                          {/* Single Word Auto-Enrich Button */}
-                          <button
-                            type="button"
-                            disabled={isEnriching}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEnrichSingle(incWord);
-                            }}
-                            className={`p-1 rounded transition-colors ${
-                              isEnriching
-                                ? "text-amber-600 bg-amber-50"
-                                : "text-stone-400 hover:text-amber-700 hover:bg-amber-50"
-                            }`}
-                            title={t("auto_enrich_single_title", appLanguage)}
-                          >
-                            {isEnriching ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                            ) : (
-                              <Sparkles className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
-                            )}
-                          </button>
+                          {/* Single Word Action Button: Manual Review for multi-defs, Auto-Enrich for regular incomplete words */}
+                          {hasMultipleDefs ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenIncompleteWord(incWord);
+                              }}
+                              className="p-1 rounded text-purple-700 hover:text-purple-950 hover:bg-purple-100 transition-colors"
+                              title={t("auto_enrich_manual_review_title", appLanguage)}
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-purple-700 group-hover:scale-110 transition-transform" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isEnriching}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnrichSingle(incWord);
+                              }}
+                              className={`p-1 rounded transition-colors ${
+                                isEnriching
+                                  ? "text-amber-600 bg-amber-50"
+                                  : "text-stone-400 hover:text-amber-700 hover:bg-amber-50"
+                              }`}
+                              title={t("auto_enrich_single_title", appLanguage)}
+                            >
+                              {isEnriching ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                              ) : (
+                                <Sparkles className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+                              )}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
