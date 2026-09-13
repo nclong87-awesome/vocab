@@ -64,37 +64,6 @@ export default function CloudSyncConfirmModal({
     updated: false
   });
 
-  if (!isOpen || !localData || !remoteData) return null;
-
-  const localWordsCount = localData.stores?.words?.length || 0;
-  const localStats = localData.stores?.stats?.[0]?.data;
-  const localDate = localData.exportedAt 
-    ? new Date(localData.exportedAt).toLocaleString() 
-    : "Just now";
-
-  const remoteWordsCount = remoteData.stores?.words?.length || 0;
-  const remoteStats = remoteData.stores?.stats?.[0]?.data;
-  const remoteDate = remoteData.exportedAt 
-    ? new Date(remoteData.exportedAt).toLocaleString() 
-    : "Unknown date";
-
-  // Extract learner personality profile archetypes if present
-  const localProfileSetting = localData?.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
-  let localArchetype: string | null = null;
-  if (localProfileSetting?.value) {
-    try {
-      localArchetype = JSON.parse(localProfileSetting.value)?.archetype || null;
-    } catch {}
-  }
-
-  const remoteProfileSetting = remoteData?.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
-  let remoteArchetype: string | null = null;
-  if (remoteProfileSetting?.value) {
-    try {
-      remoteArchetype = JSON.parse(remoteProfileSetting.value)?.archetype || null;
-    } catch {}
-  }
-
   const diff = mergeResult?.diffDetails;
   const newLocalCount = diff?.newLocalWords?.length || 0;
   const newRemoteCount = diff?.newRemoteWords?.length || 0;
@@ -146,6 +115,37 @@ export default function CloudSyncConfirmModal({
       u.changes.some(c => c.toLowerCase().includes(normalizedSearch))
     );
   }, [diff?.updatedWords, normalizedSearch]);
+
+  if (!isOpen || !localData || !remoteData) return null;
+
+  const localWordsCount = localData.stores?.words?.length || 0;
+  const localStats = localData.stores?.stats?.[0]?.data;
+  const localDate = localData.exportedAt 
+    ? new Date(localData.exportedAt).toLocaleString() 
+    : "Just now";
+
+  const remoteWordsCount = remoteData.stores?.words?.length || 0;
+  const remoteStats = remoteData.stores?.stats?.[0]?.data;
+  const remoteDate = remoteData.exportedAt 
+    ? new Date(remoteData.exportedAt).toLocaleString() 
+    : "Unknown date";
+
+  // Extract learner personality profile archetypes if present
+  const localProfileSetting = localData?.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+  let localArchetype: string | null = null;
+  if (localProfileSetting?.value) {
+    try {
+      localArchetype = JSON.parse(localProfileSetting.value)?.archetype || null;
+    } catch {}
+  }
+
+  const remoteProfileSetting = remoteData?.stores?.settings?.find((s: any) => s && s.key === "user_personality_profile");
+  let remoteArchetype: string | null = null;
+  if (remoteProfileSetting?.value) {
+    try {
+      remoteArchetype = JSON.parse(remoteProfileSetting.value)?.archetype || null;
+    } catch {}
+  }
 
   const toggleSectionExpand = (section: "local" | "remote" | "deleted" | "updated") => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
