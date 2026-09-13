@@ -3378,10 +3378,8 @@ Return STRICTLY raw JSON matching:
           const incorporated = parsed.evaluation.incorporatedTargetWord === true ||
             hasUserIncorporatedWord(parsed.evaluation.userTranslation, targetWord) ||
             hasUserIncorporatedWord(userMessage, targetWord);
-          if (incorporated) {
-            parsed.evaluation.incorporatedTargetWord = true;
-            parsed.evaluation.targetWordUsed = targetWord;
-          }
+          parsed.evaluation.incorporatedTargetWord = incorporated;
+          parsed.evaluation.targetWordUsed = targetWord;
         }
       }
       return res.json(parsed);

@@ -399,10 +399,8 @@ Return STRICTLY raw JSON matching:
       const incorporated = parsed.evaluation.incorporatedTargetWord === true ||
         hasUserIncorporatedWord(parsed.evaluation.userTranslation, targetWord) ||
         hasUserIncorporatedWord(userMessage, targetWord);
-      if (incorporated) {
-        parsed.evaluation.incorporatedTargetWord = true;
-        parsed.evaluation.targetWordUsed = targetWord;
-      }
+      parsed.evaluation.incorporatedTargetWord = incorporated;
+      parsed.evaluation.targetWordUsed = targetWord;
     }
   }
 
@@ -443,10 +441,8 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
           const incorporated = data.evaluation.incorporatedTargetWord === true ||
             hasUserIncorporatedWord(data.evaluation.userTranslation, targetWord) ||
             hasUserIncorporatedWord(params.userMessage, targetWord);
-          if (incorporated) {
-            data.evaluation.incorporatedTargetWord = true;
-            data.evaluation.targetWordUsed = targetWord;
-          }
+          data.evaluation.incorporatedTargetWord = incorporated;
+          data.evaluation.targetWordUsed = targetWord;
         }
       }
       return data as ChallengeTurnResult;

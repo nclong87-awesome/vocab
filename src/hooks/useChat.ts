@@ -1822,6 +1822,12 @@ export function useChat({
               }
             }
           }
+          // Fallback: check if evalRes.targetWordUsed matches
+          if (!wordToAugment && evalRes.targetWordUsed) {
+            wordToAugment = findWordInCollection(wordsRef.current, evalRes.targetWordUsed);
+          }
+
+          const targetWordText = wordToAugment?.word || targetColWord?.word || evalRes.targetWordUsed;
 
           const didIncorporate = wordToAugment ? (
             evalRes.incorporatedTargetWord === true ||
@@ -1829,27 +1835,35 @@ export function useChat({
             hasUserIncorporatedWord(evalRes.userTranslation, wordToAugment.word)
           ) : false;
 
-          if (didIncorporate && wordToAugment) {
+          if (wordToAugment) {
             const prevStrength = wordToAugment.strength ?? 0;
-            const newStrength = Math.min(100, prevStrength + 30);
+            const boostPoints = didIncorporate ? 30 : 10;
+            const newStrength = Math.min(100, prevStrength + boostPoints);
             const gained = newStrength - prevStrength;
 
-            evalRes.incorporatedTargetWord = true;
+            evalRes.incorporatedTargetWord = didIncorporate;
             evalRes.targetWordUsed = wordToAugment.word;
             evalRes.targetWordPrevStrength = prevStrength;
             evalRes.targetWordNewStrength = newStrength;
             evalRes.targetWordStrengthGained = gained;
 
-            // Augment the word's strength by 30 points and record history
+            // Augment the word's strength and record history.
+            // If not incorporated, award +10 points and mark as learned to rotate study queue
             setWords((prevWords) => {
               const updated = prevWords.map((w) => {
                 if (w.id === wordToAugment!.id || areWordsEquivalent(w.word, wordToAugment!.word)) {
-                  return recordStrengthHistory(
+                  const rec = recordStrengthHistory(
                     w,
                     newStrength,
                     'challenge_bonus',
-                    `Incorporated target word in translation challenge (+30% strength gained)`
+                    didIncorporate
+                      ? `Incorporated target word in translation challenge (+30% strength gained)`
+                      : `Featured target word in translation challenge (+10% strength gained & marked as learned)`
                   );
+                  return {
+                    ...rec,
+                    learned: didIncorporate ? (newStrength >= 80 ? true : rec.learned) : true,
+                  };
                 }
                 return w;
               });
@@ -1857,6 +1871,9 @@ export function useChat({
               saveAllWordsToDB(updated).catch((e) => console.error("Failed to persist challenge bonus:", e));
               return updated;
             });
+          } else if (targetWordText) {
+            evalRes.targetWordUsed = targetWordText;
+            evalRes.incorporatedTargetWord = didIncorporate;
           }
 
           const currentChallenge = activeChallenge;
@@ -1866,9 +1883,11 @@ export function useChat({
             ? `\n\n**Your Translation:** "${evalRes.userTranslation.trim()}"`
             : "";
 
-          const bonusLine = evalRes.incorporatedTargetWord && evalRes.targetWordUsed
-            ? `\n\n🎉 **Target Word Incorporated (+30 Strength Points)!**\nYou successfully incorporated **"${evalRes.targetWordUsed}"** in your response! Word strength increased from ${evalRes.targetWordPrevStrength}% to **${evalRes.targetWordNewStrength}%** (+30%).`
-            : (currentChallenge?.targetWordFromCollection ? `\n\n💡 *Note: The target word from your collection was **"${currentChallenge.targetWordFromCollection.word}"**. Incorporate it in future challenges to earn +30 strength points!*` : "");
+          const bonusLine = evalRes.targetWordUsed
+            ? (evalRes.incorporatedTargetWord
+              ? `\n\n🎉 **Target Word Incorporated (+30 Strength Points)!**\nYou successfully incorporated **"${evalRes.targetWordUsed}"** in your response! Word strength increased from ${evalRes.targetWordPrevStrength ?? 0}% to **${evalRes.targetWordNewStrength ?? 30}%** (+30%).`
+              : `\n\n💡 **Featured Target Word:** **"${evalRes.targetWordUsed}"** *(+10 Strength Points & Marked as Learned)*\nThe target word was not included in your translation, so it has been awarded +10 points and marked as learned to prevent immediate repetition in subsequent challenges.`)
+            : (currentChallenge?.targetWordFromCollection ? `\n\n💡 *Featured Target Word: **"${currentChallenge.targetWordFromCollection.word}"** (+10 Strength Points & Marked as Learned)*` : "");
 
           const evalMsg: ChatMessage = {
             id: `challenge-eval-${Date.now()}`,

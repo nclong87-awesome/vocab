@@ -335,6 +335,36 @@ export default function TranslationChallengeCard({
           </div>
         )}
 
+        {/* Target Word Feedback Banner (When NOT Incorporated) */}
+        {!evaluation.incorporatedTargetWord && (evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word) && (
+          <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-orange-50/50 border border-amber-300 rounded-xl shadow-2xs space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-amber-600 text-white rounded-lg shadow-2xs">
+                  <Lightbulb className="w-4 h-4" />
+                </span>
+                <span className="font-bold text-xs sm:text-sm text-amber-950">
+                  Featured Target Word: "{evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word}"
+                </span>
+              </div>
+              <span className="px-2.5 py-0.5 bg-amber-600 text-white text-[11px] font-black rounded-full shadow-2xs">
+                +10 Points • Marked Learned
+              </span>
+            </div>
+            <p className="text-xs text-amber-900 leading-relaxed">
+              The featured word from your collection was <strong className="font-bold font-mono">"{evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word}"</strong>
+              {(challenge?.targetWordFromCollection?.translation || challenge?.targetWordFromCollection?.definition) && (
+                <span> ({challenge.targetWordFromCollection.translation || challenge.targetWordFromCollection.definition})</span>
+              )}. Even though it was not included in your answer, it has been marked as learned (+10 strength points) to rotate your study queue and prevent repetition in subsequent challenges.
+              {typeof evaluation.targetWordPrevStrength === "number" && typeof evaluation.targetWordNewStrength === "number" && (
+                <span className="block text-[11px] font-medium text-amber-800 mt-0.5">
+                  Memory strength updated: {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-amber-950">{evaluation.targetWordNewStrength}%</strong>
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Insights Section */}
         <div className="space-y-2 text-xs">
           {evaluation.whatWentWell && (
