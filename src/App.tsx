@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { ChatMessage, LLMConfig, Word } from "./types";
@@ -29,6 +29,7 @@ import WordAddModal from "./components/chat/WordAddModal";
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
 import AiErrorFallbackModal from "./components/layout/AiErrorFallbackModal";
+import { ToastNotification, ToastItem } from "./components/layout/ToastNotification";
 
 import { getUserPersonalityProfile } from "./services/userPersonalityProfileService";
 
@@ -36,6 +37,7 @@ import { useLanguages } from "./hooks/useLanguages";
 import { useLlmAndTtsConfig } from "./hooks/useLlmAndTtsConfig";
 import { useVocabulary } from "./hooks/useVocabulary";
 import { useChat } from "./hooks/useChat";
+import { useBackgroundEnrichment } from "./hooks/useBackgroundEnrichment";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<"chatview" | "manage" | "analytics" | "settings">("chatview");
@@ -84,18 +86,95 @@ export default function App() {
     handleAddIncompleteWord,
     handleDeleteWord,
     handleUpdateWords,
+    handleUpdateSingleWord,
     handleFinishQuiz,
   } = useVocabulary();
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const showToast = useCallback((msgText: string) => {
-    setToastMessage(msgText);
-    setTimeout(() => setToastMessage(null), 3500);
+  const [toastItem, setToastItem] = useState<ToastItem | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const clearToastTimeout = useCallback(() => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = null;
+    }
   }, []);
+
+  const closeToast = useCallback(() => {
+    clearToastTimeout();
+    setToastItem(null);
+  }, [clearToastTimeout]);
+
+  const showToast = useCallback((msgOrItem: string | Partial<ToastItem>, duration: number = 4500) => {
+    clearToastTimeout();
+    if (typeof msgOrItem === "string") {
+      setToastItem({
+        id: `toast-${Date.now()}`,
+        message: msgOrItem,
+        type: "default"
+      });
+    } else {
+      setToastItem({
+        id: msgOrItem.id || `toast-${Date.now()}`,
+        message: msgOrItem.message || "",
+        ...msgOrItem
+      });
+    }
+
+    if (duration > 0) {
+      toastTimeoutRef.current = setTimeout(() => {
+        setToastItem(null);
+      }, duration);
+    }
+  }, [clearToastTimeout]);
+
+  // Background enrichment sub-system
+  const {
+    autoEnrichEnabled,
+    toggleAutoEnrich,
+    enrichWord,
+    enrichAllIncomplete,
+    cancelEnrichment,
+    progress: batchEnrichProgress,
+    isBatchRunning,
+    activeEnrichingIds
+  } = useBackgroundEnrichment({
+    words,
+    targetLanguage,
+    nativeLanguage,
+    llmConfig,
+    onUpdateWord: handleUpdateSingleWord,
+    onUpdateWords: handleUpdateWords,
+    showToast: (msg) => showToast(msg, 4000),
+    appLanguage
+  });
+
+  // Keep toast synchronized when batch enrichment is active
+  useEffect(() => {
+    if (isBatchRunning) {
+      clearToastTimeout();
+      setToastItem({
+        id: "batch-enrichment-progress",
+        message: t("auto_enrich_progress_label", appLanguage, {
+          processed: String(batchEnrichProgress.processed),
+          total: String(batchEnrichProgress.total),
+          currentWord: batchEnrichProgress.currentWordText || ""
+        }) || `Auto-enriching ${batchEnrichProgress.processed}/${batchEnrichProgress.total}...`,
+        type: "enrichment_progress",
+        progress: batchEnrichProgress,
+        action: {
+          label: t("auto_enrich_stop", appLanguage) || "Stop",
+          onClick: cancelEnrichment,
+          icon: "stop",
+          variant: "danger"
+        }
+      });
+    }
+  }, [isBatchRunning, batchEnrichProgress, appLanguage, cancelEnrichment, clearToastTimeout]);
 
   const handleAddIncompleteWordToCollection = useCallback((wordData: Partial<Word>) => {
     if (!wordData || !wordData.word) return;
-    handleAddIncompleteWord({
+    const addedWord = handleAddIncompleteWord({
       word: wordData.word,
       translation: wordData.translation || "",
       definition: wordData.definition || "",
@@ -107,11 +186,41 @@ export default function App() {
       exampleTranslation: wordData.exampleTranslation,
       suggestedWords: wordData.suggestedWords,
     });
-    showToast(
-      t("toast_added_incomplete_word", appLanguage, { word: wordData.word }) ||
-      `Added "${wordData.word}" to collection (incomplete).`
-    );
-  }, [handleAddIncompleteWord, showToast, appLanguage]);
+
+    const currentIncomplete = words.filter(w => w.completed === false);
+    const remainingCount = currentIncomplete.length + 1;
+
+    const triggerBatchUpdate = () => {
+      const listToEnrich = [...currentIncomplete, addedWord].filter(Boolean) as Word[];
+      enrichAllIncomplete(listToEnrich);
+    };
+
+    const navigateToCollection = () => {
+      setSidePanelTab("collection");
+      setIsSidePanelOpen(true);
+    };
+
+    showToast({
+      id: `add-incomplete-${Date.now()}`,
+      message: t("toast_added_incomplete_with_count", appLanguage, {
+        word: wordData.word,
+        count: String(remainingCount)
+      }) || `Added "${wordData.word}" to collection (${remainingCount} draft words)`,
+      incompleteCount: remainingCount,
+      subMessage: t("incomplete_words_rule_explainer", appLanguage),
+      type: "warning",
+      action: {
+        label: t("toast_batch_enrich_shortcut", appLanguage, { count: String(remainingCount) }) || `⚡ Auto-Enrich All (${remainingCount})`,
+        onClick: triggerBatchUpdate,
+        icon: "sparkles",
+        variant: "primary"
+      },
+      secondaryAction: {
+        label: t("toast_view_collection_shortcut", appLanguage) || "📂 View Collection",
+        onClick: navigateToCollection
+      }
+    }, 6000);
+  }, [handleAddIncompleteWord, words, enrichAllIncomplete, showToast, appLanguage]);
 
   useEffect(() => {
     const handleToastEvent = (e: any) => {
@@ -412,10 +521,18 @@ export default function App() {
               onToggleStar={handleToggleStar}
               onToggleLearned={handleToggleLearned}
               onUpdateWords={handleUpdateWords}
+              onUpdateWord={handleUpdateSingleWord}
               targetLanguage={targetLanguage}
               nativeLanguage={nativeLanguage}
               appLanguage={appLanguage}
               onLlmApiError={handleAiApiError}
+              autoEnrichEnabled={autoEnrichEnabled}
+              onToggleAutoEnrich={toggleAutoEnrich}
+              onEnrichWord={enrichWord}
+              onEnrichAllIncomplete={enrichAllIncomplete}
+              onCancelEnrichment={cancelEnrichment}
+              enrichmentProgress={batchEnrichProgress}
+              activeEnrichingIds={activeEnrichingIds}
             />
           )}
 
@@ -521,7 +638,7 @@ export default function App() {
                     onSuggestCasualReplyPrompt={handlePromptSuggestCasualReply}
                     onSuggestCasualReply={handleSuggestCasualReply}
                     conversationalState={conversationalState}
-                    toast={toastMessage}
+                    toast={toastItem?.message || null}
                     onToast={showToast}
                     onRetryErrorMessage={handleRetryErrorMessage}
                     onCancelErrorMessage={handleCancelErrorMessage}
@@ -597,22 +714,8 @@ export default function App() {
         showToast={showToast}
       />
 
-      {/* Global Toast Notification */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.96 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-4 max-w-lg w-full flex justify-center"
-          >
-            <div className="bg-stone-900/95 text-white border border-stone-700/80 px-4 py-2.5 rounded-2xl shadow-xl backdrop-blur-md text-xs sm:text-sm font-medium flex items-center gap-2.5 text-center">
-              <span>{toastMessage}</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Global Progress-Aware Toast Notification */}
+      <ToastNotification toast={toastItem} onClose={closeToast} />
     </div>
   );
 }

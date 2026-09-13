@@ -171,7 +171,8 @@ export function useVocabulary() {
       exampleTranslation?: string;
       suggestedWords?: any[];
     }
-  ) => {
+  ): Word | null => {
+    let createdWord: Word | null = null;
     setWords(prev => {
       const exists = isWordInCollection(prev, wordData.word);
       if (exists) {
@@ -206,10 +207,12 @@ export function useVocabulary() {
         0,
         "created"
       );
+      createdWord = newWord;
       const updated = [newWord, ...prev];
       saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add incomplete word save error:", e));
       return updated;
     });
+    return createdWord;
   }, []);
 
   const handleDeleteWord = useCallback((wordId: string) => {

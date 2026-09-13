@@ -548,7 +548,23 @@ function CollectionManager({
                   </div>
 
                   {/* Batch Action Buttons */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {onToggleAutoEnrich && typeof autoEnrichEnabled === "boolean" && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleAutoEnrich()}
+                        className={`px-2.5 py-1.5 text-[11px] font-medium rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                          autoEnrichEnabled
+                            ? "bg-amber-100/90 text-amber-900 border-amber-300"
+                            : "bg-white/80 text-stone-600 border-stone-200 hover:bg-white"
+                        }`}
+                        title="Automatically enrich new incomplete words in the background"
+                      >
+                        <Sparkles className={`w-3 h-3 ${autoEnrichEnabled ? "text-amber-600" : "text-stone-400"}`} />
+                        <span>Auto: {autoEnrichEnabled ? "ON" : "OFF"}</span>
+                      </button>
+                    )}
+
                     {isBatchRunning ? (
                       <button
                         type="button"
