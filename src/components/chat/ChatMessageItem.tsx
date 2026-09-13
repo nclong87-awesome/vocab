@@ -1432,70 +1432,89 @@ function ChatMessageItem({
         </div>
 
         {/* AI Suggested Actions Render */}
-        {!isUser && effectiveActions && effectiveActions.length > 0 && (
-          <div className="flex flex-col gap-1.5 pt-1 w-full">
-            {effectiveActions.map((act, aIdx) => {
-              const actLbl = (act && typeof act.label === "string") ? act.label.toLowerCase() : "";
-              const isNextQ = act.action === "next_quiz_question" || (act.action === "send_message" && (
-                actLbl.startsWith("move on") ||
-                actLbl.startsWith("next question") ||
-                actLbl.includes("continue to question")
-              ));
-              const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
-              const isSandwichDuel = act.action === "start_sandwich_duel";
-              const isSandwichQuiz = act.action === "start_sandwich_quiz";
-              const isSandwichAction = isSandwichDuel || isSandwichQuiz;
-              const isSandwichDuelLocked = isSandwichDuel && !isAllWarmupReviewed;
-              const isDuelPracticeAction = act.action === "start_practice_confuser_duel";
-              const isDuelQuizAction = (msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && act.action === "quiz_answer";
-              const isStoryImmersionAction =
-                act.action === "start_practice_story_immersion" ||
-                act.action === "start_story_immersion" ||
-                act.action === "next_story";
-              const currentPayload = customActionPayloads[aIdx] || act.payload;
+        {!isUser && effectiveActions && effectiveActions.length > 0 && (() => {
+          const isChallengePrompt = Boolean(msg.challengeData && !msg.challengeEvaluation);
 
-              return (
-                <React.Fragment key={aIdx}>
-                  {isConfirmSave && (
-                    <WordAddGalleryPreview
-                      word={currentPayload}
-                      llmConfig={llmConfig}
-                      onImagesChange={(updatedUrls) => {
-                        setCustomActionPayloads((prev) => ({
-                          ...prev,
-                          [aIdx]: {
-                            ...currentPayload,
-                            imageUrls: updatedUrls,
-                            imageUrl: updatedUrls?.[0] || undefined,
-                          },
-                        }));
-                      }}
-                    />
-                  )}
+          return (
+            <div className={isChallengePrompt ? "flex flex-wrap items-center gap-1.5 pt-1.5 w-full" : "flex flex-col gap-1.5 pt-1 w-full"}>
+              {effectiveActions.map((act, aIdx) => {
+                const actLbl = (act && typeof act.label === "string") ? act.label.toLowerCase() : "";
+                const isNextQ = act.action === "next_quiz_question" || (act.action === "send_message" && (
+                  actLbl.startsWith("move on") ||
+                  actLbl.startsWith("next question") ||
+                  actLbl.includes("continue to question")
+                ));
+                const isConfirmSave = act.action === "confirm_save_word" && act.payload && typeof act.payload.word === "string";
+                const isSandwichDuel = act.action === "start_sandwich_duel";
+                const isSandwichQuiz = act.action === "start_sandwich_quiz";
+                const isSandwichAction = isSandwichDuel || isSandwichQuiz;
+                const isSandwichDuelLocked = isSandwichDuel && !isAllWarmupReviewed;
+                const isDuelPracticeAction = act.action === "start_practice_confuser_duel";
+                const isDuelQuizAction = (msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && act.action === "quiz_answer";
+                const isStoryImmersionAction =
+                  act.action === "start_practice_story_immersion" ||
+                  act.action === "start_story_immersion" ||
+                  act.action === "next_story";
+                const currentPayload = customActionPayloads[aIdx] || act.payload;
 
-                  <button
-                    key={aIdx}
-                    onClick={() => handleActionClick(act, aIdx)}
-                    title={
-                      isSandwichDuelLocked
-                        ? t("chat_sandwich_review_all_cards_toast", currentAppLang, {
-                            total: String(totalWarmupCards),
-                            remaining: String(remainingWarmupToReview),
-                          })
-                        : undefined
-                    }
-                    className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs group ${
-                      isSandwichDuelLocked
-                        ? "bg-stone-100/95 hover:bg-stone-200/80 border border-stone-300/80 text-stone-600 cursor-pointer"
-                        : isSandwichAction
-                        ? "bg-amber-400 hover:bg-amber-300 focus:bg-amber-300 border border-amber-500/80 text-stone-950 font-bold shadow-xs cursor-pointer"
-                        : (isDuelPracticeAction || isDuelQuizAction)
-                        ? "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
-                        : isNextQ
-                        ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold cursor-pointer"
-                        : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
-                    }`}
-                  >
+                if (isChallengePrompt) {
+                  return (
+                    <button
+                      key={aIdx}
+                      type="button"
+                      onClick={() => handleActionClick(act, aIdx)}
+                      className="inline-flex items-center gap-1.5 py-1.5 px-3 rounded-full text-xs font-semibold bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 text-stone-800 hover:text-white focus:text-white border border-stone-200/90 hover:border-stone-900 shadow-3xs transition-all duration-150 cursor-pointer active:scale-95 group shrink-0"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0" />
+                      <span className="truncate max-w-[200px]">
+                        {formatActionLabel(act, currentAppLang)}
+                      </span>
+                    </button>
+                  );
+                }
+
+                return (
+                  <React.Fragment key={aIdx}>
+                    {isConfirmSave && (
+                      <WordAddGalleryPreview
+                        word={currentPayload}
+                        llmConfig={llmConfig}
+                        onImagesChange={(updatedUrls) => {
+                          setCustomActionPayloads((prev) => ({
+                            ...prev,
+                            [aIdx]: {
+                              ...currentPayload,
+                              imageUrls: updatedUrls,
+                              imageUrl: updatedUrls?.[0] || undefined,
+                            },
+                          }));
+                        }}
+                      />
+                    )}
+
+                    <button
+                      key={aIdx}
+                      onClick={() => handleActionClick(act, aIdx)}
+                      title={
+                        isSandwichDuelLocked
+                          ? t("chat_sandwich_review_all_cards_toast", currentAppLang, {
+                              total: String(totalWarmupCards),
+                              remaining: String(remainingWarmupToReview),
+                            })
+                          : undefined
+                      }
+                      className={`flex items-start justify-between text-left text-xs rounded-xl py-2.5 px-3.5 transition-all duration-200 shadow-2xs group ${
+                        isSandwichDuelLocked
+                          ? "bg-stone-100/95 hover:bg-stone-200/80 border border-stone-300/80 text-stone-600 cursor-pointer"
+                          : isSandwichAction
+                          ? "bg-amber-400 hover:bg-amber-300 focus:bg-amber-300 border border-amber-500/80 text-stone-950 font-bold shadow-xs cursor-pointer"
+                          : (isDuelPracticeAction || isDuelQuizAction)
+                          ? "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
+                          : isNextQ
+                          ? "bg-stone-900 hover:bg-stone-800 text-white border border-stone-900 font-bold cursor-pointer"
+                          : "bg-white hover:bg-stone-900 focus:bg-stone-900 active:bg-stone-900 border border-stone-200 hover:border-stone-900 focus:border-stone-900 text-stone-900 hover:text-white focus:text-white cursor-pointer"
+                      }`}
+                    >
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     {isSandwichDuelLocked ? (
                       <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
@@ -1673,7 +1692,8 @@ function ChatMessageItem({
             );
           })}
           </div>
-        )}
+        );
+      })()}
       </div>
 
       {/* Strength History Modal */}

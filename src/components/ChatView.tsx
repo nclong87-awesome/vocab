@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Upload } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider, UserPersonalityProfile } from "../types";
@@ -329,6 +329,21 @@ function ChatView({
     });
   }, []);
 
+  // Active Translation Challenge Data (if user is currently answering a challenge)
+  const activeChallengeData = useMemo(() => {
+    if (!messages || messages.length === 0) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.challengeEvaluation || m.quizFinishedData) {
+        return null;
+      }
+      if (m.challengeData) {
+        return m.challengeData;
+      }
+    }
+    return null;
+  }, [messages]);
+
   // Helper to auto scroll to the top of the newly added message
   const scrollToTopOfLatestMessage = useCallback((behavior: ScrollBehavior = "smooth") => {
     setTimeout(() => {
@@ -560,6 +575,9 @@ function ChatView({
         conversationalState={conversationalState}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
+        activeChallenge={activeChallengeData}
+        ttsConfig={ttsConfig}
+        llmConfig={llmConfig}
         showToast={showToast}
         handleSubmit={handleSubmit}
         handleImageFileChange={handleImageFileChange}

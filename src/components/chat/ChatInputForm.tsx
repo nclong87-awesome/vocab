@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback } from "react";
-import { Camera, Mic, MicOff, Send, X } from "lucide-react";
+import { Camera, Mic, MicOff, Send, X, Languages, Volume2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { useSpeechToText } from "../../hooks/useSpeechToText";
-import { getLanguageCode } from "../../utils/ttsService";
+import { getLanguageCode, speakText } from "../../utils/ttsService";
+import { ChallengeData, TTSConfig, LLMConfig } from "../../types";
 
 interface ChatInputFormProps {
   inputText: string;
@@ -14,6 +15,9 @@ interface ChatInputFormProps {
   conversationalState: string;
   targetLanguage: string;
   nativeLanguage?: string;
+  activeChallenge?: ChallengeData | null;
+  ttsConfig?: TTSConfig;
+  llmConfig?: LLMConfig;
   showToast: (msg: string) => void;
   handleSubmit: (e: React.FormEvent) => void;
   handleImageFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -31,6 +35,9 @@ function ChatInputForm({
   conversationalState,
   targetLanguage,
   nativeLanguage,
+  activeChallenge,
+  ttsConfig,
+  llmConfig,
   showToast,
   handleSubmit,
   handleImageFileChange,
@@ -38,6 +45,7 @@ function ChatInputForm({
   inputRef,
 }: ChatInputFormProps) {
   const baseTextRef = useRef("");
+  const [isChallengeBannerCollapsed, setIsChallengeBannerCollapsed] = useState(false);
   // Default to native language as requested
   const [speechLangMode, setSpeechLangMode] = useState<"native" | "target">("native");
 
@@ -91,7 +99,89 @@ function ChatInputForm({
   }, [isListening, stopListening, handleSubmit]);
 
   return (
-    <form onSubmit={onFormSubmit} className="p-3 bg-white border-t border-stone-200 shrink-0">
+    <form onSubmit={onFormSubmit} className="p-2.5 sm:p-3 bg-white border-t border-stone-200 shrink-0">
+      {/* Active Translation Challenge Sticky Banner (Always visible on mobile above keyboard) */}
+      {activeChallenge && activeChallenge.nativeSentence && (
+        <div 
+          className="mb-2 p-2.5 bg-gradient-to-r from-amber-50/95 via-orange-50/70 to-amber-50/90 border border-amber-300 rounded-xl shadow-2xs transition-all"
+          id="active-challenge-sticky-banner"
+        >
+          <div className="flex items-center justify-between gap-2 pb-1 border-b border-amber-200/60">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="p-1 bg-stone-900 text-amber-400 rounded-md shrink-0 shadow-3xs">
+                <Languages className="w-3 h-3" />
+              </span>
+              <span className="text-[11px] font-bold text-amber-950 truncate font-mono">
+                Translate into {activeChallenge.targetLanguage || effectiveTarget}:
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              {activeChallenge.topicContext && (
+                <span className="text-[10px] font-semibold px-2 py-0.2 bg-amber-200/80 text-amber-950 rounded-full">
+                  {activeChallenge.topicContext}
+                </span>
+              )}
+
+              {ttsConfig && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const langCode = getLanguageCode(activeChallenge.nativeLanguage || effectiveNative);
+                    speakText(activeChallenge.nativeSentence, ttsConfig, llmConfig, langCode);
+                  }}
+                  className="p-1 rounded-md bg-amber-100 hover:bg-amber-200 text-amber-900 transition-colors cursor-pointer"
+                  title="Listen to challenge sentence"
+                  aria-label="Listen to challenge sentence"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-amber-800" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsChallengeBannerCollapsed(prev => !prev)}
+                className="p-1 rounded-md text-amber-900 hover:bg-amber-200/60 transition-colors cursor-pointer"
+                title={isChallengeBannerCollapsed ? "Expand challenge sentence" : "Collapse challenge banner"}
+              >
+                {isChallengeBannerCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+
+          {!isChallengeBannerCollapsed ? (
+            <div className="pt-1.5 space-y-1">
+              <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug tracking-tight select-text">
+                "{activeChallenge.nativeSentence}"
+              </p>
+
+              {activeChallenge.targetWordFromCollection && (
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-900 font-medium pt-0.5 flex-wrap">
+                  <span className="flex items-center gap-1 font-bold text-amber-950">
+                    <Sparkles className="w-3 h-3 text-amber-600 animate-pulse" />
+                    Target Word:
+                  </span>
+                  <span className="font-mono font-bold bg-amber-200 text-amber-950 px-1.5 py-0.2 rounded border border-amber-300/80">
+                    {activeChallenge.targetWordFromCollection.word}
+                  </span>
+                  {activeChallenge.targetWordFromCollection.translation && (
+                    <span className="text-amber-800 text-[10px]">
+                      ({activeChallenge.targetWordFromCollection.translation})
+                    </span>
+                  )}
+                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100/90 px-1.5 py-0.2 rounded-full border border-emerald-300/60 ml-auto">
+                    +30 pts bonus
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs font-semibold text-stone-800 truncate pt-1 italic">
+              "{activeChallenge.nativeSentence}"
+            </p>
+          )}
+        </div>
+      )}
       {/* Live Voice Recording Status Bar */}
       {isListening && (
         <div className="mb-2.5 p-2 px-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs animate-fadeIn">
