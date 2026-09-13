@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { 
-  Target, 
+  Languages, 
   Sparkles, 
   CheckCircle2, 
   AlertCircle, 
@@ -138,87 +138,54 @@ export default function TranslationChallengeCard({
     }
   };
 
-  // 1. RENDER CHALLENGE PROMPT CARD
+  // 1. RENDER CHALLENGE PROMPT CARD (Clean & simplified, no target word revealed)
   if (challenge && !evaluation) {
     return (
-      <div className="w-full p-4 sm:p-5 bg-gradient-to-br from-amber-50/80 via-amber-50/20 to-white border border-amber-200/90 rounded-2xl shadow-xs space-y-3.5">
-        {/* Header Badge */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-4">
+        {/* Header Badge & Topic Context */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-stone-100">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-amber-500 text-white rounded-lg shadow-2xs">
-              <Target className="w-4 h-4" />
+            <span className="p-1.5 bg-stone-900 text-amber-400 rounded-lg shadow-2xs">
+              <Languages className="w-4 h-4" />
             </span>
             <span className="font-bold text-xs sm:text-sm text-stone-900 tracking-tight">
-              Personalized Translation Challenge
+              Translation Challenge
             </span>
           </div>
           {challenge.topicContext && (
-            <span className="px-2.5 py-0.5 bg-amber-100/90 text-amber-900 border border-amber-300/80 rounded-full text-[11px] font-semibold">
+            <span className="px-2.5 py-0.5 bg-stone-100 text-stone-700 border border-stone-200 rounded-full text-[11px] font-medium">
               {challenge.topicContext}
             </span>
           )}
         </div>
 
-        {/* Challenge Sentence Box */}
-        <div className="p-3.5 bg-white border border-amber-200/70 rounded-xl shadow-2xs space-y-1.5">
-          <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wider font-mono">
+        {/* Challenge Prompt Sentence */}
+        <div className="space-y-1.5">
+          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider font-mono">
             Translate into {challenge.targetLanguage || "English"}:
-          </div>
-          <p className="text-base sm:text-lg font-bold text-stone-900 leading-snug">
+          </span>
+          <p className="text-base sm:text-lg font-semibold text-stone-900 leading-relaxed font-sans">
             "{challenge.nativeSentence}"
           </p>
         </div>
 
-        {/* Featured Target Word from User Collection */}
-        {challenge.targetWordFromCollection && (
-          <div className="p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/80 rounded-xl flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="p-1.5 bg-amber-600 text-white rounded-lg shadow-2xs shrink-0">
-                <Target className="w-4 h-4" />
-              </span>
-              <div className="min-w-0">
-                <div className="text-xs text-amber-950 font-bold flex items-center gap-1.5 flex-wrap">
-                  <span>Target Word from Collection:</span>
-                  <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 rounded-md font-mono text-amber-900">
-                    {challenge.targetWordFromCollection.word}
-                  </span>
-                  {challenge.targetWordFromCollection.translation && (
-                    <span className="text-stone-500 font-normal">
-                      ({challenge.targetWordFromCollection.translation})
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-amber-800/90 leading-tight mt-0.5">
-                  Incorporate this specific word in your response to augment its strength by <strong className="font-bold text-amber-950">+30 points</strong>!
-                </p>
-              </div>
+        {/* Optional Context & Hints */}
+        <div className="pt-1 flex items-center justify-between gap-2 flex-wrap text-xs text-stone-600">
+          {challenge.personalityNote ? (
+            <div className="flex items-center gap-1.5 text-stone-500 text-xs">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="line-clamp-2">{challenge.personalityNote}</span>
             </div>
-            {typeof challenge.targetWordFromCollection.strength === "number" && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs shrink-0 shadow-2xs">
-                <span className="text-[10px] text-stone-500 uppercase font-mono">Strength:</span>
-                <span className="font-bold text-amber-800">{challenge.targetWordFromCollection.strength}%</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Profile Match & Hints Toggle */}
-        <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap text-xs text-stone-600">
-          {challenge.personalityNote && (
-            <div className="flex items-center gap-1.5 text-stone-600 text-[11px]">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>{challenge.personalityNote}</span>
-            </div>
-          )}
+          ) : <div />}
 
           {challenge.keyTargetWords && challenge.keyTargetWords.length > 0 && (
             <button
               type="button"
               onClick={() => setShowVocabHints(!showVocabHints)}
-              className="text-[11px] font-semibold text-amber-800 hover:text-amber-950 flex items-center gap-1 transition-colors cursor-pointer ml-auto"
+              className="text-[11px] font-medium text-stone-600 hover:text-stone-900 flex items-center gap-1 transition-colors cursor-pointer ml-auto py-1 px-2 rounded-md hover:bg-stone-100"
             >
-              <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
-              <span>{showVocabHints ? "Hide Vocab Hints" : "Show Key Vocab Hints"}</span>
+              <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+              <span>{showVocabHints ? "Hide Hints" : "Vocab Hints"}</span>
               {showVocabHints ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}
@@ -226,9 +193,9 @@ export default function TranslationChallengeCard({
 
         {/* Collapsible Key Target Words Hints */}
         {showVocabHints && challenge.keyTargetWords && (
-          <div className="p-3 bg-white/90 border border-amber-200/70 rounded-xl space-y-2 text-xs">
-            <span className="font-bold text-stone-800 block text-[11px] uppercase tracking-wider font-mono">
-              Key Target Vocabulary:
+          <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
+            <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
+              Vocab Clues:
             </span>
             <div className="flex flex-wrap gap-2">
               {challenge.keyTargetWords.map((kw, i) => {
@@ -239,14 +206,14 @@ export default function TranslationChallengeCard({
                     onClick={() => {
                       if (!inCol) handleAddSingleWord(kw);
                     }}
-                    title={inCol ? "Saved in collection" : "Click to temporarily add to collection as incomplete word"}
+                    title={inCol ? "Saved in collection" : "Click to add to collection"}
                     className={`px-2.5 py-1 rounded-lg flex items-center gap-2 border transition-all ${
                       inCol
                         ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-default"
-                        : "bg-stone-50 hover:bg-amber-50/70 border-stone-200 hover:border-amber-300 cursor-pointer active:scale-95"
+                        : "bg-white hover:bg-stone-100 border-stone-200 hover:border-stone-300 cursor-pointer active:scale-95"
                     }`}
                   >
-                    <span className="font-bold text-stone-900">{kw.word}</span>
+                    <span className="font-medium text-stone-800">{kw.word}</span>
                     <span className="text-stone-500">({kw.translation})</span>
                     {(onAddIncompleteWord || onAddWord) && (
                       <button
@@ -256,8 +223,8 @@ export default function TranslationChallengeCard({
                           handleAddSingleWord(kw);
                         }}
                         disabled={inCol}
-                        className="ml-1 text-amber-600 hover:text-amber-800 disabled:text-emerald-700 transition-colors cursor-pointer"
-                        title={inCol ? "Saved" : "Add to collection (incomplete)"}
+                        className="ml-1 text-stone-500 hover:text-stone-800 disabled:text-emerald-700 transition-colors cursor-pointer"
+                        title={inCol ? "Saved" : "Add to collection"}
                       >
                         {inCol ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Plus className="w-3.5 h-3.5" />}
                       </button>
@@ -269,7 +236,7 @@ export default function TranslationChallengeCard({
           </div>
         )}
 
-        {/* AI Response Metadata (Provider, Model, Response Time) */}
+        {/* AI Response Metadata */}
         <LlmResponseMetadata
           provider={activeProvider}
           model={activeModel}
@@ -358,10 +325,10 @@ export default function TranslationChallengeCard({
               </span>
             </div>
             <p className="text-xs text-emerald-900 leading-relaxed">
-              You used the target word <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> from your words collection in your response.
+              You incorporated <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> from your collection in your translation.
               {typeof evaluation.targetWordPrevStrength === "number" && typeof evaluation.targetWordNewStrength === "number" && (
                 <span className="block text-[11px] font-medium text-emerald-800 mt-0.5">
-                  Memory strength augmented: {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-emerald-950">{evaluation.targetWordNewStrength}%</strong> (+30 points)
+                  Memory strength augmented: {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-emerald-950">{evaluation.targetWordNewStrength}%</strong>
                 </span>
               )}
             </p>
@@ -483,3 +450,4 @@ export default function TranslationChallengeCard({
 
   return null;
 }
+
