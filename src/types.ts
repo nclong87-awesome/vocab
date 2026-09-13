@@ -114,6 +114,10 @@ export interface Word {
   quizContext?: QuizContextData;
   suggestedWords?: (string | { word: string; translation?: string; definition?: string; hint?: string; partOfSpeech?: string })[];
   strengthHistory?: StrengthHistoryTuple[];
+  senses?: WordSense[];
+  hasMultipleDefinitions?: boolean;
+  enrichmentStatus?: 'idle' | 'enriching' | 'completed' | 'has_multiple_definitions' | 'error';
+  enrichmentError?: string;
 }
 
 export interface WordSense {

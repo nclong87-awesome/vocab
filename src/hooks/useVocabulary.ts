@@ -226,6 +226,17 @@ export function useVocabulary() {
     saveAllWordsToDB(updatedWords).catch(e => console.error("IndexedDB update words error:", e));
   }, []);
 
+  const handleUpdateSingleWord = useCallback((updatedWord: Word) => {
+    setWords(prev => {
+      const idx = prev.findIndex(w => w.id === updatedWord.id);
+      if (idx === -1) return prev;
+      const copy = [...prev];
+      copy[idx] = updatedWord;
+      saveWordToDB(updatedWord).catch(e => console.error("IndexedDB update single word error:", e));
+      return copy;
+    });
+  }, []);
+
   const handleFinishQuiz = useCallback((
     score: number, 
     total: number, 
@@ -281,6 +292,7 @@ export function useVocabulary() {
     handleAddIncompleteWord,
     handleDeleteWord,
     handleUpdateWords,
+    handleUpdateSingleWord,
     handleFinishQuiz,
   };
 }

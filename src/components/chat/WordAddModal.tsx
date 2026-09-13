@@ -464,6 +464,61 @@ export default function WordAddModal({
         return;
       }
 
+      // Check if overrideData already has multiple definitions pre-computed by background enrichment
+      if (
+        overrideData?.senses &&
+        overrideData.senses.length > 1 &&
+        overrideData.hasMultipleDefinitions
+      ) {
+        setIsTyping(false);
+        setActiveModelInfo(null);
+        const validSenses = overrideData.senses.filter((s) => Boolean(s && (s.definition || s.translation)));
+        if (validSenses.length > 1) {
+          pendingWordSensesRef.current = {
+            word: wordToLookup,
+            senses: validSenses,
+            suggestedWords: overrideData.suggestedWords as any,
+          };
+
+          const disambigActions = validSenses.map((sense, idx) => {
+            const translation = sense.translation || "";
+            const definition = sense.definition || "";
+            const partOfSpeech = sense.partOfSpeech || "word";
+            const targetWord = sense.word || wordToLookup;
+            const example = sense.example || "";
+
+            let label = `(${partOfSpeech}) ${translation || definition}`;
+            if (label.length > 50) label = label.slice(0, 47) + "...";
+
+            return {
+              label,
+              action: "select_definition" as const,
+              payload: {
+                word: wordToLookup,
+                senseIndex: idx,
+                translation: translation || wordToLookup,
+                targetWord,
+                partOfSpeech,
+                definition,
+                example,
+              },
+            };
+          });
+
+          const disambigMsg: ChatMessage = {
+            id: `sense-disambig-${Date.now()}`,
+            role: "assistant",
+            content: t("chat_disambiguation_prompt", currentAppLang, { word: wordToLookup, targetLanguage }),
+            timestamp: new Date().toISOString(),
+            suggestedActions: disambigActions,
+          };
+
+          setMessages((prev) => [...prev, disambigMsg]);
+          scrollToBottom();
+          return;
+        }
+      }
+
       try {
         const data = await checkWordDefinitionsService({
           word: wordToLookup,
