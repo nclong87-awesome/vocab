@@ -33,7 +33,7 @@ import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
-import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord } from "../utils/wordNormalization";
+import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, hasUserIncorporatedWord } from "../utils/wordNormalization";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 import { ChallengeData } from "../types";
@@ -861,10 +861,14 @@ export function useChat({
 
         setActiveChallenge(challengeData);
 
+        const targetWordNotice = challengeData.targetWordFromCollection
+          ? `\n\n🎯 **Featured Target Word:** \`${challengeData.targetWordFromCollection.word}\`${challengeData.targetWordFromCollection.translation ? ` (*${challengeData.targetWordFromCollection.translation}*)` : ""}\n*💡 Incorporate this word in your translation to augment its strength by **+30 points**!*`
+          : "";
+
         const challengeMsg: ChatMessage = {
           id: `challenge-start-${Date.now()}`,
           role: "assistant",
-          content: `### 🎯 Translation Challenge\n\n**Translate into ${targetLanguage}:**\n> "${challengeData.nativeSentence}"\n\n*Topic:* \`${challengeData.topicContext || "General"}\` • *Profile Match:* ${challengeData.personalityNote || "Tailored for your archetype"}\n\n💡 *Type your translation in English in the chat below, or ask for a hint!*`,
+          content: `### 🎯 Translation Challenge\n\n**Translate into ${targetLanguage}:**\n> "${challengeData.nativeSentence}"${targetWordNotice}\n\n*Topic:* \`${challengeData.topicContext || "General"}\` • *Profile Match:* ${challengeData.personalityNote || "Tailored for your archetype"}\n\n💡 *Type your translation in ${targetLanguage} in the chat below, or ask for a hint!*`,
           timestamp: new Date().toISOString(),
           challengeData,
           suggestedActions: [
@@ -1798,17 +1802,80 @@ export function useChat({
           if (!evalRes.userTranslation || !evalRes.userTranslation.trim()) {
             evalRes.userTranslation = userText;
           }
+
+          // Check if user incorporated the specific target word from collection
+          const targetColWord = activeChallenge.targetWordFromCollection;
+          let wordToAugment: Word | undefined = undefined;
+
+          if (targetColWord?.word) {
+            wordToAugment = findWordInCollection(wordsRef.current, targetColWord.word);
+          }
+          // Fallback: check key target words against collection
+          if (!wordToAugment && activeChallenge.keyTargetWords) {
+            for (const kw of activeChallenge.keyTargetWords) {
+              if (kw?.word) {
+                const foundInCol = findWordInCollection(wordsRef.current, kw.word);
+                if (foundInCol) {
+                  wordToAugment = foundInCol;
+                  break;
+                }
+              }
+            }
+          }
+
+          const didIncorporate = wordToAugment ? (
+            evalRes.incorporatedTargetWord === true ||
+            hasUserIncorporatedWord(userText, wordToAugment.word) ||
+            hasUserIncorporatedWord(evalRes.userTranslation, wordToAugment.word)
+          ) : false;
+
+          if (didIncorporate && wordToAugment) {
+            const prevStrength = wordToAugment.strength ?? 0;
+            const newStrength = Math.min(100, prevStrength + 30);
+            const gained = newStrength - prevStrength;
+
+            evalRes.incorporatedTargetWord = true;
+            evalRes.targetWordUsed = wordToAugment.word;
+            evalRes.targetWordPrevStrength = prevStrength;
+            evalRes.targetWordNewStrength = newStrength;
+            evalRes.targetWordStrengthGained = gained;
+
+            // Augment the word's strength by 30 points and record history
+            setWords((prevWords) => {
+              const updated = prevWords.map((w) => {
+                if (w.id === wordToAugment!.id || areWordsEquivalent(w.word, wordToAugment!.word)) {
+                  return recordStrengthHistory(
+                    w,
+                    newStrength,
+                    'challenge_bonus',
+                    `Incorporated target word in translation challenge (+30% strength gained)`
+                  );
+                }
+                return w;
+              });
+              wordsRef.current = updated;
+              saveAllWordsToDB(updated).catch((e) => console.error("Failed to persist challenge bonus:", e));
+              return updated;
+            });
+          }
+
+          const currentChallenge = activeChallenge;
           setActiveChallenge(null); // Challenge completed
 
           const yourTranslationLine = evalRes.userTranslation?.trim()
             ? `\n\n**Your Translation:** "${evalRes.userTranslation.trim()}"`
             : "";
 
+          const bonusLine = evalRes.incorporatedTargetWord && evalRes.targetWordUsed
+            ? `\n\n🎉 **Target Word Incorporated (+30 Strength Points)!**\nYou successfully incorporated **"${evalRes.targetWordUsed}"** in your response! Word strength increased from ${evalRes.targetWordPrevStrength}% to **${evalRes.targetWordNewStrength}%** (+30%).`
+            : (currentChallenge?.targetWordFromCollection ? `\n\n💡 *Note: The target word from your collection was **"${currentChallenge.targetWordFromCollection.word}"**. Incorporate it in future challenges to earn +30 strength points!*` : "");
+
           const evalMsg: ChatMessage = {
             id: `challenge-eval-${Date.now()}`,
             role: "assistant",
-            content: `### 🎯 Challenge Evaluation: ${evalRes.scoreLabel} (${evalRes.score}/100)${yourTranslationLine}\n**Ideal Translation:** "${evalRes.correctedSentence}"\n\n**✨ What Went Well:**\n${evalRes.whatWentWell}\n\n**💡 Areas for Improvement:**\n${evalRes.areasForImprovement}`,
+            content: `### 🎯 Challenge Evaluation: ${evalRes.scoreLabel} (${evalRes.score}/100)${yourTranslationLine}\n**Ideal Translation:** "${evalRes.correctedSentence}"${bonusLine}\n\n**✨ What Went Well:**\n${evalRes.whatWentWell}\n\n**💡 Areas for Improvement:**\n${evalRes.areasForImprovement}`,
             timestamp: new Date().toISOString(),
+            challengeData: currentChallenge,
             challengeEvaluation: evalRes,
             provider: result.provider || configForServer?.provider || "google",
             model: result.model || configForServer?.model || "gemini-2.5-flash",

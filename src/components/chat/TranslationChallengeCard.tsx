@@ -169,6 +169,39 @@ export default function TranslationChallengeCard({
           </p>
         </div>
 
+        {/* Featured Target Word from User Collection */}
+        {challenge.targetWordFromCollection && (
+          <div className="p-3 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/80 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="p-1.5 bg-amber-600 text-white rounded-lg shadow-2xs shrink-0">
+                <Target className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-xs text-amber-950 font-bold flex items-center gap-1.5 flex-wrap">
+                  <span>Target Word from Collection:</span>
+                  <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 rounded-md font-mono text-amber-900">
+                    {challenge.targetWordFromCollection.word}
+                  </span>
+                  {challenge.targetWordFromCollection.translation && (
+                    <span className="text-stone-500 font-normal">
+                      ({challenge.targetWordFromCollection.translation})
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-amber-800/90 leading-tight mt-0.5">
+                  Incorporate this specific word in your response to augment its strength by <strong className="font-bold text-amber-950">+30 points</strong>!
+                </p>
+              </div>
+            </div>
+            {typeof challenge.targetWordFromCollection.strength === "number" && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs shrink-0 shadow-2xs">
+                <span className="text-[10px] text-stone-500 uppercase font-mono">Strength:</span>
+                <span className="font-bold text-amber-800">{challenge.targetWordFromCollection.strength}%</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Profile Match & Hints Toggle */}
         <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap text-xs text-stone-600">
           {challenge.personalityNote && (
@@ -307,6 +340,33 @@ export default function TranslationChallengeCard({
             </div>
           );
         })()}
+
+        {/* Target Word Incorporation Celebration Banner */}
+        {evaluation.incorporatedTargetWord && evaluation.targetWordUsed && (
+          <div className="p-3.5 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-teal-50/50 border border-emerald-300 rounded-xl shadow-2xs space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-emerald-600 text-white rounded-lg shadow-2xs">
+                  <Sparkles className="w-4 h-4" />
+                </span>
+                <span className="font-bold text-xs sm:text-sm text-emerald-950">
+                  Target Word Successfully Incorporated!
+                </span>
+              </div>
+              <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[11px] font-black rounded-full shadow-2xs">
+                +30 Strength Points
+              </span>
+            </div>
+            <p className="text-xs text-emerald-900 leading-relaxed">
+              You used the target word <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> from your words collection in your response.
+              {typeof evaluation.targetWordPrevStrength === "number" && typeof evaluation.targetWordNewStrength === "number" && (
+                <span className="block text-[11px] font-medium text-emerald-800 mt-0.5">
+                  Memory strength augmented: {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-emerald-950">{evaluation.targetWordNewStrength}%</strong> (+30 points)
+                </span>
+              )}
+            </p>
+          </div>
+        )}
 
         {/* Insights Section */}
         <div className="space-y-2 text-xs">

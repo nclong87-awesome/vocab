@@ -120,13 +120,13 @@ export function calculateNextReviewIntervalHours(
     if (reason === "quiz_incorrect" || reason === "unmastered") {
       break;
     }
-    if (reason === "quiz_correct" || reason === "mastered") {
+    if (reason === "quiz_correct" || reason === "mastered" || reason === "challenge_bonus") {
       consecutiveSuccesses++;
     }
   }
 
   // If calculating for a new correct practice event right now, count it
-  if (overrideReason === "quiz_correct" || overrideReason === "mastered") {
+  if (overrideReason === "quiz_correct" || overrideReason === "mastered" || overrideReason === "challenge_bonus") {
     if (lastEntry?.[2] === "quiz_incorrect") {
       consecutiveSuccesses = 1;
     }

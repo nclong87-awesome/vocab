@@ -2,6 +2,7 @@ import { ChallengeData, ChallengeTurnResult, UserPersonalityProfile, Word, LLMCo
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse } from "./llmClientService";
 import { sortWordsByLastPracticeTime } from "../utils/spacedRepetition";
+import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 
 export interface GenerateChallengeParams {
   nativeLanguage?: string;
@@ -50,7 +51,11 @@ const COMMUNICATIVE_MOODS = [
   "Summarizing consensus and defining unambiguous ownership after a lively discussion"
 ];
 
-function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: string): { prompt: string; chosenTheme: string } {
+function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: string): {
+  prompt: string;
+  chosenTheme: string;
+  candidateCollectionWords: Word[];
+} {
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
   const profile = params.personalityProfile;
@@ -63,16 +68,23 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
   const scenarioObj = DIVERSE_SCENARIOS[Math.floor(Math.random() * DIVERSE_SCENARIOS.length)];
   const mood = COMMUNICATIVE_MOODS[Math.floor(Math.random() * COMMUNICATIVE_MOODS.length)];
 
-  // Grounding in user vocabulary words if available, prioritizing words based on least recent practice time
+  // Grounding in user vocabulary words: endeavor to select the single most suitable word from collection
   let vocabAnchorSection = "";
+  let candidateCollectionWords: Word[] = [];
   if (params.words && params.words.length > 0) {
     const validWords = params.words.filter((w) => w.completed !== false);
     const sortedCandidates = sortWordsByLastPracticeTime(validWords);
-    const pickedWords = sortedCandidates.slice(0, 3);
-    if (pickedWords.length > 0) {
+    candidateCollectionWords = sortedCandidates.slice(0, 8);
+    if (candidateCollectionWords.length > 0) {
       vocabAnchorSection = `
-VOCABULARY FOCUS (PRIORITIZE NATURALLY INTEGRATING 1-2 OF THESE TERMS INTO THE SENTENCE):
-${pickedWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"})`).join("\n")}`;
+USER'S WORDS COLLECTION CANDIDATES:
+${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%]`).join("\n")}
+
+WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
+- Carefully evaluate the candidate words from the user's collection above.
+- Endeavor to identify the SINGLE MOST SUITABLE word from this collection that naturally fits within the assigned scenario ("${scenarioObj.theme}").
+- Construct a concise sentence whose ideal translation naturally incorporates this identified word.
+- Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.`;
     }
   }
 
@@ -104,27 +116,98 @@ LEARNER CONTEXT:
 - Primary Learning Modality: ${modality}
 ${vocabAnchorSection}
 ${recentAvoidanceSection}
-CRITICAL DIVERSITY & ANTI-REPETITION MANDATE:
-1. STRICTLY FORBIDDEN CLICHÉS: Do NOT generate sentences about "tối ưu hóa thuật toán" (optimizing algorithms), "độ trễ" (latency), or "suy giảm hiệu năng hệ thống" (system performance degradation). These specific tropes have already been overused!
+CRITICAL MANDATES:
+1. CONCISE SENTENCE STRUCTURE: Aim for a concise, compact, and punchy sentence structure (strictly 6 to 14 words). Avoid verbose rambling or convoluted multi-clause sentences. Keep the phrasing natural, modern, clear, and direct.
 2. Follow the assigned Scenario Theme ("${scenarioObj.theme}") and Communicative Mood ("${mood}").
-3. Create a fresh, creative, and realistic sentence (10-22 words) in the user's NATIVE language (${nativeLanguage}) that they must translate into their TARGET language (${targetLanguage}).
-4. Ensure the sentence sounds completely natural and idiomatic for real-life speech or written communication in ${nativeLanguage}.
-5. Provide the ideal, polished, natural translation in ${targetLanguage}.
-6. List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
-7. Provide a short note (personalityNote) explaining why this specific scenario was selected for their profile.
+3. Create the concise sentence (6-14 words) in the user's NATIVE language (${nativeLanguage}) that they must translate into their TARGET language (${targetLanguage}).
+4. Ensure the sentence sounds completely natural and idiomatic for real-life workplace or casual speech in ${nativeLanguage}.
+5. Provide the ideal, concise, and polished natural translation in ${targetLanguage}.
+6. Endeavor to identify and feature the most suitable word from the user's words collection within the sentence and output it in "targetWordFromCollection".
+7. List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
+8. Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected.
 
 Return STRICTLY raw JSON-only matching this schema:
 {
-  "nativeSentence": "Sentence in ${nativeLanguage}",
-  "idealTranslation": "Ideal translation in ${targetLanguage}",
+  "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words)",
+  "idealTranslation": "Concise ideal translation in ${targetLanguage}",
   "topicContext": "${scenarioObj.theme}",
+  "targetWordFromCollection": {
+    "word": "most_suitable_word_from_collection",
+    "translation": "translation_in_native",
+    "hint": "context hint"
+  },
   "keyTargetWords": [
     { "word": "word_in_target", "translation": "translation_in_native", "hint": "part of speech or context" }
   ],
   "personalityNote": "Explanation of profile alignment"
 }`;
 
-  return { prompt, chosenTheme: scenarioObj.theme };
+  return { prompt, chosenTheme: scenarioObj.theme, candidateCollectionWords };
+}
+
+/**
+ * Resolves the identified target word from the collection against the user's words array.
+ */
+function resolveTargetWordFromCollection(
+  parsed: any,
+  words?: Word[],
+  candidateWords: Word[] = []
+): ChallengeData["targetWordFromCollection"] {
+  if (!words || words.length === 0) return undefined;
+
+  const rawWord = parsed.targetWordFromCollection?.word ||
+    (typeof parsed.targetWordFromCollection === "string" ? parsed.targetWordFromCollection : undefined) ||
+    parsed.targetWord?.word ||
+    parsed.featuredWord?.word;
+
+  let matched: Word | undefined = rawWord ? findWordInCollection(words, rawWord) : undefined;
+
+  // If not directly matched, check keyTargetWords against collection
+  if (!matched && Array.isArray(parsed.keyTargetWords)) {
+    for (const kw of parsed.keyTargetWords) {
+      if (kw?.word) {
+        const found = findWordInCollection(words, kw.word);
+        if (found) {
+          matched = found;
+          break;
+        }
+      }
+    }
+  }
+
+  // If still not matched, check candidate collection words against ideal translation
+  if (!matched && candidateWords.length > 0 && parsed.idealTranslation) {
+    for (const cand of candidateWords) {
+      if (hasUserIncorporatedWord(parsed.idealTranslation, cand.word)) {
+        matched = cand;
+        break;
+      }
+    }
+  }
+
+  // Final check: check any word in words collection against ideal translation
+  if (!matched && parsed.idealTranslation) {
+    const validWords = words.filter((w) => w.completed !== false);
+    for (const w of validWords.slice(0, 15)) {
+      if (hasUserIncorporatedWord(parsed.idealTranslation, w.word)) {
+        matched = w;
+        break;
+      }
+    }
+  }
+
+  if (matched) {
+    return {
+      id: matched.id,
+      word: matched.word,
+      translation: matched.translation || parsed.targetWordFromCollection?.translation,
+      definition: matched.definition,
+      hint: parsed.targetWordFromCollection?.hint || matched.translation,
+      strength: matched.strength ?? 0,
+    };
+  }
+
+  return undefined;
 }
 
 /**
@@ -133,10 +216,10 @@ Return STRICTLY raw JSON-only matching this schema:
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
-  const { prompt, chosenTheme } = buildChallengePrompt(params, randomSeed);
+  const { prompt, chosenTheme, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
-  const systemInstruction = `You are a personalized AI Language Coach creating diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. Never repeat generic tropes or overused patterns.`;
-  const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, keyTargetWords array, and personalityNote string.`;
+  const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. Ensure sentences are concise (6-14 words) and endeavor to feature the most suitable word from the user's collection.`;
+  const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
   const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, params.llmConfig);
@@ -148,6 +231,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   }
 
   const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
+  const targetWordFromCollection = resolveTargetWordFromCollection(parsed, params.words, candidateCollectionWords);
 
   return {
     id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -156,6 +240,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
     nativeLanguage,
     topicContext: parsed.topicContext || chosenTheme || "Personalized Practice",
     idealTranslation: parsed.idealTranslation,
+    targetWordFromCollection,
     keyTargetWords: parsed.keyTargetWords || [],
     personalityNote: parsed.personalityNote,
     createdAt: new Date().toISOString(),
@@ -187,6 +272,11 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
     const data = await safeParseResponseJson(res);
 
     if (res.ok && data && data.nativeSentence) {
+      let targetWord = data.targetWordFromCollection;
+      if (!targetWord && params.words && params.words.length > 0) {
+        targetWord = resolveTargetWordFromCollection(data, params.words);
+      }
+
       return {
         id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         nativeSentence: data.nativeSentence,
@@ -194,6 +284,7 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
         nativeLanguage: params.nativeLanguage || "Vietnamese",
         topicContext: data.topicContext || "Personalized Practice",
         idealTranslation: data.idealTranslation,
+        targetWordFromCollection: targetWord,
         keyTargetWords: data.keyTargetWords || [],
         personalityNote: data.personalityNote,
         createdAt: new Date().toISOString(),
@@ -218,6 +309,7 @@ async function processChallengeTurnClientSide(params: ChallengeTurnParams): Prom
   const nativeSentence = challenge.nativeSentence;
   const idealTranslation = challenge.idealTranslation;
   const keyTargetWords = JSON.stringify(challenge.keyTargetWords || []);
+  const targetWord = challenge.targetWordFromCollection?.word || "";
 
   const formattedHistory = chatHistory.map((m: any) => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
 
@@ -227,6 +319,7 @@ CHALLENGE DETAILS:
 - Native Sentence (${nativeLanguage}): "${nativeSentence}"
 - Ideal Target Translation (${targetLanguage}): "${idealTranslation}"
 - Key Target Words: ${keyTargetWords}
+- Featured Target Word from Collection: "${targetWord}"
 - Target Language: ${targetLanguage}
 - Native Language: ${nativeLanguage}
 
@@ -251,7 +344,8 @@ IF INTENT IS "submission":
 - Calculate an overall accuracy score from 0 to 100.
 - Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
 - Provide "userTranslation": the learner's submitted translation attempt.
-- List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing.
+- SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}".
+- List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word if used).
 - List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
 - Provide "correctedSentence": the optimal target translation.
 - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing:
@@ -267,6 +361,8 @@ Return STRICTLY raw JSON matching:
     "score": 85,
     "scoreLabel": "Great Job! 👏",
     "userTranslation": "learner's submitted translation text",
+    "incorporatedTargetWord": true,
+    "targetWordUsed": "${targetWord}",
     "whatWentWell": "Praise paragraph...",
     "areasForImprovement": "Improvement paragraph...",
     "correctedSentence": "Optimal target translation",
@@ -285,8 +381,8 @@ Return STRICTLY raw JSON matching:
   }
 }`;
 
-  const systemInstruction = `You are an AI Language Evaluation Coach. Classify intent as assistance or submission and return strict JSON output.`;
-  const schemaDescription = `JSON object with intent ("assistance" | "submission"), agentReply, askedWord, and evaluation object (including userTranslation) if submission.`;
+  const systemInstruction = `You are an AI Language Evaluation Coach. Classify intent as assistance or submission and return strict JSON output. Check whether the learner incorporated the designated target word.`;
+  const schemaDescription = `JSON object with intent ("assistance" | "submission"), agentReply, askedWord, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
 
   const startTime = performance.now();
   const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig);
@@ -299,6 +395,15 @@ Return STRICTLY raw JSON matching:
 
   if (parsed.evaluation) {
     parsed.evaluation.userTranslation = parsed.evaluation.userTranslation?.trim() || userMessage.trim();
+    if (targetWord) {
+      const incorporated = parsed.evaluation.incorporatedTargetWord === true ||
+        hasUserIncorporatedWord(parsed.evaluation.userTranslation, targetWord) ||
+        hasUserIncorporatedWord(userMessage, targetWord);
+      if (incorporated) {
+        parsed.evaluation.incorporatedTargetWord = true;
+        parsed.evaluation.targetWordUsed = targetWord;
+      }
+    }
   }
 
   const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
@@ -333,6 +438,16 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
     if (res.ok && data && data.intent) {
       if (data.evaluation) {
         data.evaluation.userTranslation = data.evaluation.userTranslation?.trim() || params.userMessage.trim();
+        const targetWord = params.challenge.targetWordFromCollection?.word;
+        if (targetWord) {
+          const incorporated = data.evaluation.incorporatedTargetWord === true ||
+            hasUserIncorporatedWord(data.evaluation.userTranslation, targetWord) ||
+            hasUserIncorporatedWord(params.userMessage, targetWord);
+          if (incorporated) {
+            data.evaluation.incorporatedTargetWord = true;
+            data.evaluation.targetWordUsed = targetWord;
+          }
+        }
       }
       return data as ChallengeTurnResult;
     }
@@ -342,3 +457,4 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
     return processChallengeTurnClientSide(params);
   }
 }
+

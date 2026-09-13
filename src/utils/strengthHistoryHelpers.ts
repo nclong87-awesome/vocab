@@ -23,6 +23,8 @@ export function getReasonDefaultNote(reason: StrengthHistoryReason, delta: numbe
       return `Contextual immersion review (${sign}%)`;
     case "study_method":
       return `Studied with cognitive method (${sign}%)`;
+    case "challenge_bonus":
+      return `Used target word in translation challenge (${sign}%)`;
     case "manual_adjust":
       return `Manually updated strength (${sign}%)`;
     default:

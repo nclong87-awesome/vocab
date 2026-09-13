@@ -62,7 +62,8 @@ export type StrengthHistoryReason =
   | 'memory_decay' 
   | 'manual_adjust' 
   | 'immersion_review'
-  | 'study_method';
+  | 'study_method'
+  | 'challenge_bonus';
 
 /**
  * Compact tuple representation for persistent storage and cloud sync:
@@ -375,6 +376,14 @@ export interface ChallengeData {
   topicContext?: string;
   idealTranslation?: string;
   keyTargetWords?: ChallengeKeyWord[];
+  targetWordFromCollection?: {
+    id?: string;
+    word: string;
+    translation?: string;
+    definition?: string;
+    hint?: string;
+    strength?: number;
+  };
   personalityNote?: string;
   createdAt: string;
   provider?: string;
@@ -401,6 +410,11 @@ export interface ChallengeEvaluation {
   correctedSentence: string;
   userTranslation: string;
   suggestedVocabulary: ChallengeSuggestedVocab[];
+  incorporatedTargetWord?: boolean;
+  targetWordUsed?: string;
+  targetWordStrengthGained?: number;
+  targetWordNewStrength?: number;
+  targetWordPrevStrength?: number;
   provider?: string;
   model?: string;
   responseTimeMs?: number;

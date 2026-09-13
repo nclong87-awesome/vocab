@@ -270,4 +270,63 @@ export function normalizeWordPartOfSpeech(
   return partOfSpeech || "word";
 }
 
+/**
+ * Checks if a user's response text incorporates a specific target word,
+ * handling case insensitivity, punctuation, word boundaries, plural/singular forms,
+ * and common verb inflections (e.g. "streamlined", "streamlining", "streamlines").
+ */
+export function hasUserIncorporatedWord(text?: string | null, targetWord?: string | null): boolean {
+  if (!text || !targetWord) return false;
+  const t = text.trim().toLowerCase();
+  const tw = targetWord.trim().toLowerCase();
+  if (!t || !tw) return false;
+
+  // 1. Direct whole-word regex check with non-word boundary matching
+  const escaped = tw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const boundaryRegex = new RegExp(`(?:^|[^a-zA-Z0-9_-])${escaped}(?:$|[^a-zA-Z0-9_-])`, 'i');
+  if (boundaryRegex.test(t)) return true;
+
+  // 2. Singular / Plural regex check
+  const singular = normalizeWordForComparison(tw);
+  const plural = getPluralForComparison(tw);
+  if (singular && singular !== tw) {
+    const escSingular = singular.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${escSingular}(?:$|[^a-zA-Z0-9_-])`, 'i').test(t)) return true;
+  }
+  if (plural && plural !== tw) {
+    const escPlural = plural.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${escPlural}(?:$|[^a-zA-Z0-9_-])`, 'i').test(t)) return true;
+  }
+
+  // 3. Multi-word phrase check (e.g. phrasal verbs "look into", "bring up")
+  if (tw.includes(" ")) {
+    const phrasePattern = tw.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${phrasePattern}(?:$|[^a-zA-Z0-9_-])`, 'i').test(t)) {
+      return true;
+    }
+  }
+
+  // 4. Token-by-token check with grammatical inflections and equivalence
+  const tokens = t.replace(/[^\w\s-]/g, ' ').split(/\s+/).filter(Boolean);
+  for (const token of tokens) {
+    if (areWordsEquivalent(token, tw)) return true;
+    if (singular && normalizeWordForComparison(token) === singular) return true;
+    if (tw.length >= 4) {
+      const baseStem = tw.endsWith('e') ? tw.slice(0, -1) : tw;
+      if (
+        token === `${baseStem}ed` ||
+        token === `${baseStem}ing` ||
+        token === `${tw}s` ||
+        token === `${tw}es` ||
+        token === `${tw}d`
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+
 
