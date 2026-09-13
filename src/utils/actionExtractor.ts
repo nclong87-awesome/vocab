@@ -253,7 +253,7 @@ export function extractOrGenerateTopicActions(
   const lowerMain = (mainText || "").toLowerCase();
   const lowerUser = (lastUserMsg || "").toLowerCase();
 
-  // 1. Check if this message or context is related to "Polish Sentence" / Fix Grammar
+  // 1. Check if this message or context is related to "Polish Sentence" / Fix Grammar or "Translation Challenge"
   const isFixGrammarRelated =
     lowerMain.includes("polish sentence") ||
     lowerMain.includes("fix grammar") ||
@@ -277,8 +277,15 @@ export function extractOrGenerateTopicActions(
     lowerUser.includes("sửa ngữ pháp") ||
     resultActions.some((a) => a?.action === "fix_another" || a?.action === "copy_text");
 
-  // If this is related to Polish Sentence / Fix Grammar, return existing actions without adding sample sentences or topic suggestions
-  if (isFixGrammarRelated) {
+  const isTranslationChallengeRelated =
+    lowerMain.includes("translation challenge") ||
+    lowerMain.includes("challenge evaluation") ||
+    lowerMain.includes("thử thách dịch") ||
+    lowerMain.includes("đánh giá thử thách") ||
+    resultActions.some((a) => a?.action === "start_translation_challenge");
+
+  // If this is related to Polish Sentence / Fix Grammar or Translation Challenge, return existing actions without adding sample sentences or topic suggestions
+  if (isFixGrammarRelated || isTranslationChallengeRelated) {
     return resultActions;
   }
 

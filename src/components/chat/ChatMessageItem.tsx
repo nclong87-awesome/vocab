@@ -449,8 +449,8 @@ function ChatMessageItem({
         }
       }
 
-      // On the latest message, if no quiz options and not story, extract or generate topic choices
-      if (isLatestMessage && !hasQuizOptions && !msg.storyData) {
+      // On the latest message, if no quiz options, not story, and not translation challenge, extract or generate topic choices
+      if (isLatestMessage && !hasQuizOptions && !msg.storyData && !msg.challengeData && !msg.challengeEvaluation) {
         const content = safeMsgContent;
         const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
 
@@ -499,6 +499,13 @@ function ChatMessageItem({
             });
           }
         }
+      }
+
+      // For translation challenge messages, strictly only retain "Next Translation challenge" and "Practice overview"
+      if (msg.challengeData || msg.challengeEvaluation) {
+        rawActions = rawActions.filter(
+          a => a && (a.action === "start_translation_challenge" || a.action === "start_practice")
+        );
       }
 
       // Filter actions if this is NOT the latest message in the thread:
