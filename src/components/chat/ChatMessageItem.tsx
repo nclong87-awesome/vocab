@@ -902,6 +902,10 @@ function ChatMessageItem({
                 return msg.challengeEvaluation;
               })()}
               appLanguage={currentAppLang}
+              targetLanguage={targetLanguage}
+              nativeLanguage={nativeLanguage}
+              ttsConfig={ttsConfig}
+              llmConfig={llmConfig}
               provider={msg.provider || msg.challengeData?.provider}
               model={msg.model || msg.challengeData?.model}
               responseTimeMs={msg.responseTimeMs ?? msg.challengeData?.responseTimeMs}

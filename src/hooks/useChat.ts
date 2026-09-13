@@ -32,7 +32,7 @@ import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
-import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
+import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, hasUserIncorporatedWord } from "../utils/wordNormalization";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
@@ -1889,6 +1889,8 @@ export function useChat({
               : `\n\n💡 **Featured Target Word:** **"${evalRes.targetWordUsed}"** *(+10 Strength Points & Marked as Learned)*\nThe target word was not included in your translation, so it has been awarded +10 points and marked as learned to prevent immediate repetition in subsequent challenges.`)
             : (currentChallenge?.targetWordFromCollection ? `\n\n💡 *Featured Target Word: **"${currentChallenge.targetWordFromCollection.word}"** (+10 Strength Points & Marked as Learned)*` : "");
 
+          const finalTargetWord = targetWordText || evalRes.targetWordUsed || currentChallenge?.targetWordFromCollection?.word;
+
           const evalMsg: ChatMessage = {
             id: `challenge-eval-${Date.now()}`,
             role: "assistant",
@@ -1896,6 +1898,7 @@ export function useChat({
             timestamp: new Date().toISOString(),
             challengeData: currentChallenge,
             challengeEvaluation: evalRes,
+            audioWord: finalTargetWord || evalRes.correctedSentence,
             provider: result.provider || configForServer?.provider || "google",
             model: result.model || configForServer?.model || "gemini-2.5-flash",
             responseTimeMs: result.responseTimeMs,
@@ -1913,6 +1916,21 @@ export function useChat({
             ],
           };
           setChatMessages((prev) => [...prev, evalMsg]);
+
+          // Audio feedback: speak strictly essential information (score, ideal translation, target word)
+          const isAutoPlayEnabled = ttsConfig?.autoPlayAudioInChat ?? true;
+          if (ttsConfig && isAutoPlayEnabled) {
+            const timerId = window.setTimeout(() => {
+              const audioText = buildEssentialChallengeAudioText(
+                evalRes.score,
+                evalRes.scoreLabel,
+                evalRes.correctedSentence,
+                finalTargetWord
+              );
+              speakTextService(audioText, ttsConfig, llmConfig, targetLanguage || "English");
+            }, 300);
+            registerSpeechTimer(timerId);
+          }
         }
       } catch (err: any) {
         console.error("Error processing challenge turn:", err);

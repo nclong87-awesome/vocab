@@ -707,3 +707,37 @@ export async function speakText(
 
   await speakWithBrowser();
 }
+
+/**
+ * Constructs a clean, focused speech text for Translation Challenge feedback containing
+ * strictly essential information: score, ideal translation, and target word.
+ */
+export function buildEssentialChallengeAudioText(
+  score: number,
+  scoreLabel?: string,
+  idealTranslation?: string,
+  targetWord?: string
+): string {
+  const cleanScoreLabel = (scoreLabel || "")
+    .replace(/[\u{1F300}-\u{1F9FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, "")
+    .trim();
+
+  let text = `Score: ${score} out of 100`;
+  if (cleanScoreLabel) {
+    text += `, ${cleanScoreLabel}`;
+  }
+  text += ".";
+
+  if (idealTranslation && idealTranslation.trim()) {
+    const cleanIdeal = idealTranslation.trim().replace(/^["']|["']$/g, "");
+    text += ` Ideal translation: ${cleanIdeal}.`;
+  }
+
+  if (targetWord && targetWord.trim()) {
+    const cleanWord = targetWord.trim().replace(/^["']|["']$/g, "");
+    text += ` Target word: ${cleanWord}.`;
+  }
+
+  return text;
+}
+

@@ -9,16 +9,23 @@ import {
   Lightbulb, 
   Brain,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Volume2,
+  Square
 } from "lucide-react";
-import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab } from "../../types";
+import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig } from "../../types";
 import { isWordInCollection } from "../../utils/wordNormalization";
+import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 
 interface TranslationChallengeCardProps {
   challenge?: ChallengeData;
   evaluation?: ChallengeEvaluation;
   appLanguage?: string;
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  ttsConfig?: TTSConfig;
+  llmConfig?: LLMConfig;
   provider?: string;
   model?: string;
   responseTimeMs?: number;
@@ -33,6 +40,10 @@ export default function TranslationChallengeCard({
   challenge,
   evaluation,
   appLanguage: _appLanguage,
+  targetLanguage = "English",
+  nativeLanguage: _nativeLanguage,
+  ttsConfig,
+  llmConfig,
   provider,
   model,
   responseTimeMs,
@@ -44,10 +55,72 @@ export default function TranslationChallengeCard({
 }: TranslationChallengeCardProps) {
   const [showVocabHints, setShowVocabHints] = useState(false);
   const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
+  const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
+  const [playingItemKey, setPlayingItemKey] = useState<string | null>(null);
 
   const activeProvider = provider || challenge?.provider || evaluation?.provider;
   const activeModel = model || challenge?.model || evaluation?.model;
   const activeResponseTimeMs = responseTimeMs ?? challenge?.responseTimeMs ?? evaluation?.responseTimeMs;
+
+  const handlePlayEssentialAudio = () => {
+    if (!evaluation) return;
+
+    if (isPlayingEssentialAudio) {
+      stopSpeech();
+      setIsPlayingEssentialAudio(false);
+      return;
+    }
+
+    stopSpeech();
+    setPlayingItemKey(null);
+
+    const targetWordText = evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word;
+    const audioText = buildEssentialChallengeAudioText(
+      evaluation.score,
+      evaluation.scoreLabel,
+      evaluation.correctedSentence,
+      targetWordText
+    );
+
+    speakText(
+      audioText,
+      ttsConfig,
+      llmConfig,
+      targetLanguage || "English",
+      () => setIsPlayingEssentialAudio(true),
+      () => setIsPlayingEssentialAudio(false)
+    ).catch(() => setIsPlayingEssentialAudio(false));
+  };
+
+  const handlePlayText = (text: string, customLang?: string, itemKey?: string) => {
+    if (!text?.trim()) return;
+
+    if (playingItemKey === itemKey && itemKey) {
+      stopSpeech();
+      setPlayingItemKey(null);
+      return;
+    }
+
+    stopSpeech();
+    setIsPlayingEssentialAudio(false);
+
+    if (itemKey) setPlayingItemKey(itemKey);
+
+    speakText(
+      text,
+      ttsConfig,
+      llmConfig,
+      customLang || targetLanguage || "English",
+      () => {
+        if (itemKey) setPlayingItemKey(itemKey);
+      },
+      () => {
+        if (itemKey) setPlayingItemKey((current) => (current === itemKey ? null : current));
+      }
+    ).catch(() => {
+      if (itemKey) setPlayingItemKey((current) => (current === itemKey ? null : current));
+    });
+  };
 
   const handleAddSingleWord = (
     item:
@@ -141,7 +214,7 @@ export default function TranslationChallengeCard({
   // 1. RENDER CHALLENGE PROMPT CARD (Clean & simplified, no target word revealed)
   if (challenge && !evaluation) {
     return (
-      <div className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-4">
+      <div id="challenge-prompt-card" className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-4">
         {/* Header Badge & Topic Context */}
         <div className="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-stone-100">
           <div className="flex items-center gap-2">
@@ -161,9 +234,24 @@ export default function TranslationChallengeCard({
 
         {/* Challenge Prompt Sentence */}
         <div className="space-y-1.5">
-          <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider font-mono">
-            Translate into {challenge.targetLanguage || "English"}:
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider font-mono">
+              Translate into {challenge.targetLanguage || "English"}:
+            </span>
+            <button
+              id="btn-play-prompt-sentence"
+              type="button"
+              onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence")}
+              className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+              title="Listen sentence"
+            >
+              {playingItemKey === "prompt-sentence" ? (
+                <Square className="w-3.5 h-3.5 text-amber-600 fill-amber-600 animate-pulse" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
           <p className="text-base sm:text-lg font-semibold text-stone-900 leading-relaxed font-sans">
             "{challenge.nativeSentence}"
           </p>
@@ -180,6 +268,7 @@ export default function TranslationChallengeCard({
 
           {challenge.keyTargetWords && challenge.keyTargetWords.length > 0 && (
             <button
+              id="btn-toggle-vocab-hints"
               type="button"
               onClick={() => setShowVocabHints(!showVocabHints)}
               className="text-[11px] font-medium text-stone-600 hover:text-stone-900 flex items-center gap-1 transition-colors cursor-pointer ml-auto py-1 px-2 rounded-md hover:bg-stone-100"
@@ -200,6 +289,7 @@ export default function TranslationChallengeCard({
             <div className="flex flex-wrap gap-2">
               {challenge.keyTargetWords.map((kw, i) => {
                 const inCol = isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()];
+                const isPlayingKw = playingItemKey === `kw-${i}`;
                 return (
                   <div
                     key={i}
@@ -213,10 +303,27 @@ export default function TranslationChallengeCard({
                         : "bg-white hover:bg-stone-100 border-stone-200 hover:border-stone-300 cursor-pointer active:scale-95"
                     }`}
                   >
+                    <button
+                      id={`btn-play-clue-${i}`}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayText(kw.word, challenge.targetLanguage || "English", `kw-${i}`);
+                      }}
+                      className="text-stone-400 hover:text-stone-800 p-0.5 rounded cursor-pointer transition-colors"
+                      title={`Listen "${kw.word}"`}
+                    >
+                      {isPlayingKw ? (
+                        <Square className="w-3 h-3 text-amber-600 fill-amber-600 animate-pulse" />
+                      ) : (
+                        <Volume2 className="w-3 h-3" />
+                      )}
+                    </button>
                     <span className="font-medium text-stone-800">{kw.word}</span>
                     <span className="text-stone-500">({kw.translation})</span>
                     {(onAddIncompleteWord || onAddWord) && (
                       <button
+                        id={`btn-add-clue-${i}`}
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -259,8 +366,10 @@ export default function TranslationChallengeCard({
       (v) => addedWordKeys[v.word.toLowerCase()] || isWordInCollection(words, v.word)
     );
 
+    const targetWordText = evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word;
+
     return (
-      <div className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-3.5">
+      <div id="challenge-evaluation-card" className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-3.5">
         {/* Top Header & Score Banner */}
         <div className="flex items-center justify-between gap-3 pb-2 border-b border-stone-100 flex-wrap">
           <div className="flex items-center gap-2">
@@ -274,15 +383,46 @@ export default function TranslationChallengeCard({
               <p className="text-xs text-stone-500">{evaluation.scoreLabel}</p>
             </div>
           </div>
-          <div className={`px-3 py-1 rounded-xl border text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-2xs ${scoreColorClass}`}>
-            <span>{evaluation.score}</span>
-            <span className="text-[10px] opacity-80">/100</span>
+
+          <div className="flex items-center gap-2">
+            {/* Essential Audio Feedback Playback Button (Score + Ideal Translation + Target Word) */}
+            <button
+              id="btn-play-essential-challenge-feedback"
+              type="button"
+              onClick={handlePlayEssentialAudio}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 ${
+                isPlayingEssentialAudio
+                  ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                  : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+              }`}
+              title="Play essential feedback (Score, Ideal translation, and Target word)"
+            >
+              {isPlayingEssentialAudio ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Stop Audio</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Listen Feedback</span>
+                </>
+              )}
+            </button>
+
+            {/* Score Badge */}
+            <div className={`px-3 py-1 rounded-xl border text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-2xs ${scoreColorClass}`}>
+              <span>{evaluation.score}</span>
+              <span className="text-[10px] opacity-80">/100</span>
+            </div>
           </div>
         </div>
 
         {/* Translation Comparison Block */}
         {(() => {
           const userSub = evaluation.userTranslation?.trim();
+          const isPlayingIdeal = playingItemKey === "ideal-sentence";
+
           return (
             <div className={`grid grid-cols-1 ${userSub ? "md:grid-cols-2" : ""} gap-3`}>
               {userSub && (
@@ -296,10 +436,25 @@ export default function TranslationChallengeCard({
                 </div>
               )}
 
-              <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1">
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider font-mono block">
-                  Ideal Target Translation
-                </span>
+              <div className="p-3 bg-emerald-50/80 border border-emerald-200/80 rounded-xl space-y-1 relative group">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider font-mono block">
+                    Ideal Target Translation
+                  </span>
+                  <button
+                    id="btn-play-ideal-translation"
+                    type="button"
+                    onClick={() => handlePlayText(evaluation.correctedSentence, targetLanguage || "English", "ideal-sentence")}
+                    className="p-1 rounded-md text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100/70 transition-colors cursor-pointer"
+                    title="Listen to ideal translation"
+                  >
+                    {isPlayingIdeal ? (
+                      <Square className="w-3.5 h-3.5 fill-emerald-800 text-emerald-800 animate-pulse" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
                 <p className="text-xs sm:text-sm font-bold text-emerald-950 break-words">
                   "{evaluation.correctedSentence}"
                 </p>
@@ -320,9 +475,24 @@ export default function TranslationChallengeCard({
                   Target Word Successfully Incorporated!
                 </span>
               </div>
-              <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[11px] font-black rounded-full shadow-2xs">
-                +30 Strength Points
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  id="btn-play-target-word-incorporated"
+                  type="button"
+                  onClick={() => handlePlayText(evaluation.targetWordUsed!, targetLanguage || "English", "target-word-inc")}
+                  className="p-1 rounded-md text-emerald-800 hover:text-emerald-950 hover:bg-emerald-100 transition-colors cursor-pointer"
+                  title={`Pronounce "${evaluation.targetWordUsed}"`}
+                >
+                  {playingItemKey === "target-word-inc" ? (
+                    <Square className="w-3.5 h-3.5 fill-emerald-800 text-emerald-800 animate-pulse" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[11px] font-black rounded-full shadow-2xs">
+                  +30 Strength Points
+                </span>
+              </div>
             </div>
             <p className="text-xs text-emerald-900 leading-relaxed">
               You incorporated <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> from your collection in your translation.
@@ -336,7 +506,7 @@ export default function TranslationChallengeCard({
         )}
 
         {/* Target Word Feedback Banner (When NOT Incorporated) */}
-        {!evaluation.incorporatedTargetWord && (evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word) && (
+        {!evaluation.incorporatedTargetWord && targetWordText && (
           <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-orange-50/50 border border-amber-300 rounded-xl shadow-2xs space-y-1.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
@@ -344,15 +514,30 @@ export default function TranslationChallengeCard({
                   <Lightbulb className="w-4 h-4" />
                 </span>
                 <span className="font-bold text-xs sm:text-sm text-amber-950">
-                  Featured Target Word: "{evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word}"
+                  Featured Target Word: "{targetWordText}"
                 </span>
               </div>
-              <span className="px-2.5 py-0.5 bg-amber-600 text-white text-[11px] font-black rounded-full shadow-2xs">
-                +10 Points • Marked Learned
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  id="btn-play-target-word-featured"
+                  type="button"
+                  onClick={() => handlePlayText(targetWordText, targetLanguage || "English", "target-word-feat")}
+                  className="p-1 rounded-md text-amber-800 hover:text-amber-950 hover:bg-amber-100 transition-colors cursor-pointer"
+                  title={`Pronounce "${targetWordText}"`}
+                >
+                  {playingItemKey === "target-word-feat" ? (
+                    <Square className="w-3.5 h-3.5 fill-amber-800 text-amber-800 animate-pulse" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+                <span className="px-2.5 py-0.5 bg-amber-600 text-white text-[11px] font-black rounded-full shadow-2xs">
+                  +10 Points • Marked Learned
+                </span>
+              </div>
             </div>
             <p className="text-xs text-amber-900 leading-relaxed">
-              The featured word from your collection was <strong className="font-bold font-mono">"{evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word}"</strong>
+              The featured word from your collection was <strong className="font-bold font-mono">"{targetWordText}"</strong>
               {(challenge?.targetWordFromCollection?.translation || challenge?.targetWordFromCollection?.definition) && (
                 <span> ({challenge.targetWordFromCollection.translation || challenge.targetWordFromCollection.definition})</span>
               )}. Even though it was not included in your answer, it has been marked as learned (+10 strength points) to rotate your study queue and prevent repetition in subsequent challenges.
@@ -398,8 +583,9 @@ export default function TranslationChallengeCard({
               </span>
               {(onAddIncompleteWord || onAddMultipleWords) && !allVocabAdded && (
                 <button
+                  id="btn-add-all-challenge-vocab"
                   type="button"
-                  onClick={() => handleAddAllVocab(evaluation.suggestedVocabulary)}
+                  onClick={() => handleAddAllVocab(evaluation.suggestedVocabulary!)}
                   className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                 >
                   <Plus className="w-3 h-3" />
@@ -411,6 +597,7 @@ export default function TranslationChallengeCard({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {evaluation.suggestedVocabulary.map((v, idx) => {
                 const inCol = isWordInCollection(words, v.word) || addedWordKeys[v.word.toLowerCase()];
+                const isPlayingVocab = playingItemKey === `vocab-${idx}`;
                 return (
                   <div
                     key={idx}
@@ -426,6 +613,22 @@ export default function TranslationChallengeCard({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
+                        <button
+                          id={`btn-play-vocab-${idx}`}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayText(v.word, targetLanguage || "English", `vocab-${idx}`);
+                          }}
+                          className="text-stone-400 hover:text-stone-800 p-0.5 rounded cursor-pointer transition-colors"
+                          title={`Pronounce "${v.word}"`}
+                        >
+                          {isPlayingVocab ? (
+                            <Square className="w-3 h-3 text-amber-600 fill-amber-600 animate-pulse" />
+                          ) : (
+                            <Volume2 className="w-3 h-3" />
+                          )}
+                        </button>
                         <span className="font-bold text-xs text-stone-900 truncate">{v.word}</span>
                         {v.partOfSpeech && (
                           <span className="text-[10px] text-stone-400 font-mono">({v.partOfSpeech})</span>
@@ -436,6 +639,7 @@ export default function TranslationChallengeCard({
 
                     {(onAddIncompleteWord || onAddWord) && (
                       <button
+                        id={`btn-add-vocab-${idx}`}
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -480,4 +684,3 @@ export default function TranslationChallengeCard({
 
   return null;
 }
-
