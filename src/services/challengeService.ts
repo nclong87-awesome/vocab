@@ -1,6 +1,7 @@
 import { ChallengeData, ChallengeTurnResult, UserPersonalityProfile, Word, LLMConfig } from "../types";
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse } from "./llmClientService";
+import { sortWordsByLastPracticeTime } from "../utils/spacedRepetition";
 
 export interface GenerateChallengeParams {
   nativeLanguage?: string;
@@ -62,12 +63,12 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
   const scenarioObj = DIVERSE_SCENARIOS[Math.floor(Math.random() * DIVERSE_SCENARIOS.length)];
   const mood = COMMUNICATIVE_MOODS[Math.floor(Math.random() * COMMUNICATIVE_MOODS.length)];
 
-  // Grounding in user vocabulary words if available
+  // Grounding in user vocabulary words if available, prioritizing words based on least recent practice time
   let vocabAnchorSection = "";
   if (params.words && params.words.length > 0) {
-    const unlearned = params.words.filter((w) => !w.learned);
-    const candidatePool = unlearned.length >= 2 ? unlearned : params.words;
-    const pickedWords = [...candidatePool].sort(() => Math.random() - 0.5).slice(0, 3);
+    const validWords = params.words.filter((w) => w.completed !== false);
+    const sortedCandidates = sortWordsByLastPracticeTime(validWords);
+    const pickedWords = sortedCandidates.slice(0, 3);
     if (pickedWords.length > 0) {
       vocabAnchorSection = `
 VOCABULARY FOCUS (PRIORITIZE NATURALLY INTEGRATING 1-2 OF THESE TERMS INTO THE SENTENCE):
