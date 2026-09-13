@@ -7,6 +7,7 @@ export interface GenerateChallengeParams {
   targetLanguage?: string;
   personalityProfile?: UserPersonalityProfile | null;
   words?: Word[];
+  recentSentences?: string[];
   llmConfig?: LLMConfig;
 }
 
@@ -19,21 +20,79 @@ export interface ChallengeTurnParams {
   llmConfig?: LLMConfig;
 }
 
-/**
- * Client-side LLM call using Cloudflare Workers / direct provider for translation challenge generation
- */
-async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
+const DIVERSE_SCENARIOS = [
+  { theme: "Stakeholder Negotiation & Deadlines", scenario: "Pushing back diplomatically on an unrealistic delivery date or negotiating scope boundaries with product stakeholders." },
+  { theme: "Code Review & Quality Standards", scenario: "Delivering constructive feedback during a pull request review regarding code readability, maintainability, or testing." },
+  { theme: "System Architecture & Storage", scenario: "Evaluating database indexing, read replicas, caching invalidation, or distributed consistency trade-offs." },
+  { theme: "Incident Retrospective & Resilience", scenario: "Discussing root causes and preventative measures after unexpected production downtime without finger-pointing." },
+  { theme: "Customer Support & Feedback", scenario: "Addressing constructive user feedback regarding checkout drop-offs, UX friction, or error messaging." },
+  { theme: "Data Privacy & API Security", scenario: "Discussing credential rotation, OAuth token expiration, encryption at rest, or user privacy regulations." },
+  { theme: "Cross-Functional Alignment", scenario: "Bridging communication gaps between UI/UX designers and back-end engineers during sprint planning." },
+  { theme: "Async Collaboration & Remote Work", scenario: "Setting clear expectations for async handoffs and documentation across international time zones." },
+  { theme: "Cloud Infrastructure & Cost Optimization", scenario: "Evaluating serverless scaling costs or pruning unused cloud resources to manage operational budgets." },
+  { theme: "Team Mentorship & Knowledge Sharing", scenario: "Encouraging a junior teammate to ask clarifying questions and write concise architectural decision records." },
+  { theme: "Product Discovery & User Interviews", scenario: "Formulating unbiased questions for user discovery interviews to validate a proposed solution." },
+  { theme: "Everyday Workplace & Coffee Chat", scenario: "Chatting informally about ergonomic workstation setups, work-life balance, or weekend recharge routines." },
+  { theme: "Vendor Agreements & SLAs", scenario: "Reviewing vendor service level agreements (SLAs) or negotiating support response times." },
+  { theme: "Continuous Integration & Tooling", scenario: "Troubleshooting flaky automated integration tests that intermittently fail on the staging environment." },
+  { theme: "Mobile Usability & Low Bandwidth", scenario: "Designing offline-first synchronization or handling poor cellular network connectivity gracefully." },
+  { theme: "Executive Presentation & Value Pitch", scenario: "Pitching a tech debt refactoring proposal by framing its direct value to business reliability." }
+];
+
+const COMMUNICATIVE_MOODS = [
+  "Polite professional disagreement or proposing a pragmatic alternative",
+  "Explaining a nuanced technical concept in plain, accessible language",
+  "Diplomatically asking clarifying questions before committing to an approach",
+  "Empathizing with customer frustration while providing concrete reassurance",
+  "Highlighting a potential operational risk along with actionable mitigation steps",
+  "Celebrating a milestone achievement while outlining constructive next iterations",
+  "Summarizing consensus and defining unambiguous ownership after a lively discussion"
+];
+
+function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: string): { prompt: string; chosenTheme: string } {
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
   const profile = params.personalityProfile;
   const archetype = profile?.archetype || "Pragmatic Professional";
-  const interests = (profile?.detectedInterests || ["Workplace", "Daily Life", "Travel"]).join(", ");
+  const interests = (profile?.detectedInterests || ["Workplace", "Technology", "Daily Discussion"]).join(", ");
   const traits = (profile?.archetypeTraits || ["Practical", "Goal-oriented"]).join(", ");
   const modality = profile?.learningPreferences?.primaryModality || "contextual_examples";
 
+  // Select a random scenario and mood from the curated pool
+  const scenarioObj = DIVERSE_SCENARIOS[Math.floor(Math.random() * DIVERSE_SCENARIOS.length)];
+  const mood = COMMUNICATIVE_MOODS[Math.floor(Math.random() * COMMUNICATIVE_MOODS.length)];
+
+  // Grounding in user vocabulary words if available
+  let vocabAnchorSection = "";
+  if (params.words && params.words.length > 0) {
+    const unlearned = params.words.filter((w) => !w.learned);
+    const candidatePool = unlearned.length >= 2 ? unlearned : params.words;
+    const pickedWords = [...candidatePool].sort(() => Math.random() - 0.5).slice(0, 3);
+    if (pickedWords.length > 0) {
+      vocabAnchorSection = `
+VOCABULARY FOCUS (PRIORITIZE NATURALLY INTEGRATING 1-2 OF THESE TERMS INTO THE SENTENCE):
+${pickedWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"})`).join("\n")}`;
+    }
+  }
+
+  // Avoid recently generated sentences
+  let recentAvoidanceSection = "";
+  if (params.recentSentences && params.recentSentences.length > 0) {
+    const recentList = params.recentSentences.slice(0, 8).map((s) => `- "${s}"`).join("\n");
+    recentAvoidanceSection = `
+PREVIOUSLY GENERATED SENTENCES TO AVOID (DO NOT DUPLICATE OR RESEMBLE THESE):
+${recentList}
+`;
+  }
+
   const prompt = `Generate a single personalized translation challenge for a language learner.
 
-RANDOM DIVERSITY SEED (MUST INFLUENCE CREATIVITY & SCENARIO): ${randomSeed}
+DIVERSITY SEED: ${randomSeed}
+
+ASSIGNED SCENARIO FOR THIS CHALLENGE:
+- Scenario Theme: ${scenarioObj.theme}
+- Situation Context: ${scenarioObj.scenario}
+- Communicative Mood: ${mood}
 
 LEARNER CONTEXT:
 - Native Language: ${nativeLanguage}
@@ -42,26 +101,40 @@ LEARNER CONTEXT:
 - Learner Traits: ${traits}
 - Topics/Interests: ${interests}
 - Primary Learning Modality: ${modality}
-
-INSTRUCTIONS:
-1. Create a fresh, creative, and realistic sentence (10-22 words) in the user's NATIVE language (${nativeLanguage}) that they must translate into their TARGET language (${targetLanguage}).
-2. HIGH DIVERSITY MANDATE: Make this sentence completely distinct, novel, and creative. Choose a specific scenario (e.g. project management, creative problem solving, casual social interaction, travel logistics, personal development, technology trend, or daily discussion).
-3. Provide the ideal, polished, natural translation in ${targetLanguage}.
-4. List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
-5. Provide a short note (personalityNote) explaining why this sentence was selected for their profile.
+${vocabAnchorSection}
+${recentAvoidanceSection}
+CRITICAL DIVERSITY & ANTI-REPETITION MANDATE:
+1. STRICTLY FORBIDDEN CLICHÉS: Do NOT generate sentences about "tối ưu hóa thuật toán" (optimizing algorithms), "độ trễ" (latency), or "suy giảm hiệu năng hệ thống" (system performance degradation). These specific tropes have already been overused!
+2. Follow the assigned Scenario Theme ("${scenarioObj.theme}") and Communicative Mood ("${mood}").
+3. Create a fresh, creative, and realistic sentence (10-22 words) in the user's NATIVE language (${nativeLanguage}) that they must translate into their TARGET language (${targetLanguage}).
+4. Ensure the sentence sounds completely natural and idiomatic for real-life speech or written communication in ${nativeLanguage}.
+5. Provide the ideal, polished, natural translation in ${targetLanguage}.
+6. List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
+7. Provide a short note (personalityNote) explaining why this specific scenario was selected for their profile.
 
 Return STRICTLY raw JSON-only matching this schema:
 {
   "nativeSentence": "Sentence in ${nativeLanguage}",
   "idealTranslation": "Ideal translation in ${targetLanguage}",
-  "topicContext": "Topic label",
+  "topicContext": "${scenarioObj.theme}",
   "keyTargetWords": [
     { "word": "word_in_target", "translation": "translation_in_native", "hint": "part of speech or context" }
   ],
   "personalityNote": "Explanation of profile alignment"
 }`;
 
-  const systemInstruction = `You are a personalized AI Language Coach creating translation challenges tailored to learner personality profiles. Always output strictly raw valid JSON without markdown formatting.`;
+  return { prompt, chosenTheme: scenarioObj.theme };
+}
+
+/**
+ * Client-side LLM call using Cloudflare Workers / direct provider for translation challenge generation
+ */
+async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
+  const nativeLanguage = params.nativeLanguage || "Vietnamese";
+  const targetLanguage = params.targetLanguage || "English";
+  const { prompt, chosenTheme } = buildChallengePrompt(params, randomSeed);
+
+  const systemInstruction = `You are a personalized AI Language Coach creating diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. Never repeat generic tropes or overused patterns.`;
   const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
@@ -80,7 +153,7 @@ Return STRICTLY raw JSON-only matching this schema:
     nativeSentence: parsed.nativeSentence,
     targetLanguage,
     nativeLanguage,
-    topicContext: parsed.topicContext || "Personalized Practice",
+    topicContext: parsed.topicContext || chosenTheme || "Personalized Practice",
     idealTranslation: parsed.idealTranslation,
     keyTargetWords: parsed.keyTargetWords || [],
     personalityNote: parsed.personalityNote,

@@ -784,14 +784,35 @@ export function useChat({
       const configForServer = startTypingWithConfig(configToUse);
 
       try {
+        let recentSentences: string[] = [];
+        try {
+          const raw = sessionStorage.getItem("vocab_recent_challenge_sentences");
+          if (raw) recentSentences = JSON.parse(raw);
+        } catch {
+          // ignore storage error
+        }
+
         const personalityProfile = getUserPersonalityProfile(activeWords);
         const challengeData = await generateChallenge({
           nativeLanguage,
           targetLanguage,
           personalityProfile,
           words: activeWords,
+          recentSentences,
           llmConfig: configForServer,
         });
+
+        if (challengeData?.nativeSentence) {
+          try {
+            const updated = [
+              challengeData.nativeSentence.trim(),
+              ...recentSentences.filter((s) => s.toLowerCase() !== challengeData.nativeSentence.trim().toLowerCase()),
+            ].slice(0, 15);
+            sessionStorage.setItem("vocab_recent_challenge_sentences", JSON.stringify(updated));
+          } catch {
+            // ignore
+          }
+        }
 
         setActiveChallenge(challengeData);
 
