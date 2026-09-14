@@ -425,8 +425,9 @@ export interface ChallengeEvaluation {
 }
 
 export interface ChallengeTurnResult {
-  intent: "assistance" | "submission";
+  intent: "assistance" | "submission" | "incomplete";
   agentReply?: string;
+  suggestedActions?: { label: string; action: string; payload?: any }[];
   askedWord?: {
     word: string;
     translation?: string;

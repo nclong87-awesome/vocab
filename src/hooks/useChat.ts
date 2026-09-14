@@ -1775,28 +1775,29 @@ export function useChat({
           llmConfig: configForServer,
         });
 
-        if (result.intent === "assistance") {
-          const assistMsg: ChatMessage = {
-            id: `challenge-assist-${Date.now()}`,
+        if (result.intent === "incomplete") {
+          const shortDraft = userText.length > 25 ? userText.slice(0, 25) + "…" : userText;
+          const incompleteMsg: ChatMessage = {
+            id: `challenge-incomplete-${Date.now()}`,
             role: "assistant",
-            content: result.agentReply || "Here is a hint for your translation.",
+            content: result.agentReply || `⚠️ **Incomplete Answer Detected**\n\nIt looks like your answer was sent before you finished typing *(did you press Enter by mistake? 😉)*\n\n**Your draft:** *"${userText}"*\n\n👉 Please type your full translation below or tap the button to repopulate your draft!`,
             timestamp: new Date().toISOString(),
-            provider: result.provider || configForServer?.provider || "google",
-            model: result.model || configForServer?.model || "gemini-2.5-flash",
+            provider: result.provider || configForServer?.provider || "local",
+            model: result.model || configForServer?.model || "instant-detection",
             responseTimeMs: result.responseTimeMs,
-            suggestedWords: result.askedWord ? [{
-              word: result.askedWord.word,
-              translation: result.askedWord.translation || "",
-              definition: result.askedWord.definition || "",
-              hint: result.askedWord.hint || "Asked during challenge",
-            }] : undefined,
-            suggestedActions: [
-              { label: "🏳️ Submit empty answer", action: "submit_empty_challenge" },
-              { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
+            suggestedActions: result.suggestedActions || [
+              {
+                label: `✏️ Repopulate draft: "${shortDraft}"`,
+                action: "repopulate_input",
+                payload: { text: userText }
+              },
+              { label: "🏳️ Reveal answer & skip", action: "submit_empty_challenge" },
               { label: "🏆 Practice overview", action: "start_practice" },
             ],
           };
-          setChatMessages((prev) => [...prev, assistMsg]);
+          setChatMessages((prev) => [...prev, incompleteMsg]);
+          // Note: activeChallenge remains set so the user can finish their answer.
+          return;
         } else {
           // Submission completed!
           const evalRes = result.evaluation!;

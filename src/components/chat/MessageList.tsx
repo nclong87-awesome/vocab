@@ -40,6 +40,7 @@ interface MessageListProps {
   onUpdateWords?: (updatedWords: Word[]) => void;
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
+  onRepopulateInput?: (text: string) => void;
 }
 
 function MessageList({
@@ -74,6 +75,7 @@ function MessageList({
   onUpdateWords,
   onRetryErrorMessage,
   onCancelErrorMessage,
+  onRepopulateInput,
 }: MessageListProps) {
   const targetScrollIndex = React.useMemo(() => {
     if (messages.length === 0) return -1;
@@ -122,6 +124,7 @@ function MessageList({
               onUpdateWords={onUpdateWords}
               onRetryErrorMessage={onRetryErrorMessage}
               onCancelErrorMessage={onCancelErrorMessage}
+              onRepopulateInput={onRepopulateInput}
             />
           </Fragment>
         );

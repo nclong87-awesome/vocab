@@ -481,13 +481,15 @@ async function callLLMClientSideSingleCandidate(
       }
     }
 
-    const payload = {
+    const payload: any = {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
     };
+    if (schemaDescription) {
+      payload.generationConfig = {
+        responseMimeType: "application/json"
+      };
+    }
 
     return callWithRetry(
       async () => {
@@ -512,7 +514,7 @@ async function callLLMClientSideSingleCandidate(
         if (!text) {
           throw new Error("Empty response from Gemini API.");
         }
-        return cleanJsonResponse(text);
+        return schemaDescription ? cleanJsonResponse(text) : text;
       },
       { maxRetries: 1, provider: "gemini" }
     );
@@ -619,18 +621,20 @@ async function callLLMClientSideSingleCandidate(
     headers["X-Proxy-Key"] = proxyKeyToUse || apiKey || effectiveApiKey;
   }
 
+  const systemContent = systemInstruction + (schemaDescription ? "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." : "");
+
   const reqBody: any = {
     model: model,
     messages: [
-      { role: "system", content: systemInstruction + "\nOutput MUST be strictly valid raw JSON-only matching:\n" + schemaDescription + "\nDo not include any conversational filler outside the JSON." },
+      { role: "system", content: systemContent },
       { role: "user", content: prompt }
     ],
     max_tokens: 2500,
     stream: false
   };
 
-  // OpenRouter models often return 400 "JSON mode is not supported for this model". Only pass response_format for other supported providers.
-  if (provider === "openai" || provider === "groq" || provider === "gemini" || provider === "9flare") {
+  // OpenRouter models often return 400 "JSON mode is not supported for this model". Only pass response_format for other supported providers when JSON schema is requested.
+  if (schemaDescription && (provider === "openai" || provider === "groq" || provider === "gemini" || provider === "9flare")) {
     reqBody.response_format = { type: "json_object" };
   }
 

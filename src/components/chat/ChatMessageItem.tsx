@@ -55,6 +55,7 @@ interface ChatMessageItemProps {
   onRetryErrorMessage?: (messageId: string) => void;
   onCancelErrorMessage?: (messageId: string) => void;
   hideAskAiButton?: boolean;
+  onRepopulateInput?: (text: string) => void;
 }
 
 const createAdHocWord = (overrides: Partial<Word> & { word: string }): Word => ({
@@ -82,6 +83,15 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
   const rawLabel = String(act.label).trim();
 
   const lower = rawLabel.toLowerCase();
+
+  if (act.action === "repopulate_input" || act.action === "restore_draft") {
+    const text = act.payload?.text || "";
+    if (text) {
+      const displayDraft = text.length > 25 ? text.slice(0, 25) + "…" : text;
+      return `✏️ Repopulate draft: "${displayDraft}"`;
+    }
+    return "✏️ Repopulate draft";
+  }
 
   if (act.action === "submit_empty_challenge" || lower.includes("submit empty")) {
     return "🏳️ Submit empty answer";
@@ -174,6 +184,7 @@ function ChatMessageItem({
   onRetryErrorMessage,
   onCancelErrorMessage,
   hideAskAiButton,
+  onRepopulateInput,
 }: ChatMessageItemProps) {
   if (msg.isError) {
     return (
@@ -780,6 +791,12 @@ function ChatMessageItem({
     } else if (act.action === "start_translation_challenge") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "translation_challenge");
+    } else if (act.action === "repopulate_input" || act.action === "restore_draft") {
+      const textToRepopulate = act.payload?.text || "";
+      if (textToRepopulate && onRepopulateInput) {
+        onRepopulateInput(textToRepopulate);
+        showToast("✏️ Repopulated draft into input!");
+      }
     } else if (act.action === "submit_empty_challenge") {
       handleRecordActionUse("start_practice");
       onSendMessage("(Submit empty answer)");
@@ -1006,13 +1023,9 @@ function ChatMessageItem({
                 />
               )}
 
-              {/* Ask AI button for Quiz Question Context - placed prominently outside the word banner at the bottom of quiz feedback */}
+              {/* Ask AI button for Quiz Question Context - placed directly at the bottom of quiz feedback */}
               {!hideAskAiButton && (msg.answeredQuizWordId || msg.id.startsWith("quiz-feedback-") || msg.quizContext || answeredWord) && (
-                <div className="my-2.5 p-2.5 px-3 bg-[#f5f3ff] border border-indigo-200/90 rounded-xl flex items-center justify-between gap-2 flex-wrap shadow-2xs">
-                  <div className="flex items-center gap-1.5 text-xs text-indigo-950 font-medium">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                    <span>Have questions about this quiz question or answer?</span>
-                  </div>
+                <div className="my-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -1052,7 +1065,7 @@ function ChatMessageItem({
                       };
                       setSelectedChatWord(wordForAskAi);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white shadow-3xs transition-all hover:scale-102 active:scale-95 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-3xs transition-all hover:scale-102 active:scale-95 cursor-pointer"
                     title="Open Ask AI dialog with full quiz question context"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-indigo-200" />

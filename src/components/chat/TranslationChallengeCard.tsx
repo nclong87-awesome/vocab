@@ -17,6 +17,7 @@ import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSC
 import { isWordInCollection } from "../../utils/wordNormalization";
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
 import LlmResponseMetadata from "./LlmResponseMetadata";
+import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
 
 interface TranslationChallengeCardProps {
   challenge?: ChallengeData;
@@ -57,6 +58,7 @@ export default function TranslationChallengeCard({
   const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
   const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
   const [playingItemKey, setPlayingItemKey] = useState<string | null>(null);
+  const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
 
   const activeProvider = provider || challenge?.provider || evaluation?.provider;
   const activeModel = model || challenge?.model || evaluation?.model;
@@ -343,11 +345,40 @@ export default function TranslationChallengeCard({
           </div>
         )}
 
+        {/* Ask AI Support Button */}
+        <div className="pt-1">
+          <button
+            id="btn-ask-ai-challenge-prompt"
+            type="button"
+            onClick={() => setIsAskAiModalOpen(true)}
+            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer shadow-3xs flex items-center justify-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Ask AI about this question</span>
+          </button>
+        </div>
+
         {/* AI Response Metadata */}
         <LlmResponseMetadata
           provider={activeProvider}
           model={activeModel}
           responseTimeMs={activeResponseTimeMs}
+        />
+
+        {/* Translation Challenge Ask AI Support Modal */}
+        <TranslationChallengeAskAiModal
+          isOpen={isAskAiModalOpen}
+          onClose={() => setIsAskAiModalOpen(false)}
+          challenge={challenge}
+          evaluation={evaluation}
+          nativeLanguage={_nativeLanguage}
+          targetLanguage={targetLanguage}
+          appLanguage={_appLanguage}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          onAddIncompleteWord={onAddIncompleteWord}
+          onAddWord={onAddWord}
+          showToast={showToast}
         />
       </div>
     );
@@ -672,11 +703,40 @@ export default function TranslationChallengeCard({
           </div>
         )}
 
+        {/* Ask AI Support Button */}
+        <div className="pt-1">
+          <button
+            id="btn-ask-ai-challenge-eval"
+            type="button"
+            onClick={() => setIsAskAiModalOpen(true)}
+            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer shadow-3xs flex items-center justify-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Ask AI about this question</span>
+          </button>
+        </div>
+
         {/* AI Response Metadata (Provider, Model, Response Time) */}
         <LlmResponseMetadata
           provider={activeProvider}
           model={activeModel}
           responseTimeMs={activeResponseTimeMs}
+        />
+
+        {/* Translation Challenge Ask AI Support Modal */}
+        <TranslationChallengeAskAiModal
+          isOpen={isAskAiModalOpen}
+          onClose={() => setIsAskAiModalOpen(false)}
+          challenge={challenge}
+          evaluation={evaluation}
+          nativeLanguage={_nativeLanguage}
+          targetLanguage={targetLanguage}
+          appLanguage={_appLanguage}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          onAddIncompleteWord={onAddIncompleteWord}
+          onAddWord={onAddWord}
+          showToast={showToast}
         />
       </div>
     );

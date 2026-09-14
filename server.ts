@@ -3357,6 +3357,40 @@ app.post("/api/challenge-turn", async (req, res) => {
       });
     }
 
+    // Check for incomplete / accidental submission
+    const trimmedMsg = rawUserMsg.trim();
+    const userWords = trimmedMsg.split(/\s+/).filter(Boolean);
+    const idealWords = (challenge.idealTranslation || challenge.nativeSentence || "").split(/\s+/).filter(Boolean);
+    const trailingConnectives = ["the", "a", "an", "is", "are", "was", "were", "to", "in", "at", "of", "for", "with", "that", "this", "and", "or", "because", "if", "when", "while", "as", "how", "what", "will", "would", "should", "could", "can", "may", "might"];
+    const lastWord = userWords[userWords.length - 1]?.toLowerCase();
+    const hasPunctuation = /[.?!…]$/.test(trimmedMsg);
+
+    const isIncomplete = !hasPunctuation && (
+      (idealWords.length >= 5 && userWords.length <= 2) ||
+      ((challenge.idealTranslation || "").length >= 25 && trimmedMsg.length < 12) ||
+      (idealWords.length >= 4 && lastWord && trailingConnectives.includes(lastWord))
+    );
+
+    if (isIncomplete) {
+      const shortDraft = trimmedMsg.length > 25 ? trimmedMsg.slice(0, 25) + "…" : trimmedMsg;
+      return res.json({
+        intent: "incomplete",
+        agentReply: `⚠️ **Incomplete Answer Detected**\n\nIt looks like your answer was sent before you finished typing *(did you press Enter by mistake? 😉)*\n\n**Your draft:** *"${trimmedMsg}"*\n\n👉 Please type your full translation below or tap the button to repopulate your draft!`,
+        suggestedActions: [
+          {
+            label: `✏️ Repopulate draft: "${shortDraft}"`,
+            action: "repopulate_input",
+            payload: { text: trimmedMsg }
+          },
+          { label: "🏳️ Reveal answer & skip", action: "submit_empty_challenge" },
+          { label: "🏆 Practice overview", action: "start_practice" }
+        ],
+        provider: "server",
+        model: "instant-detection",
+        responseTimeMs: 15,
+      });
+    }
+
     const nativeSentence = challenge.nativeSentence;
     const idealTranslation = challenge.idealTranslation;
     const keyTargetWords = JSON.stringify(challenge.keyTargetWords || []);
@@ -3364,7 +3398,7 @@ app.post("/api/challenge-turn", async (req, res) => {
 
     const formattedHistory = chatHistory.map((m: any) => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
 
-    const prompt = `Evaluate or assist a language learner during a Translation Challenge.
+    const prompt = `Evaluate a language learner's translation attempt during a Translation Challenge.
 
 CHALLENGE DETAILS:
 - Native Sentence (${nativeLanguage}): "${nativeSentence}"
@@ -3377,37 +3411,28 @@ CHALLENGE DETAILS:
 CONVERSATION HISTORY SO FAR:
 ${formattedHistory || "(No prior messages in this challenge session)"}
 
-LATEST USER MESSAGE:
+LATEST USER SUBMISSION:
 "${userMessage}"
 
-TASK & INTENT CLASSIFICATION:
-Determine if the user is:
-A) ASKING FOR ASSISTANCE ("assistance"): User asks for a hint, asks how to translate a word ("what is X", "how do I say Y", "gợi ý giúp"), asks a grammar question, or requests clarification.
-B) SUBMITTING FINAL ANSWER ("submission"): User is providing their attempt to translate the complete native sentence into ${targetLanguage}.
+TASK:
+1. Check if the user's submission is an incomplete fragment (e.g. accidentally pressed Enter before finishing the sentence).
+   If it is clearly an incomplete sentence fragment, set intent: "incomplete" and provide agentReply in ${nativeLanguage} or simple English noting that their answer looks incomplete.
 
-IF INTENT IS "assistance":
-- Provide a helpful, friendly hint or answer to their query in ${nativeLanguage} (or simple ${targetLanguage}).
-- Do NOT reveal the full ideal sentence translation!
-- If they asked about a specific word or phrase, populate the "askedWord" field with word, translation, definition, and partOfSpeech.
-
-IF INTENT IS "submission":
-- Evaluate their translation against the native sentence and ideal target translation.
-- Calculate an overall accuracy score from 0 to 100.
-- Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
-- Provide "userTranslation": the learner's submitted translation attempt.
-- SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}".
-- List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word if used).
-- List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
-- Provide "correctedSentence": the optimal target translation.
-- Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing:
-  1) Any words the user explicitly asked about during the conversation history (mark askedByUser: true).
-  2) Key vocabulary terms from the challenge sentence (mark askedByUser: false).
+2. Otherwise, treat as a complete translation attempt (intent: "submission"):
+   - Evaluate their translation against the native sentence and ideal target translation.
+   - Calculate an overall accuracy score from 0 to 100.
+   - Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
+   - Provide "userTranslation": the learner's submitted translation attempt.
+   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}".
+   - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word if used).
+   - List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
+   - Provide "correctedSentence": the optimal target translation.
+   - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing key terms from the challenge.
 
 Return STRICTLY raw JSON matching:
 {
-  "intent": "assistance" | "submission",
-  "agentReply": "Helpful reply if intent is assistance",
-  "askedWord": { "word": "target_word", "translation": "native_translation", "definition": "definition", "partOfSpeech": "noun/verb", "hint": "context hint" },
+  "intent": "submission" | "incomplete",
+  "agentReply": "Helpful reply if intent is incomplete",
   "evaluation": {
     "score": 85,
     "scoreLabel": "Great Job! 👏",
@@ -3426,14 +3451,14 @@ Return STRICTLY raw JSON matching:
         "hint": "context hint",
         "example": "example sentence",
         "exampleTranslation": "example translation",
-        "askedByUser": boolean
+        "askedByUser": false
       }
     ]
   }
 }`;
 
-    const systemInstruction = `You are an AI Language Evaluation Coach. Classify intent as assistance or submission and return strict JSON output. Check whether the learner incorporated the designated target word.`;
-    const schemaDescription = `JSON object with intent ("assistance" | "submission"), agentReply, askedWord, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
+    const systemInstruction = `You are an AI Language Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
+    const schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
 
     const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, controller.signal);
     const parsed = cleanAndParseJson(rawResult);

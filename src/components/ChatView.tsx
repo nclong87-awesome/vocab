@@ -154,6 +154,17 @@ function ChatView({
     }, 50);
   }, []);
 
+  const handleRepopulateInput = useCallback((textToSet: string) => {
+    setInputText(textToSet);
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const len = textToSet.length;
+        inputRef.current.setSelectionRange?.(len, len);
+      }
+    }, 60);
+  }, []);
+
   const handleInsertToChatInput = useCallback((textToInsert: string) => {
     setInputText(prev => {
       const trimmed = prev.trim();
@@ -543,6 +554,7 @@ function ChatView({
         onUpdateWords={onUpdateWords}
         onRetryErrorMessage={onRetryErrorMessage}
         onCancelErrorMessage={onCancelErrorMessage}
+        onRepopulateInput={handleRepopulateInput}
       />
 
       {/* Quick Actions Component */}
