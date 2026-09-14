@@ -933,7 +933,6 @@ function ChatMessageItem({
               onAddWord={onAddWord}
               onAddIncompleteWord={onAddIncompleteWord}
               onAddMultipleWords={onAddMultipleWords}
-              onSubmitEmptyAnswer={() => handleActionClick({ label: "🏳️ Submit empty answer", action: "submit_empty_challenge" })}
               showToast={showToast}
             />
           ) : (
