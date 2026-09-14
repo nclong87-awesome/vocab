@@ -15,9 +15,9 @@ import {
 import { logApiRequest } from "./requestHistoryService";
 import { publishLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 
-import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from "../utils/jsonSanitizer";
+import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload, formatLlmResponseText, unescapeStringContent } from "../utils/jsonSanitizer";
 import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
-export { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload };
+export { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload, formatLlmResponseText, unescapeStringContent };
 
 export function getFastestModelForProvider(provider: string, llmConfig?: LLMConfig): string | null {
   try {

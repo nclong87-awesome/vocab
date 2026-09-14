@@ -1,5 +1,6 @@
 import React from "react";
 import { Sparkles, Volume2 } from "lucide-react";
+import { formatLlmResponseText } from "../../utils/jsonSanitizer";
 
 function parseMarkdownTokens(safeText: string): (string | React.ReactNode)[] | string {
   if (!safeText) return "";
@@ -239,7 +240,10 @@ function FormattedMessage({
   onPlayAudio,
   targetWord,
 }: FormattedMessageProps) {
-  const safeText = typeof text === "string" ? text : (text ? String(text) : "");
+  const safeText = React.useMemo(() => {
+    const raw = typeof text === "string" ? text : (text ? String(text) : "");
+    return formatLlmResponseText(raw);
+  }, [text]);
 
   const renderedContent = React.useMemo(() => {
     const lines = safeText.split("\n");

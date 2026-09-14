@@ -376,3 +376,196 @@ export function extractWordsFromPayload(data: any): any[] {
 
   return [];
 }
+
+/**
+ * Unescapes literal escape sequences (e.g. \n, \", \t) in text strings
+ */
+export function unescapeStringContent(str: string): string {
+  if (!str) return "";
+  let res = str;
+  // Replace literal escaped newlines with actual newlines
+  res = res.replace(/\\n/g, "\n");
+  res = res.replace(/\\r/g, "");
+  res = res.replace(/\\t/g, "  ");
+  // Replace literal escaped quotes with regular quotes
+  res = res.replace(/\\"/g, '"');
+  res = res.replace(/\\'/g, "'");
+  // Normalize redundant line breaks
+  res = res.replace(/\n{3,}/g, "\n\n");
+  return res.trim();
+}
+
+/**
+ * Intelligently joins string chunks/tokens from an LLM array response into coherent Markdown paragraphs
+ */
+function joinStringChunks(chunks: (string | number)[]): string {
+  let combined = "";
+  for (let idx = 0; idx < chunks.length; idx++) {
+    const rawChunk = String(chunks[idx]);
+    if (rawChunk === "") continue;
+
+    if (idx === 0 || combined === "") {
+      combined = rawChunk;
+      continue;
+    }
+
+    const prev = combined;
+    const prevEndsWithWs = /[\s\n]$/.test(prev);
+    const chunkStartsWithWs = /^[\s\n]/.test(rawChunk);
+    const chunkStartsWithPunct = /^[,.:;!?')\]}\/]/.test(rawChunk);
+    const chunkIsApostropheContinuation = /^['’][a-zA-Z]/.test(rawChunk);
+
+    if (prevEndsWithWs || chunkStartsWithWs || chunkStartsWithPunct || chunkIsApostropheContinuation) {
+      combined += rawChunk;
+    } else {
+      if (prev.endsWith("\n") || rawChunk.startsWith("\n")) {
+        combined += rawChunk;
+      } else {
+        combined += " " + rawChunk;
+      }
+    }
+  }
+
+  return unescapeStringContent(combined);
+}
+
+/**
+ * Transforms any raw LLM response (whether plain text, JSON object, array of strings, or markdown-wrapped JSON)
+ * into clean, beautifully formatted Markdown.
+ */
+export function formatLlmResponseText(rawText: string): string {
+  if (!rawText) return "";
+  let trimmed = String(rawText).trim();
+
+  // Strip <think>...</think> reasoning tags
+  trimmed = trimmed.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Strip outer markdown code blocks if the whole content is inside ```json ... ``` or ``` ... ```
+  if (trimmed.startsWith("```")) {
+    const codeBlockMatch = trimmed.match(/^```(?:json|javascript|js)?\s*([\s\S]*?)\s*```$/i);
+    if (codeBlockMatch && codeBlockMatch[1]?.trim()) {
+      trimmed = codeBlockMatch[1].trim();
+    }
+  }
+
+  // Check if text starts with [ or { and could be JSON
+  const isArrayLike = trimmed.startsWith("[") && (trimmed.endsWith("]") || trimmed.includes("]"));
+  const isObjectLike = trimmed.startsWith("{") && (trimmed.endsWith("}") || trimmed.includes("}"));
+
+  if (isArrayLike || isObjectLike) {
+    try {
+      const parsed = cleanAndParseJson(trimmed);
+
+      // Case 1: Array of items (e.g. array of token strings, or list of objects)
+      if (Array.isArray(parsed)) {
+        // 1a. Array of primitive strings / numbers / tokens
+        if (parsed.every((item) => typeof item === "string" || typeof item === "number")) {
+          return joinStringChunks(parsed);
+        }
+
+        // 1b. Array of objects (e.g. list of vocabulary terms or points)
+        if (parsed.every((item) => typeof item === "object" && item !== null)) {
+          const formattedList = parsed.map((item, idx) => {
+            if (item.word || item.term) {
+              const w = item.word || item.term;
+              const t = item.translation || item.definition || item.meaning || "";
+              const ex = item.example ? `\n> *Example:* ${item.example}` : "";
+              return `${idx + 1}. **${w}**${t ? ` — ${t}` : ""}${ex}`;
+            }
+            if (item.title || item.heading) {
+              const h = item.title || item.heading;
+              const desc = item.description || item.content || item.text || "";
+              return `**${h}**\n${desc}`;
+            }
+            return Object.entries(item)
+              .map(([k, v]) => `**${k.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}:** ${typeof v === "object" ? JSON.stringify(v) : v}`)
+              .join("\n");
+          });
+          return formattedList.join("\n\n");
+        }
+      }
+
+      // Case 2: Object representation
+      if (typeof parsed === "object" && parsed !== null) {
+        // Direct single message property wrapper
+        if (parsed.text && typeof parsed.text === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.text);
+        }
+        if (parsed.message && typeof parsed.message === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.message);
+        }
+        if (parsed.response && typeof parsed.response === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.response);
+        }
+        if (parsed.answer && typeof parsed.answer === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.answer);
+        }
+        if (parsed.content && typeof parsed.content === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.content);
+        }
+        if (parsed.output && typeof parsed.output === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.output);
+        }
+        if (parsed.reply && typeof parsed.reply === "string" && !parsed.translation && !parsed.explanation) {
+          return formatLlmResponseText(parsed.reply);
+        }
+
+        // Structured language explanation schema
+        const parts: string[] = [];
+
+        if (parsed.greeting || parsed.greetingMessage) {
+          parts.push(parsed.greeting || parsed.greetingMessage);
+        }
+        if (parsed.translation) {
+          parts.push(`**Translation:** ${parsed.translation}`);
+        }
+        if (parsed.meaning || parsed.definition) {
+          parts.push(`**Meaning:** ${parsed.meaning || parsed.definition}`);
+        }
+        if (parsed.partOfSpeech || parsed.part_of_speech) {
+          parts.push(`**Part of Speech / Nuance:** ${parsed.partOfSpeech || parsed.part_of_speech}`);
+        }
+        if (parsed.explanation || parsed.breakdown || parsed.details) {
+          parts.push(`**Explanation:**\n${parsed.explanation || parsed.breakdown || parsed.details}`);
+        }
+        if (parsed.example || parsed.exampleSentence || parsed.examples) {
+          const ex = parsed.example || parsed.exampleSentence || (Array.isArray(parsed.examples) ? parsed.examples.join("\n- ") : parsed.examples);
+          parts.push(`**Example:**\n${ex}`);
+        }
+        if (parsed.exampleTranslation || parsed.example_translation) {
+          parts.push(`*Example Translation:* ${parsed.exampleTranslation || parsed.example_translation}`);
+        }
+        if (parsed.hint || parsed.clue) {
+          parts.push(`💡 **Hint:** ${parsed.hint || parsed.clue}`);
+        }
+        if (parsed.alternatives || parsed.alternativeTranslations) {
+          const alts = Array.isArray(parsed.alternatives || parsed.alternativeTranslations)
+            ? (parsed.alternatives || parsed.alternativeTranslations).map((a: any) => `- ${typeof a === "object" ? (a.translation || a.text || JSON.stringify(a)) : a}`).join("\n")
+            : (parsed.alternatives || parsed.alternativeTranslations);
+          parts.push(`**Alternatives:**\n${alts}`);
+        }
+        if (parsed.closing || parsed.followUp || parsed.question) {
+          parts.push(parsed.closing || parsed.followUp || parsed.question);
+        }
+
+        if (parts.length > 0) {
+          return parts.join("\n\n");
+        }
+
+        return Object.entries(parsed)
+          .map(([key, val]) => `**${key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}:** ${typeof val === "object" ? JSON.stringify(val) : val}`)
+          .join("\n\n");
+      }
+    } catch {
+      // Regex fallback if JSON parsing failed but string is a string array format: ["...", "..."]
+      const stringMatches = [...trimmed.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
+      if (stringMatches.length >= 2 && trimmed.startsWith("[")) {
+        return joinStringChunks(stringMatches);
+      }
+    }
+  }
+
+  // Handle literal escaped newlines or quotes in regular text
+  return unescapeStringContent(trimmed);
+}
+
