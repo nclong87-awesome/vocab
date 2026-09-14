@@ -3295,8 +3295,70 @@ app.post("/api/challenge-turn", async (req, res) => {
   try {
     const { challenge, userMessage, chatHistory = [], nativeLanguage = "Vietnamese", targetLanguage = "English", llmConfig } = req.body;
 
-    if (!challenge || !userMessage) {
-      return res.status(400).json({ error: "Missing challenge object or userMessage" });
+    if (!challenge) {
+      return res.status(400).json({ error: "Missing challenge object" });
+    }
+
+    const rawUserMsg = String(userMessage || "").trim();
+    const lowerMsg = rawUserMsg.toLowerCase();
+    const isEmptySub = !rawUserMsg ||
+      lowerMsg === "(no answer provided)" ||
+      lowerMsg === "(submit empty answer)" ||
+      lowerMsg === "submit empty answer" ||
+      lowerMsg === "submit empty" ||
+      lowerMsg.includes("submit empty") ||
+      lowerMsg === "skip" ||
+      lowerMsg === "give up" ||
+      lowerMsg === "reveal answer" ||
+      lowerMsg === "bỏ qua" ||
+      lowerMsg === "xem đáp án";
+
+    if (isEmptySub) {
+      const targetCol = challenge.targetWordFromCollection;
+      const targetWord = targetCol?.word || (challenge.keyTargetWords?.[0]?.word || "");
+      const suggestedVocabulary: any[] = [];
+      if (targetCol) {
+        suggestedVocabulary.push({
+          word: targetCol.word,
+          translation: targetCol.translation || "",
+          definition: targetCol.definition || "",
+          hint: targetCol.hint || "Featured target word from collection",
+          partOfSpeech: "target word",
+          askedByUser: false,
+        });
+      }
+      if (Array.isArray(challenge.keyTargetWords)) {
+        for (const kw of challenge.keyTargetWords) {
+          if (kw?.word && (!targetCol || kw.word.toLowerCase() !== targetCol.word.toLowerCase())) {
+            suggestedVocabulary.push({
+              word: kw.word,
+              translation: kw.translation || "",
+              definition: "",
+              hint: kw.hint || "Key vocabulary from challenge",
+              partOfSpeech: kw.hint || "",
+              askedByUser: false,
+            });
+          }
+        }
+      }
+
+      return res.json({
+        intent: "submission",
+        evaluation: {
+          score: 0,
+          scoreLabel: "Review & Learn! 💡",
+          userTranslation: "(No answer provided)",
+          incorporatedTargetWord: false,
+          targetWordUsed: targetWord,
+          whatWentWell: "You took this opportunity to review the sentence structure and learn the target vocabulary.",
+          areasForImprovement: `Study the ideal translation: "${challenge.idealTranslation}" and practice incorporating the target word "${targetWord}" into future sentences.`,
+          correctedSentence: challenge.idealTranslation,
+          suggestedVocabulary,
+        },
+        provider: "server",
+        model: "instant-evaluation",
+        responseTimeMs: 25,
+      });
     }
 
     const nativeSentence = challenge.nativeSentence;

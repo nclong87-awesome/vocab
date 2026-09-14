@@ -1,4 +1,4 @@
-import { ChallengeData, ChallengeTurnResult, UserPersonalityProfile, Word, LLMConfig } from "../types";
+import { ChallengeData, ChallengeTurnResult, ChallengeSuggestedVocab, UserPersonalityProfile, Word, LLMConfig } from "../types";
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { sortWordsByLastPracticeTime } from "../utils/spacedRepetition";
@@ -304,10 +304,87 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
 }
 
 /**
+ * Checks whether user message is an empty submission / give-up attempt
+ */
+export function isEmptySubmissionMessage(msg?: string): boolean {
+  if (!msg || !msg.trim()) return true;
+  const lower = msg.trim().toLowerCase();
+  return (
+    lower === "(no answer provided)" ||
+    lower === "(submit empty answer)" ||
+    lower === "submit empty answer" ||
+    lower === "submit empty" ||
+    lower.includes("submit empty") ||
+    lower === "skip" ||
+    lower === "give up" ||
+    lower === "reveal answer" ||
+    lower === "bỏ qua" ||
+    lower === "xem đáp án"
+  );
+}
+
+/**
+ * Creates a complete evaluation for an empty submission showing ideal translation and target word
+ */
+export function createEmptySubmissionEvaluation(params: ChallengeTurnParams): ChallengeTurnResult {
+  const { challenge } = params;
+  const targetCol = challenge.targetWordFromCollection;
+  const targetWord = targetCol?.word || (challenge.keyTargetWords?.[0]?.word || "");
+
+  const suggestedVocabulary: ChallengeSuggestedVocab[] = [];
+  if (targetCol) {
+    suggestedVocabulary.push({
+      word: targetCol.word,
+      translation: targetCol.translation || "",
+      definition: targetCol.definition || "",
+      hint: targetCol.hint || "Featured target word from collection",
+      partOfSpeech: "target word",
+      askedByUser: false,
+    });
+  }
+  if (Array.isArray(challenge.keyTargetWords)) {
+    for (const kw of challenge.keyTargetWords) {
+      if (kw?.word && (!targetCol || kw.word.toLowerCase() !== targetCol.word.toLowerCase())) {
+        suggestedVocabulary.push({
+          word: kw.word,
+          translation: kw.translation || "",
+          definition: "",
+          hint: kw.hint || "Key vocabulary from challenge",
+          partOfSpeech: kw.hint || "",
+          askedByUser: false,
+        });
+      }
+    }
+  }
+
+  return {
+    intent: "submission",
+    evaluation: {
+      score: 0,
+      scoreLabel: "Review & Learn! 💡",
+      userTranslation: "(No answer provided)",
+      incorporatedTargetWord: false,
+      targetWordUsed: targetWord,
+      whatWentWell: "You took this opportunity to review the sentence structure and learn the target vocabulary.",
+      areasForImprovement: `Study the ideal translation: "${challenge.idealTranslation}" and practice incorporating the target word "${targetWord}" into future sentences.`,
+      correctedSentence: challenge.idealTranslation,
+      suggestedVocabulary,
+    },
+    provider: "local",
+    model: "instant-evaluation",
+    responseTimeMs: 50,
+  };
+}
+
+/**
  * Client-side LLM call using Cloudflare Workers / direct provider for evaluating challenge turn
  */
 async function processChallengeTurnClientSide(params: ChallengeTurnParams): Promise<ChallengeTurnResult> {
   const { challenge, userMessage, chatHistory = [], nativeLanguage = "Vietnamese", targetLanguage = "English", llmConfig } = params;
+
+  if (isEmptySubmissionMessage(userMessage)) {
+    return createEmptySubmissionEvaluation(params);
+  }
 
   const nativeSentence = challenge.nativeSentence;
   const idealTranslation = challenge.idealTranslation;

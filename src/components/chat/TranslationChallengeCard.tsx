@@ -33,6 +33,7 @@ interface TranslationChallengeCardProps {
   onAddWord?: (wordText?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
+  onSubmitEmptyAnswer?: () => void;
   showToast?: (msg: string) => void;
 }
 
@@ -51,6 +52,7 @@ export default function TranslationChallengeCard({
   onAddWord,
   onAddIncompleteWord,
   onAddMultipleWords,
+  onSubmitEmptyAnswer,
   showToast,
 }: TranslationChallengeCardProps) {
   const [showVocabHints, setShowVocabHints] = useState(false);
@@ -225,11 +227,24 @@ export default function TranslationChallengeCard({
               Translation Challenge
             </span>
           </div>
-          {challenge.topicContext && (
-            <span className="px-2.5 py-0.5 bg-stone-100 text-stone-700 border border-stone-200 rounded-full text-[11px] font-medium">
-              {challenge.topicContext}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {challenge.topicContext && (
+              <span className="px-2.5 py-0.5 bg-stone-100 text-stone-700 border border-stone-200 rounded-full text-[11px] font-medium">
+                {challenge.topicContext}
+              </span>
+            )}
+            {onSubmitEmptyAnswer && (
+              <button
+                id="btn-submit-empty-challenge-card"
+                type="button"
+                onClick={onSubmitEmptyAnswer}
+                className="px-2 py-0.5 bg-stone-100 hover:bg-amber-50 text-stone-600 hover:text-amber-900 border border-stone-200 hover:border-amber-300 rounded-full text-[11px] font-medium transition-all cursor-pointer shadow-3xs active:scale-95 flex items-center gap-1"
+                title="Submit empty answer to reveal ideal translation and feedback"
+              >
+                <span>🏳️ Submit empty answer</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Challenge Prompt Sentence */}

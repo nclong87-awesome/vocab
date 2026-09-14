@@ -872,6 +872,7 @@ export function useChat({
           timestamp: new Date().toISOString(),
           challengeData,
           suggestedActions: [
+            { label: "🏳️ Submit empty answer", action: "submit_empty_challenge" },
             { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
             { label: "🏆 Practice overview", action: "start_practice" },
           ],
@@ -1713,21 +1714,22 @@ export function useChat({
   };
 
   const handleSendChatMessage = async (text: string, overrideConfig?: LLMConfig) => {
-    if (!text.trim()) return;
+    if (!text.trim() && !activeChallenge) return;
 
     const configToUse = overrideConfig || llmConfig;
+    const effectiveText = text.trim() || "(No answer provided)";
 
     let newUserMessage: ChatMessage | null = null;
     setChatMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (last && last.role === "user" && last.content === text.trim()) {
+      if (last && last.role === "user" && last.content === effectiveText) {
         newUserMessage = last;
         return prev;
       }
       newUserMessage = {
         id: `msg-${Date.now()}`,
         role: "user",
-        content: text.trim(),
+        content: effectiveText,
         timestamp: new Date().toISOString(),
       };
       return [...prev, newUserMessage];
@@ -1744,7 +1746,7 @@ export function useChat({
     }
 
     if (activeChallenge) {
-      const userText = text.trim();
+      const userText = effectiveText;
       const lowerText = userText.toLowerCase();
 
       if (lowerText === "start practice" || lowerText === "practice overview" || lowerText === "🏆 practice overview") {
@@ -1789,6 +1791,7 @@ export function useChat({
               hint: result.askedWord.hint || "Asked during challenge",
             }] : undefined,
             suggestedActions: [
+              { label: "🏳️ Submit empty answer", action: "submit_empty_challenge" },
               { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
               { label: "🏆 Practice overview", action: "start_practice" },
             ],

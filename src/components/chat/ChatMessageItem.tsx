@@ -83,6 +83,10 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
 
   const lower = rawLabel.toLowerCase();
 
+  if (act.action === "submit_empty_challenge" || lower.includes("submit empty")) {
+    return "🏳️ Submit empty answer";
+  }
+
   if (act.action === "next_quiz" || lower === "next quiz" || lower === "🏆 next quiz") {
     return t("action_next_quiz", currentAppLang);
   }
@@ -501,11 +505,17 @@ function ChatMessageItem({
         }
       }
 
-      // For translation challenge messages, strictly only retain "Next Translation challenge" and "Practice overview"
+      // For translation challenge messages, retain "Submit empty answer" (for prompt), "Next Translation challenge", and "Practice overview"
       if (msg.challengeData || msg.challengeEvaluation) {
-        rawActions = rawActions.filter(
-          a => a && (a.action === "start_translation_challenge" || a.action === "start_practice")
-        );
+        if (msg.challengeEvaluation) {
+          rawActions = rawActions.filter(
+            a => a && (a.action === "start_translation_challenge" || a.action === "start_practice")
+          );
+        } else {
+          rawActions = rawActions.filter(
+            a => a && (a.action === "submit_empty_challenge" || a.action === "start_translation_challenge" || a.action === "start_practice")
+          );
+        }
       }
 
       // Filter actions if this is NOT the latest message in the thread:
@@ -770,6 +780,9 @@ function ChatMessageItem({
     } else if (act.action === "start_translation_challenge") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "translation_challenge");
+    } else if (act.action === "submit_empty_challenge") {
+      handleRecordActionUse("start_practice");
+      onSendMessage("(Submit empty answer)");
     } else if (act.action === "start_sandwich_duel") {
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
@@ -920,6 +933,7 @@ function ChatMessageItem({
               onAddWord={onAddWord}
               onAddIncompleteWord={onAddIncompleteWord}
               onAddMultipleWords={onAddMultipleWords}
+              onSubmitEmptyAnswer={() => handleActionClick({ label: "🏳️ Submit empty answer", action: "submit_empty_challenge" })}
               showToast={showToast}
             />
           ) : (
