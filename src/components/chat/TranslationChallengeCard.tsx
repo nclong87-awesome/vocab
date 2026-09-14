@@ -5,6 +5,9 @@ import {
   Sparkles, 
   CheckCircle2, 
   AlertCircle, 
+  AlertTriangle,
+  TrendingUp,
+  Trophy,
   Plus, 
   Check, 
   Lightbulb, 
@@ -400,12 +403,61 @@ export default function TranslationChallengeCard({
 
   // 2. RENDER EVALUATION RESULT CARD
   if (evaluation) {
-    const isHighScore = evaluation.score >= 85;
-    const scoreColorClass = isHighScore 
-      ? "bg-emerald-500 text-white border-emerald-600" 
-      : evaluation.score >= 70 
-      ? "bg-amber-500 text-white border-amber-600" 
-      : "bg-orange-500 text-white border-orange-600";
+    const rawScore = typeof evaluation.score === "number" ? evaluation.score : 0;
+    const clampedScore = Math.max(0, Math.min(100, Math.round(rawScore)));
+
+    // Qualitative Tiers:
+    // Good: >= 80 (80-100)
+    // So-so: 60 - 79
+    // Needs Practice / Bad: < 60
+    const isGood = clampedScore >= 80;
+    const isSoso = clampedScore >= 60 && clampedScore < 80;
+    const isBad = clampedScore < 60;
+
+    const isVietnamese = _appLanguage === "vi" || localStorage.getItem("vocab_learner_app_lang") === "vi";
+
+    const scoreVerdict = {
+      tier: isGood ? "good" : isSoso ? "soso" : "bad",
+      badgeLabel: isGood 
+        ? (clampedScore >= 90 ? (isVietnamese ? "XUẤT SẮC" : "EXCELLENT") : (isVietnamese ? "ĐẠT CHUẨN / TỐT" : "GOOD ANSWER"))
+        : isSoso 
+        ? (isVietnamese ? "TƯƠNG ĐỐI / KHÁ" : "SO-SO / FAIR")
+        : (isVietnamese ? "CẦN CẢI THIỆN" : "NEEDS PRACTICE"),
+      verdictTitle: isGood
+        ? (clampedScore >= 90 
+            ? (isVietnamese ? "Bản dịch xuất sắc • Độ chính xác cao" : "Masterful Translation • High Accuracy")
+            : (isVietnamese ? "Bản dịch tốt & tự nhiên" : "Good Translation • Natural & Clear"))
+        : isSoso
+        ? (isVietnamese ? "Bản dịch tương đối • Cần trau chuốt nhẹ" : "So-so Translation • Needs Minor Polish")
+        : (isVietnamese ? "Chưa đạt • Hãy xem câu mẫu chuẩn bên dưới" : "Needs Practice • Review Ideal Phrasing"),
+      verdictDesc: isGood
+        ? (isVietnamese ? "Bạn đã truyền tải ý nghĩa chính xác với cấu trúc câu tự nhiên và chuẩn xác." : "You captured the meaning accurately with natural phrasing and appropriate vocabulary.")
+        : isSoso
+        ? (isVietnamese ? "Hiểu được ý chính, nhưng có vài điểm ngữ pháp hoặc từ vựng cần tinh chỉnh để tự nhiên hơn." : "The main idea is conveyed, but minor grammar or vocabulary refinements are needed.")
+        : (isVietnamese ? "Câu dịch còn thiếu từ vựng quan trọng hoặc sai cấu trúc câu. Hãy đối chiếu với mẫu chuẩn bên dưới!" : "The translation had key word omissions or structural inaccuracies. Study the ideal translation below!"),
+      cardBgClass: isGood
+        ? "bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-teal-50/40 border-emerald-300"
+        : isSoso
+        ? "bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-yellow-50/40 border-amber-300"
+        : "bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-orange-50/40 border-rose-300",
+      scorePillClass: isGood
+        ? "bg-emerald-600 text-white border-emerald-700 shadow-emerald-200/50"
+        : isSoso
+        ? "bg-amber-500 text-white border-amber-600 shadow-amber-200/50"
+        : "bg-rose-600 text-white border-rose-700 shadow-rose-200/50",
+      badgeClass: isGood
+        ? "bg-emerald-600 text-white border-emerald-700"
+        : isSoso
+        ? "bg-amber-500 text-white border-amber-600"
+        : "bg-rose-600 text-white border-rose-700",
+      icon: isGood ? (
+        clampedScore >= 90 ? <Trophy className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />
+      ) : isSoso ? (
+        <TrendingUp className="w-3.5 h-3.5" />
+      ) : (
+        <AlertTriangle className="w-3.5 h-3.5" />
+      ),
+    };
 
     const allVocabAdded = evaluation.suggestedVocabulary?.every(
       (v) => addedWordKeys[v.word.toLowerCase()] || isWordInCollection(words, v.word)
@@ -457,50 +509,129 @@ export default function TranslationChallengeCard({
 
     return (
       <div id="challenge-evaluation-card" className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-3.5">
-        {/* Top Header & Score Banner */}
-        <div className="flex items-center justify-between gap-3 pb-2 border-b border-stone-100 flex-wrap">
+        {/* Top Header */}
+        <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-stone-900 text-amber-400 rounded-lg">
+            <span className="p-1.5 bg-stone-900 text-amber-400 rounded-lg shadow-2xs">
               <Sparkles className="w-4 h-4" />
             </span>
             <div>
-              <h4 className="font-bold text-sm sm:text-base text-stone-900 leading-tight">
+              <h4 className="font-bold text-xs sm:text-sm text-stone-900 leading-tight">
                 Challenge Feedback
               </h4>
-              <p className="text-xs text-stone-500">{evaluation.scoreLabel}</p>
+              <span className="text-[11px] text-stone-500 font-medium">Evaluation Results</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Essential Audio Feedback Playback Button (Score + Ideal Translation + Target Word) */}
-            <button
-              id="btn-play-essential-challenge-feedback"
-              type="button"
-              onClick={handlePlayEssentialAudio}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 ${
-                isPlayingEssentialAudio
-                  ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                  : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-              }`}
-              title="Play essential feedback (Score, Ideal translation, and Target word)"
-            >
-              {isPlayingEssentialAudio ? (
-                <>
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>Stop Audio</span>
-                </>
-              ) : (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Listen Feedback</span>
-                </>
-              )}
-            </button>
+          {/* Essential Audio Feedback Playback Button */}
+          <button
+            id="btn-play-essential-challenge-feedback"
+            type="button"
+            onClick={handlePlayEssentialAudio}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 ${
+              isPlayingEssentialAudio
+                ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+            }`}
+            title="Play essential feedback (Score, Ideal translation, and Target word)"
+          >
+            {isPlayingEssentialAudio ? (
+              <>
+                <Square className="w-3.5 h-3.5 fill-current" />
+                <span>Stop Audio</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-3.5 h-3.5 text-amber-600" />
+                <span>Listen Feedback</span>
+              </>
+            )}
+          </button>
+        </div>
 
-            {/* Score Badge */}
-            <div className={`px-3 py-1 rounded-xl border text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-2xs ${scoreColorClass}`}>
-              <span>{evaluation.score}</span>
-              <span className="text-[10px] opacity-80">/100</span>
+        {/* Enhanced Obvious Score Showcase Banner */}
+        <div id="score-showcase-banner" className={`p-4 sm:p-4.5 rounded-2xl border ${scoreVerdict.cardBgClass} space-y-3 shadow-xs`}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Left: Big Score & Performance Level */}
+            <div className="flex items-center gap-3.5">
+              {/* Big Score Block */}
+              <div className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl border flex items-baseline gap-1 shadow-xs ${scoreVerdict.scorePillClass}`}>
+                <span className="text-2xl sm:text-3xl font-black tracking-tight leading-none">{clampedScore}</span>
+                <span className="text-xs sm:text-sm font-bold opacity-80 leading-none">/100</span>
+              </div>
+
+              {/* Status Level & Title */}
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-2xs ${scoreVerdict.badgeClass}`}>
+                    {scoreVerdict.icon}
+                    <span>{scoreVerdict.badgeLabel}</span>
+                  </span>
+                  {evaluation.scoreLabel && (
+                    <span className="text-xs text-stone-600 font-semibold">
+                      {evaluation.scoreLabel}
+                    </span>
+                  )}
+                </div>
+                <h5 className="text-xs sm:text-sm font-bold text-stone-900 leading-tight">
+                  {scoreVerdict.verdictTitle}
+                </h5>
+              </div>
+            </div>
+          </div>
+
+          {/* Verdict Description */}
+          <p className="text-xs text-stone-700 leading-relaxed font-medium">
+            {scoreVerdict.verdictDesc}
+          </p>
+
+          {/* 3-Zone Visual Meter with Score Pointer Marker */}
+          <div className="space-y-1.5 pt-1 border-t border-stone-200/50">
+            {/* Segmented Track */}
+            <div className="relative w-full h-3 bg-stone-200/70 rounded-full overflow-hidden flex border border-stone-300/60 shadow-inner">
+              {/* Zone 1: Bad / Needs Work (0 to 59) -> 60% */}
+              <div className="h-full bg-rose-200 border-r border-white relative" style={{ width: "60%" }}>
+                <div 
+                  className="h-full bg-gradient-to-r from-rose-500 to-rose-600 transition-all duration-700" 
+                  style={{ width: clampedScore < 60 ? `${(clampedScore / 60) * 100}%` : "100%" }} 
+                />
+              </div>
+
+              {/* Zone 2: So-so / Fair (60 to 79) -> 20% */}
+              <div className="h-full bg-amber-200 border-r border-white relative" style={{ width: "20%" }}>
+                {clampedScore >= 60 && (
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-700" 
+                    style={{ width: clampedScore < 80 ? `${((clampedScore - 60) / 20) * 100}%` : "100%" }} 
+                  />
+                )}
+              </div>
+
+              {/* Zone 3: Good / Excellent (80 to 100) -> 20% */}
+              <div className="h-full bg-emerald-200 relative" style={{ width: "20%" }}>
+                {clampedScore >= 80 && (
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-700" 
+                    style={{ width: `${((clampedScore - 80) / 20) * 100}%` }} 
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Zone Markers / Legend */}
+            <div className="flex items-center justify-between text-[11px] font-mono font-medium">
+              <span className={`flex items-center gap-1 transition-all ${isBad ? "font-bold text-rose-700 scale-105 origin-left" : "text-stone-400 opacity-80"}`}>
+                <span className={`w-2 h-2 rounded-full ${isBad ? "bg-rose-500 ring-2 ring-rose-300 animate-pulse" : "bg-rose-300"}`} />
+                <span>Needs Work (&lt;60)</span>
+              </span>
+              <span className={`flex items-center gap-1 transition-all ${isSoso ? "font-bold text-amber-700 scale-105" : "text-stone-400 opacity-80"}`}>
+                <span className={`w-2 h-2 rounded-full ${isSoso ? "bg-amber-500 ring-2 ring-amber-300 animate-pulse" : "bg-amber-300"}`} />
+                <span>So-so (60–79)</span>
+              </span>
+              <span className={`flex items-center gap-1 transition-all ${isGood ? "font-bold text-emerald-700 scale-105 origin-right" : "text-stone-400 opacity-80"}`}>
+                <span className={`w-2 h-2 rounded-full ${isGood ? "bg-emerald-500 ring-2 ring-emerald-300 animate-pulse" : "bg-emerald-300"}`} />
+                <span>Good (80–100)</span>
+              </span>
             </div>
           </div>
         </div>
