@@ -387,6 +387,7 @@ export interface ChallengeData {
     definition?: string;
     hint?: string;
     strength?: number;
+    partOfSpeech?: string;
   };
   personalityNote?: string;
   createdAt: string;

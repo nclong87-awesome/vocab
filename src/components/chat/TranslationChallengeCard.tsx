@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { AnimatePresence } from "motion/react";
 import { 
   Languages, 
   Sparkles, 
@@ -14,10 +15,13 @@ import {
   Square
 } from "lucide-react";
 import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig } from "../../types";
-import { isWordInCollection } from "../../utils/wordNormalization";
+import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
+import WordReviewedBanner from "./WordReviewedBanner";
+import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
+import WordChatModal from "./WordChatModal";
 
 interface TranslationChallengeCardProps {
   challenge?: ChallengeData;
@@ -34,6 +38,10 @@ interface TranslationChallengeCardProps {
   onAddWord?: (wordText?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;
+  onUpdateWords?: (updatedWords: Word[]) => void;
+  onPlayAudio?: (wordText: string) => void;
+  onViewHistory?: (word: Word) => void;
+  onAskAi?: (word: Word) => void;
   showToast?: (msg: string) => void;
 }
 
@@ -52,6 +60,10 @@ export default function TranslationChallengeCard({
   onAddWord,
   onAddIncompleteWord,
   onAddMultipleWords,
+  onUpdateWords,
+  onPlayAudio,
+  onViewHistory,
+  onAskAi,
   showToast,
 }: TranslationChallengeCardProps) {
   const [showVocabHints, setShowVocabHints] = useState(false);
@@ -59,6 +71,8 @@ export default function TranslationChallengeCard({
   const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
   const [playingItemKey, setPlayingItemKey] = useState<string | null>(null);
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
+  const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
+  const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
 
   const activeProvider = provider || challenge?.provider || evaluation?.provider;
   const activeModel = model || challenge?.model || evaluation?.model;
@@ -399,6 +413,48 @@ export default function TranslationChallengeCard({
 
     const targetWordText = evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word;
 
+    const reviewedWord = useMemo(() => {
+      const rawTargetWord = evaluation?.targetWordUsed || challenge?.targetWordFromCollection?.word;
+      if (!rawTargetWord && !challenge?.targetWordFromCollection) return null;
+
+      let matchedWord: Word | undefined = undefined;
+      if (challenge?.targetWordFromCollection?.id && words?.length) {
+        matchedWord = words.find((w) => w.id === challenge.targetWordFromCollection?.id);
+      }
+      if (!matchedWord && rawTargetWord && words?.length) {
+        matchedWord = findWordInCollection(words, rawTargetWord);
+      }
+
+      if (matchedWord) {
+        if (typeof evaluation?.targetWordNewStrength === "number" && matchedWord.strength !== evaluation.targetWordNewStrength) {
+          return {
+            ...matchedWord,
+            strength: evaluation.targetWordNewStrength,
+          };
+        }
+        return matchedWord;
+      }
+
+      const fallbackBase = challenge?.targetWordFromCollection;
+      const wordText = rawTargetWord || fallbackBase?.word || "";
+      if (!wordText) return null;
+
+      return {
+        id: fallbackBase?.id || `word-${wordText.toLowerCase().replace(/\s+/g, "_")}`,
+        word: wordText,
+        partOfSpeech: fallbackBase?.partOfSpeech || "expression",
+        translation: fallbackBase?.translation || "",
+        definition: fallbackBase?.definition || fallbackBase?.translation || "",
+        strength: typeof evaluation?.targetWordNewStrength === "number" 
+          ? evaluation.targetWordNewStrength 
+          : (fallbackBase?.strength ?? 0),
+        learned: true,
+        starred: false,
+        createdAt: new Date().toISOString(),
+        lastReviewed: new Date().toISOString(),
+      } as Word;
+    }, [words, evaluation, challenge]);
+
     return (
       <div id="challenge-evaluation-card" className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-3.5">
         {/* Top Header & Score Banner */}
@@ -493,6 +549,26 @@ export default function TranslationChallengeCard({
             </div>
           );
         })()}
+
+        {/* Word Reviewed Banner */}
+        {reviewedWord && (
+          <WordReviewedBanner
+            word={reviewedWord}
+            prefixLabel="Word Reviewed:"
+            onPlayAudio={(text) => {
+              if (onPlayAudio) onPlayAudio(text);
+              else handlePlayText(text, targetLanguage || "English", "reviewed-word-audio");
+            }}
+            onViewHistory={(w) => {
+              if (onViewHistory) onViewHistory(w);
+              else setSelectedHistoryWord(w);
+            }}
+            onAskAi={(w) => {
+              if (onAskAi) onAskAi(w);
+              else setSelectedChatWord(w);
+            }}
+          />
+        )}
 
         {/* Target Word Incorporation Celebration Banner */}
         {evaluation.incorporatedTargetWord && evaluation.targetWordUsed && (
@@ -738,6 +814,38 @@ export default function TranslationChallengeCard({
           onAddWord={onAddWord}
           showToast={showToast}
         />
+
+        {/* Strength History Modal Fallback */}
+        <AnimatePresence>
+          {selectedHistoryWord && (
+            <StrengthHistoryModal
+              word={selectedHistoryWord}
+              onClose={() => setSelectedHistoryWord(null)}
+              onUpdateWord={(updated) => {
+                setSelectedHistoryWord(updated);
+                if (onUpdateWords && words) {
+                  onUpdateWords(words.map((w) => (w.id === updated.id ? updated : w)));
+                }
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Word Chat Modal Fallback */}
+        <AnimatePresence>
+          {selectedChatWord && (
+            <WordChatModal
+              word={selectedChatWord}
+              isOpen={Boolean(selectedChatWord)}
+              onClose={() => setSelectedChatWord(null)}
+              targetLanguage={targetLanguage}
+              nativeLanguage={_nativeLanguage}
+              ttsConfig={ttsConfig}
+              llmConfig={llmConfig}
+              onAddWord={onAddWord ? (w) => onAddWord(w.word, w.definition || w.translation) : undefined}
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }

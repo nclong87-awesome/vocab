@@ -947,9 +947,13 @@ function ChatMessageItem({
               model={msg.model || msg.challengeData?.model}
               responseTimeMs={msg.responseTimeMs ?? msg.challengeData?.responseTimeMs}
               words={words}
+              onUpdateWords={onUpdateWords}
               onAddWord={onAddWord}
               onAddIncompleteWord={onAddIncompleteWord}
               onAddMultipleWords={onAddMultipleWords}
+              onViewHistory={(w) => setSelectedHistoryWord(w)}
+              onAskAi={(w) => setSelectedChatWord(w)}
+              onPlayAudio={(text) => speakText(text, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
               showToast={showToast}
             />
           ) : (
