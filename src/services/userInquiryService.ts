@@ -1,7 +1,7 @@
 import { recordLearningInteraction } from "./userPersonalityProfileService";
 import { QuizContextData } from "../types";
 
-export type InquirySource = "main_chat" | "ask_ai_dialog" | "quiz_intervention" | "quick_action" | "add_word_modal";
+export type InquirySource = "main_chat" | "ask_ai_dialog" | "quiz_intervention" | "quick_action" | "add_word_modal" | "translation_challenge";
 
 export interface UserInquiryRecord {
   id: string;

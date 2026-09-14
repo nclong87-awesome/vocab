@@ -38,7 +38,7 @@ import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGen
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 import { ChallengeData } from "../types";
 import { generateChallenge, processChallengeTurn } from "../services/challengeService";
-import { getUserPersonalityProfile } from "../services/userPersonalityProfileService";
+import { getUserPersonalityProfile, recordLearningInteraction } from "../services/userPersonalityProfileService";
 
 interface UseChatProps {
   words: Word[];
@@ -1925,6 +1925,14 @@ export function useChat({
             ],
           };
           setChatMessages((prev) => [...prev, evalMsg]);
+
+          // Record learning interaction for continuous milestone profiling
+          recordLearningInteraction("study_review", {
+            source: "translation_challenge",
+            word: finalTargetWord,
+            score: evalRes.score,
+            incorporatedTargetWord: evalRes.incorporatedTargetWord,
+          });
         }
       } catch (err: any) {
         console.error("Error processing challenge turn:", err);

@@ -20,6 +20,7 @@ import { callLLMClientSideWithMeta, getOverrideConfig, formatLlmResponseText } f
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
+import { recordUserInquiry } from "../../services/userInquiryService";
 
 interface TranslationChallengeAskAiModalProps {
   isOpen: boolean;
@@ -176,6 +177,12 @@ Ask me anything about the feedback, word nuances, or grammar!`;
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend !== undefined ? textToSend : inputText).trim();
     if (!query || isTyping) return;
+
+    recordUserInquiry(query, {
+      source: "ask_ai_dialog",
+      word: challenge?.targetWordFromCollection?.word || undefined,
+      category: challenge?.topicContext || "Translation Challenge",
+    });
 
     setErrorMsg(null);
     setInputText("");
