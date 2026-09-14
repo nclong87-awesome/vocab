@@ -84,6 +84,9 @@ WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
 - Carefully evaluate the candidate words from the user's collection above.
 - Endeavor to identify the SINGLE MOST SUITABLE word from this collection that naturally fits within the assigned scenario ("${scenarioObj.theme}").
 - Construct a concise sentence whose ideal translation naturally incorporates this identified word.
+- CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
+  NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
+  Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
 - Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.`;
     }
   }
@@ -119,16 +122,16 @@ ${recentAvoidanceSection}
 CRITICAL MANDATES:
 1. CONCISE SENTENCE STRUCTURE: Aim for a concise, compact, and punchy sentence structure (strictly 6 to 14 words). Avoid verbose rambling or convoluted multi-clause sentences. Keep the phrasing natural, modern, clear, and direct.
 2. Follow the assigned Scenario Theme ("${scenarioObj.theme}") and Communicative Mood ("${mood}").
-3. Create the concise sentence (6-14 words) in the user's NATIVE language (${nativeLanguage}) that they must translate into their TARGET language (${targetLanguage}).
+3. ZERO TARGET-LANGUAGE LOANWORDS IN NATIVE SENTENCE: Create the concise sentence (6-14 words) entirely in the user's NATIVE language (${nativeLanguage}). The 'nativeSentence' MUST NOT contain any ${targetLanguage} words, English loanwords, or untranslated target terms. Express every concept strictly in natural ${nativeLanguage}.
 4. Ensure the sentence sounds completely natural and idiomatic for real-life workplace or casual speech in ${nativeLanguage}.
-5. Provide the ideal, concise, and polished natural translation in ${targetLanguage}.
+5. Provide the ideal, concise, and polished natural translation in ${targetLanguage}. The target vocabulary word MUST appear in this 'idealTranslation'.
 6. Endeavor to identify and feature the most suitable word from the user's words collection within the sentence and output it in "targetWordFromCollection".
 7. List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
 8. Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected.
 
 Return STRICTLY raw JSON-only matching this schema:
 {
-  "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words)",
+  "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words, ZERO ${targetLanguage} words)",
   "idealTranslation": "Concise ideal translation in ${targetLanguage}",
   "topicContext": "${scenarioObj.theme}",
   "targetWordFromCollection": {
@@ -211,6 +214,49 @@ function resolveTargetWordFromCollection(
 }
 
 /**
+ * Sanitizes the native sentence to ensure target words (in targetLanguage, e.g. English)
+ * are not accidentally left untranslated as loanwords in the native sentence (e.g. Vietnamese).
+ */
+export function sanitizeNativeSentence(
+  nativeSentence: string,
+  targetWord?: { word: string; translation?: string },
+  keyTargetWords?: Array<{ word: string; translation?: string }>
+): string {
+  if (!nativeSentence || typeof nativeSentence !== "string") return nativeSentence;
+  let result = nativeSentence;
+
+  const pairsToReplace: Array<{ word: string; translation: string }> = [];
+
+  if (targetWord?.word && targetWord?.translation) {
+    pairsToReplace.push({ word: targetWord.word.trim(), translation: targetWord.translation.trim() });
+  }
+
+  if (Array.isArray(keyTargetWords)) {
+    for (const kw of keyTargetWords) {
+      if (kw?.word && kw?.translation) {
+        pairsToReplace.push({ word: kw.word.trim(), translation: kw.translation.trim() });
+      }
+    }
+  }
+
+  for (const { word, translation } of pairsToReplace) {
+    if (!word || !translation || word.toLowerCase() === translation.toLowerCase()) continue;
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escaped}\\b`, "gi");
+    if (regex.test(result)) {
+      result = result.replace(regex, (matched) => {
+        if (matched[0] === matched[0].toUpperCase() && matched[0] !== matched[0].toLowerCase()) {
+          return translation.charAt(0).toUpperCase() + translation.slice(1);
+        }
+        return translation.toLowerCase();
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Client-side LLM call using Cloudflare Workers / direct provider for translation challenge generation
  */
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
@@ -219,7 +265,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const targetLanguage = params.targetLanguage || "English";
   const { prompt, chosenTheme, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
-  const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. Ensure sentences are concise (6-14 words) and endeavor to feature the most suitable word from the user's collection.`;
+  const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, concise (6-14 words), and its idealTranslation must incorporate the target word.`;
   const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
@@ -234,9 +280,15 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
   const targetWordFromCollection = resolveTargetWordFromCollection(parsed, params.words, candidateCollectionWords);
 
+  const sanitizedSentence = sanitizeNativeSentence(
+    parsed.nativeSentence,
+    targetWordFromCollection || parsed.targetWordFromCollection,
+    parsed.keyTargetWords
+  );
+
   return {
     id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    nativeSentence: parsed.nativeSentence,
+    nativeSentence: sanitizedSentence,
     targetLanguage,
     nativeLanguage,
     topicContext: parsed.topicContext || chosenTheme || "Personalized Practice",
@@ -280,9 +332,15 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
         targetWord = resolveTargetWordFromCollection(data, effectiveParams.words);
       }
 
+      const sanitizedSentence = sanitizeNativeSentence(
+        data.nativeSentence,
+        targetWord || data.targetWordFromCollection,
+        data.keyTargetWords
+      );
+
       return {
         id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        nativeSentence: data.nativeSentence,
+        nativeSentence: sanitizedSentence,
         targetLanguage: effectiveParams.targetLanguage || "English",
         nativeLanguage: effectiveParams.nativeLanguage || "Vietnamese",
         topicContext: data.topicContext || "Personalized Practice",
