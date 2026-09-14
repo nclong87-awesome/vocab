@@ -510,25 +510,25 @@ export default function TranslationChallengeCard({
     return (
       <div id="challenge-evaluation-card" className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-3.5">
         {/* Top Header */}
-        <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 bg-stone-900 text-amber-400 rounded-lg shadow-2xs">
+        <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="p-1.5 bg-stone-900 text-amber-400 rounded-lg shadow-2xs shrink-0">
               <Sparkles className="w-4 h-4" />
             </span>
-            <div>
-              <h4 className="font-bold text-xs sm:text-sm text-stone-900 leading-tight">
+            <div className="min-w-0">
+              <h4 className="font-bold text-xs sm:text-sm text-stone-900 leading-tight truncate">
                 Challenge Feedback
               </h4>
-              <span className="text-[11px] text-stone-500 font-medium">Evaluation Results</span>
+              <span className="text-[11px] text-stone-500 font-medium block truncate">Evaluation Results</span>
             </div>
           </div>
 
-          {/* Essential Audio Feedback Playback Button */}
+          {/* Essential Audio Feedback Playback Button - Top Right */}
           <button
             id="btn-play-essential-challenge-feedback"
             type="button"
             onClick={handlePlayEssentialAudio}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 ${
+            className={`shrink-0 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 whitespace-nowrap ${
               isPlayingEssentialAudio
                 ? "bg-amber-500 text-white border-amber-600 animate-pulse"
                 : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
@@ -542,7 +542,7 @@ export default function TranslationChallengeCard({
               </>
             ) : (
               <>
-                <Volume2 className="w-3.5 h-3.5 text-amber-600" />
+                <Volume2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 <span>Listen Feedback</span>
               </>
             )}
@@ -619,18 +619,18 @@ export default function TranslationChallengeCard({
             </div>
 
             {/* Zone Markers / Legend */}
-            <div className="flex items-center justify-between text-[11px] font-mono font-medium">
-              <span className={`flex items-center gap-1 transition-all ${isBad ? "font-bold text-rose-700 scale-105 origin-left" : "text-stone-400 opacity-80"}`}>
-                <span className={`w-2 h-2 rounded-full ${isBad ? "bg-rose-500 ring-2 ring-rose-300 animate-pulse" : "bg-rose-300"}`} />
-                <span>Needs Work (&lt;60)</span>
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono font-medium gap-1">
+              <span className={`flex items-center gap-1 shrink-0 transition-all ${isBad ? "font-bold text-rose-700" : "text-stone-400 opacity-80"}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isBad ? "bg-rose-500 ring-2 ring-rose-300 animate-pulse" : "bg-rose-300"}`} />
+                <span className="whitespace-nowrap">&lt;60 Needs Work</span>
               </span>
-              <span className={`flex items-center gap-1 transition-all ${isSoso ? "font-bold text-amber-700 scale-105" : "text-stone-400 opacity-80"}`}>
-                <span className={`w-2 h-2 rounded-full ${isSoso ? "bg-amber-500 ring-2 ring-amber-300 animate-pulse" : "bg-amber-300"}`} />
-                <span>So-so (60–79)</span>
+              <span className={`flex items-center gap-1 shrink-0 transition-all ${isSoso ? "font-bold text-amber-700" : "text-stone-400 opacity-80"}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isSoso ? "bg-amber-500 ring-2 ring-amber-300 animate-pulse" : "bg-amber-300"}`} />
+                <span className="whitespace-nowrap">60–79 So-so</span>
               </span>
-              <span className={`flex items-center gap-1 transition-all ${isGood ? "font-bold text-emerald-700 scale-105 origin-right" : "text-stone-400 opacity-80"}`}>
-                <span className={`w-2 h-2 rounded-full ${isGood ? "bg-emerald-500 ring-2 ring-emerald-300 animate-pulse" : "bg-emerald-300"}`} />
-                <span>Good (80–100)</span>
+              <span className={`flex items-center gap-1 shrink-0 transition-all ${isGood ? "font-bold text-emerald-700" : "text-stone-400 opacity-80"}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${isGood ? "bg-emerald-500 ring-2 ring-emerald-300 animate-pulse" : "bg-emerald-300"}`} />
+                <span className="whitespace-nowrap">80–100 Good</span>
               </span>
             </div>
           </div>
