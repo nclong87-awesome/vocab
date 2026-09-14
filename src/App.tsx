@@ -26,6 +26,7 @@ import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
 import OnboardingModal from "./components/OnboardingModal";
 import WordAddModal from "./components/chat/WordAddModal";
+import EnrichedWordsGalleryModal from "./components/deckManager/EnrichedWordsGalleryModal";
 
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
@@ -129,6 +130,24 @@ export default function App() {
     }
   }, [clearToastTimeout]);
 
+  // Enriched Words Gallery Modal State
+  const [isEnrichedGalleryOpen, setIsEnrichedGalleryOpen] = useState(false);
+  const [enrichedGalleryWords, setEnrichedGalleryWords] = useState<Word[]>([]);
+  const [enrichedGalleryInitialIndex, setEnrichedGalleryInitialIndex] = useState(0);
+
+  const handleOpenEnrichedGallery = useCallback((galleryWords?: Word[], initialIndex: number = 0) => {
+    let listToDisplay = galleryWords;
+    if (!listToDisplay || listToDisplay.length === 0) {
+      listToDisplay = words.filter(w => w.completed === true);
+    }
+    if (!listToDisplay || listToDisplay.length === 0) {
+      listToDisplay = words;
+    }
+    setEnrichedGalleryWords(listToDisplay);
+    setEnrichedGalleryInitialIndex(initialIndex);
+    setIsEnrichedGalleryOpen(true);
+  }, [words]);
+
   // Background enrichment sub-system
   const {
     autoEnrichEnabled,
@@ -138,7 +157,8 @@ export default function App() {
     cancelEnrichment,
     progress: batchEnrichProgress,
     isBatchRunning,
-    activeEnrichingIds
+    activeEnrichingIds,
+    recentlyEnrichedWords
   } = useBackgroundEnrichment({
     words,
     targetLanguage,
@@ -146,7 +166,8 @@ export default function App() {
     llmConfig,
     onUpdateWord: handleUpdateSingleWord,
     onUpdateWords: handleUpdateWords,
-    showToast: (msg) => showToast(msg, 4000),
+    showToast: (msg, duration) => showToast(msg, duration || 5000),
+    onOpenEnrichedGallery: handleOpenEnrichedGallery,
     appLanguage
   });
 
@@ -556,6 +577,8 @@ export default function App() {
               enrichmentProgress={batchEnrichProgress}
               activeEnrichingIds={activeEnrichingIds}
               onNavigateToCollection={() => setSidePanelTab("collection")}
+              onOpenEnrichedGallery={handleOpenEnrichedGallery}
+              recentlyEnrichedWords={recentlyEnrichedWords}
             />
           )}
 
@@ -736,6 +759,26 @@ export default function App() {
           handleAddCustomWord(newWord, ttsConfig, llmConfig, targetLanguage);
         }}
         showToast={showToast}
+      />
+
+      {/* Enriched Words Gallery Modal */}
+      <EnrichedWordsGalleryModal
+        isOpen={isEnrichedGalleryOpen}
+        words={enrichedGalleryWords}
+        initialIndex={enrichedGalleryInitialIndex}
+        onClose={() => setIsEnrichedGalleryOpen(false)}
+        onUpdateWord={handleUpdateSingleWord}
+        onUpdateWords={handleUpdateWords}
+        onDeleteWord={handleDeleteWord}
+        onToggleStar={handleToggleStar}
+        onToggleLearned={handleToggleLearned}
+        onAddWord={handleOpenAddWordModal}
+        targetLanguage={targetLanguage}
+        nativeLanguage={nativeLanguage}
+        appLanguage={appLanguage}
+        llmConfig={llmConfig}
+        ttsConfig={ttsConfig}
+        onLlmApiError={handleAiApiError}
       />
 
       {/* Global Progress-Aware Toast Notification */}

@@ -42,6 +42,14 @@ export interface EnrichmentResult {
   error?: string;
 }
 
+export interface BatchEnrichmentSummary {
+  total: number;
+  completedCount: number;
+  multipleDefCount: number;
+  errorCount: number;
+  enrichedWords: Word[];
+}
+
 export interface BatchEnrichmentProgress {
   isRunning: boolean;
   total: number;
@@ -280,7 +288,7 @@ export async function enrichIncompleteWordsQueue(
     nativeLanguage: string;
     llmConfig?: LLMConfig;
     onWordUpdated: (updatedWord: Word, res: EnrichmentResult) => void;
-    onComplete?: (summary: { total: number; completedCount: number; multipleDefCount: number; errorCount: number }) => void;
+    onComplete?: (summary: BatchEnrichmentSummary) => void;
   }
 ): Promise<void> {
   if (incompleteWords.length === 0) return;
@@ -310,7 +318,8 @@ export async function enrichIncompleteWordsQueue(
       total: incompleteWords.length,
       completedCount: 0,
       multipleDefCount: existingMultiDefCount,
-      errorCount: 0
+      errorCount: 0,
+      enrichedWords: []
     });
     return;
   }
@@ -323,6 +332,7 @@ export async function enrichIncompleteWordsQueue(
   let completedCount = 0;
   let multipleDefCount = existingMultiDefCount;
   let errorCount = 0;
+  const enrichedWords: Word[] = [];
 
   notifyProgress({
     isRunning: true,
@@ -362,6 +372,7 @@ export async function enrichIncompleteWordsQueue(
         multipleDefCount++;
       } else if (res.updatedWord.completed) {
         completedCount++;
+        enrichedWords.push(res.updatedWord);
       } else {
         errorCount++;
       }
@@ -410,6 +421,7 @@ export async function enrichIncompleteWordsQueue(
     total: incompleteWords.length,
     completedCount,
     multipleDefCount,
-    errorCount
+    errorCount,
+    enrichedWords
   });
 }

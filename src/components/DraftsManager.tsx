@@ -50,6 +50,8 @@ interface DraftsManagerProps {
   enrichmentProgress?: BatchEnrichmentProgress;
   activeEnrichingIds?: Set<string>;
   onNavigateToCollection?: () => void;
+  onOpenEnrichedGallery?: (words?: Word[], initialIndex?: number) => void;
+  recentlyEnrichedWords?: Word[];
 }
 
 export default function DraftsManager({
@@ -71,7 +73,9 @@ export default function DraftsManager({
   onCancelEnrichment,
   enrichmentProgress,
   activeEnrichingIds,
-  onNavigateToCollection
+  onNavigateToCollection,
+  onOpenEnrichedGallery,
+  recentlyEnrichedWords
 }: DraftsManagerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "auto_ready" | "needs_selection">("all");
@@ -252,6 +256,18 @@ export default function DraftsManager({
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+              {onOpenEnrichedGallery && (recentlyEnrichedWords?.length || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onOpenEnrichedGallery(recentlyEnrichedWords)}
+                  className="px-3 py-2 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="View recently enriched words in gallery"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-stone-950" />
+                  <span>{t("gallery_view_enriched_btn", appLanguage) || "View Enriched Words"} ({recentlyEnrichedWords!.length})</span>
+                </button>
+              )}
+
               {onToggleAutoEnrich && typeof autoEnrichEnabled === "boolean" && (
                 <button
                   type="button"
@@ -298,6 +314,29 @@ export default function DraftsManager({
               ) : null}
             </div>
           </div>
+
+          {/* Completed Batch Notification Banner with Gallery Trigger */}
+          {!isBatchRunning && activeProgress.completedCount > 0 && onOpenEnrichedGallery && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-3xs">
+              <div className="flex items-center gap-2 text-emerald-950 font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  {t("toast_auto_enrich_summary", appLanguage, {
+                    completed: String(activeProgress.completedCount),
+                    multiple: String(activeProgress.multipleDefCount)
+                  }) || `Enrichment finished: ${activeProgress.completedCount} auto-completed!`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenEnrichedGallery(recentlyEnrichedWords)}
+                className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-3xs"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{t("gallery_view_in_gallery", appLanguage) || "Browse in Gallery"}</span>
+              </button>
+            </div>
+          )}
 
           {/* Batch Progress Bar Banner */}
           {isBatchRunning && (
@@ -563,7 +602,17 @@ export default function DraftsManager({
                 {t("drafts_empty_desc", appLanguage) || "All your vocabulary words are complete and ready for practice! When you add new words or capture photos without full definitions, they will appear here."}
               </p>
             </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+              {onOpenEnrichedGallery && (
+                <button
+                  type="button"
+                  onClick={() => onOpenEnrichedGallery(recentlyEnrichedWords && recentlyEnrichedWords.length > 0 ? recentlyEnrichedWords : undefined)}
+                  className="px-3.5 py-2 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500/50 transition-colors flex items-center gap-1.5 cursor-pointer shadow-3xs rounded-md"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-900" />
+                  <span>{t("gallery_view_enriched_btn", appLanguage) || "View Enriched Words (Gallery)"}</span>
+                </button>
+              )}
               {onAddWord && (
                 <button
                   type="button"

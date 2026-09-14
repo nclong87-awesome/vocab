@@ -485,7 +485,19 @@ export type TranslationKey =
   | "challenge_ask_hint"
   | "challenge_translate_word"
   | "challenge_submit_final"
-  | "challenge_next";
+  | "challenge_next"
+  | "toast_view_enriched_gallery"
+  | "gallery_enriched_modal_title"
+  | "gallery_nav_prev"
+  | "gallery_nav_next"
+  | "gallery_regenerate_word"
+  | "gallery_regenerating"
+  | "gallery_regenerated_success"
+  | "gallery_word_counter"
+  | "gallery_view_enriched_btn"
+  | "gallery_view_in_gallery"
+  | "gallery_empty_title"
+  | "gallery_empty_desc";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

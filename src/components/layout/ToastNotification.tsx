@@ -7,14 +7,16 @@ import {
   Clock,
   ArrowRight,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  LayoutGrid,
+  Eye
 } from "lucide-react";
 import { BatchEnrichmentProgress } from "../../services/backgroundEnrichmentService";
 
 export interface ToastAction {
   label: string;
   onClick: () => void;
-  icon?: "sparkles" | "arrow" | "stop";
+  icon?: "sparkles" | "arrow" | "stop" | "gallery" | "eye";
   variant?: "primary" | "secondary" | "danger";
 }
 
@@ -167,6 +169,8 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
                   {toast.action.icon === "sparkles" && <Sparkles className="w-3.5 h-3.5" />}
                   {toast.action.icon === "arrow" && <ArrowRight className="w-3.5 h-3.5" />}
                   {toast.action.icon === "stop" && <X className="w-3.5 h-3.5" />}
+                  {toast.action.icon === "gallery" && <LayoutGrid className="w-3.5 h-3.5" />}
+                  {toast.action.icon === "eye" && <Eye className="w-3.5 h-3.5" />}
                   <span>{toast.action.label}</span>
                 </button>
               )}

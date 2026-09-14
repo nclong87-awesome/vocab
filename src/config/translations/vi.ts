@@ -464,5 +464,17 @@ export const viTranslations: LanguageTranslations = {
     badge_multiple_defs_review: "Nhiều nghĩa • Cần chọn",
     badge_manual_review_required: "Cần duyệt thủ công",
     multiple_definitions_select_prompt: "Tìm thấy {count} định nghĩa — bấm để chọn nghĩa phù hợp",
-    incomplete_multiple_defs_tooltip: "AI tìm thấy nhiều định nghĩa. Đã chặn tự động làm giàu. Bấm để duyệt và chọn định nghĩa bạn muốn học."
+    incomplete_multiple_defs_tooltip: "AI tìm thấy nhiều định nghĩa. Đã chặn tự động làm giàu. Bấm để duyệt và chọn định nghĩa bạn muốn học.",
+    toast_view_enriched_gallery: "🔍 Xem Từ Đã Làm Giàu",
+    gallery_enriched_modal_title: "Bộ Sưu Tập Từ Đã Làm Giàu",
+    gallery_nav_prev: "Trước",
+    gallery_nav_next: "Tiếp Theo",
+    gallery_regenerate_word: "Tái Tạo Từ (AI)",
+    gallery_regenerating: "Đang tái tạo bằng AI...",
+    gallery_regenerated_success: "Đã tái tạo chi tiết từ thành công!",
+    gallery_word_counter: "Từ {current} trên {total}",
+    gallery_view_enriched_btn: "Xem Từ Đã Làm Giàu",
+    gallery_view_in_gallery: "Duyệt Trong Gallery",
+    gallery_empty_title: "Chưa Có Từ Đã Làm Giàu Nào",
+    gallery_empty_desc: "Hiện chưa có từ vựng nào vừa hoàn thành làm giàu. Hãy thử chạy làm giàu tự động các từ nháp!"
   };

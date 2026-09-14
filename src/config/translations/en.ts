@@ -478,5 +478,17 @@ export const enTranslations: LanguageTranslations = {
     challenge_ask_hint: "💡 Ask for Hint",
     challenge_translate_word: "🔤 Ask Word Translation",
     challenge_submit_final: "🚀 Submit Final Answer",
-    challenge_next: "🎯 Try Next Challenge"
+    challenge_next: "🎯 Try Next Challenge",
+    toast_view_enriched_gallery: "🔍 View Words",
+    gallery_enriched_modal_title: "Enriched Words Gallery",
+    gallery_nav_prev: "Previous",
+    gallery_nav_next: "Next",
+    gallery_regenerate_word: "Regenerate Word",
+    gallery_regenerating: "Regenerating with AI...",
+    gallery_regenerated_success: "Word details regenerated successfully!",
+    gallery_word_counter: "Word {current} of {total}",
+    gallery_view_enriched_btn: "View Enriched Words",
+    gallery_view_in_gallery: "Browse in Gallery",
+    gallery_empty_title: "No Enriched Words Found",
+    gallery_empty_desc: "No auto-completed words are available to display right now. Try enriching some draft words!"
   };

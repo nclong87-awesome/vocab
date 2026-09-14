@@ -6,10 +6,12 @@ import {
   cancelBatchEnrichment,
   subscribeEnrichmentProgress,
   BatchEnrichmentProgress,
+  BatchEnrichmentSummary,
   EnrichmentResult,
   getAutoEnrichmentSetting,
   setAutoEnrichmentSetting
 } from "../services/backgroundEnrichmentService";
+import { t } from "../config/i18n";
 
 interface UseBackgroundEnrichmentOptions {
   words: Word[];
@@ -18,7 +20,8 @@ interface UseBackgroundEnrichmentOptions {
   llmConfig?: LLMConfig;
   onUpdateWord?: (updatedWord: Word) => void;
   onUpdateWords?: (updatedWords: Word[]) => void;
-  showToast?: (message: string) => void;
+  showToast?: (itemOrMsg: any, duration?: number) => void;
+  onOpenEnrichedGallery?: (words: Word[], initialIndex?: number) => void;
   appLanguage?: string;
 }
 
@@ -31,10 +34,13 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
     onUpdateWord,
     onUpdateWords,
     showToast,
+    onOpenEnrichedGallery,
     appLanguage = "en"
   } = options;
 
   const [autoEnrichEnabled, setAutoEnrichEnabledState] = useState<boolean>(getAutoEnrichmentSetting);
+  const [recentlyEnrichedWords, setRecentlyEnrichedWords] = useState<Word[]>([]);
+  const [lastEnrichSummary, setLastEnrichSummary] = useState<BatchEnrichmentSummary | null>(null);
   const [progress, setProgress] = useState<BatchEnrichmentProgress>({
     isRunning: false,
     total: 0,
@@ -123,6 +129,10 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
           onUpdateWords(updated);
         }
 
+        if (result.updatedWord.completed) {
+          setRecentlyEnrichedWords((prev) => [result.updatedWord, ...prev.filter((w) => w.id !== result.updatedWord.id)]);
+        }
+
         if (showToast) {
           if (result.hasMultipleDefinitions) {
             const isVi = appLanguage === "vi";
@@ -133,11 +143,21 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
             );
           } else if (result.updatedWord.completed) {
             const isVi = appLanguage === "vi";
-            showToast(
-              isVi
+            showToast({
+              id: `single-enrich-${result.updatedWord.id}`,
+              message: isVi
                 ? `✨ Đã tự động hoàn thành từ "${word.word}" (1 định nghĩa)!`
-                : `✨ Auto-completed "${word.word}" (1 definition found)!`
-            );
+                : `✨ Auto-completed "${word.word}" (1 definition found)!`,
+              type: "success",
+              action: onOpenEnrichedGallery
+                ? {
+                    label: t("toast_view_enriched_gallery", appLanguage) || "🔍 View Word",
+                    onClick: () => onOpenEnrichedGallery([result.updatedWord], 0),
+                    icon: "sparkles",
+                    variant: "primary"
+                  }
+                : undefined
+            }, 6000);
           }
         }
 
@@ -150,7 +170,7 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
         });
       }
     },
-    [onUpdateWord, onUpdateWords, showToast, appLanguage]
+    [onUpdateWord, onUpdateWords, showToast, onOpenEnrichedGallery, appLanguage]
   );
 
   /**
@@ -202,18 +222,41 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
         },
         onComplete: (summary) => {
           setActiveEnrichingIds(new Set());
+          setLastEnrichSummary(summary);
+          if (summary.enrichedWords && summary.enrichedWords.length > 0) {
+            setRecentlyEnrichedWords(summary.enrichedWords);
+          }
+
           if (showToast) {
             const isVi = appLanguage === "vi";
-            showToast(
-              isVi
-                ? `Hoàn tất làm giàu: ${summary.completedCount} từ tự động hoàn thành, ${summary.multipleDefCount} từ giữ nháp vì có nhiều định nghĩa.`
-                : `Enrichment complete: ${summary.completedCount} auto-completed, ${summary.multipleDefCount} marked incomplete (multiple definitions).`
-            );
+            const summaryMsg = isVi
+              ? `Hoàn tất làm giàu: ${summary.completedCount} từ tự động hoàn thành, ${summary.multipleDefCount} từ giữ nháp vì có nhiều định nghĩa.`
+              : `Enrichment complete: ${summary.completedCount} auto-completed, ${summary.multipleDefCount} marked incomplete (multiple definitions).`;
+
+            if (summary.completedCount > 0 && onOpenEnrichedGallery) {
+              const enrichedWordsList = summary.enrichedWords && summary.enrichedWords.length > 0
+                ? summary.enrichedWords
+                : wordsRef.current.filter((w) => w.completed === true);
+
+              showToast({
+                id: `batch-enrich-complete-${Date.now()}`,
+                message: summaryMsg,
+                type: "success",
+                action: {
+                  label: t("toast_view_enriched_gallery", appLanguage) || "🔍 View Words",
+                  onClick: () => onOpenEnrichedGallery(enrichedWordsList, 0),
+                  icon: "sparkles",
+                  variant: "primary"
+                }
+              }, 8000);
+            } else {
+              showToast(summaryMsg);
+            }
           }
         }
       });
     },
-    [onUpdateWord, onUpdateWords, showToast, appLanguage]
+    [onUpdateWord, onUpdateWords, showToast, onOpenEnrichedGallery, appLanguage]
   );
 
   const cancelEnrichment = useCallback(() => {
@@ -229,6 +272,9 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
     cancelEnrichment,
     progress,
     isBatchRunning: progress.isRunning,
-    activeEnrichingIds
+    activeEnrichingIds,
+    recentlyEnrichedWords,
+    lastEnrichSummary
   };
 }
+
