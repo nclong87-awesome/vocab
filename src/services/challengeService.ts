@@ -22,51 +22,17 @@ export interface ChallengeTurnParams {
   llmConfig?: LLMConfig;
 }
 
-const DIVERSE_SCENARIOS = [
-  { theme: "Stakeholder Negotiation & Deadlines", scenario: "Pushing back diplomatically on an unrealistic delivery date or negotiating scope boundaries with product stakeholders." },
-  { theme: "Code Review & Quality Standards", scenario: "Delivering constructive feedback during a pull request review regarding code readability, maintainability, or testing." },
-  { theme: "System Architecture & Storage", scenario: "Evaluating database indexing, read replicas, caching invalidation, or distributed consistency trade-offs." },
-  { theme: "Incident Retrospective & Resilience", scenario: "Discussing root causes and preventative measures after unexpected production downtime without finger-pointing." },
-  { theme: "Customer Support & Feedback", scenario: "Addressing constructive user feedback regarding checkout drop-offs, UX friction, or error messaging." },
-  { theme: "Data Privacy & API Security", scenario: "Discussing credential rotation, OAuth token expiration, encryption at rest, or user privacy regulations." },
-  { theme: "Cross-Functional Alignment", scenario: "Bridging communication gaps between UI/UX designers and back-end engineers during sprint planning." },
-  { theme: "Async Collaboration & Remote Work", scenario: "Setting clear expectations for async handoffs and documentation across international time zones." },
-  { theme: "Cloud Infrastructure & Cost Optimization", scenario: "Evaluating serverless scaling costs or pruning unused cloud resources to manage operational budgets." },
-  { theme: "Team Mentorship & Knowledge Sharing", scenario: "Encouraging a junior teammate to ask clarifying questions and write concise architectural decision records." },
-  { theme: "Product Discovery & User Interviews", scenario: "Formulating unbiased questions for user discovery interviews to validate a proposed solution." },
-  { theme: "Everyday Workplace & Coffee Chat", scenario: "Chatting informally about ergonomic workstation setups, work-life balance, or weekend recharge routines." },
-  { theme: "Vendor Agreements & SLAs", scenario: "Reviewing vendor service level agreements (SLAs) or negotiating support response times." },
-  { theme: "Continuous Integration & Tooling", scenario: "Troubleshooting flaky automated integration tests that intermittently fail on the staging environment." },
-  { theme: "Mobile Usability & Low Bandwidth", scenario: "Designing offline-first synchronization or handling poor cellular network connectivity gracefully." },
-  { theme: "Executive Presentation & Value Pitch", scenario: "Pitching a tech debt refactoring proposal by framing its direct value to business reliability." }
-];
-
-const COMMUNICATIVE_MOODS = [
-  "Polite professional disagreement or proposing a pragmatic alternative",
-  "Explaining a nuanced technical concept in plain, accessible language",
-  "Diplomatically asking clarifying questions before committing to an approach",
-  "Empathizing with customer frustration while providing concrete reassurance",
-  "Highlighting a potential operational risk along with actionable mitigation steps",
-  "Celebrating a milestone achievement while outlining constructive next iterations",
-  "Summarizing consensus and defining unambiguous ownership after a lively discussion"
-];
-
 function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: string): {
   prompt: string;
-  chosenTheme: string;
   candidateCollectionWords: Word[];
 } {
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
   const profile = params.personalityProfile;
-  const archetype = profile?.archetype || "Pragmatic Professional";
-  const interests = (profile?.detectedInterests || ["Workplace", "Technology", "Daily Discussion"]).join(", ");
-  const traits = (profile?.archetypeTraits || ["Practical", "Goal-oriented"]).join(", ");
+  const archetype = profile?.archetype || "Practical Learner";
+  const interests = (profile?.detectedInterests || ["Daily Life", "Workplace", "Casual Discussion"]).join(", ");
+  const traits = (profile?.archetypeTraits || ["Practical", "Conversational"]).join(", ");
   const modality = profile?.learningPreferences?.primaryModality || "contextual_examples";
-
-  // Select a random scenario and mood from the curated pool
-  const scenarioObj = DIVERSE_SCENARIOS[Math.floor(Math.random() * DIVERSE_SCENARIOS.length)];
-  const mood = COMMUNICATIVE_MOODS[Math.floor(Math.random() * COMMUNICATIVE_MOODS.length)];
 
   // Grounding in user vocabulary words: endeavor to select the single most suitable word from collection
   let vocabAnchorSection = "";
@@ -77,13 +43,13 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
     candidateCollectionWords = sortedCandidates.slice(0, 8);
     if (candidateCollectionWords.length > 0) {
       vocabAnchorSection = `
-USER'S WORDS COLLECTION CANDIDATES:
+USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):
 ${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%]`).join("\n")}
 
 WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
-- Carefully evaluate the candidate words from the user's collection above.
-- Endeavor to identify the SINGLE MOST SUITABLE word from this collection that naturally fits within the assigned scenario ("${scenarioObj.theme}").
-- Construct a concise sentence whose ideal translation naturally incorporates this identified word.
+- Carefully evaluate the candidate words from the user's database above.
+- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation or daily workplace chat.
+- Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
 - CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
   NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
   Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
@@ -101,14 +67,9 @@ ${recentList}
 `;
   }
 
-  const prompt = `Generate a single personalized translation challenge for a language learner.
+  const prompt = `Generate a single personalized translation challenge for a language learner based on common sentences used in daily conversation and real-life interactions.
 
 DIVERSITY SEED: ${randomSeed}
-
-ASSIGNED SCENARIO FOR THIS CHALLENGE:
-- Scenario Theme: ${scenarioObj.theme}
-- Situation Context: ${scenarioObj.scenario}
-- Communicative Mood: ${mood}
 
 LEARNER CONTEXT:
 - Native Language: ${nativeLanguage}
@@ -120,20 +81,21 @@ LEARNER CONTEXT:
 ${vocabAnchorSection}
 ${recentAvoidanceSection}
 CRITICAL MANDATES:
-1. CONCISE SENTENCE STRUCTURE: Aim for a concise, compact, and punchy sentence structure (strictly 6 to 14 words). Avoid verbose rambling or convoluted multi-clause sentences. Keep the phrasing natural, modern, clear, and direct.
-2. Follow the assigned Scenario Theme ("${scenarioObj.theme}") and Communicative Mood ("${mood}").
-3. ZERO TARGET-LANGUAGE LOANWORDS IN NATIVE SENTENCE: Create the concise sentence (6-14 words) entirely in the user's NATIVE language (${nativeLanguage}). The 'nativeSentence' MUST NOT contain any ${targetLanguage} words, English loanwords, or untranslated target terms. Express every concept strictly in natural ${nativeLanguage}.
-4. Ensure the sentence sounds completely natural and idiomatic for real-life workplace or casual speech in ${nativeLanguage}.
-5. Provide the ideal, concise, and polished natural translation in ${targetLanguage}. The target vocabulary word MUST appear in this 'idealTranslation'.
-6. Endeavor to identify and feature the most suitable word from the user's words collection within the sentence and output it in "targetWordFromCollection".
-7. List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
-8. Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected.
+1. COMMON DAILY CONVERSATION FOCUS: Create a practical, authentic sentence commonly spoken in everyday life, daily workplace chats, social interactions, errands, dining, commuting, or casual discussion. Avoid overly formal or contrived jargon unless naturally fitting the learner's vocabulary.
+2. DYNAMIC TOPIC CATEGORY: Dynamically determine a relevant, concise 2-4 word topic label (e.g. "Everyday Routine", "Ordering at a Cafe", "Coffee Break Chat", "Team Sync", "Weekend Plans", "Travel & Commuting", "Tech Discussion") that accurately describes the context of the sentence, and return it in "topicContext".
+3. CONCISE SENTENCE STRUCTURE: Aim for a concise, compact, and punchy sentence structure (strictly 6 to 14 words). Avoid verbose rambling or convoluted multi-clause sentences. Keep the phrasing natural, modern, clear, and direct.
+4. ZERO TARGET-LANGUAGE LOANWORDS IN NATIVE SENTENCE: Create the concise sentence (6-14 words) entirely in the user's NATIVE language (${nativeLanguage}). The 'nativeSentence' MUST NOT contain any ${targetLanguage} words, English loanwords, or untranslated target terms. Express every concept strictly in natural ${nativeLanguage}.
+5. NATURAL IDIOMATIC PHRASING: Ensure the sentence sounds completely natural, authentic, and idiomatic for real-life conversational speech in ${nativeLanguage}.
+6. IDEAL POLISHED TRANSLATION: Provide the ideal, concise, and polished natural translation in ${targetLanguage}. The target vocabulary word MUST appear in this 'idealTranslation'.
+7. FEATURE VOCABULARY: Endeavor to feature the chosen word from the user's database and output it in "targetWordFromCollection".
+8. VOCABULARY HINTS: List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
+9. PROFILE NOTE: Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected.
 
 Return STRICTLY raw JSON-only matching this schema:
 {
   "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words, ZERO ${targetLanguage} words)",
   "idealTranslation": "Concise ideal translation in ${targetLanguage}",
-  "topicContext": "${scenarioObj.theme}",
+  "topicContext": "Concise 2-4 word topic category dynamically created by AI",
   "targetWordFromCollection": {
     "word": "most_suitable_word_from_collection",
     "translation": "translation_in_native",
@@ -145,7 +107,7 @@ Return STRICTLY raw JSON-only matching this schema:
   "personalityNote": "Explanation of profile alignment"
 }`;
 
-  return { prompt, chosenTheme: scenarioObj.theme, candidateCollectionWords };
+  return { prompt, candidateCollectionWords };
 }
 
 /**
@@ -263,7 +225,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const effectiveConfig = getOverrideConfig(params.llmConfig);
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
-  const { prompt, chosenTheme, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
+  const { prompt, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
   const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges tailored to learner profiles. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, concise (6-14 words), and its idealTranslation must incorporate the target word.`;
   const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
@@ -291,7 +253,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
     nativeSentence: sanitizedSentence,
     targetLanguage,
     nativeLanguage,
-    topicContext: parsed.topicContext || chosenTheme || "Personalized Practice",
+    topicContext: parsed.topicContext || "Daily Conversation",
     idealTranslation: parsed.idealTranslation,
     targetWordFromCollection,
     keyTargetWords: parsed.keyTargetWords || [],
