@@ -1,7 +1,7 @@
 import { ChallengeData, ChallengeTurnResult, ChallengeSuggestedVocab, UserPersonalityProfile, Word, LLMConfig } from "../types";
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
-import { sortWordsByLastPracticeTime } from "../utils/spacedRepetition";
+import { getQuizCandidateWords } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 
 export interface GenerateChallengeParams {
@@ -39,8 +39,11 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
   let candidateCollectionWords: Word[] = [];
   if (params.words && params.words.length > 0) {
     const validWords = params.words.filter((w) => w.completed !== false);
-    const sortedCandidates = sortWordsByLastPracticeTime(validWords);
-    candidateCollectionWords = sortedCandidates.slice(0, 8);
+    candidateCollectionWords = getQuizCandidateWords(validWords, {
+      maxCandidates: 8,
+      includeUnstudied: true,
+      balanceStratified: true,
+    });
     if (candidateCollectionWords.length > 0) {
       vocabAnchorSection = `
 USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):

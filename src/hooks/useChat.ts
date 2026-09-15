@@ -509,23 +509,12 @@ export function useChat({
         return;
       }
 
-      // Prioritize candidates based on the most recent time they have appeared in practice
-      // (words never practiced first FIFO, then least recently practiced words)
-      const prioritized = sortWordsByLastPracticeTime(confuserCandidates);
-      let duelWords: Word[] = [];
-      const existingIds = new Set<string>();
-
-      for (const w of prioritized) {
-        if (!existingIds.has(w.id)) {
-          duelWords.push(w);
-          existingIds.add(w.id);
-          if (duelWords.length >= 3) break;
-        }
-      }
+      // Select candidates using anti-starvation weighted sampling
+      let duelWords = getCandidateWordsForPractice(confuserCandidates, 3);
+      const existingIds = new Set<string>(duelWords.map((w) => w.id));
 
       if (duelWords.length < 3 && confuserCandidates.length > duelWords.length) {
-        const sortedRemaining = sortWordsByLastPracticeTime(confuserCandidates);
-        for (const w of sortedRemaining) {
+        for (const w of confuserCandidates) {
           if (!existingIds.has(w.id)) {
             duelWords.push(w);
             existingIds.add(w.id);
@@ -676,15 +665,17 @@ export function useChat({
       // Top up to guarantee exactly 3 questions if non-cooldown words are available
       if (effectiveQuizWords.length < 3) {
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
-        const nonCooldownCandidates = sortWordsByLastPracticeTime(
-          activeWords.filter(
-            (w) =>
-              !existingIds.has(w.id) &&
-              !incorrectIds.has(w.id) &&
-              !isWordOnReviewCooldown(w, new Date(), 2)
-          )
+        const nonCooldownPool = activeWords.filter(
+          (w) =>
+            !existingIds.has(w.id) &&
+            !incorrectIds.has(w.id) &&
+            !isWordOnReviewCooldown(w, new Date(), 2)
         );
-        for (const w of nonCooldownCandidates) {
+        const topUpWords = getQuizCandidateWords(nonCooldownPool, {
+          maxCandidates: 3 - effectiveQuizWords.length,
+          includeUnstudied: true,
+        });
+        for (const w of topUpWords) {
           if (!existingIds.has(w.id)) {
             effectiveQuizWords.push(w);
             existingIds.add(w.id);
@@ -693,13 +684,15 @@ export function useChat({
         }
       }
 
-      // Final fallback to any available words in collection sorted by last practice time (excluding words answered incorrectly)
+      // Final fallback to any available words in collection
       if (effectiveQuizWords.length < 3) {
         const existingIds = new Set(effectiveQuizWords.map((w) => w.id));
-        const allCandidatesSorted = sortWordsByLastPracticeTime(
-          activeWords.filter((w) => !existingIds.has(w.id) && !incorrectIds.has(w.id))
-        );
-        for (const w of allCandidatesSorted) {
+        const remainingPool = activeWords.filter((w) => !existingIds.has(w.id) && !incorrectIds.has(w.id));
+        const finalTopUps = getQuizCandidateWords(remainingPool, {
+          maxCandidates: 3 - effectiveQuizWords.length,
+          includeUnstudied: true,
+        });
+        for (const w of finalTopUps) {
           if (!existingIds.has(w.id)) {
             effectiveQuizWords.push(w);
             existingIds.add(w.id);

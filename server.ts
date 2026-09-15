@@ -7,7 +7,7 @@ import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from ".
 import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quizGenerator";
 import { isPhrasalVerb, findWordInCollection, hasUserIncorporatedWord } from "./src/utils/wordNormalization";
-import { sortWordsByLastPracticeTime } from "./src/utils/spacedRepetition";
+import { getQuizCandidateWords } from "./src/utils/spacedRepetition";
 import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "./src/config/llmProviders";
 
 dotenv.config();
@@ -3133,8 +3133,11 @@ app.post("/api/generate-challenge", async (req, res) => {
     let candidateCollectionWords: any[] = [];
     if (Array.isArray(words) && words.length > 0) {
       const validWords = words.filter((w: any) => w.completed !== false);
-      const sortedCandidates = sortWordsByLastPracticeTime(validWords);
-      candidateCollectionWords = sortedCandidates.slice(0, 8);
+      candidateCollectionWords = getQuizCandidateWords(validWords, {
+        maxCandidates: 8,
+        includeUnstudied: true,
+        balanceStratified: true,
+      });
       if (candidateCollectionWords.length > 0) {
         vocabAnchorSection = `
 USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):

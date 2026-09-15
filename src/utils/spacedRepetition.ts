@@ -1,6 +1,6 @@
 import { Word, StrengthHistoryReason, StrengthHistoryTuple } from "../types";
 import { recordStrengthHistory, sanitizeAndHealWordHistory } from "./strengthHistoryHelpers";
-import { areWordsEquivalent, normalizeWordForComparison } from "./wordNormalization";
+import { normalizeWordForComparison } from "./wordNormalization";
 
 export interface BaselinePracticeInfo {
   baselineStrength: number;
@@ -340,6 +340,7 @@ export interface CandidateWordsOptions {
   maxCandidates?: number;
   candidatePoolSize?: number;
   includeUnstudied?: boolean;
+  balanceStratified?: boolean;
 }
 
 export interface WeightedCandidate {
@@ -370,8 +371,9 @@ export function isWordLearnedOrStudied(word: Word): boolean {
  * Assigns probability weight based on word urgency tier, incorporating
  * practice recency, the 'lastReviewedAt' timestamp, and 'reviewCount'.
  * - Words that have NEVER appeared in practice (unlearned words) receive high weight to ensure they are actively practiced.
- * - Older words (long elapsed days since practice, lower review count) receive higher priority.
+ * - Older words (long elapsed days since practice, lower review count) receive higher priority via an anti-starvation aging factor.
  * - Frequently / recently appearing words receive a recency penalty to prevent repeated selection.
+ * - Words on review cooldown receive minimal weight to protect them from immediate re-testing.
  */
 export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
   tier: "starred" | "memoryDecay" | "weak" | "unstudied" | "rest";
@@ -416,7 +418,7 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
   if (lastPractice !== null) {
     const hoursSincePractice = (now.getTime() - lastPractice) / (1000 * 60 * 60);
     if (hoursSincePractice < 2 || isWordOnReviewCooldown(word, now)) {
-      recencyMultiplier = 0.01; // Cooldown shield: practically zero weight during cooldown
+      return { tier, weight: 0.05 }; // Cooldown shield: practically zero weight during cooldown
     } else if (hoursSincePractice < 12) {
       recencyMultiplier = 0.2; // Steep penalty for words practiced in last 12 hours
     } else if (hoursSincePractice < 24) {
@@ -424,11 +426,15 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
     } else if (hoursSincePractice < 48) {
       recencyMultiplier = 0.7;
     }
+  } else if (isWordOnReviewCooldown(word, now)) {
+    return { tier, weight: 0.05 };
   }
 
   // Calculate Neglect Ratio: days elapsed since last review relative to total review count.
+  // Extended scaling (up to 4.0x) ensures that words left unpracticed for 30+ days naturally rise in priority,
+  // preventing deep backlogs and long-tail library words from being permanently starved.
   const neglectRatio = days / Math.max(1, reviewCount);
-  const neglectMultiplier = Math.min(2.5, 1.0 + Math.min(neglectRatio, 10) * 0.15);
+  const neglectMultiplier = Math.min(4.0, 1.0 + Math.min(neglectRatio, 30) * 0.1);
   const finalWeight = Math.max(1, Math.round(baseWeight * recencyMultiplier * neglectMultiplier));
 
   return { tier, weight: finalWeight };
@@ -438,11 +444,11 @@ export function getWordTierAndWeight(word: Word, now: Date = new Date()): {
  * Performs weighted random sampling without replacement from a pool of candidates using the A-Res algorithm.
  */
 export function sampleWeightedCandidates(candidates: WeightedCandidate[], count: number): Word[] {
-  if (!candidates || candidates.length === 0) return [];
+  if (!candidates || candidates.length === 0 || count <= 0) return [];
 
   const sampled = candidates.map(item => {
     const u = Math.max(Number.EPSILON, Math.random());
-    const key = Math.pow(u, 1 / Math.max(0.1, item.weight));
+    const key = Math.pow(u, 1 / Math.max(0.01, item.weight));
     return { word: item.word, key };
   });
 
@@ -464,11 +470,18 @@ export function sampleWeightedCandidates(candidates: WeightedCandidate[], count:
 }
 
 /**
- * Selects candidate words for a new quiz, prioritizing words based on the most recent time
- * they have appeared in practice:
- * 1. Unlearned words that have NEVER appeared in practice have the highest priority.
- * 2. Words that have appeared in practice are ordered by least recent practice (oldest practice date first).
- * 3. Words practiced very recently receive a recency penalty to prevent repetitive selection.
+ * Selects candidate words for a new quiz or practice session.
+ *
+ * ARCHITECTURAL ANTI-STARVATION GUARANTEES (FOR LIBRARIES WITH THOUSANDS OF WORDS):
+ * 1. Global Candidate Evaluation: Evaluates the entire vocabulary without arbitrary pool truncation (no 30-word cap).
+ * 2. Stratified Balancing: Guarantees a healthy distribution between:
+ *    - Urgent / Due Reviews (starred, memory decay, weak, overdue items)
+ *    - New / Unstudied Words (introducing unstudied words from the backlog)
+ *    - Exploration / Long-Tail Words (checking mature or older words across the collection)
+ * 3. Non-Zero Stochastic Probability: Every eligible word in the collection has weight w_i >= 1 and an
+ *    A-Res key k_i = u_i^(1/w_i) with u_i in (0, 1). Thus, every single word has a mathematically non-zero chance
+ *    of being selected each day, regardless of library size.
+ * 4. Cooldown Shield: Words reviewed within the cooldown window (e.g. 2 hours) are strictly protected.
  */
 export function getQuizCandidateWords(words: Word[], options: CandidateWordsOptions = {}): Word[] {
   if (!words || words.length === 0) return [];
@@ -477,16 +490,16 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
   const validWords = words.filter(w => w.completed !== false);
   if (validWords.length === 0) return [];
 
-  const { maxCandidates = 10, candidatePoolSize = 30, includeUnstudied = true } = options;
+  const {
+    maxCandidates = 10,
+    candidatePoolSize = 0, // 0 = unconstrained (all eligible candidates evaluated)
+    includeUnstudied = true,
+    balanceStratified = true,
+  } = options;
   const now = new Date();
 
   // Sweep memory decay so fresh decayed strengths are evaluated
   const { updatedWords: freshWords } = recalculateWordsMemoryDecay(validWords, now);
-
-  // Helper to check if a word is already represented in a list (by id or vocabulary equivalence)
-  const isAlreadySelected = (candidate: Word, list: Word[]): boolean => {
-    return list.some(w => w.id === candidate.id || areWordsEquivalent(w.word, candidate.word));
-  };
 
   // Filter candidates avoiding words on review cooldown (practiced < 2 hours ago)
   let eligibleCandidates = freshWords.filter(w => !isWordOnReviewCooldown(w, now, MIN_REVIEW_COOLDOWN_HOURS));
@@ -502,52 +515,157 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
     }
   }
 
-  // Prioritize candidates based on the most recent time they have appeared in practice
-  // (never practiced first, then oldest practiced date first)
-  const sortedCandidates = sortWordsByLastPracticeTime(eligibleCandidates, now);
+  const selectedWords: Word[] = [];
+  const selectedIds = new Set<string>();
+  const selectedNorm = new Set<string>();
 
-  // Assemble candidate pool across priority tiers with weights reflecting recency and neglect
-  const candidatePool: WeightedCandidate[] = [];
-  const poolSeenIds = new Set<string>();
-  const poolSeenNorm = new Set<string>();
+  const tryAddWord = (w: Word): boolean => {
+    if (selectedWords.length >= maxCandidates) return false;
+    if (selectedIds.has(w.id)) return false;
+    const norm = normalizeWordForComparison(w.word);
+    if (norm && selectedNorm.has(norm)) return false;
+    selectedIds.add(w.id);
+    if (norm) selectedNorm.add(norm);
+    selectedWords.push(w);
+    return true;
+  };
 
-  for (const word of sortedCandidates) {
-    if (candidatePool.length >= candidatePoolSize) break;
-    if (poolSeenIds.has(word.id)) continue;
-    const norm = normalizeWordForComparison(word.word);
-    if (norm && poolSeenNorm.has(norm)) continue;
-    poolSeenIds.add(word.id);
-    if (norm) poolSeenNorm.add(norm);
-
-    const { tier, weight } = getWordTierAndWeight(word, now);
-    candidatePool.push({
-      word,
-      tier: tier === "unstudied" ? "weak" : tier,
-      weight,
+  // Convert words into weighted candidates
+  const mapToWeightedCandidates = (wordList: Word[]): WeightedCandidate[] => {
+    return wordList.map(word => {
+      const { tier, weight } = getWordTierAndWeight(word, now);
+      return {
+        word,
+        tier: tier === "unstudied" ? "weak" : tier,
+        weight,
+      };
     });
-  }
+  };
 
-  // Perform Weighted Random Sampling (A-Res) from the candidate pool
-  const selectedWords = sampleWeightedCandidates(candidatePool, maxCandidates);
+  // Stratified Balancing: Partition candidates into strata to balance review, introduction, and long-tail exploration
+  if (balanceStratified && eligibleCandidates.length > maxCandidates) {
+    const dueOrUrgentWords: Word[] = [];
+    const unstudiedWords: Word[] = [];
+    const explorationWords: Word[] = [];
 
-  // If selectedWords is under maxCandidates, top up from sortedCandidates (respecting least recent practice priority)
-  if (selectedWords.length < maxCandidates) {
-    for (const word of sortedCandidates) {
-      if (selectedWords.length >= maxCandidates) break;
-      if (!isAlreadySelected(word, selectedWords)) {
-        selectedWords.push(word);
+    for (const w of eligibleCandidates) {
+      const isUnstudied = !isWordLearnedOrStudied(w) || getWordLastPracticeTimestamp(w) === null;
+      if (isUnstudied) {
+        unstudiedWords.push(w);
+      } else {
+        const isUrgent =
+          w.starred ||
+          (w.strength ?? 0) < 50 ||
+          hasUnresolvedQuizMistake(w) ||
+          isDueReviewCandidate(w, now);
+        if (isUrgent) {
+          dueOrUrgentWords.push(w);
+        } else {
+          explorationWords.push(w);
+        }
+      }
+    }
+
+    const hasDue = dueOrUrgentWords.length > 0;
+    const hasUnstudied = unstudiedWords.length > 0 && includeUnstudied;
+    const hasExploration = explorationWords.length > 0;
+
+    let dueQuota = 0;
+    let unstudiedQuota = 0;
+    let explorationQuota = 0;
+
+    if (maxCandidates <= 3) {
+      if (hasDue && hasUnstudied) {
+        dueQuota = 1;
+        unstudiedQuota = 1;
+        explorationQuota = 1;
+      } else if (hasDue) {
+        dueQuota = 2;
+        explorationQuota = 1;
+      } else if (hasUnstudied) {
+        unstudiedQuota = 2;
+        explorationQuota = 1;
+      } else {
+        explorationQuota = maxCandidates;
+      }
+    } else {
+      // For larger quizzes (e.g. 5, 8, 10):
+      if (hasDue && hasUnstudied) {
+        dueQuota = Math.max(1, Math.round(maxCandidates * 0.5));
+        unstudiedQuota = Math.max(1, Math.round(maxCandidates * 0.35));
+        explorationQuota = Math.max(1, maxCandidates - dueQuota - unstudiedQuota);
+      } else if (hasDue) {
+        dueQuota = Math.max(1, Math.round(maxCandidates * 0.7));
+        explorationQuota = maxCandidates - dueQuota;
+      } else if (hasUnstudied) {
+        unstudiedQuota = Math.max(1, Math.round(maxCandidates * 0.7));
+        explorationQuota = maxCandidates - unstudiedQuota;
+      } else {
+        explorationQuota = maxCandidates;
+      }
+    }
+
+    // Step 1: Sample from Due/Urgent words using A-Res (all due words across the library have non-zero probability)
+    if (hasDue && dueQuota > 0) {
+      const sampledDue = sampleWeightedCandidates(mapToWeightedCandidates(dueOrUrgentWords), dueQuota);
+      for (const w of sampledDue) {
+        tryAddWord(w);
+      }
+    }
+
+    // Step 2: Sample from Unstudied words using A-Res (all unstudied words across the thousands have non-zero probability)
+    if (hasUnstudied && unstudiedQuota > 0 && selectedWords.length < maxCandidates) {
+      const remainingQuota = Math.min(unstudiedQuota, maxCandidates - selectedWords.length);
+      const sampledUnstudied = sampleWeightedCandidates(mapToWeightedCandidates(unstudiedWords), remainingQuota);
+      for (const w of sampledUnstudied) {
+        tryAddWord(w);
+      }
+    }
+
+    // Step 3: Sample from Exploration words using A-Res (long-tail words, mature retention checks)
+    if (hasExploration && explorationQuota > 0 && selectedWords.length < maxCandidates) {
+      const remainingQuota = Math.min(explorationQuota, maxCandidates - selectedWords.length);
+      const sampledExploration = sampleWeightedCandidates(mapToWeightedCandidates(explorationWords), remainingQuota);
+      for (const w of sampledExploration) {
+        tryAddWord(w);
       }
     }
   }
 
-  // Fallback to any remaining words in freshWords if still needed
+  // If we still need candidates (or balanceStratified is false / fewer candidates than quota):
+  // Perform global A-Res weighted sampling across all remaining eligible candidates in the collection
+  if (selectedWords.length < maxCandidates) {
+    const remainingEligible = eligibleCandidates.filter(w => !selectedIds.has(w.id));
+    const remainingWeighted = mapToWeightedCandidates(remainingEligible);
+
+    let poolToSample = remainingWeighted;
+    if (candidatePoolSize > 0 && remainingWeighted.length > candidatePoolSize) {
+      const sorted = sortWordsByLastPracticeTime(remainingEligible, now);
+      poolToSample = mapToWeightedCandidates(sorted.slice(0, candidatePoolSize));
+    }
+
+    const needed = maxCandidates - selectedWords.length;
+    const additionalSampled = sampleWeightedCandidates(poolToSample, needed);
+    for (const w of additionalSampled) {
+      tryAddWord(w);
+    }
+  }
+
+  // Fallback top-up from sorted eligible candidates if needed
+  if (selectedWords.length < maxCandidates) {
+    const sorted = sortWordsByLastPracticeTime(eligibleCandidates, now);
+    for (const w of sorted) {
+      if (selectedWords.length >= maxCandidates) break;
+      tryAddWord(w);
+    }
+  }
+
+  // Final fallback to any valid fresh words
   if (selectedWords.length < maxCandidates) {
     const sortedAll = sortWordsByLastPracticeTime(freshWords, now);
-    for (const word of sortedAll) {
+    for (const w of sortedAll) {
       if (selectedWords.length >= maxCandidates) break;
-      if (!isAlreadySelected(word, selectedWords)) {
-        selectedWords.push(word);
-      }
+      tryAddWord(w);
     }
   }
 
@@ -794,7 +912,9 @@ export function sortWordsByLastPracticeTime(words: Word[], now: Date = new Date(
     if (timeA === null && timeB === null) {
       if (a.starred && !b.starred) return -1;
       if (!a.starred && b.starred) return 1;
-      return getWordCreationTimestamp(a) - getWordCreationTimestamp(b);
+      const diffCreated = getWordCreationTimestamp(a) - getWordCreationTimestamp(b);
+      if (diffCreated !== 0) return diffCreated;
+      return a.word.localeCompare(b.word);
     }
 
     // Both words have appeared in practice:
@@ -868,10 +988,11 @@ export function isNewUnstudiedWord(word: Word): boolean {
 }
 
 /**
- * Selects candidate words for practice sessions (default up to 3), prioritizing words
- * based on the most recent time they have appeared in practice:
- * 1. Words that have never appeared in practice (unlearned/unstudied) FIFO
- * 2. Words whose last practice was longest ago (oldest practice date first)
+ * Selects candidate words for practice sessions (default up to 3).
+ * Uses anti-starvation weighted sampling (A-Res) with stratified balancing across the entire collection:
+ * - Every word in the library has a non-zero probability of being selected.
+ * - Balances review of due/weak words with continuous introduction of unstudied words and catalog exploration.
+ * - Avoids static truncation and starvation even with thousands of words.
  */
 export function getCandidateWordsForPractice(
   words: Word[],
@@ -879,10 +1000,12 @@ export function getCandidateWordsForPractice(
   now: Date = new Date(),
   customCooldownHours?: number
 ): Word[] {
-  if (!words || words.length === 0) return [];
+  if (!words || words.length === 0 || count <= 0) return [];
 
   // Filter ONLY words that meet candidate criteria (incomplete words are excluded)
   const validWords = words.filter(w => w.completed !== false);
+  if (validWords.length === 0) return [];
+
   let eligibleWords = validWords.filter(word => isQuizCandidate(word, now, customCooldownHours));
 
   if (eligibleWords.length === 0) {
@@ -892,26 +1015,12 @@ export function getCandidateWordsForPractice(
     }
   }
 
-  // Prioritize candidates based on the most recent time they appeared in practice:
-  // 1. Words that have never appeared in practice (unlearned/unstudied) FIFO
-  // 2. Words whose last practice was longest ago (oldest practice date first)
-  const sorted = sortWordsByLastPracticeTime(eligibleWords, now);
-
-  const prioritized: Word[] = [];
-  const seenIds = new Set<string>();
-  const seenNorm = new Set<string>();
-
-  for (const w of sorted) {
-    if (seenIds.has(w.id)) continue;
-    const norm = normalizeWordForComparison(w.word);
-    if (norm && seenNorm.has(norm)) continue;
-    seenIds.add(w.id);
-    if (norm) seenNorm.add(norm);
-    prioritized.push(w);
-    if (prioritized.length >= count) break;
-  }
-
-  return prioritized;
+  // Use the intelligent, anti-starvation weighted candidate selector
+  return getQuizCandidateWords(eligibleWords, {
+    maxCandidates: count,
+    includeUnstudied: true,
+    balanceStratified: true,
+  });
 }
 
 /**
