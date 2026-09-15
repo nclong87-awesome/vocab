@@ -1,4 +1,4 @@
-import { ChallengeData, ChallengeTurnResult, ChallengeSuggestedVocab, UserPersonalityProfile, Word, LLMConfig } from "../types";
+import { ChallengeData, ChallengeKeyWord, ChallengeTurnResult, ChallengeSuggestedVocab, UserPersonalityProfile, Word, LLMConfig } from "../types";
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { getQuizCandidateWords } from "../utils/spacedRepetition";
@@ -40,7 +40,7 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
   if (params.words && params.words.length > 0) {
     const validWords = params.words.filter((w) => w.completed !== false);
     candidateCollectionWords = getQuizCandidateWords(validWords, {
-      maxCandidates: 8,
+      maxCandidates: 18,
       includeUnstudied: true,
       balanceStratified: true,
     });
@@ -51,12 +51,13 @@ ${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.defin
 
 WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
 - Carefully evaluate the candidate words from the user's database above.
-- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation or daily workplace chat.
+- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation or daily workplace chat as the primary target word.
 - Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
 - CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
   NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
   Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
-- Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.`;
+- Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.
+- COLLECTION VOCAB SYNERGY: If other words from the candidate collection list above fit as natural vocabulary or alternative translations in this sentence, prioritize including them in "keyTargetWords"!`;
     }
   }
 
@@ -91,7 +92,12 @@ CRITICAL MANDATES:
 5. NATURAL IDIOMATIC PHRASING: Ensure the sentence sounds completely natural, authentic, and idiomatic for real-life conversational speech in ${nativeLanguage}.
 6. IDEAL POLISHED TRANSLATION: Provide the ideal, concise, and polished natural translation in ${targetLanguage}. The target vocabulary word MUST appear in this 'idealTranslation'.
 7. FEATURE VOCABULARY: Endeavor to feature the chosen word from the user's database and output it in "targetWordFromCollection".
-8. VOCABULARY HINTS: List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
+8. WIDE VARIETY OF VOCABULARY CLUES & SYNONYMS (5-8 CLUES):
+   - Provide a rich, diverse list of 5 to 8 vocabulary clues in "keyTargetWords" covering the key actions, entities, modifiers, and expressions from the sentence.
+   - Crucially include natural synonyms and alternative valid translations for the key concepts (e.g. if the sentence has "chờ đợi", provide both "await" and "wait for"; if "phản hồi", provide both "feedback" and "response"; if "khách hàng", provide both "client" and "customer"; if "hợp đồng", provide both "contract" and "agreement").
+   - Prefer words and synonyms that match candidate words from the user's collection whenever appropriate.
+   - This empowers learners to write multiple correct, idiomatic translations of the sentence while dramatically increasing the likelihood that words they use already exist in their collection (earning them memory strength boosts).
+   - Ensure the primary featured target word is included in this list.
 9. PROFILE NOTE: Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected.
 
 Return STRICTLY raw JSON-only matching this schema:
@@ -105,7 +111,7 @@ Return STRICTLY raw JSON-only matching this schema:
     "hint": "context hint"
   },
   "keyTargetWords": [
-    { "word": "word_in_target", "translation": "translation_in_native", "hint": "part of speech or context" }
+    { "word": "word_or_synonym_in_target", "translation": "translation_in_native", "hint": "synonym or part of speech" }
   ],
   "personalityNote": "Explanation of profile alignment"
 }`;
@@ -222,6 +228,62 @@ export function sanitizeNativeSentence(
 }
 
 /**
+ * Enriches and deduplicates key target words (vocab clues):
+ * - Guarantees the primary featured target word from the collection is included as the top clue.
+ * - Adds all AI-generated clues (synonyms and alternate valid translations).
+ * - Scans user's words collection for any words appearing in the idealTranslation or candidate collection words and appends them.
+ */
+export function enrichKeyTargetWords(
+  rawKeyWords: any[],
+  targetWord?: ChallengeData["targetWordFromCollection"],
+  words?: Word[],
+  idealTranslation?: string,
+  candidateWords: Word[] = []
+): ChallengeKeyWord[] {
+  const result: ChallengeKeyWord[] = [];
+  const seen = new Set<string>();
+
+  const addClue = (word: string, translation: string, hint?: string) => {
+    const trimmed = (word || "").trim();
+    if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
+    if (seen.has(lower)) return;
+    seen.add(lower);
+    result.push({
+      word: trimmed,
+      translation: (translation || "").trim(),
+      hint: hint?.trim() || undefined,
+    });
+  };
+
+  // 1. Featured target word always prioritized first if available
+  if (targetWord?.word) {
+    addClue(targetWord.word, targetWord.translation || targetWord.definition || "", targetWord.hint || "Featured target word");
+  }
+
+  // 2. Add AI-generated clues (rich variety with synonyms and alternative translations)
+  if (Array.isArray(rawKeyWords)) {
+    for (const kw of rawKeyWords) {
+      if (kw?.word) {
+        addClue(kw.word, kw.translation || "", kw.hint);
+      }
+    }
+  }
+
+  // 3. Check candidate collection words and entire collection to see if any match words in the ideal translation
+  const pool = candidateWords.length > 0 ? candidateWords : (words || []);
+  if (pool.length > 0 && idealTranslation) {
+    for (const w of pool) {
+      if (w?.word && hasUserIncorporatedWord(idealTranslation, w.word)) {
+        addClue(w.word, w.translation || w.definition || "", "From your collection");
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Client-side LLM call using Cloudflare Workers / direct provider for translation challenge generation
  */
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
@@ -245,10 +307,18 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
   const targetWordFromCollection = resolveTargetWordFromCollection(parsed, params.words, candidateCollectionWords);
 
+  const keyTargetWords = enrichKeyTargetWords(
+    parsed.keyTargetWords,
+    targetWordFromCollection || parsed.targetWordFromCollection,
+    params.words,
+    parsed.idealTranslation,
+    candidateCollectionWords
+  );
+
   const sanitizedSentence = sanitizeNativeSentence(
     parsed.nativeSentence,
     targetWordFromCollection || parsed.targetWordFromCollection,
-    parsed.keyTargetWords
+    keyTargetWords
   );
 
   return {
@@ -259,7 +329,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
     topicContext: parsed.topicContext || "Daily Conversation",
     idealTranslation: parsed.idealTranslation,
     targetWordFromCollection,
-    keyTargetWords: parsed.keyTargetWords || [],
+    keyTargetWords,
     personalityNote: parsed.personalityNote,
     createdAt: new Date().toISOString(),
     provider: resWithMeta.provider,
@@ -297,10 +367,17 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
         targetWord = resolveTargetWordFromCollection(data, effectiveParams.words);
       }
 
+      const keyTargetWords = enrichKeyTargetWords(
+        data.keyTargetWords,
+        targetWord || data.targetWordFromCollection,
+        effectiveParams.words,
+        data.idealTranslation
+      );
+
       const sanitizedSentence = sanitizeNativeSentence(
         data.nativeSentence,
         targetWord || data.targetWordFromCollection,
-        data.keyTargetWords
+        keyTargetWords
       );
 
       return {
@@ -311,7 +388,7 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
         topicContext: data.topicContext || "Personalized Practice",
         idealTranslation: data.idealTranslation,
         targetWordFromCollection: targetWord,
-        keyTargetWords: data.keyTargetWords || [],
+        keyTargetWords,
         personalityNote: data.personalityNote,
         createdAt: new Date().toISOString(),
         provider: data.provider,
@@ -510,11 +587,15 @@ TASK:
 
 2. Otherwise, treat as a complete translation attempt (intent: "submission"):
    - Evaluate their translation against the native sentence and ideal target translation.
-   - Calculate an overall accuracy score from 0 to 100.
+   - FLEXIBILITY FOR MULTIPLE CORRECT TRANSLATIONS & SYNONYMS:
+     Real-world language has multiple valid ways to express the same thought. Acknowledge and credit valid alternative vocabulary, natural synonyms (e.g., using "client" vs "customer", "feedback" vs "response", "contract" vs "agreement", "await" vs "wait for", etc.), and different correct grammatical structures that accurately convey the native sentence.
+     Do NOT penalize the learner for choosing valid synonyms or natural phrasing alternatives. Reward authentic, accurate communication!
+   - Calculate an overall accuracy score from 0 to 100 based on grammatical correctness, semantic faithfulness, and naturalness.
    - Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
    - Provide "userTranslation": the learner's submitted translation attempt.
-   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}".
-   - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word if used).
+   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}". If they used a valid synonym instead, praise their alternative choice in "whatWentWell" and gently mention how "${targetWord}" also works in "areasForImprovement".
+   - VOCAB CLUES INCORPORATED: Check which words from "Key Target Words" (or their synonyms) the learner used in their translation. List all incorporated clue words in "incorporatedVocabClues".
+   - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word or synonyms if used).
    - List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
    - Provide "correctedSentence": the optimal target translation.
    - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing key terms from the challenge.
@@ -529,6 +610,7 @@ Return STRICTLY raw JSON matching:
     "userTranslation": "learner's submitted translation text",
     "incorporatedTargetWord": true,
     "targetWordUsed": "${targetWord}",
+    "incorporatedVocabClues": ["word1", "word2"],
     "whatWentWell": "Praise paragraph...",
     "areasForImprovement": "Improvement paragraph...",
     "correctedSentence": "Optimal target translation",

@@ -302,9 +302,27 @@ export default function TranslationChallengeCard({
         {/* Collapsible Key Target Words Hints */}
         {showVocabHints && challenge.keyTargetWords && (
           <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
-            <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
-              Vocab Clues:
-            </span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
+                Vocab Clues & Options:
+              </span>
+              {(() => {
+                const countInCol = challenge.keyTargetWords.filter(
+                  (kw) => isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()]
+                ).length;
+                return (
+                  <span className="text-[11px] text-stone-500">
+                    {countInCol > 0 ? (
+                      <span className="text-emerald-700 font-medium">
+                        {countInCol} {countInCol === 1 ? "word" : "words"} in your collection
+                      </span>
+                    ) : (
+                      <span>Multiple valid options</span>
+                    )}
+                  </span>
+                );
+              })()}
+            </div>
             <div className="flex flex-wrap gap-2">
               {challenge.keyTargetWords.map((kw, i) => {
                 const inCol = isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()];

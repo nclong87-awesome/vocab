@@ -3134,7 +3134,7 @@ app.post("/api/generate-challenge", async (req, res) => {
     if (Array.isArray(words) && words.length > 0) {
       const validWords = words.filter((w: any) => w.completed !== false);
       candidateCollectionWords = getQuizCandidateWords(validWords, {
-        maxCandidates: 8,
+        maxCandidates: 18,
         includeUnstudied: true,
         balanceStratified: true,
       });
@@ -3145,12 +3145,13 @@ ${candidateCollectionWords.map((w: any) => `- "${w.word}" (${w.translation || w.
 
 WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
 - Carefully evaluate the candidate words from the user's database above.
-- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation or daily workplace chat.
+- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation or daily workplace chat as the primary target word.
 - Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
 - CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
   NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
   Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
-- Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.`;
+- Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.
+- COLLECTION VOCAB SYNERGY: If other words from the candidate collection list above fit as natural vocabulary or alternative translations in this sentence, prioritize including them in "keyTargetWords"!`;
       }
     }
 
@@ -3184,7 +3185,12 @@ CRITICAL MANDATES:
 5. NATURAL IDIOMATIC PHRASING: Ensure the sentence sounds completely natural, authentic, and idiomatic for real-life conversational speech in ${nativeLanguage}.
 6. IDEAL POLISHED TRANSLATION: Provide the ideal, concise, and polished natural translation in ${targetLanguage}. The target vocabulary word MUST appear in this 'idealTranslation'.
 7. FEATURE VOCABULARY: Endeavor to feature the chosen word from the user's database and output it in "targetWordFromCollection".
-8. VOCABULARY HINTS: List 2-3 key target vocabulary words contained in the sentence with their native translation and hint.
+8. WIDE VARIETY OF VOCABULARY CLUES & SYNONYMS (5-8 CLUES):
+   - Provide a rich, diverse list of 5 to 8 vocabulary clues in "keyTargetWords" covering the key actions, entities, modifiers, and expressions from the sentence.
+   - Crucially include natural synonyms and alternative valid translations for the key concepts (e.g. if the sentence has "chờ đợi", provide both "await" and "wait for"; if "phản hồi", provide both "feedback" and "response"; if "khách hàng", provide both "client" and "customer"; if "hợp đồng", provide both "contract" and "agreement").
+   - Prefer words and synonyms that match candidate words from the user's collection whenever appropriate.
+   - This empowers learners to write multiple correct, idiomatic translations of the sentence while dramatically increasing the likelihood that words they use already exist in their collection (earning them memory strength boosts).
+   - Ensure the primary featured target word is included in this list.
 9. PROFILE NOTE: Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected.
 
 Return STRICTLY raw JSON-only matching this schema:
@@ -3198,7 +3204,7 @@ Return STRICTLY raw JSON-only matching this schema:
     "hint": "context hint"
   },
   "keyTargetWords": [
-    { "word": "word_in_target", "translation": "translation_in_native", "hint": "part of speech or context" }
+    { "word": "word_or_synonym_in_target", "translation": "translation_in_native", "hint": "synonym or part of speech" }
   ],
   "personalityNote": "Explanation of profile alignment"
 }`;
@@ -3247,6 +3253,51 @@ Return STRICTLY raw JSON-only matching this schema:
           };
         }
       }
+
+      // Enrich keyTargetWords:
+      // 1. Ensure targetWordFromCollection is included as first clue
+      // 2. Add AI generated clues (rich variety with synonyms and alternatives)
+      // 3. Add any candidate collection words that appear in idealTranslation
+      const enrichedKeyTargetWords: any[] = [];
+      const seenClues = new Set<string>();
+      const addClue = (wordText: string, transText: string, hintText?: string) => {
+        const w = (wordText || "").trim();
+        if (!w) return;
+        const low = w.toLowerCase();
+        if (seenClues.has(low)) return;
+        seenClues.add(low);
+        enrichedKeyTargetWords.push({
+          word: w,
+          translation: (transText || "").trim(),
+          hint: hintText?.trim() || undefined,
+        });
+      };
+
+      if (parsed.targetWordFromCollection?.word) {
+        addClue(
+          parsed.targetWordFromCollection.word,
+          parsed.targetWordFromCollection.translation || parsed.targetWordFromCollection.definition || "",
+          parsed.targetWordFromCollection.hint || "Featured target word"
+        );
+      }
+
+      if (Array.isArray(parsed.keyTargetWords)) {
+        for (const kw of parsed.keyTargetWords) {
+          if (kw?.word) {
+            addClue(kw.word, kw.translation || "", kw.hint);
+          }
+        }
+      }
+
+      if (Array.isArray(candidateCollectionWords) && candidateCollectionWords.length > 0 && parsed.idealTranslation) {
+        for (const cand of candidateCollectionWords) {
+          if (cand?.word && hasUserIncorporatedWord(parsed.idealTranslation, cand.word)) {
+            addClue(cand.word, cand.translation || cand.definition || "", "From your collection");
+          }
+        }
+      }
+
+      parsed.keyTargetWords = enrichedKeyTargetWords;
 
       // Sanitize nativeSentence to ensure target loanwords are replaced if present
       const pairsToReplace: Array<{ word: string; translation: string }> = [];
@@ -3423,11 +3474,15 @@ TASK:
 
 2. Otherwise, treat as a complete translation attempt (intent: "submission"):
    - Evaluate their translation against the native sentence and ideal target translation.
-   - Calculate an overall accuracy score from 0 to 100.
+   - FLEXIBILITY FOR MULTIPLE CORRECT TRANSLATIONS & SYNONYMS:
+     Real-world language has multiple valid ways to express the same thought. Acknowledge and credit valid alternative vocabulary, natural synonyms (e.g., using "client" vs "customer", "feedback" vs "response", "contract" vs "agreement", "await" vs "wait for", etc.), and different correct grammatical structures that accurately convey the native sentence.
+     Do NOT penalize the learner for choosing valid synonyms or natural phrasing alternatives. Reward authentic, accurate communication!
+   - Calculate an overall accuracy score from 0 to 100 based on grammatical correctness, semantic faithfulness, and naturalness.
    - Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
    - Provide "userTranslation": the learner's submitted translation attempt.
-   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}".
-   - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word if used).
+   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}". If they used a valid synonym instead, praise their alternative choice in "whatWentWell" and gently mention how "${targetWord}" also works in "areasForImprovement".
+   - VOCAB CLUES INCORPORATED: Check which words from "Key Target Words" (or their synonyms) the learner used in their translation. List all incorporated clue words in "incorporatedVocabClues".
+   - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word or synonyms if used).
    - List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
    - Provide "correctedSentence": the optimal target translation.
    - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing key terms from the challenge.
@@ -3442,6 +3497,7 @@ Return STRICTLY raw JSON matching:
     "userTranslation": "learner's submitted translation text",
     "incorporatedTargetWord": true,
     "targetWordUsed": "${targetWord}",
+    "incorporatedVocabClues": ["word1", "word2"],
     "whatWentWell": "Praise paragraph...",
     "areasForImprovement": "Improvement paragraph...",
     "correctedSentence": "Optimal target translation",
