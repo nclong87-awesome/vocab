@@ -59,6 +59,7 @@ export default function WordSearchModal({
   onToggleStarWord,
   onToast,
 }: WordSearchModalProps) {
+  const [inputValue, setInputValue] = useState("");
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<WordSearchFilter>("all");
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
@@ -71,11 +72,93 @@ export default function WordSearchModal({
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveRecentSearch = useCallback((term: string) => {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setRecentSearches(prev => {
+      const filtered = prev.filter(t => t.toLowerCase() !== trimmed.toLowerCase());
+      const updated = [trimmed, ...filtered].slice(0, 6);
+      try {
+        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.error("Failed to save recent search", err);
+      }
+      return updated;
+    });
+  }, []);
+
+  const commitSearch = useCallback((rawTerm: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const cleanTerm = rawTerm.trim();
+    setQuery(cleanTerm);
+    if (cleanTerm) {
+      saveRecentSearch(cleanTerm);
+    }
+  }, [saveRecentSearch]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputValue(val);
+
+    // If input is emptied, clear search immediately
+    if (!val.trim()) {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      setQuery("");
+      return;
+    }
+
+    // Debounce search while typing: wait 850ms of typing inactivity
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      commitSearch(val);
+    }, 850);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitSearch(inputValue);
+    }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    commitSearch(inputValue);
+  };
+
+  const handleClearInput = () => {
+    setInputValue("");
+    commitSearch("");
+    inputRef.current?.focus();
+  };
 
   const handleCloseModal = useCallback(() => {
     stopSpeech();
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
     onClose();
   }, [onClose]);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Support hardware/browser Back button on mobile devices (Android system back, browser back)
   useModalBackNavigation(isOpen, handleCloseModal, "word-search-modal");
@@ -109,21 +192,6 @@ export default function WordSearchModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, handleCloseModal]);
-
-  const saveRecentSearch = useCallback((term: string) => {
-    const trimmed = term.trim();
-    if (!trimmed) return;
-    setRecentSearches(prev => {
-      const filtered = prev.filter(t => t.toLowerCase() !== trimmed.toLowerCase());
-      const updated = [trimmed, ...filtered].slice(0, 6);
-      try {
-        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
-      } catch (err) {
-        console.error("Failed to save recent search", err);
-      }
-      return updated;
-    });
-  }, []);
 
   const clearRecentSearches = useCallback(() => {
     setRecentSearches([]);
@@ -205,21 +273,22 @@ export default function WordSearchModal({
   }, [onInsertToChat, handleCloseModal, onToast, saveRecentSearch]);
 
   const handleTriggerAiExplain = useCallback((searchTerm: string) => {
-    const term = searchTerm.trim();
+    const term = searchTerm.trim() || inputValue.trim();
     if (!term) return;
     saveRecentSearch(term);
     handleCloseModal();
+    setInputValue("");
     setQuery("");
     const prompt = `Please explain the word "${term}" in ${targetLanguage} with clear definition, phonetic pronunciation, nuance, and 3 example sentences translated to ${nativeLanguage}.`;
     onSendMessage?.(prompt);
-  }, [targetLanguage, nativeLanguage, onSendMessage, handleCloseModal, saveRecentSearch]);
+  }, [inputValue, targetLanguage, nativeLanguage, onSendMessage, handleCloseModal, saveRecentSearch]);
 
   const handleAddNewWord = useCallback((term?: string) => {
     handleCloseModal();
-    const w = term || query;
+    const w = term || inputValue || query;
     if (w.trim()) saveRecentSearch(w.trim());
     onAddWord?.(w.trim() || undefined);
-  }, [query, onAddWord, handleCloseModal, saveRecentSearch]);
+  }, [inputValue, query, onAddWord, handleCloseModal, saveRecentSearch]);
 
   // Helper to highlight matching text in word name or fields (including fuzzy matches)
   const renderHighlighted = (text: string, highlight: string) => {
@@ -312,38 +381,49 @@ export default function WordSearchModal({
 
           {/* Search Input Bar */}
           <div className="p-3 sm:p-4 border-b border-stone-200 bg-white space-y-2.5">
-            <div className="relative flex items-center gap-2">
+            <form onSubmit={handleFormSubmit} className="relative flex items-center gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
                 <input
                   ref={inputRef}
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  type="search"
+                  enterKeyHint="search"
+                  value={inputValue}
+                  onChange={handleInputChange}
+                  onKeyDown={handleInputKeyDown}
                   placeholder={t("chat_search_word_placeholder", appLanguage) || "Search word, meaning, IPA, topic, or ask AI..."}
-                  className="w-full pl-10 pr-9 py-2 sm:py-2.5 rounded-xl border border-stone-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 transition-all font-medium bg-stone-50/50 focus:bg-white"
+                  className="w-full pl-10 pr-20 py-2 sm:py-2.5 rounded-xl border border-stone-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 transition-all font-medium bg-stone-50/50 focus:bg-white"
                   id="modal-word-search-input"
                 />
-                {query && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery("");
-                      inputRef.current?.focus();
-                    }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 rounded-md transition-colors"
-                    title="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {inputValue && (
+                    <button
+                      type="button"
+                      onClick={handleClearInput}
+                      className="text-stone-400 hover:text-stone-700 p-1 rounded-md transition-colors cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {inputValue.trim() !== query.trim() && inputValue.trim().length > 0 && (
+                    <button
+                      type="submit"
+                      className="px-2 py-0.5 rounded-md bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-bold shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 shrink-0"
+                      title="Search now (or press Enter)"
+                    >
+                      <span>Search</span>
+                      <span className="text-[10px] opacity-70 hidden sm:inline">↵</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Add New Word Quick Button */}
               {onAddWord && (
                 <button
                   type="button"
-                  onClick={() => handleAddNewWord(query)}
+                  onClick={() => handleAddNewWord(inputValue)}
                   className="px-3 py-2 sm:py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-2xs shrink-0 cursor-pointer"
                   title="Add new word to vocabulary"
                   id="modal-quick-add-word-btn"
@@ -352,7 +432,7 @@ export default function WordSearchModal({
                   <span className="hidden sm:inline">Add Word</span>
                 </button>
               )}
-            </div>
+            </form>
 
             {/* Filter Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
@@ -408,7 +488,11 @@ export default function WordSearchModal({
                     <button
                       key={idx}
                       type="button"
-                      onClick={() => setQuery(term)}
+                      onClick={() => {
+                        setInputValue(term);
+                        commitSearch(term);
+                        inputRef.current?.focus();
+                      }}
                       className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-indigo-50 hover:text-indigo-900 text-stone-700 text-xs font-semibold border border-stone-200/80 transition-all cursor-pointer flex items-center gap-1"
                     >
                       <Search className="w-3 h-3 text-stone-400" />

@@ -174,21 +174,24 @@ export default function AppHeader({
         <Sliders className="w-3.5 h-3.5" />
         <span>{t("nav_settings", appLanguage)}</span>
       </button>
-
-      {onOpenWordSearch && (
-        <button
-          type="button"
-          onClick={onOpenWordSearch}
-          className="p-1 sm:p-1.5 text-stone-500 hover:text-stone-950 hover:bg-stone-100 active:bg-stone-200 rounded-md transition-colors cursor-pointer shrink-0 flex items-center justify-center"
-          title={`${t("qa_search_word_title", appLanguage) || "Search Words"} (⌘K or /)`}
-          aria-label={t("qa_search_word_title", appLanguage) || "Search words"}
-          id="nav-search-words-btn"
-        >
-          <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        </button>
-      )}
     </div>
   );
+
+  const renderSearchButton = () => {
+    if (!onOpenWordSearch) return null;
+    return (
+      <button
+        type="button"
+        onClick={onOpenWordSearch}
+        className="p-1 sm:p-1.5 text-stone-500 hover:text-stone-950 hover:bg-stone-100 active:bg-stone-200 rounded-md transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+        title={`${t("qa_search_word_title", appLanguage) || "Search Words"} (⌘K or /)`}
+        aria-label={t("qa_search_word_title", appLanguage) || "Search words"}
+        id="header-search-words-btn"
+      >
+        <Search className="w-4 h-4" />
+      </button>
+    );
+  };
 
   return (
     <header className="bg-white border-b border-stone-200 py-1.5 sm:py-2.5 md:py-3 px-2 sm:px-6 md:px-8 sticky top-0 z-40 shrink-0" id="main-header">
@@ -197,14 +200,18 @@ export default function AppHeader({
         {!isMobile ? (
           /* Desktop Header Layout (>= lg) */
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-6 xl:gap-8">
+            <div className="flex items-center gap-6 xl:gap-8 min-w-0">
               {renderLogo()}
               <div className="h-4 w-px bg-stone-200" />
               <div className="text-xs font-medium">
                 {renderNavLinks()}
               </div>
             </div>
-            {renderSwitchers()}
+            <div className="flex items-center gap-2 shrink-0">
+              {renderSearchButton()}
+              <div className="h-4 w-px bg-stone-200" />
+              {renderSwitchers()}
+            </div>
           </div>
         ) : (
           /* Mobile & Tablet Header Layout (< lg, including iPad portrait) */
@@ -214,9 +221,14 @@ export default function AppHeader({
               {renderLogo()}
               {renderSwitchers()}
             </div>
-            {/* Row 2: Nav Links */}
-            <div className="flex items-center justify-start sm:justify-center gap-4 sm:gap-6 text-xs font-medium tracking-normal pt-1 border-t border-stone-100 overflow-x-auto scrollbar-none">
-              {renderNavLinks()}
+            {/* Row 2: Nav Links (left) & Search Button (far right) */}
+            <div className="flex items-center justify-between min-w-0 w-full pt-1 border-t border-stone-100">
+              <div className="flex items-center gap-3.5 sm:gap-6 text-xs font-medium tracking-normal overflow-x-auto scrollbar-none py-0.5 min-w-0">
+                {renderNavLinks()}
+              </div>
+              <div className="pl-2 shrink-0">
+                {renderSearchButton()}
+              </div>
             </div>
           </div>
         )}
