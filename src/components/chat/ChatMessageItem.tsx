@@ -1,14 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
-  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2, Swords, BookOpen
+  Volume2, ChevronRight, Check, Sparkles, Plus, History, MessageSquare, Lock, CheckCircle2, Swords
 } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, QuizSuggestedWord } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
 import FormattedMessage, { findMatchingAction } from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import QuizImage from "../quiz/QuizImage";
-import StoryImmersionMessageCard from "./StoryImmersionMessageCard";
 import TranslationChallengeCard from "./TranslationChallengeCard";
 import ChatErrorMessageCard from "./ChatErrorMessageCard";
 import { WordLibraryChatCard } from "./WordLibraryChatCard";
@@ -37,7 +36,7 @@ interface ChatMessageItemProps {
   onGenerateByTopic?: () => void;
   startPractice: (
     overrideConfig?: any,
-    mode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel" | "translation_challenge",
+    mode?: "auto" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel" | "translation_challenge",
     options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
   ) => void;
   onFixGrammar: () => void;
@@ -373,7 +372,6 @@ function ChatMessageItem({
     return messages.find(
       (m) =>
         (m.id.startsWith("sandwich-warmup-msg-") ||
-          m.id.startsWith("sandwich-warmup-story-") ||
           (m.suggestedActions && m.suggestedActions.some((a) => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz"))) &&
         !messages.some((quizM) => quizM.id.startsWith("sandwich-duel-start-") || quizM.id.startsWith("sandwich-quiz-start-") || quizM.quizFinishedData)
     );
@@ -464,8 +462,8 @@ function ChatMessageItem({
         }
       }
 
-      // On the latest message, if no quiz options, not story, and not translation challenge, extract or generate topic choices
-      if (isLatestMessage && !hasQuizOptions && !msg.storyData && !msg.challengeData && !msg.challengeEvaluation) {
+      // On the latest message, if no quiz options and not translation challenge, extract or generate topic choices
+      if (isLatestMessage && !hasQuizOptions && !msg.challengeData && !msg.challengeEvaluation) {
         const content = safeMsgContent;
         const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
 
@@ -584,7 +582,7 @@ function ChatMessageItem({
 
             if (!actionPayload || !Array.isArray(actionPayload.warmupWordIds) || actionPayload.warmupWordIds.length === 0) {
               const warmupMsg = messages.find(
-                m => m.id.startsWith("sandwich-warmup-msg-") || m.id.startsWith("sandwich-warmup-story-")
+                m => m.id.startsWith("sandwich-warmup-msg-")
               );
               const origAction = warmupMsg?.suggestedActions?.find(
                 a => a?.action === "start_sandwich_quiz" || a?.action === "start_sandwich_duel"
@@ -703,7 +701,6 @@ function ChatMessageItem({
     msg.suggestedActions,
     msg.quizFinishedData,
     isLatestMessage,
-    msg.storyData,
     safeMsgContent,
     messages,
     targetLanguage,
@@ -781,13 +778,6 @@ function ChatMessageItem({
     } else if (act.action === "start_practice_confuser_duel") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "confuser_duel");
-    } else if (
-      act.action === "start_practice_story_immersion" ||
-      act.action === "start_story_immersion" ||
-      act.action === "next_story"
-    ) {
-      handleRecordActionUse("start_practice");
-      startPractice(undefined, "story_immersion");
     } else if (act.action === "start_translation_challenge") {
       handleRecordActionUse("start_practice");
       startPractice(undefined, "translation_challenge");
@@ -804,7 +794,7 @@ function ChatMessageItem({
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
       if (!warmupWordIds || !Array.isArray(warmupWordIds) || warmupWordIds.length === 0) {
-        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-") || m.id.startsWith("sandwich-warmup-story-"));
+        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-"));
         const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_duel" || a?.action === "start_sandwich_quiz");
         warmupWordIds = origAction?.payload?.warmupWordIds || [];
       }
@@ -813,7 +803,7 @@ function ChatMessageItem({
       handleRecordActionUse("start_practice");
       let warmupWordIds = act.payload?.warmupWordIds;
       if (!warmupWordIds || !Array.isArray(warmupWordIds) || warmupWordIds.length === 0) {
-        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-") || m.id.startsWith("sandwich-warmup-story-"));
+        const warmupMsg = messages.find(m => m.id.startsWith("sandwich-warmup-msg-"));
         const origAction = warmupMsg?.suggestedActions?.find(a => a?.action === "start_sandwich_quiz" || a?.action === "start_sandwich_duel");
         warmupWordIds = origAction?.payload?.warmupWordIds || [];
       }
@@ -877,7 +867,7 @@ function ChatMessageItem({
       <div className="space-y-2 w-full flex flex-col">
         <div 
           className={
-            msg.storyData || msg.challengeData || msg.challengeEvaluation
+            msg.challengeData || msg.challengeEvaluation
               ? "w-full"
               : `p-4 rounded-2xl w-full ${
                   isUser 
@@ -900,24 +890,6 @@ function ChatMessageItem({
                 </div>
               )}
             </div>
-          ) : msg.storyData ? (
-            <StoryImmersionMessageCard
-              story={msg.storyData}
-              targetLanguage={targetLanguage}
-              nativeLanguage={nativeLanguage}
-              appLanguage={currentAppLang}
-              ttsConfig={ttsConfig}
-              llmConfig={llmConfig}
-              provider={msg.storyData?.provider || msg.provider}
-              model={msg.storyData?.model || msg.model}
-              responseTimeMs={msg.storyData?.responseTimeMs ?? msg.responseTimeMs}
-              words={words}
-              onUpdateWords={onUpdateWords}
-              onAddWord={onAddWord}
-              onAddIncompleteWord={onAddIncompleteWord}
-              onAddMultipleWords={onAddMultipleWords}
-              showToast={showToast}
-            />
           ) : (msg.challengeData || msg.challengeEvaluation) ? (
             <TranslationChallengeCard
               challenge={msg.challengeData}
@@ -1490,10 +1462,6 @@ function ChatMessageItem({
                 const isSandwichDuelLocked = isSandwichDuel && !isAllWarmupReviewed;
                 const isDuelPracticeAction = act.action === "start_practice_confuser_duel";
                 const isDuelQuizAction = (msg.isConfuserDuel || /Confuser Duel/i.test(msg.content)) && act.action === "quiz_answer";
-                const isStoryImmersionAction =
-                  act.action === "start_practice_story_immersion" ||
-                  act.action === "start_story_immersion" ||
-                  act.action === "next_story";
                 const currentPayload = customActionPayloads[aIdx] || act.payload;
 
                 return (
@@ -1549,8 +1517,6 @@ function ChatMessageItem({
                       <Swords className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0 mt-0.5" />
                     ) : isDuelQuizAction ? (
                       <Swords className="w-3.5 h-3.5 text-amber-600 group-hover:text-amber-400 shrink-0 mt-0.5" />
-                    ) : isStoryImmersionAction ? (
-                      <BookOpen className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-400 group-focus:text-amber-400 shrink-0 mt-0.5" />
                     ) : isNextQ ? (
                       <ChevronRight className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                     ) : (

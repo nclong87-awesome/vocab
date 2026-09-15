@@ -295,7 +295,6 @@ export default function App() {
     handlePromptSuggestCasualReply,
     handleSuggestCasualReply,
     handlePromptFixGrammar,
-    handleViewStoryImmersion,
     handleShowWordLibraries,
     handleClearChatHistory,
     handleAnalyzeImageVocab,
@@ -664,7 +663,6 @@ export default function App() {
                     onGenerateByTopic={handleConversationalGenerateWordsPrompt}
                     startPractice={startPractice}
                     onFixGrammar={handlePromptFixGrammar}
-                    onViewStoryImmersion={handleViewStoryImmersion}
                     onOpenWordLibrary={handleShowWordLibraries}
                     onSelectDefinition={handleSelectDefinition}
                     onClearHistory={handleClearChatHistory}

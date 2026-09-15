@@ -2164,7 +2164,7 @@ export interface QuizGenerationRequest {
   llmConfig?: LLMConfig;
   stats?: UserStats;
   signal?: AbortSignal;
-  practiceMode?: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel";
+  practiceMode?: "auto" | "quiz_only" | "balanced" | "sandwich_quiz" | "sandwich_duel" | "confuser_duel";
 }
 
 export interface QuizGenerationResult {

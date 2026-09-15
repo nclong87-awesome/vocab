@@ -29,7 +29,6 @@ interface ChatViewProps {
   onGenerateByTopic: () => void;
   startPractice: (overrideConfig?: any, mode?: any, options?: any) => void;
   onFixGrammar: () => void;
-  onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onOpenWordLibrary?: () => void;
   onAnalyzeImageVocab?: (imageDataUrl: string, prompt?: string) => void;
   onSuggestCasualReplyPrompt?: () => void;
@@ -67,7 +66,6 @@ function ChatView({
   onGenerateByTopic,
   startPractice,
   onFixGrammar,
-  onViewStoryImmersion,
   onOpenWordLibrary,
   onAnalyzeImageVocab,
   onSuggestCasualReplyPrompt,
@@ -571,7 +569,6 @@ function ChatView({
         onGenerateByTopic={onGenerateByTopic}
         startPractice={startPractice}
         onFixGrammar={onFixGrammar}
-        onViewStoryImmersion={onViewStoryImmersion}
         onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
         onOpenWordLibrary={onOpenWordLibrary}
         onOpenWordSearch={handleOpenWordSearch}

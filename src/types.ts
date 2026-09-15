@@ -249,7 +249,6 @@ export interface ChatMessage {
   quizSpeechText?: string;
   nextQuestionSpeechText?: string;
   fixedSentence?: string;
-  storyData?: ImmersionStory;
   challengeData?: ChallengeData;
   challengeEvaluation?: ChallengeEvaluation;
   quizFinishedData?: QuizFinishedData;
@@ -310,55 +309,6 @@ export interface UserPersonalityProfile {
   tailoredSystemPromptPatch: string;
   modelUsed?: string;
   providerUsed?: string;
-}
-
-// ==========================================
-// Contextual Immersion Story Types (Chat)
-// ==========================================
-
-export interface ImmersionStoryWord {
-  word: string;
-  targetInStory: string;
-  translation: string;
-  definition?: string;
-  pronunciation?: string;
-  partOfSpeech?: string;
-  isCollectionWord?: boolean;
-}
-
-export interface ImmersionStoryParagraph {
-  id: string;
-  targetText: string;
-  nativeText: string;
-  audioText?: string;
-}
-
-export interface ImmersionStory {
-  id: string;
-  title: string;
-  titleTranslation: string;
-  topic: string;
-  genre: string;
-  difficulty: "beginner" | "intermediate" | "advanced";
-  targetLanguage: string;
-  nativeLanguage: string;
-  targetWords: ImmersionStoryWord[];
-  suggestedWords?: ImmersionStoryWord[];
-  paragraphs: ImmersionStoryParagraph[];
-  provider?: string;
-  model?: string;
-  responseTimeMs?: number;
-  createdAt: string;
-}
-
-export interface MinedSentence {
-  id: string;
-  targetSentence: string;
-  translation: string;
-  sourceStoryTitle?: string;
-  minedWords: string[];
-  createdAt: string;
-  userNotes?: string;
 }
 
 // ==========================================

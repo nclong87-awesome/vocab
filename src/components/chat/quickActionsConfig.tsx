@@ -26,7 +26,6 @@ export interface QuickActionItem {
     onAddWord: () => void;
     onSendMessage: (text: string) => void;
     onClearHistory: () => void;
-    onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
     onSuggestCasualReplyPrompt?: () => void;
     onOpenWordLibrary?: () => void;
     onOpenWordSearch?: () => void;

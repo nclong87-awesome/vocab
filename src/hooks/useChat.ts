@@ -9,14 +9,11 @@ import {
   analyzeImageVocabService,
   suggestCasualReplyService,
 } from "../services/llmClientService";
-import { generateImmersionStoryService } from "../services/immersionStoryService";
 import {
   getQuizCandidateWords,
-  getCandidateWordsForImmersion,
+  getCandidateWordsForPractice,
   getQuizCandidates,
-  getImmersionCandidates,
   isWordLearnedOrStudied,
-  sortUnstudiedWordsOldestFirst,
   isWordOnReviewCooldown,
   getDueReviewCandidates,
   hasUnresolvedQuizMistake,
@@ -256,10 +253,10 @@ export function useChat({
     );
   };
 
-  // Start the unified Practice flow: checks Quiz candidates first, then Immersion candidates, or displays no-words message
+  // Start the unified Practice flow: checks Quiz candidates, or displays no-words message
   const startPractice = async (
     overrideConfig?: LLMConfig,
-    practiceMode: "auto" | "story_immersion" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
+    practiceMode: "auto" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
     options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
   ) => {
     const configToUse = overrideConfig || llmConfig;
@@ -290,7 +287,6 @@ export function useChat({
       return;
     }
 
-    const immersionCandidates = getImmersionCandidates(activeWords);
     const dueQuizCandidates = getQuizCandidates(activeWords);
     const unstudiedCandidates = activeWords.filter((w) => !isWordLearnedOrStudied(w));
     const nonCooldownActive = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
@@ -299,7 +295,6 @@ export function useChat({
       practiceMode === "translation_challenge" ||
       unstudiedCandidates.length > 0 ||
       dueQuizCandidates.length > 0 ||
-      immersionCandidates.length > 0 ||
       nonCooldownActive.length > 0;
 
     if (!hasAvailablePractice) {
@@ -319,11 +314,10 @@ export function useChat({
 
     // When practiceMode is 'auto', present practice session starter overview with details & choice
     if (practiceMode === "auto") {
-      const immersionCount = immersionCandidates.length;
       const unstudiedCount = unstudiedCandidates.length;
       const dueReviews = getDueReviewCandidates(activeWords);
       const dueCount = dueReviews.length;
-      const totalReady = immersionCount > 0 ? immersionCount : (unstudiedCount + dueCount);
+      const totalReady = unstudiedCount + dueCount > 0 ? unstudiedCount + dueCount : activeWords.length;
 
       const actions: { label: string; action: string }[] = [];
 
@@ -363,13 +357,6 @@ export function useChat({
         });
       }
 
-      if (immersionCount > 0) {
-        actions.push({
-          label: `📖 Story Immersion (${immersionCount} ${immersionCount === 1 ? "word" : "words"})`,
-          action: "start_practice_story_immersion",
-        });
-      }
-
       actions.push({
         label: `🎯 Translation Challenge (Personalized)`,
         action: "start_translation_challenge",
@@ -404,7 +391,7 @@ export function useChat({
       let duelWords = warmupWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
       if (duelWords.length === 0) {
         const nonCooldownPool = activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2));
-        duelWords = getCandidateWordsForImmersion(nonCooldownPool.length >= 3 ? nonCooldownPool : activeWords, 3);
+        duelWords = getCandidateWordsForPractice(nonCooldownPool.length >= 3 ? nonCooldownPool : activeWords, 3);
       }
       if (duelWords.length < 3) {
         const existingIds = new Set(duelWords.map((w) => w.id));
@@ -888,101 +875,7 @@ export function useChat({
       return;
     }
 
-    // Step 2: Search for candidate words for Story Immersion (for story_immersion mode)
-    const rawUnstudied = activeWords.filter((w) => !isWordLearnedOrStudied(w));
-    const unstudiedWords = sortUnstudiedWordsOldestFirst(rawUnstudied);
-    let batchStoryCandidates = getCandidateWordsForImmersion(activeWords, 5);
-    if (practiceMode === "story_immersion" || unstudiedWords.length > 0) {
-      if (unstudiedWords.length > 0) {
-        batchStoryCandidates = unstudiedWords.slice(0, 5);
-      } else if (immersionCandidates.length > 0) {
-        batchStoryCandidates = immersionCandidates.slice(0, 5);
-      }
-    }
-    if (batchStoryCandidates.length === 0 && activeWords.length > 0) {
-      const nonCooldownWords = sortWordsByLastPracticeTime(
-        activeWords.filter((w) => !isWordOnReviewCooldown(w, new Date(), 2))
-      );
-      batchStoryCandidates = nonCooldownWords.slice(0, 5);
-      if (batchStoryCandidates.length === 0) {
-        batchStoryCandidates = sortWordsByLastPracticeTime(activeWords).slice(0, 5);
-      }
-    }
-    if (batchStoryCandidates.length === 0) {
-      const noCandidateMsg: ChatMessage = {
-        id: `practice-no-candidates-${Date.now()}`,
-        role: "assistant",
-        content: t("chat_quiz_no_candidates_warning", currentAppLang),
-        timestamp: new Date().toISOString(),
-        suggestedActions: [
-          { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
-          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
-        ],
-      };
-      setChatMessages([noCandidateMsg]);
-      return;
-    }
-    if (batchStoryCandidates.length > 0) {
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      const configForServer = startTypingWithConfig(configToUse);
-
-      try {
-        const storyResult = await generateImmersionStoryService({
-          targetWords: batchStoryCandidates,
-          targetLanguage,
-          nativeLanguage,
-          cfg: configForServer,
-        });
-
-        // Update strength and review history for all studied words
-        const candidateIds = new Set(batchStoryCandidates.map((w) => w.id));
-        setWords((prevWords) => {
-          const updatedWords = prevWords.map((w) => {
-            if (candidateIds.has(w.id)) {
-              const prevStrength = w.strength ?? 0;
-              const calcNewStrength = Math.min(100, prevStrength + 10);
-              const strengthGained = calcNewStrength - prevStrength;
-              return recordStrengthHistory(
-                w, 
-                calcNewStrength, 
-                'immersion_review', 
-                `Studied Story Immersion (+${strengthGained}% strength gained)`
-              );
-            }
-            return w;
-          });
-          saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB story word save error:", e));
-          return updatedWords;
-        });
-
-        const storyMsg: ChatMessage = {
-          id: `story-msg-${Date.now()}`,
-          role: "assistant",
-          content: `### 📖 Contextual Immersion & Dual Reader\n\nEnjoy this graded story crafted to naturally practice **${batchStoryCandidates.length} candidate words** with Comprehensible Input.`,
-          timestamp: new Date().toISOString(),
-          audioWord: batchStoryCandidates[0]?.word,
-          storyData: storyResult,
-          provider: storyResult.provider || configForServer?.provider,
-          model: storyResult.model || configForServer?.model,
-          responseTimeMs: storyResult.responseTimeMs,
-          suggestedActions: [
-            { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
-            { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
-          ],
-        };
-
-        setChatMessages([storyMsg]);
-      } catch (e: any) {
-        console.error("Error generating immersion story:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
-      } finally {
-        setIsTyping(false);
-      }
-      return;
-    }
-
-    // Step 3: If still none are available, show the message saying there are no words to practice today, and suggest coming back tomorrow or adding more words to learn
+    // If none are available, show the message saying there are no words to practice today, and suggest coming back tomorrow or adding more words to learn
     const noCandidateMsg: ChatMessage = {
       id: `practice-no-candidates-${Date.now()}`,
       role: "assistant",
@@ -2075,40 +1968,6 @@ export function useChat({
       return;
     }
 
-    // Check if user is explicitly asking to write or generate a story (e.g. historical story, real person story)
-    const trimmedInput = text.trim();
-    const isExplicitStoryRequest = 
-      /^(?:write|tell|generate|create|kể|tạo|viết)?\s*(?:a\s+|an\s+|me\s+a\s+|bài\s+|một\s+)?(?:story|immersion\s+story|truyện|câu\s+chuyện)\b/i.test(trimmedInput) ||
-      /\b(?:story|truyện|câu\s+chuyện)\s+(?:about|on|regarding|về)\b/i.test(trimmedInput) ||
-      /\b(?:historical|real\s*(?:person|event|figure|history)|non-fiction|tiểu\s+sử|lịch\s+sử)\s+(?:story|truyện)\b/i.test(trimmedInput);
-
-    if (isExplicitStoryRequest && !trimmedInput.toLowerCase().startsWith("why") && !trimmedInput.toLowerCase().startsWith("how")) {
-      let extractedTopic: string | undefined = undefined;
-      let genre = "Auto";
-
-      if (/\b(?:historical|real\s*(?:person|event|figure|history)|non-fiction|tiểu\s+sử|lịch\s+sử)\b/i.test(trimmedInput)) {
-        genre = "Historical Non-Fiction (Real Events & Figures)";
-      } else if (/\b(?:mystery|trinh\s+thám|detective)\b/i.test(trimmedInput)) {
-        genre = "Mystery & Intrigue";
-      } else if (/\b(?:travel|adventure|du\s+lịch|phiêu\s+lưu)\b/i.test(trimmedInput)) {
-        genre = "Travel & Cultural Discovery";
-      } else if (/\b(?:funny|humor|comedy|hài|hài\s+hước)\b/i.test(trimmedInput)) {
-        genre = "Humor & Lighthearted";
-      } else if (/\b(?:daily|slice\s+of\s+life|đời\s+thường)\b/i.test(trimmedInput)) {
-        genre = "Slice of Life & Everyday";
-      } else if (/\b(?:fiction|fairy\s+tale|khoa\s+học\s+viễn\s+tưởng|sci-fi|fantasy)\b/i.test(trimmedInput)) {
-        genre = "Creative Fiction & Adventure";
-      }
-
-      const topicMatch = trimmedInput.match(/(?:about|on|regarding|về)\s+([^.?!]+)/i);
-      if (topicMatch && topicMatch[1]) {
-        extractedTopic = topicMatch[1].trim();
-      }
-
-      await handleViewStoryImmersion(configToUse, { topic: extractedTopic, genre, keepHistory: true });
-      return;
-    }
-
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const configForServer = startTypingWithConfig(configToUse);
@@ -3083,115 +2942,6 @@ export function useChat({
     }
   };
 
-  const handleViewStoryImmersion = async (
-    overrideConfig?: LLMConfig,
-    options?: { topic?: string; genre?: string; difficulty?: "beginner" | "intermediate" | "advanced"; keepHistory?: boolean }
-  ) => {
-    const configToUse = overrideConfig || llmConfig;
-    setActiveQuiz(null);
-    setConversationalState("none");
-    if (!options?.keepHistory) {
-      setChatMessages([]);
-    }
-
-    const activeWords = await getEffectiveWords();
-    const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
-
-    if (activeWords.length === 0) {
-      const noWordsMsg: ChatMessage = {
-        id: `immersion-no-words-${Date.now()}`,
-        role: "assistant",
-        content: t("chat_quiz_no_words_warning", currentAppLang),
-        timestamp: new Date().toISOString(),
-      };
-      setChatMessages((prev) => options?.keepHistory ? [...prev, noWordsMsg] : [noWordsMsg]);
-      return;
-    }
-
-    const candidateWords = getCandidateWordsForImmersion(activeWords, 6);
-    if (candidateWords.length === 0) {
-      const noCandidateMsg: ChatMessage = {
-        id: `immersion-no-candidates-${Date.now()}`,
-        role: "assistant",
-        content: t("chat_quiz_no_candidates_warning", currentAppLang),
-        timestamp: new Date().toISOString(),
-        suggestedActions: [
-          { label: t("qa_add_word_label", currentAppLang), action: "add_word" },
-          { label: t("qa_generate_words_label", currentAppLang), action: "generate_topic" },
-          { label: t("chat_practice_start_today_action", currentAppLang), action: "start_practice" },
-        ],
-      };
-      setChatMessages((prev) => options?.keepHistory ? [...prev, noCandidateMsg] : [noCandidateMsg]);
-      return;
-    }
-
-    const configForServer = startTypingWithConfig(configToUse);
-
-    try {
-      const topic = options?.topic;
-      const genre = options?.genre || "Auto";
-      const difficulty = options?.difficulty || "intermediate";
-
-      const storyResult = await generateImmersionStoryService({
-        targetWords: candidateWords,
-        topic,
-        genre,
-        difficulty,
-        targetLanguage,
-        nativeLanguage,
-        cfg: configForServer,
-      });
-
-      // Update strength and review history for all studied words
-      const candidateIds = new Set(candidateWords.map((w) => w.id));
-      setWords((prevWords) => {
-        const updatedWords = prevWords.map((w) => {
-          if (candidateIds.has(w.id)) {
-            const prevStrength = w.strength ?? 0;
-            const calcNewStrength = Math.min(100, prevStrength + 10);
-            const strengthGained = calcNewStrength - prevStrength;
-            return recordStrengthHistory(
-              w, 
-              calcNewStrength, 
-              'immersion_review', 
-              `Studied Contextual Story Immersion (+${strengthGained}% strength gained)`
-            );
-          }
-          return w;
-        });
-        saveAllWordsToDB(updatedWords).catch((e) => console.error("IndexedDB story word save error:", e));
-        return updatedWords;
-      });
-
-      const resolvedTopic = storyResult.topic || topic || "Immersion Story";
-      const isHistorical = genre && genre !== "Auto" && (genre.toLowerCase().includes("historical") || genre.toLowerCase().includes("non-fiction") || genre.toLowerCase().includes("real"));
-
-      const storyMsg: ChatMessage = {
-        id: `story-msg-${Date.now()}`,
-        role: "assistant",
-        content: isHistorical
-          ? `### 📜 Real Event Immersion: ${resolvedTopic}\n\nEnjoy this factual account recounting real events while naturally practicing **${candidateWords.length} candidate words** with Comprehensible Input.`
-          : `### 📖 Contextual Story Immersion: ${resolvedTopic}\n\nEnjoy this story crafted to naturally practice **${candidateWords.length} candidate words** with Comprehensible Input.`,
-        timestamp: new Date().toISOString(),
-        audioWord: candidateWords[0]?.word,
-        storyData: storyResult,
-        provider: configForServer?.provider,
-        model: configForServer?.model,
-        suggestedActions: [
-          { label: "📖 Next Story Practice", action: "start_practice_story_immersion" },
-          { label: "🏆 Quiz Practice", action: "start_practice_quiz_only" },
-        ],
-      };
-
-      setChatMessages((prev) => options?.keepHistory ? [...prev, storyMsg] : [storyMsg]);
-    } catch (e: any) {
-      console.error("Error generating immersion story:", e);
-      triggerChatErrorWithCountdown(e, configToUse, (newConfig) => handleViewStoryImmersion(newConfig, options), "view-immersion-error");
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
   const handleClearChatHistory = () => {
     setActiveQuiz(null);
     setConversationalState("none");
@@ -3258,7 +3008,6 @@ export function useChat({
     handleSuggestCasualReply,
     handlePromptFixGrammar,
     handleConversationalFixGrammar,
-    handleViewStoryImmersion,
     handleShowWordLibraries,
     handleClearChatHistory,
     handleRetryErrorMessage,

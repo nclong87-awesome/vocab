@@ -25,7 +25,6 @@ interface QuickActionsSectionProps {
   onGenerateByTopic?: () => void;
   startPractice: (overrideConfig?: any, mode?: any, options?: any) => void;
   onFixGrammar: () => void;
-  onViewStoryImmersion?: (overrideConfig?: any, options?: any) => void;
   onSuggestCasualReplyPrompt?: () => void;
   onOpenWordLibrary?: () => void;
   onOpenWordSearch?: () => void;
@@ -66,7 +65,6 @@ function QuickActionsSection({
   onGenerateByTopic,
   startPractice,
   onFixGrammar,
-  onViewStoryImmersion,
   onSuggestCasualReplyPrompt,
   onOpenWordLibrary,
   onOpenWordSearch,
@@ -108,7 +106,6 @@ function QuickActionsSection({
     onGenerateByTopic,
     startPractice,
     onFixGrammar,
-    onViewStoryImmersion,
     onSuggestCasualReplyPrompt,
     onOpenWordLibrary,
     onOpenWordSearch,
@@ -134,7 +131,6 @@ function QuickActionsSection({
       onGenerateByTopic,
       startPractice,
       onFixGrammar,
-      onViewStoryImmersion,
       onSuggestCasualReplyPrompt,
       onOpenWordLibrary,
       onOpenWordSearch,
