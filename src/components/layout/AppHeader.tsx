@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sliders } from "lucide-react";
+import { Sliders, Search } from "lucide-react";
 import { LLMConfig, LLMProvider, UserStats } from "../../types";
 import QuickAiSwitcher from "./QuickAiSwitcher";
 import QuickLanguageSwitcher from "./QuickLanguageSwitcher";
@@ -22,6 +22,7 @@ interface AppHeaderProps {
   sidePanelTab?: "collection" | "drafts" | "analytics" | "settings";
   isSidePanelOpen?: boolean;
   incompleteCount?: number;
+  onOpenWordSearch?: () => void;
 }
 
 export default function AppHeader({
@@ -39,7 +40,8 @@ export default function AppHeader({
   onReloadData,
   sidePanelTab = "collection",
   isSidePanelOpen = false,
-  incompleteCount = 0
+  incompleteCount = 0,
+  onOpenWordSearch,
 }: AppHeaderProps) {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== "undefined") {
@@ -172,6 +174,19 @@ export default function AppHeader({
         <Sliders className="w-3.5 h-3.5" />
         <span>{t("nav_settings", appLanguage)}</span>
       </button>
+
+      {onOpenWordSearch && (
+        <button
+          type="button"
+          onClick={onOpenWordSearch}
+          className="p-1 sm:p-1.5 text-stone-500 hover:text-stone-950 hover:bg-stone-100 active:bg-stone-200 rounded-md transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+          title={`${t("qa_search_word_title", appLanguage) || "Search Words"} (⌘K or /)`}
+          aria-label={t("qa_search_word_title", appLanguage) || "Search words"}
+          id="nav-search-words-btn"
+        >
+          <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        </button>
+      )}
     </div>
   );
 

@@ -14,6 +14,7 @@ import {
 import { WordLibrarySet } from "../../config/wordLibraries";
 import { Word, LLMConfig, TTSConfig } from "../../types";
 import { speakText, getLanguageCode } from "../../utils/ttsService";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { t } from "../../config/i18n";
 
 export interface LibraryWordItem {
@@ -67,6 +68,8 @@ export const LibraryWordListModal: React.FC<LibraryWordListModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [addedSingleWords, setAddedSingleWords] = useState<Set<string>>(new Set());
+
+  useModalBackNavigation(isOpen, onClose);
 
   // Handle ESC key press
   React.useEffect(() => {

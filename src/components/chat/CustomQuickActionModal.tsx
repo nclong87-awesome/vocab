@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { 
   X, 
   Sparkles, 
@@ -46,6 +47,8 @@ export default function CustomQuickActionModal({
   const [activeTab, setActiveTab] = useState<"list" | "presets" | "editor">("list");
   const [actions, setActions] = useState<CustomQuickAction[]>([]);
   const [editingAction, setEditingAction] = useState<CustomQuickAction | null>(null);
+
+  useModalBackNavigation(isOpen, onClose);
 
   // Form State
   const [label, setLabel] = useState("");

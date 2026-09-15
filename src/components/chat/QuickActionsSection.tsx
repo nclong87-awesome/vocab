@@ -27,7 +27,6 @@ interface QuickActionsSectionProps {
   onFixGrammar: () => void;
   onSuggestCasualReplyPrompt?: () => void;
   onOpenWordLibrary?: () => void;
-  onOpenWordSearch?: () => void;
   onOpenChallenge?: () => void;
   onSwitchProvider?: (provider: LLMProvider, model?: string) => void;
   showToast: (msg: string) => void;
@@ -39,7 +38,6 @@ interface QuickActionsSectionProps {
 }
 
 const ACTION_THEMES: Record<string, { cardHover: string; iconBgHover: string }> = {
-  search_word: { cardHover: "hover:bg-indigo-50/50 hover:border-indigo-300/80", iconBgHover: "group-hover:bg-indigo-100" },
   add_word: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
   generate_topic: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
   import_library: { cardHover: "hover:bg-sky-50/50 hover:border-sky-300/80", iconBgHover: "group-hover:bg-sky-100" },
@@ -67,7 +65,6 @@ function QuickActionsSection({
   onFixGrammar,
   onSuggestCasualReplyPrompt,
   onOpenWordLibrary,
-  onOpenWordSearch,
   onOpenChallenge,
   onSwitchProvider,
   showToast,
@@ -108,7 +105,6 @@ function QuickActionsSection({
     onFixGrammar,
     onSuggestCasualReplyPrompt,
     onOpenWordLibrary,
-    onOpenWordSearch,
     onOpenChallenge,
     onSwitchProvider,
     showToast,
@@ -133,7 +129,6 @@ function QuickActionsSection({
       onFixGrammar,
       onSuggestCasualReplyPrompt,
       onOpenWordLibrary,
-      onOpenWordSearch,
       onOpenChallenge,
       onSwitchProvider,
       showToast,
@@ -173,7 +168,6 @@ function QuickActionsSection({
             p.onSuggestCasualReplyPrompt?.();
           },
           onOpenWordLibrary: p.onOpenWordLibrary,
-          onOpenWordSearch: p.onOpenWordSearch,
           onOpenChallenge: p.onOpenChallenge,
         });
         setIsActionsPanelOpen(false);

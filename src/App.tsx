@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { ChatMessage, LLMConfig, Word } from "./types";
-import { stopSpeech, unlockAudioElement } from "./utils/ttsService";
+import { stopSpeech, unlockAudioElement, speakText } from "./utils/ttsService";
 import { recalculateWordsMemoryDecay } from "./utils/spacedRepetition";
 import { DEFAULT_TTS_CONFIG } from "./utils/ttsService";
 import { getDefaultLLMConfig } from "./config/llmProviders";
@@ -26,6 +26,9 @@ import AnalyticsDashboard from "./components/AnalyticsDashboard";
 import LlmLoginModal from "./components/LlmLoginModal";
 import OnboardingModal from "./components/OnboardingModal";
 import WordAddModal from "./components/chat/WordAddModal";
+import WordSearchModal from "./components/chat/WordSearchModal";
+import WordChatModal from "./components/chat/WordChatModal";
+import WordDetailsModal from "./components/deckManager/WordDetailsModal";
 import EnrichedWordsGalleryModal from "./components/deckManager/EnrichedWordsGalleryModal";
 
 import AppHeader from "./components/layout/AppHeader";
@@ -46,6 +49,38 @@ export default function App() {
   const [sidePanelTab, setSidePanelTab] = useState<"collection" | "drafts" | "analytics" | "settings">("collection");
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Search Words Modal and drilldown state
+  const [isWordSearchModalOpen, setIsWordSearchModalOpen] = useState(false);
+  const [selectedWordForChat, setSelectedWordForChat] = useState<Word | null>(null);
+  const [selectedWordForDetails, setSelectedWordForDetails] = useState<Word | null>(null);
+
+  // Global shortcut to open Word Search Modal (Cmd+K, Ctrl+K, or "/" when not typing)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isTyping = activeEl && (
+        activeEl.tagName === "INPUT" || 
+        activeEl.tagName === "TEXTAREA" || 
+        (activeEl instanceof HTMLElement && activeEl.isContentEditable)
+      );
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsWordSearchModalOpen(true);
+        return;
+      }
+
+      if (e.key === "/" && !isTyping) {
+        e.preventDefault();
+        setIsWordSearchModalOpen(true);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   // Custom hooks for sub-systems
   const {
@@ -635,6 +670,7 @@ export default function App() {
         sidePanelTab={sidePanelTab}
         isSidePanelOpen={isSidePanelOpen}
         incompleteCount={words.filter((w) => w.completed === false).length}
+        onOpenWordSearch={() => setIsWordSearchModalOpen(true)}
       />
 
       {/* Main Viewport Container */}
@@ -758,6 +794,85 @@ export default function App() {
         }}
         showToast={showToast}
       />
+
+      {/* Quick Word Search Modal Dialog */}
+      {isWordSearchModalOpen && (
+        <WordSearchModal
+          isOpen={isWordSearchModalOpen}
+          onClose={() => setIsWordSearchModalOpen(false)}
+          words={words}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          onOpenWordChat={(w) => setSelectedWordForChat(w)}
+          onOpenWordDetails={(w) => setSelectedWordForDetails(w)}
+          onInsertToChat={(text) => {
+            setCurrentView("chatview");
+            setIsSidePanelOpen(false);
+            window.dispatchEvent(new CustomEvent("vocab-insert-chat", { detail: { text } }));
+          }}
+          onSendMessage={async (text) => {
+            setCurrentView("chatview");
+            setIsSidePanelOpen(false);
+            await handleSendChatMessage(text);
+          }}
+          onAddWord={handleOpenAddWordModal}
+          onToggleStarWord={handleToggleStar}
+          onToast={showToast}
+        />
+      )}
+
+      {/* Word Card Details Modal */}
+      {selectedWordForDetails && (
+        <WordDetailsModal
+          word={selectedWordForDetails}
+          isOpen={Boolean(selectedWordForDetails)}
+          onClose={() => setSelectedWordForDetails(null)}
+          onUpdateWord={(updated) => {
+            handleUpdateSingleWord(updated);
+            setSelectedWordForDetails(updated);
+          }}
+          onToggleStar={(wId) => {
+            handleToggleStar(wId);
+            setSelectedWordForDetails((prev) => prev && prev.id === wId ? { ...prev, starred: !prev.starred } : prev);
+          }}
+          onToggleLearned={(wId) => {
+            handleToggleLearned(wId);
+            setSelectedWordForDetails((prev) => prev && prev.id === wId ? { ...prev, learned: !prev.learned } : prev);
+          }}
+          onDeleteWord={(wId) => {
+            handleDeleteWord(wId);
+            setSelectedWordForDetails(null);
+          }}
+          speakWord={(txt) => speakText(txt, ttsConfig, llmConfig, targetLanguage)}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+        />
+      )}
+
+      {/* Word Interactive AI Chat Modal */}
+      {selectedWordForChat && (
+        <WordChatModal
+          word={selectedWordForChat}
+          isOpen={Boolean(selectedWordForChat)}
+          onClose={() => setSelectedWordForChat(null)}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+          words={words}
+          onUpdateWord={(updated) => {
+            handleUpdateSingleWord(updated);
+            setSelectedWordForChat(updated);
+          }}
+        />
+      )}
 
       {/* Enriched Words Gallery Modal */}
       <EnrichedWordsGalleryModal

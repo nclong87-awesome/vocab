@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { Word, TTSConfig, LLMConfig } from "../../types";
 import { searchWordsSmart, WordSearchFilter, removeAccents, checkFuzzyMatch } from "../../utils/smartWordSearch";
-import { speakText, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
+import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
+import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { t } from "../../config/i18n";
 
 export interface WordSearchModalProps {
@@ -71,6 +72,21 @@ export default function WordSearchModal({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const handleCloseModal = useCallback(() => {
+    stopSpeech();
+    onClose();
+  }, [onClose]);
+
+  // Support hardware/browser Back button on mobile devices (Android system back, browser back)
+  useModalBackNavigation(isOpen, handleCloseModal, "word-search-modal");
+
+  // Clean up any playing audio when modal closes or unmounts
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
+
   // Auto-focus input when opened
   useEffect(() => {
     if (isOpen) {
@@ -87,12 +103,12 @@ export default function WordSearchModal({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        handleCloseModal();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleCloseModal]);
 
   const saveRecentSearch = useCallback((term: string) => {
     const trimmed = term.trim();
@@ -169,41 +185,41 @@ export default function WordSearchModal({
 
   const handleSelectWordDetails = useCallback((w: Word) => {
     saveRecentSearch(w.word);
-    onClose();
+    handleCloseModal();
     onOpenWordDetails?.(w);
-  }, [onOpenWordDetails, onClose, saveRecentSearch]);
+  }, [onOpenWordDetails, handleCloseModal, saveRecentSearch]);
 
   const handleSelectWordChat = useCallback((w: Word, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     saveRecentSearch(w.word);
-    onClose();
+    handleCloseModal();
     onOpenWordChat?.(w);
-  }, [onOpenWordChat, onClose, saveRecentSearch]);
+  }, [onOpenWordChat, handleCloseModal, saveRecentSearch]);
 
   const handleInsertToChat = useCallback((textToInsert: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     saveRecentSearch(textToInsert);
-    onClose();
+    handleCloseModal();
     onInsertToChat?.(textToInsert);
     onToast?.(`Inserted "${textToInsert}" into chat input`);
-  }, [onInsertToChat, onClose, onToast, saveRecentSearch]);
+  }, [onInsertToChat, handleCloseModal, onToast, saveRecentSearch]);
 
   const handleTriggerAiExplain = useCallback((searchTerm: string) => {
     const term = searchTerm.trim();
     if (!term) return;
     saveRecentSearch(term);
-    onClose();
+    handleCloseModal();
     setQuery("");
     const prompt = `Please explain the word "${term}" in ${targetLanguage} with clear definition, phonetic pronunciation, nuance, and 3 example sentences translated to ${nativeLanguage}.`;
     onSendMessage?.(prompt);
-  }, [targetLanguage, nativeLanguage, onSendMessage, onClose, saveRecentSearch]);
+  }, [targetLanguage, nativeLanguage, onSendMessage, handleCloseModal, saveRecentSearch]);
 
   const handleAddNewWord = useCallback((term?: string) => {
-    onClose();
+    handleCloseModal();
     const w = term || query;
     if (w.trim()) saveRecentSearch(w.trim());
     onAddWord?.(w.trim() || undefined);
-  }, [query, onAddWord, onClose, saveRecentSearch]);
+  }, [query, onAddWord, handleCloseModal, saveRecentSearch]);
 
   // Helper to highlight matching text in word name or fields (including fuzzy matches)
   const renderHighlighted = (text: string, highlight: string) => {
@@ -250,7 +266,7 @@ export default function WordSearchModal({
       <div 
         className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2.5 sm:p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto"
         onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
+          if (e.target === e.currentTarget) handleCloseModal();
         }}
       >
         <motion.div
@@ -284,7 +300,7 @@ export default function WordSearchModal({
               </span>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleCloseModal}
                 className="w-8 h-8 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 hover:text-stone-900 flex items-center justify-center transition-colors cursor-pointer"
                 title="Close search modal"
                 id="close-word-search-modal-btn"
