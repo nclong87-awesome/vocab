@@ -357,6 +357,17 @@ export interface ChallengeSuggestedVocab {
   askedByUser?: boolean;
 }
 
+export interface ChallengeAugmentedWord {
+  word: string;
+  translation?: string;
+  prevStrength: number;
+  newStrength: number;
+  strengthGained: number;
+  isTargetWord?: boolean;
+  isVocabClue?: boolean;
+  wasAlreadyInCollection?: boolean;
+}
+
 export interface ChallengeEvaluation {
   score: number; // 0 - 100
   scoreLabel: string;
@@ -370,6 +381,8 @@ export interface ChallengeEvaluation {
   targetWordStrengthGained?: number;
   targetWordNewStrength?: number;
   targetWordPrevStrength?: number;
+  augmentedWords?: ChallengeAugmentedWord[];
+  incorporatedVocabClues?: string[];
   provider?: string;
   model?: string;
   responseTimeMs?: number;

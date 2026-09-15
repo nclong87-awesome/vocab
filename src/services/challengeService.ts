@@ -568,6 +568,15 @@ Return STRICTLY raw JSON matching:
       parsed.evaluation.incorporatedTargetWord = incorporated;
       parsed.evaluation.targetWordUsed = targetWord;
     }
+    if (Array.isArray(challenge.keyTargetWords)) {
+      const incClues: string[] = [];
+      for (const kw of challenge.keyTargetWords) {
+        if (kw?.word && (hasUserIncorporatedWord(parsed.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(userMessage, kw.word))) {
+          incClues.push(kw.word);
+        }
+      }
+      parsed.evaluation.incorporatedVocabClues = incClues;
+    }
   }
 
   const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
@@ -609,6 +618,15 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
             hasUserIncorporatedWord(params.userMessage, targetWord);
           data.evaluation.incorporatedTargetWord = incorporated;
           data.evaluation.targetWordUsed = targetWord;
+        }
+        if (Array.isArray(params.challenge.keyTargetWords)) {
+          const incClues: string[] = [];
+          for (const kw of params.challenge.keyTargetWords) {
+            if (kw?.word && (hasUserIncorporatedWord(data.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(params.userMessage, kw.word))) {
+              incClues.push(kw.word);
+            }
+          }
+          data.evaluation.incorporatedVocabClues = incClues;
         }
       }
       return data as ChallengeTurnResult;

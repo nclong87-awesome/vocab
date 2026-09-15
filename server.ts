@@ -3476,6 +3476,15 @@ Return STRICTLY raw JSON matching:
           parsed.evaluation.incorporatedTargetWord = incorporated;
           parsed.evaluation.targetWordUsed = targetWord;
         }
+        if (Array.isArray(challenge.keyTargetWords)) {
+          const incClues: string[] = [];
+          for (const kw of challenge.keyTargetWords) {
+            if (kw?.word && (hasUserIncorporatedWord(parsed.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(userMessage, kw.word))) {
+              incClues.push(kw.word);
+            }
+          }
+          parsed.evaluation.incorporatedVocabClues = incClues;
+        }
       }
       return res.json(parsed);
     }

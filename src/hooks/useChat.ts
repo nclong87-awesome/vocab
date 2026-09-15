@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, QuizSuggestedWord } from "../types";
+import { ChatMessage, Word, WordSense, LLMConfig, TTSConfig, UserStats, QuizQuestion, QuizSuggestedWord, ChallengeAugmentedWord } from "../types";
 import {
   sendChatMessageService,
   checkWordDefinitionsService,
@@ -842,8 +842,10 @@ export function useChat({
         setActiveChallenge(challengeData);
 
         const targetWordNotice = challengeData.targetWordFromCollection
-          ? `\n\n🎯 **Featured Target Word:** \`${challengeData.targetWordFromCollection.word}\`${challengeData.targetWordFromCollection.translation ? ` (*${challengeData.targetWordFromCollection.translation}*)` : ""}\n*💡 Incorporate this word in your translation to augment its strength by **+30 points**!*`
-          : "";
+          ? `\n\n🎯 **Featured Target Word:** \`${challengeData.targetWordFromCollection.word}\`${challengeData.targetWordFromCollection.translation ? ` (*${challengeData.targetWordFromCollection.translation}*)` : ""}\n*💡 Incorporate this word and any vocab clues in your translation to boost their strength by **+30 points**!*`
+          : (challengeData.keyTargetWords && challengeData.keyTargetWords.length > 0
+            ? `\n\n💡 *Tip: Mention any words from the vocab clues in your translation to boost their strength by **+30 points**!*`
+            : "");
 
         const challengeMsg: ChatMessage = {
           id: `challenge-start-${Date.now()}`,
@@ -1691,78 +1693,211 @@ export function useChat({
             evalRes.userTranslation = userText;
           }
 
-          // Check if user incorporated the specific target word from collection
+          // Check if user incorporated the specific target word from collection or vocab clues
           const targetColWord = activeChallenge.targetWordFromCollection;
-          let wordToAugment: Word | undefined = undefined;
+          let primaryTargetWord: Word | undefined = undefined;
 
           if (targetColWord?.word) {
-            wordToAugment = findWordInCollection(wordsRef.current, targetColWord.word);
+            primaryTargetWord = findWordInCollection(wordsRef.current, targetColWord.word);
           }
           // Fallback: check key target words against collection
-          if (!wordToAugment && activeChallenge.keyTargetWords) {
+          if (!primaryTargetWord && activeChallenge.keyTargetWords) {
             for (const kw of activeChallenge.keyTargetWords) {
               if (kw?.word) {
                 const foundInCol = findWordInCollection(wordsRef.current, kw.word);
                 if (foundInCol) {
-                  wordToAugment = foundInCol;
+                  primaryTargetWord = foundInCol;
                   break;
                 }
               }
             }
           }
           // Fallback: check if evalRes.targetWordUsed matches
-          if (!wordToAugment && evalRes.targetWordUsed) {
-            wordToAugment = findWordInCollection(wordsRef.current, evalRes.targetWordUsed);
+          if (!primaryTargetWord && evalRes.targetWordUsed) {
+            primaryTargetWord = findWordInCollection(wordsRef.current, evalRes.targetWordUsed);
           }
 
-          const targetWordText = wordToAugment?.word || targetColWord?.word || evalRes.targetWordUsed;
+          const primaryTargetWordText = primaryTargetWord?.word || targetColWord?.word || evalRes.targetWordUsed;
 
-          const didIncorporate = wordToAugment ? (
+          const didIncorporatePrimary = primaryTargetWordText ? (
             evalRes.incorporatedTargetWord === true ||
-            hasUserIncorporatedWord(userText, wordToAugment.word) ||
-            hasUserIncorporatedWord(evalRes.userTranslation, wordToAugment.word)
+            hasUserIncorporatedWord(userText, primaryTargetWordText) ||
+            hasUserIncorporatedWord(evalRes.userTranslation, primaryTargetWordText)
           ) : false;
 
-          if (wordToAugment) {
-            const prevStrength = wordToAugment.strength ?? 0;
-            const boostPoints = didIncorporate ? 30 : 10;
+          evalRes.incorporatedTargetWord = didIncorporatePrimary;
+          if (primaryTargetWordText) {
+            evalRes.targetWordUsed = primaryTargetWordText;
+          }
+
+          const augmentedWordsList: ChallengeAugmentedWord[] = [];
+
+          // 1. Process primary target word
+          if (primaryTargetWord) {
+            const prevStrength = primaryTargetWord.strength ?? 0;
+            const boostPoints = didIncorporatePrimary ? 30 : 10;
             const newStrength = Math.min(100, prevStrength + boostPoints);
             const gained = newStrength - prevStrength;
 
-            evalRes.incorporatedTargetWord = didIncorporate;
-            evalRes.targetWordUsed = wordToAugment.word;
             evalRes.targetWordPrevStrength = prevStrength;
             evalRes.targetWordNewStrength = newStrength;
             evalRes.targetWordStrengthGained = gained;
 
-            // Augment the word's strength and record history.
-            // If not incorporated, award +10 points and mark as learned to rotate study queue
+            augmentedWordsList.push({
+              word: primaryTargetWord.word,
+              translation: primaryTargetWord.translation || targetColWord?.translation,
+              prevStrength,
+              newStrength,
+              strengthGained: gained,
+              isTargetWord: true,
+              isVocabClue: false,
+              wasAlreadyInCollection: true,
+            });
+          } else if (primaryTargetWordText) {
+            evalRes.targetWordUsed = primaryTargetWordText;
+            evalRes.targetWordPrevStrength = 0;
+            evalRes.targetWordNewStrength = didIncorporatePrimary ? 30 : 10;
+            evalRes.targetWordStrengthGained = didIncorporatePrimary ? 30 : 10;
+
+            if (didIncorporatePrimary) {
+              augmentedWordsList.push({
+                word: primaryTargetWordText,
+                translation: targetColWord?.translation || "",
+                prevStrength: 0,
+                newStrength: 30,
+                strengthGained: 30,
+                isTargetWord: true,
+                isVocabClue: false,
+                wasAlreadyInCollection: false,
+              });
+            }
+          }
+
+          // 2. Process all vocab clues in activeChallenge.keyTargetWords
+          const vocabClues = activeChallenge.keyTargetWords || [];
+          const incorporatedClueWords: string[] = [];
+
+          for (const clue of vocabClues) {
+            if (!clue?.word) continue;
+            const clueWordText = clue.word.trim();
+
+            // Skip if it is the same as primary target word (already handled)
+            if (primaryTargetWordText && areWordsEquivalent(clueWordText, primaryTargetWordText)) {
+              continue;
+            }
+
+            // Check if user mentioned this vocab clue in their answer
+            const didMentionClue = (
+              evalRes.incorporatedVocabClues?.some((w) => areWordsEquivalent(w, clueWordText)) ||
+              hasUserIncorporatedWord(userText, clueWordText) ||
+              hasUserIncorporatedWord(evalRes.userTranslation, clueWordText)
+            );
+
+            if (didMentionClue) {
+              incorporatedClueWords.push(clueWordText);
+
+              const existingWord = findWordInCollection(wordsRef.current, clueWordText);
+              if (existingWord) {
+                const prevStrength = existingWord.strength ?? 0;
+                const boostPoints = 30;
+                const newStrength = Math.min(100, prevStrength + boostPoints);
+                const gained = newStrength - prevStrength;
+
+                augmentedWordsList.push({
+                  word: existingWord.word,
+                  translation: existingWord.translation || clue.translation,
+                  prevStrength,
+                  newStrength,
+                  strengthGained: gained,
+                  isTargetWord: false,
+                  isVocabClue: true,
+                  wasAlreadyInCollection: true,
+                });
+              } else {
+                // Clue word mentioned in answer: awards 30% initial strength and adds to collection!
+                augmentedWordsList.push({
+                  word: clueWordText,
+                  translation: clue.translation || "",
+                  prevStrength: 0,
+                  newStrength: 30,
+                  strengthGained: 30,
+                  isTargetWord: false,
+                  isVocabClue: true,
+                  wasAlreadyInCollection: false,
+                });
+              }
+            }
+          }
+
+          // 3. Atomically update words in collection (updating existing and adding any newly incorporated clue words)
+          if (augmentedWordsList.length > 0) {
             setWords((prevWords) => {
-              const updated = prevWords.map((w) => {
-                if (w.id === wordToAugment!.id || areWordsEquivalent(w.word, wordToAugment!.word)) {
+              const updatedExisting = prevWords.map((w) => {
+                const aug = augmentedWordsList.find(
+                  (a) => a.wasAlreadyInCollection && (areWordsEquivalent(w.word, a.word) || (primaryTargetWord && w.id === primaryTargetWord.id))
+                );
+                if (aug) {
                   const rec = recordStrengthHistory(
                     w,
-                    newStrength,
+                    aug.newStrength,
                     'challenge_bonus',
-                    didIncorporate
-                      ? `Incorporated target word in translation challenge (+30% strength gained)`
-                      : `Featured target word in translation challenge (+10% strength gained & marked as learned)`
+                    aug.isTargetWord
+                      ? (didIncorporatePrimary
+                        ? `Incorporated target word in translation challenge (+${aug.strengthGained}% strength gained)`
+                        : `Featured target word in translation challenge (+${aug.strengthGained}% strength gained & marked as learned)`)
+                      : `Incorporated vocab clue "${aug.word}" in translation challenge (+${aug.strengthGained}% strength gained)`
                   );
                   return {
                     ...rec,
-                    learned: didIncorporate ? (newStrength >= 80 ? true : rec.learned) : true,
+                    learned: aug.isTargetWord && !didIncorporatePrimary ? true : (aug.newStrength >= 80 ? true : rec.learned),
+                    lastReviewed: new Date().toISOString(),
                   };
                 }
                 return w;
               });
-              wordsRef.current = updated;
-              saveAllWordsToDB(updated).catch((e) => console.error("Failed to persist challenge bonus:", e));
-              return updated;
+
+              // Add newly incorporated vocab clues as incomplete words (with strength 30) so background enrichment can complete them
+              const newWordsToAdd: Word[] = [];
+              for (const aug of augmentedWordsList) {
+                if (!aug.wasAlreadyInCollection) {
+                  if (findWordInCollection(updatedExisting, aug.word)) continue;
+                  const clueInfo = vocabClues.find((c) => areWordsEquivalent(c.word, aug.word));
+                  const newWordRecord: Word = recordStrengthHistory(
+                    {
+                      id: `clue-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                      word: aug.word.trim(),
+                      pronunciation: undefined,
+                      partOfSpeech: clueInfo?.hint || "expression",
+                      category: "Challenge Practice",
+                      definition: clueInfo?.hint || clueInfo?.translation || "Key term from translation challenge",
+                      translation: aug.translation || clueInfo?.translation || "",
+                      example: evalRes.correctedSentence || undefined,
+                      exampleTranslation: activeChallenge.nativeSentence || undefined,
+                      context: activeChallenge.nativeSentence ? `From challenge: "${activeChallenge.nativeSentence}"` : undefined,
+                      learned: false,
+                      starred: false,
+                      completed: false,
+                      createdAt: new Date().toISOString(),
+                      lastReviewed: new Date().toISOString(),
+                      strength: aug.newStrength,
+                    },
+                    aug.newStrength,
+                    'challenge_bonus',
+                    `Incorporated vocab clue "${aug.word}" in translation challenge (+${aug.strengthGained}% strength gained)`
+                  );
+                  newWordsToAdd.push(newWordRecord);
+                }
+              }
+
+              const finalWordList = [...newWordsToAdd, ...updatedExisting];
+              wordsRef.current = finalWordList;
+              saveAllWordsToDB(finalWordList).catch((e) => console.error("Failed to persist challenge bonuses:", e));
+              return finalWordList;
             });
-          } else if (targetWordText) {
-            evalRes.targetWordUsed = targetWordText;
-            evalRes.incorporatedTargetWord = didIncorporate;
           }
+
+          evalRes.augmentedWords = augmentedWordsList;
+          evalRes.incorporatedVocabClues = incorporatedClueWords;
 
           const currentChallenge = activeChallenge;
           setActiveChallenge(null); // Challenge completed
@@ -1771,13 +1906,29 @@ export function useChat({
             ? `\n\n**Your Translation:** "${evalRes.userTranslation.trim()}"`
             : "";
 
-          const bonusLine = evalRes.targetWordUsed
-            ? (evalRes.incorporatedTargetWord
-              ? `\n\n🎉 **Target Word Incorporated (+30 Strength Points)!**\nYou successfully incorporated **"${evalRes.targetWordUsed}"** in your response! Word strength increased from ${evalRes.targetWordPrevStrength ?? 0}% to **${evalRes.targetWordNewStrength ?? 30}%** (+30%).`
-              : `\n\n💡 **Featured Target Word:** **"${evalRes.targetWordUsed}"** *(+10 Strength Points & Marked as Learned)*\nThe target word was not included in your translation, so it has been awarded +10 points and marked as learned to prevent immediate repetition in subsequent challenges.`)
-            : (currentChallenge?.targetWordFromCollection ? `\n\n💡 *Featured Target Word: **"${currentChallenge.targetWordFromCollection.word}"** (+10 Strength Points & Marked as Learned)*` : "");
+          // Build rich bonus section
+          const bonusSections: string[] = [];
 
-          const finalTargetWord = targetWordText || evalRes.targetWordUsed || currentChallenge?.targetWordFromCollection?.word;
+          if (evalRes.targetWordUsed) {
+            if (evalRes.incorporatedTargetWord) {
+              bonusSections.push(`🎉 **Target Word Incorporated (+30 Strength Points)!**\nYou successfully incorporated **"${evalRes.targetWordUsed}"** in your response! Word strength increased from ${evalRes.targetWordPrevStrength ?? 0}% to **${evalRes.targetWordNewStrength ?? 30}%** (+30%).`);
+            } else {
+              bonusSections.push(`💡 **Featured Target Word:** **"${evalRes.targetWordUsed}"** *(+10 Strength Points & Marked as Learned)*\nThe target word was not included in your translation, so it has been awarded +10 points and marked as learned to prevent immediate repetition in subsequent challenges.`);
+            }
+          }
+
+          const clueBonuses = augmentedWordsList.filter((a) => a.isVocabClue);
+          if (clueBonuses.length > 0) {
+            const clueLines = clueBonuses.map((c) => `- **"${c.word}"**${c.translation ? ` (*${c.translation}*)` : ""}: ${c.prevStrength}% → **${c.newStrength}%** (+${c.strengthGained}%)`).join("\n");
+            bonusSections.push(`✨ **Vocab Clues Incorporated (+30 Strength Points each):**\n${clueLines}`);
+
+            const boostedNames = clueBonuses.map((c) => `"${c.word}" (+${c.strengthGained}%)`).join(", ");
+            onShowToast?.(`🎯 Boosted strength for vocab clue${clueBonuses.length > 1 ? "s" : ""}: ${boostedNames}!`);
+          }
+
+          const bonusLine = bonusSections.length > 0 ? `\n\n${bonusSections.join("\n\n")}` : "";
+
+          const finalTargetWord = primaryTargetWordText || evalRes.targetWordUsed || currentChallenge?.targetWordFromCollection?.word;
 
           const essentialAudioText = buildEssentialChallengeAudioText(
             evalRes.score,
@@ -1818,6 +1969,7 @@ export function useChat({
             word: finalTargetWord,
             score: evalRes.score,
             incorporatedTargetWord: evalRes.incorporatedTargetWord,
+            augmentedWords: augmentedWordsList.map((a) => a.word),
           });
         }
       } catch (err: any) {

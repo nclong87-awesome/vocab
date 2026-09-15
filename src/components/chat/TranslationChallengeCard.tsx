@@ -465,46 +465,81 @@ export default function TranslationChallengeCard({
 
     const targetWordText = evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word;
 
-    const reviewedWord = useMemo(() => {
-      const rawTargetWord = evaluation?.targetWordUsed || challenge?.targetWordFromCollection?.word;
-      if (!rawTargetWord && !challenge?.targetWordFromCollection) return null;
+    const reviewedWords = useMemo(() => {
+      const list: Word[] = [];
+      const seenWords = new Set<string>();
 
-      let matchedWord: Word | undefined = undefined;
-      if (challenge?.targetWordFromCollection?.id && words?.length) {
-        matchedWord = words.find((w) => w.id === challenge.targetWordFromCollection?.id);
-      }
-      if (!matchedWord && rawTargetWord && words?.length) {
-        matchedWord = findWordInCollection(words, rawTargetWord);
-      }
+      // 1. If evaluation.augmentedWords is present, build Word objects for all augmented words
+      if (evaluation?.augmentedWords && evaluation.augmentedWords.length > 0) {
+        for (const aug of evaluation.augmentedWords) {
+          const lower = aug.word.toLowerCase().trim();
+          if (seenWords.has(lower)) continue;
+          seenWords.add(lower);
 
-      if (matchedWord) {
-        if (typeof evaluation?.targetWordNewStrength === "number" && matchedWord.strength !== evaluation.targetWordNewStrength) {
-          return {
-            ...matchedWord,
-            strength: evaluation.targetWordNewStrength,
-          };
+          let matched = words?.length ? findWordInCollection(words, aug.word) : undefined;
+          if (matched) {
+            list.push({
+              ...matched,
+              strength: typeof aug.newStrength === "number" ? aug.newStrength : matched.strength,
+            });
+          } else {
+            list.push({
+              id: `word-${aug.word.toLowerCase().replace(/\s+/g, "_")}`,
+              word: aug.word,
+              partOfSpeech: "expression",
+              translation: aug.translation || "",
+              definition: aug.translation || `Key term from translation challenge`,
+              strength: aug.newStrength,
+              learned: true,
+              starred: false,
+              createdAt: new Date().toISOString(),
+              lastReviewed: new Date().toISOString(),
+            } as Word);
+          }
         }
-        return matchedWord;
       }
 
-      const fallbackBase = challenge?.targetWordFromCollection;
-      const wordText = rawTargetWord || fallbackBase?.word || "";
-      if (!wordText) return null;
+      // 2. Fallback to single target word if list is empty
+      if (list.length === 0) {
+        const rawTargetWord = evaluation?.targetWordUsed || challenge?.targetWordFromCollection?.word;
+        if (rawTargetWord || challenge?.targetWordFromCollection) {
+          let matchedWord: Word | undefined = undefined;
+          if (challenge?.targetWordFromCollection?.id && words?.length) {
+            matchedWord = words.find((w) => w.id === challenge.targetWordFromCollection?.id);
+          }
+          if (!matchedWord && rawTargetWord && words?.length) {
+            matchedWord = findWordInCollection(words, rawTargetWord);
+          }
 
-      return {
-        id: fallbackBase?.id || `word-${wordText.toLowerCase().replace(/\s+/g, "_")}`,
-        word: wordText,
-        partOfSpeech: fallbackBase?.partOfSpeech || "expression",
-        translation: fallbackBase?.translation || "",
-        definition: fallbackBase?.definition || fallbackBase?.translation || "",
-        strength: typeof evaluation?.targetWordNewStrength === "number" 
-          ? evaluation.targetWordNewStrength 
-          : (fallbackBase?.strength ?? 0),
-        learned: true,
-        starred: false,
-        createdAt: new Date().toISOString(),
-        lastReviewed: new Date().toISOString(),
-      } as Word;
+          if (matchedWord) {
+            list.push({
+              ...matchedWord,
+              strength: typeof evaluation?.targetWordNewStrength === "number" ? evaluation.targetWordNewStrength : matchedWord.strength,
+            });
+          } else {
+            const fallbackBase = challenge?.targetWordFromCollection;
+            const wordText = rawTargetWord || fallbackBase?.word || "";
+            if (wordText) {
+              list.push({
+                id: fallbackBase?.id || `word-${wordText.toLowerCase().replace(/\s+/g, "_")}`,
+                word: wordText,
+                partOfSpeech: fallbackBase?.partOfSpeech || "expression",
+                translation: fallbackBase?.translation || "",
+                definition: fallbackBase?.definition || fallbackBase?.translation || "",
+                strength: typeof evaluation?.targetWordNewStrength === "number" 
+                  ? evaluation.targetWordNewStrength 
+                  : (fallbackBase?.strength ?? 0),
+                learned: true,
+                starred: false,
+                createdAt: new Date().toISOString(),
+                lastReviewed: new Date().toISOString(),
+              } as Word);
+            }
+          }
+        }
+      }
+
+      return list;
     }, [words, evaluation, challenge]);
 
     return (
@@ -681,14 +716,15 @@ export default function TranslationChallengeCard({
           );
         })()}
 
-        {/* Word Reviewed Banner */}
-        {reviewedWord && (
+        {/* Word Reviewed Banner(s) */}
+        {reviewedWords.map((rw) => (
           <WordReviewedBanner
-            word={reviewedWord}
+            key={rw.id || rw.word}
+            word={rw}
             prefixLabel="Word Reviewed:"
             onPlayAudio={(text) => {
               if (onPlayAudio) onPlayAudio(text);
-              else handlePlayText(text, targetLanguage || "English", "reviewed-word-audio");
+              else handlePlayText(text, targetLanguage || "English", `reviewed-word-${rw.word}`);
             }}
             onViewHistory={(w) => {
               if (onViewHistory) onViewHistory(w);
@@ -699,7 +735,7 @@ export default function TranslationChallengeCard({
               else setSelectedChatWord(w);
             }}
           />
-        )}
+        ))}
 
         {/* Target Word Incorporation Celebration Banner */}
         {evaluation.incorporatedTargetWord && evaluation.targetWordUsed && (
@@ -742,6 +778,68 @@ export default function TranslationChallengeCard({
             </p>
           </div>
         )}
+
+        {/* Vocab Clues Incorporation Celebration Banner */}
+        {(() => {
+          const incorporatedClues = evaluation.augmentedWords?.filter((a) => a.isVocabClue && a.strengthGained > 0) || [];
+          if (incorporatedClues.length === 0) return null;
+          return (
+            <div className="p-3.5 bg-gradient-to-r from-teal-500/10 via-emerald-500/5 to-cyan-50/50 border border-teal-300 rounded-xl shadow-2xs space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-teal-600 text-white rounded-lg shadow-2xs">
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                  <span className="font-bold text-xs sm:text-sm text-teal-950">
+                    Vocab Clues Successfully Incorporated! ({incorporatedClues.length} {incorporatedClues.length === 1 ? "word" : "words"})
+                  </span>
+                </div>
+                <span className="px-2.5 py-0.5 bg-teal-600 text-white text-[11px] font-black rounded-full shadow-2xs">
+                  +30 Strength Points Each
+                </span>
+              </div>
+              <p className="text-xs text-teal-900 leading-relaxed">
+                Great job using terms from the vocab clues in your response! Memory strength has been boosted by <strong className="font-bold font-mono">+30%</strong> for each term.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {incorporatedClues.map((clue) => (
+                  <div
+                    key={clue.word}
+                    className="flex items-center justify-between p-2.5 bg-white/95 border border-teal-200/80 rounded-xl shadow-3xs gap-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-xs sm:text-sm text-stone-900 font-serif truncate">
+                          {clue.word}
+                        </span>
+                        {clue.translation && (
+                          <span className="text-[11px] text-stone-500 italic truncate max-w-[140px]">
+                            "{clue.translation}"
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-mono font-medium text-teal-800">
+                        {clue.prevStrength}% → <strong className="font-bold text-teal-950">{clue.newStrength}%</strong> (+{clue.strengthGained}%)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePlayText(clue.word, targetLanguage || "English", `clue-${clue.word}`)}
+                      className="p-1.5 rounded-lg text-teal-800 hover:text-teal-950 hover:bg-teal-100 transition-colors cursor-pointer shrink-0 border border-teal-200/60"
+                      title={`Pronounce "${clue.word}"`}
+                    >
+                      {playingItemKey === `clue-${clue.word}` ? (
+                        <Square className="w-3.5 h-3.5 fill-teal-800 text-teal-800 animate-pulse" />
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Target Word Feedback Banner (When NOT Incorporated) */}
         {!evaluation.incorporatedTargetWord && targetWordText && (
