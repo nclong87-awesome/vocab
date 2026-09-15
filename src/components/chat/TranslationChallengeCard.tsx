@@ -469,37 +469,24 @@ export default function TranslationChallengeCard({
       const list: Word[] = [];
       const seenWords = new Set<string>();
 
-      // 1. If evaluation.augmentedWords is present, build Word objects for all augmented words
+      // 1. If evaluation.augmentedWords is present, build Word objects for all augmented words that exist in collection
       if (evaluation?.augmentedWords && evaluation.augmentedWords.length > 0) {
         for (const aug of evaluation.augmentedWords) {
           const lower = aug.word.toLowerCase().trim();
           if (seenWords.has(lower)) continue;
           seenWords.add(lower);
 
-          let matched = words?.length ? findWordInCollection(words, aug.word) : undefined;
+          const matched = words?.length ? findWordInCollection(words, aug.word) : undefined;
           if (matched) {
             list.push({
               ...matched,
               strength: typeof aug.newStrength === "number" ? aug.newStrength : matched.strength,
             });
-          } else {
-            list.push({
-              id: `word-${aug.word.toLowerCase().replace(/\s+/g, "_")}`,
-              word: aug.word,
-              partOfSpeech: "expression",
-              translation: aug.translation || "",
-              definition: aug.translation || `Key term from translation challenge`,
-              strength: aug.newStrength,
-              learned: true,
-              starred: false,
-              createdAt: new Date().toISOString(),
-              lastReviewed: new Date().toISOString(),
-            } as Word);
           }
         }
       }
 
-      // 2. Fallback to single target word if list is empty
+      // 2. Fallback to single target word if list is empty, but ONLY if it exists in the collection
       if (list.length === 0) {
         const rawTargetWord = evaluation?.targetWordUsed || challenge?.targetWordFromCollection?.word;
         if (rawTargetWord || challenge?.targetWordFromCollection) {
@@ -516,25 +503,6 @@ export default function TranslationChallengeCard({
               ...matchedWord,
               strength: typeof evaluation?.targetWordNewStrength === "number" ? evaluation.targetWordNewStrength : matchedWord.strength,
             });
-          } else {
-            const fallbackBase = challenge?.targetWordFromCollection;
-            const wordText = rawTargetWord || fallbackBase?.word || "";
-            if (wordText) {
-              list.push({
-                id: fallbackBase?.id || `word-${wordText.toLowerCase().replace(/\s+/g, "_")}`,
-                word: wordText,
-                partOfSpeech: fallbackBase?.partOfSpeech || "expression",
-                translation: fallbackBase?.translation || "",
-                definition: fallbackBase?.definition || fallbackBase?.translation || "",
-                strength: typeof evaluation?.targetWordNewStrength === "number" 
-                  ? evaluation.targetWordNewStrength 
-                  : (fallbackBase?.strength ?? 0),
-                learned: true,
-                starred: false,
-                createdAt: new Date().toISOString(),
-                lastReviewed: new Date().toISOString(),
-              } as Word);
-            }
           }
         }
       }
@@ -791,7 +759,7 @@ export default function TranslationChallengeCard({
                     <Sparkles className="w-4 h-4" />
                   </span>
                   <span className="font-bold text-xs sm:text-sm text-teal-950">
-                    Vocab Clues Successfully Incorporated! ({incorporatedClues.length} {incorporatedClues.length === 1 ? "word" : "words"})
+                    Collection Vocab Clues Boosted! ({incorporatedClues.length} {incorporatedClues.length === 1 ? "word" : "words"})
                   </span>
                 </div>
                 <span className="px-2.5 py-0.5 bg-teal-600 text-white text-[11px] font-black rounded-full shadow-2xs">
@@ -799,7 +767,7 @@ export default function TranslationChallengeCard({
                 </span>
               </div>
               <p className="text-xs text-teal-900 leading-relaxed">
-                Great job using terms from the vocab clues in your response! Memory strength has been boosted by <strong className="font-bold font-mono">+30%</strong> for each term.
+                Great job using vocabulary from your collection in your response! Memory strength has been boosted by <strong className="font-bold font-mono">+30%</strong> for each term.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 {incorporatedClues.map((clue) => (
