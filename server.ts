@@ -3195,6 +3195,7 @@ WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
 - Carefully evaluate the candidate words from the user's database above.
 - Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life as the primary target word.
 - Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
+- TARGET WORD PRESENCE IN NATIVE SENTENCE MANDATE: The "nativeSentence" MUST explicitly, clearly, and unmistakably contain the exact native translation/meaning of the selected target word (e.g. if target word is "set off" with native translation "khởi hành, lên đường", "nativeSentence" MUST explicitly contain "khởi hành" or "lên đường"). The learner MUST be prompted to use the target word by encountering its direct native meaning in "nativeSentence"! NEVER omit or drop the native meaning of the target word.
 - CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
   NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
   Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
@@ -3249,6 +3250,8 @@ CRITICAL MANDATES:
    - This empowers learners to write multiple correct, idiomatic translations of the sentence while dramatically increasing the likelihood that words they use already exist in their collection (earning them memory strength boosts).
    - Ensure the primary featured target word is included in this list.
 9. PROFILE NOTE: Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected. For pragmatic or goal-oriented learners, emphasize how this vocabulary supports versatile, effective communication across real-life daily, travel, dining, and social settings rather than repetitive office work.
+10. TARGET WORD PRESENCE IN NATIVE SENTENCE: The chosen target word's native translation/meaning MUST appear explicitly in 'nativeSentence' so that the learner is directly prompted to translate it into the target word. For example, if target word is "set off" ("khởi hành, lên đường"), 'nativeSentence' MUST contain "khởi hành" or "lên đường".
+11. STRICT 1-TO-1 BIDIRECTIONAL SEMANTIC EQUIVALENCE: 'nativeSentence' and 'idealTranslation' MUST be exact 1-to-1 semantic translations of each other. Every single clause, action, or verb phrase in 'idealTranslation' MUST correspond directly to a clause in 'nativeSentence', and vice versa. NEVER drop clauses (e.g. keeping "settle" while dropping "set off"), NEVER invent extra actions in 'idealTranslation' not present in 'nativeSentence', and NEVER confuse false-friend verbs (e.g. confusing "set off" or "settle" with "set up / thiết lập").
 
 Return STRICTLY raw JSON-only matching this schema:
 {
@@ -3266,7 +3269,7 @@ Return STRICTLY raw JSON-only matching this schema:
   "personalityNote": "Explanation of profile alignment"
 } `;
 
-    const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, concise (6-14 words), and its idealTranslation must incorporate the target word. Actively avoid defaulting to corporate office or business management scenarios.`;
+    const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lên đường' for 'set off'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
     const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
     let effectiveLlmConfig = llmConfig ? { ...llmConfig, onlyReliableModels: true } : { onlyReliableModels: true };
