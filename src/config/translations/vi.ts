@@ -476,5 +476,7 @@ export const viTranslations: LanguageTranslations = {
     gallery_view_enriched_btn: "Xem Từ Đã Làm Giàu",
     gallery_view_in_gallery: "Duyệt Trong Gallery",
     gallery_empty_title: "Chưa Có Từ Đã Làm Giàu Nào",
-    gallery_empty_desc: "Hiện chưa có từ vựng nào vừa hoàn thành làm giàu. Hãy thử chạy làm giàu tự động các từ nháp!"
+    gallery_empty_desc: "Hiện chưa có từ vựng nào vừa hoàn thành làm giàu. Hãy thử chạy làm giàu tự động các từ nháp!",
+    gallery_enriched_by_model: "Làm giàu bằng {model}",
+    gallery_model_label: "Mô hình"
   };

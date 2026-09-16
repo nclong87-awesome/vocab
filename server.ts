@@ -589,14 +589,14 @@ async function callLLMSingle(
   return JSON.stringify(result);
 }
 
-async function callLLMAutoCandidates(
+async function callLLMAutoCandidatesWithMeta(
   prompt: string,
   systemInstruction: string,
   schemaDescription: string,
   llmConfig?: LLMRequestConfig,
   initialExcludedKeys?: Set<string>,
   signal?: AbortSignal
-): Promise<string> {
+): Promise<{ text: string; provider: string; model: string }> {
   let candidates = getServerAutoModelCandidates(llmConfig);
   if ((llmConfig as any)?.onlyReliableModels) {
     candidates = candidates.filter(c => RELIABLE_MODELS.some(m => m === c.model));
@@ -647,7 +647,7 @@ async function callLLMAutoCandidates(
           throw new Error(`Invalid JSON response from ${candKey}: ${jsonErr.message}`);
         }
       }
-      return resultText;
+      return { text: resultText, provider: cand.provider, model: cand.model };
     } catch (err: any) {
       if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted")) {
         throw err;
@@ -662,6 +662,37 @@ async function callLLMAutoCandidates(
   throw lastError || new Error("All AI models in Auto Mode failed on server.");
 }
 
+async function callLLMAutoCandidates(
+  prompt: string,
+  systemInstruction: string,
+  schemaDescription: string,
+  llmConfig?: LLMRequestConfig,
+  initialExcludedKeys?: Set<string>,
+  signal?: AbortSignal
+): Promise<string> {
+  const result = await callLLMAutoCandidatesWithMeta(prompt, systemInstruction, schemaDescription, llmConfig, initialExcludedKeys, signal);
+  return result.text;
+}
+
+// LLM caller returning result text with executed provider and model metadata
+async function callLLMWithMeta(
+  prompt: string,
+  systemInstruction: string,
+  schemaDescription: string,
+  llmConfig?: LLMRequestConfig,
+  signal?: AbortSignal
+): Promise<{ text: string; provider: string; model: string }> {
+  const provider = llmConfig?.provider || "auto";
+
+  if (provider === "auto" || llmConfig?.model === "auto") {
+    return callLLMAutoCandidatesWithMeta(prompt, systemInstruction, schemaDescription, llmConfig, undefined, signal);
+  }
+
+  const sanitizedMod = sanitizeModel(provider, llmConfig?.model);
+  const text = await callLLMSingle(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+  return { text, provider, model: sanitizedMod };
+}
+
 // Main callLLM function supporting Auto Mode
 async function callLLM(
   prompt: string, 
@@ -670,14 +701,8 @@ async function callLLM(
   llmConfig?: LLMRequestConfig,
   signal?: AbortSignal
 ): Promise<string> {
-  const provider = llmConfig?.provider || "auto";
-
-  if (provider === "auto" || llmConfig?.model === "auto") {
-    return callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, signal);
-  }
-
-  // When a specific provider is configured, call it directly and throw on error without fallbacks
-  return callLLMSingle(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+  const res = await callLLMWithMeta(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+  return res.text;
 }
 
 function extractTextFromContent(content: any): string {
@@ -1203,10 +1228,18 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
   ]
 }`;
 
-    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
+    const startTime = performance.now();
+    const { text, provider: usedProvider, model: usedModel } = await callLLMWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
     const result = cleanAndParseJson(text);
-    res.json(result);
+    const responseTimeMs = Math.round(performance.now() - startTime);
+    res.json({
+      ...result,
+      provider: usedProvider,
+      model: usedModel,
+      responseTimeMs,
+      serverLockedModels: getServerLockedModelsArray()
+    });
   } catch (error: any) {
     if (controller.signal.aborted || error?.name === "AbortError") {
       console.log("[/api/autofill-word] Request aborted by client");
@@ -1342,12 +1375,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT RESOLUTION:
   ]
 }`;
 
-    const text = await callLLM(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
+    const startTime = performance.now();
+    const { text, provider: usedProvider, model: usedModel } = await callLLMWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, controller.signal);
     if (controller.signal.aborted) return;
     let result = cleanAndParseJson(text);
-    const parsedProvider = result?.provider || llmConfig?.provider || "gemini";
-    const parsedModel = result?.model || sanitizeModel(parsedProvider, llmConfig?.model);
-    const responseTimeMs = result?.responseTimeMs;
+    const parsedProvider = result?.provider || usedProvider || llmConfig?.provider || "gemini";
+    const parsedModel = result?.model || usedModel || sanitizeModel(parsedProvider, llmConfig?.model);
+    const responseTimeMs = result?.responseTimeMs || Math.round(performance.now() - startTime);
 
     if (Array.isArray(result)) {
       result = {

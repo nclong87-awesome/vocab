@@ -118,6 +118,9 @@ export interface Word {
   hasMultipleDefinitions?: boolean;
   enrichmentStatus?: 'idle' | 'enriching' | 'completed' | 'has_multiple_definitions' | 'error';
   enrichmentError?: string;
+  enrichmentModel?: string;
+  enrichmentProvider?: string;
+  enrichedAt?: string;
 }
 
 export interface WordSense {

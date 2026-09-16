@@ -497,7 +497,9 @@ export type TranslationKey =
   | "gallery_view_enriched_btn"
   | "gallery_view_in_gallery"
   | "gallery_empty_title"
-  | "gallery_empty_desc";
+  | "gallery_empty_desc"
+  | "gallery_enriched_by_model"
+  | "gallery_model_label";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

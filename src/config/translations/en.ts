@@ -490,5 +490,7 @@ export const enTranslations: LanguageTranslations = {
     gallery_view_enriched_btn: "View Enriched Words",
     gallery_view_in_gallery: "Browse in Gallery",
     gallery_empty_title: "No Enriched Words Found",
-    gallery_empty_desc: "No auto-completed words are available to display right now. Try enriching some draft words!"
+    gallery_empty_desc: "No auto-completed words are available to display right now. Try enriching some draft words!",
+    gallery_enriched_by_model: "Enriched with {model}",
+    gallery_model_label: "Model"
   };

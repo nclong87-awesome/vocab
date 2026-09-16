@@ -416,7 +416,10 @@ export function autoMergeLocalAndRemote(
         lastReviewed: localReviewTime >= remoteReviewTime ? lWord.lastReviewed : match.lastReviewed,
         nextReviewDate: primary.nextReviewDate || secondary.nextReviewDate || null,
         createdAt: parseTime(lWord.createdAt) < parseTime(match.createdAt) && parseTime(lWord.createdAt) > 0 ? lWord.createdAt : match.createdAt,
-        strengthHistory: cappedHistoryList.length > 0 ? cappedHistoryList : undefined
+        strengthHistory: cappedHistoryList.length > 0 ? cappedHistoryList : undefined,
+        enrichmentModel: primary.enrichmentModel || secondary.enrichmentModel || undefined,
+        enrichmentProvider: primary.enrichmentProvider || secondary.enrichmentProvider || undefined,
+        enrichedAt: primary.enrichedAt || secondary.enrichedAt || undefined
       };
 
       // Detect differences

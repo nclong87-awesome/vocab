@@ -5,20 +5,22 @@ export interface LlmResponseMetadataProps {
   model?: string;
   responseTimeMs?: number;
   className?: string;
+  dark?: boolean;
 }
 
 export function LlmResponseMetadata({
   provider,
   model,
   responseTimeMs,
-  className = ""
+  className = "",
+  dark = false
 }: LlmResponseMetadataProps) {
   if (!provider && !model && responseTimeMs === undefined) {
     return null;
   }
 
   return (
-    <div className={`mt-3 pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] select-none gap-1.5 flex-nowrap whitespace-nowrap min-w-0 w-full overflow-hidden ${className}`}>
+    <div className={`mt-3 pt-2 border-t ${dark ? "border-stone-750 text-stone-300" : "border-stone-100 text-stone-600"} flex items-center justify-between text-[11px] select-none gap-1.5 flex-nowrap whitespace-nowrap min-w-0 w-full overflow-hidden ${className}`}>
       <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-hidden shrink">
         {provider && (() => {
           const style = getProviderBadgeStyle(provider);
@@ -29,7 +31,11 @@ export function LlmResponseMetadata({
           );
         })()}
         {model && (
-          <span className="font-mono text-[10.5px] text-stone-600 font-medium bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200/60 truncate min-w-0 max-w-[130px] sm:max-w-[220px]" title={model}>
+          <span className={`font-mono text-[10.5px] font-medium px-1.5 py-0.5 rounded border truncate min-w-0 max-w-[130px] sm:max-w-[220px] ${
+            dark 
+              ? "text-stone-200 bg-stone-800/90 border-stone-700/80" 
+              : "text-stone-600 bg-stone-50 border-stone-200/60"
+          }`} title={model}>
             {model}
           </span>
         )}

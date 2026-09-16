@@ -1,5 +1,5 @@
 import { Word, WordSense, LLMConfig } from "../types";
-import { checkWordDefinitionsService } from "./llmClientService";
+import { checkWordDefinitionsService, sanitizeModel } from "./llmClientService";
 import {
   normalizeWordCategory,
   normalizeWordPartOfSpeech,
@@ -167,7 +167,10 @@ export async function enrichSingleWord(
         pronunciation: primarySense?.pronunciation || data?.pronunciation || word.pronunciation || undefined,
         partOfSpeech: normPos,
         category: normCat,
-        suggestedWords: primarySense?.suggestedWords || data?.suggestedWords || word.suggestedWords
+        suggestedWords: primarySense?.suggestedWords || data?.suggestedWords || word.suggestedWords,
+        enrichmentModel: data?.model || (llmConfig?.model ? sanitizeModel(llmConfig.provider, llmConfig.model) : undefined),
+        enrichmentProvider: data?.provider || llmConfig?.provider,
+        enrichedAt: new Date().toISOString()
       };
 
       return {
@@ -235,7 +238,10 @@ export async function enrichSingleWord(
       hasMultipleDefinitions: false,
       senses: validSenses.length > 0 ? validSenses : undefined,
       enrichmentStatus: "completed",
-      enrichmentError: undefined
+      enrichmentError: undefined,
+      enrichmentModel: data?.model || (llmConfig?.model ? sanitizeModel(llmConfig.provider, llmConfig.model) : undefined),
+      enrichmentProvider: data?.provider || llmConfig?.provider,
+      enrichedAt: new Date().toISOString()
     };
 
     return {

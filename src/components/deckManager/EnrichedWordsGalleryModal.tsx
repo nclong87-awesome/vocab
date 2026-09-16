@@ -14,7 +14,8 @@ import {
   Edit3,
   Languages,
   Check,
-  Plus
+  Plus,
+  Bot
 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../../types";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
@@ -24,6 +25,10 @@ import { WordImageGallery } from "../common/WordImageGallery";
 import MemoryStrengthBar from "../common/MemoryStrengthBar";
 import { t } from "../../config/i18n";
 import { normalizeWordCategory, normalizeWordPartOfSpeech, isPhrasalVerb } from "../../utils/wordNormalization";
+import { formatModelDisplayName } from "../../utils/llmHelpers";
+import { getAutoCandidateWithMeta } from "../../utils/autoModeManager";
+import { PROVIDER_OPTIONS } from "../../config/llmProviders";
+import LlmResponseMetadata from "../chat/LlmResponseMetadata";
 
 export interface EnrichedWordsGalleryModalProps {
   isOpen: boolean;
@@ -90,6 +95,24 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
   const wordsCount = localWords.length;
   const safeIndex = wordsCount > 0 ? Math.min(Math.max(0, currentIndex), wordsCount - 1) : 0;
   const currentWord: Word | undefined = localWords[safeIndex];
+
+  const [lastEnrichmentMetadata, setLastEnrichmentMetadata] = useState<{
+    provider?: string;
+    model?: string;
+    responseTimeMs?: number;
+  } | null>(null);
+
+  // Determine effective AI model and provider for current word
+  const activeAutoCand = (!llmConfig?.provider || llmConfig.provider === "auto" || !llmConfig.model || llmConfig.model === "auto")
+    ? getAutoCandidateWithMeta(llmConfig, undefined, false).candidate
+    : null;
+
+  const currentWordEnrichmentModel = currentWord?.enrichmentModel || (regeneratedSuccessId === currentWord?.id ? lastEnrichmentMetadata?.model : undefined) || (activeAutoCand ? activeAutoCand.model : llmConfig?.model) || "gemini-3.5-flash-lite";
+  const currentWordEnrichmentProvider = currentWord?.enrichmentProvider || (regeneratedSuccessId === currentWord?.id ? lastEnrichmentMetadata?.provider : undefined) || (activeAutoCand ? activeAutoCand.provider : llmConfig?.provider) || "auto";
+
+  const formattedModelName = formatModelDisplayName(currentWordEnrichmentModel);
+  const providerMeta = PROVIDER_OPTIONS.find((p) => p.id === currentWordEnrichmentProvider);
+  const providerDisplayName = providerMeta ? providerMeta.name.replace(/\s*\(Default\)/i, "") : (currentWordEnrichmentProvider && currentWordEnrichmentProvider !== "auto" ? currentWordEnrichmentProvider.charAt(0).toUpperCase() + currentWordEnrichmentProvider.slice(1) : "");
 
   // Auto scroll current word thumbnail into view
   useEffect(() => {
@@ -193,6 +216,15 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
             ? normalizeWordCategory(data.category, data.word, normalizedPos)
             : data.category || currentWord.category || "General";
 
+          const usedProvider = data.provider || newConfig.provider || llmConfig?.provider || "auto";
+          const usedModel = data.model || newConfig.model || llmConfig?.model || "auto";
+
+          setLastEnrichmentMetadata({
+            provider: usedProvider,
+            model: formatModelDisplayName(usedModel),
+            responseTimeMs: data.responseTimeMs
+          });
+
           const updated: Word = {
             ...currentWord,
             pronunciation: data.pronunciation || currentWord.pronunciation,
@@ -205,7 +237,10 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
             context: data.context || currentWord.context,
             suggestedWords: data.suggestedWords || currentWord.suggestedWords,
             imageKeyword: data.imageKeyword || currentWord.imageKeyword,
-            completed: true
+            completed: true,
+            enrichmentModel: data.model || usedModel,
+            enrichmentProvider: data.provider || usedProvider,
+            enrichedAt: new Date().toISOString()
           };
 
           // Update local state
@@ -243,6 +278,15 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
           ? normalizeWordCategory(data.category, data.word, normalizedPos)
           : data.category || currentWord.category || "General";
 
+        const usedProvider = data.provider || llmConfig?.provider || "auto";
+        const usedModel = data.model || llmConfig?.model || "auto";
+
+        setLastEnrichmentMetadata({
+          provider: usedProvider,
+          model: formatModelDisplayName(usedModel),
+          responseTimeMs: data.responseTimeMs
+        });
+
         const updated: Word = {
           ...currentWord,
           pronunciation: data.pronunciation || currentWord.pronunciation,
@@ -255,7 +299,10 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
           context: data.context || currentWord.context,
           suggestedWords: data.suggestedWords || currentWord.suggestedWords,
           imageKeyword: data.imageKeyword || currentWord.imageKeyword,
-          completed: true
+          completed: true,
+          enrichmentModel: data.model || usedModel,
+          enrichmentProvider: data.provider || usedProvider,
+          enrichedAt: new Date().toISOString()
         };
 
         // Update local state
@@ -319,6 +366,21 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
                     }) || `${safeIndex + 1} / ${wordsCount}`}
                   </span>
                 )}
+                {/* AI Model Badge in Modal Header */}
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-sky-950/80 text-sky-300 border border-sky-600/50 flex items-center gap-1.5 shrink-0 shadow-2xs"
+                  title={`AI Model: ${formattedModelName}${providerDisplayName ? ` (${providerDisplayName})` : ""}`}
+                >
+                  <Bot className="w-3 h-3 text-sky-400 shrink-0" />
+                  <span className="truncate max-w-[130px] sm:max-w-[200px]">
+                    {formattedModelName}
+                  </span>
+                  {providerDisplayName && (
+                    <span className="text-sky-400/70 text-[9px] font-sans font-normal hidden sm:inline">
+                      • {providerDisplayName}
+                    </span>
+                  )}
+                </span>
               </div>
               <p className="text-[11px] text-stone-400 truncate">
                 {t("incomplete_words_rule_explainer", appLanguage) || "Review enriched words, navigate forward/backward, and regenerate with AI."}
@@ -388,9 +450,17 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
               >
                 {/* Success Banner if Regenerated */}
                 {regeneratedSuccessId === currentWord.id && (
-                  <div className="p-3 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-emerald-200 text-xs font-bold flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>{t("gallery_regenerated_success", appLanguage) || "Word details regenerated successfully with AI!"}</span>
+                  <div className="p-3 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-emerald-200 text-xs font-bold flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{t("gallery_regenerated_success", appLanguage) || "Word details regenerated successfully with AI!"}</span>
+                    </div>
+                    {lastEnrichmentMetadata?.model && (
+                      <span className="font-mono text-[11px] text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700/50 flex items-center gap-1 shrink-0">
+                        <Bot className="w-3 h-3 text-emerald-400" />
+                        {lastEnrichmentMetadata.model}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -432,6 +502,17 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
                         <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded flex items-center gap-1">
                           <Sparkles className="w-2.5 h-2.5" />
                           <span>Auto-Enriched</span>
+                        </span>
+                        {/* Enriched AI Model Pill */}
+                        <span
+                          className="text-[10px] font-mono font-semibold text-sky-300 bg-sky-950/70 border border-sky-600/50 px-2 py-0.5 rounded flex items-center gap-1.5 shadow-2xs"
+                          title={`AI Model used to enrich: ${formattedModelName}${providerDisplayName ? ` via ${providerDisplayName}` : ""}`}
+                        >
+                          <Bot className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+                          <span>{formattedModelName}</span>
+                          {providerDisplayName && (
+                            <span className="text-sky-400/70 text-[9px] font-sans font-normal">({providerDisplayName})</span>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -611,18 +692,41 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
                     />
                   </div>
 
-                  {/* Memory Strength & SRS Info */}
-                  <div className="pt-3 border-t border-stone-800 flex items-center justify-between gap-3 text-xs">
+                  {/* Memory Strength, SRS Info, & AI Model */}
+                  <div className="pt-3 border-t border-stone-800 flex flex-wrap items-center justify-between gap-2.5 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-[10px] text-stone-400 uppercase font-mono">Memory Strength:</span>
                       <MemoryStrengthBar strength={currentWord.strength || 0} />
                     </div>
-                    {currentWord.lastReviewed && (
-                      <span className="text-[10px] text-stone-400 font-mono">
-                        Reviewed: {new Date(currentWord.lastReviewed).toLocaleDateString()}
-                      </span>
-                    )}
+
+                    <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                        <span className="text-stone-400">{t("gallery_model_label", appLanguage) || "Model"}:</span>
+                        <span className="text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/60 flex items-center gap-1 font-semibold">
+                          <Bot className="w-2.5 h-2.5 text-sky-400" />
+                          {formattedModelName}
+                          {providerDisplayName && <span className="opacity-70 font-normal">({providerDisplayName})</span>}
+                        </span>
+                      </div>
+
+                      {currentWord.lastReviewed && (
+                        <span className="text-[10px] text-stone-400 font-mono">
+                          Reviewed: {new Date(currentWord.lastReviewed).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Regenerated Response Metadata */}
+                  {lastEnrichmentMetadata && regeneratedSuccessId === currentWord.id && (
+                    <LlmResponseMetadata
+                      provider={lastEnrichmentMetadata.provider || currentWordEnrichmentProvider}
+                      model={lastEnrichmentMetadata.model || formattedModelName}
+                      responseTimeMs={lastEnrichmentMetadata.responseTimeMs}
+                      dark={true}
+                      className="mt-2 pt-2 border-stone-800"
+                    />
+                  )}
                 </div>
               </motion.div>
             </AnimatePresence>
