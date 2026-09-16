@@ -247,6 +247,10 @@ export default function App() {
       suggestedWords: wordData.suggestedWords,
     });
 
+    if (addedWord) {
+      wordsRef.current = [addedWord, ...wordsRef.current.filter(w => w.id !== addedWord.id)];
+    }
+
     const currentIncomplete = wordsRef.current.filter(w => w.completed === false);
     const isAlreadyInList = addedWord && currentIncomplete.some(w => w.id === addedWord.id || w.word.toLowerCase() === addedWord.word.toLowerCase());
     const remainingCount = isAlreadyInList ? currentIncomplete.length : currentIncomplete.length + 1;

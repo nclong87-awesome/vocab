@@ -212,6 +212,8 @@ export function useVocabulary() {
       "created"
     );
 
+    wordsRef.current = [newWord, ...wordsRef.current.filter(w => w.id !== newWord.id)];
+
     setWords(prev => {
       const exists = isWordInCollection(prev, trimmedWord);
       if (exists) {
