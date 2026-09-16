@@ -386,37 +386,26 @@ export default function WordSearchModal({
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
                 <input
                   ref={inputRef}
-                  type="search"
+                  type="text"
                   enterKeyHint="search"
                   value={inputValue}
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
                   placeholder={t("chat_search_word_placeholder", appLanguage) || "Search word, meaning, IPA, topic, or ask AI..."}
-                  className="w-full pl-10 pr-20 py-2 sm:py-2.5 rounded-xl border border-stone-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 transition-all font-medium bg-stone-50/50 focus:bg-white"
+                  className="w-full pl-10 pr-9 py-2 sm:py-2.5 rounded-xl border border-stone-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 transition-all font-medium bg-stone-50/50 focus:bg-white [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden [&::-ms-clear]:hidden"
                   id="modal-word-search-input"
                 />
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                  {inputValue && (
-                    <button
-                      type="button"
-                      onClick={handleClearInput}
-                      className="text-stone-400 hover:text-stone-700 p-1 rounded-md transition-colors cursor-pointer"
-                      title="Clear search"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {inputValue.trim() !== query.trim() && inputValue.trim().length > 0 && (
-                    <button
-                      type="submit"
-                      className="px-2 py-0.5 rounded-md bg-stone-900 hover:bg-stone-800 text-white text-[11px] font-bold shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 shrink-0"
-                      title="Search now (or press Enter)"
-                    >
-                      <span>Search</span>
-                      <span className="text-[10px] opacity-70 hidden sm:inline">↵</span>
-                    </button>
-                  )}
-                </div>
+                {inputValue && (
+                  <button
+                    type="button"
+                    onClick={handleClearInput}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 rounded-md transition-colors cursor-pointer"
+                    title="Clear search"
+                    id="clear-word-search-btn"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
               {/* Add New Word Quick Button */}

@@ -74,3 +74,16 @@ main {
 .animate-chat-msg {
   animation: chatMessageFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Prevent native browser clear/cancel icons from clashing with custom clear icons */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
+input::-ms-clear {
+  display: none;
+}
