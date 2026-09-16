@@ -44,7 +44,7 @@ interface DraftsManagerProps {
   onLlmApiError?: (err: any, currentConfig: LLMConfig, retryAction: (newConfig: LLMConfig) => void) => void;
   autoEnrichEnabled?: boolean;
   onToggleAutoEnrich?: (val?: boolean) => void;
-  onEnrichWord?: (word: Word) => Promise<any>;
+  onEnrichWord?: (word: Word, forceRecheck?: boolean) => Promise<any>;
   onEnrichAllIncomplete?: (customIncompleteList?: Word[]) => Promise<void>;
   onCancelEnrichment?: () => void;
   enrichmentProgress?: BatchEnrichmentProgress;
@@ -132,16 +132,17 @@ export default function DraftsManager({
     speakTextService(text, ttsConfig, llmConfig, targetLanguage);
   }, [ttsConfig, llmConfig, targetLanguage]);
 
-  const handleEnrichSingle = useCallback(async (incWord: Word) => {
+  const handleEnrichSingle = useCallback(async (incWord: Word, forceRecheck = false) => {
     if (onEnrichWord) {
-      await onEnrichWord(incWord);
+      await onEnrichWord(incWord, forceRecheck);
     } else {
       setLocalEnrichingIds(prev => new Set(prev).add(incWord.id));
       try {
         const res = await enrichSingleWord(incWord, {
           targetLanguage,
           nativeLanguage,
-          llmConfig
+          llmConfig,
+          forceRecheck
         });
         if (onUpdateWord) {
           onUpdateWord(res.updatedWord);
@@ -293,7 +294,7 @@ export default function DraftsManager({
                   <X className="w-3.5 h-3.5" />
                   <span>{t("auto_enrich_stop", appLanguage)}</span>
                 </button>
-              ) : autoEnrichableWords.length > 0 ? (
+              ) : incompleteWords.length > 0 ? (
                 <button
                   type="button"
                   onClick={handleEnrichAll}
@@ -301,16 +302,8 @@ export default function DraftsManager({
                   title={t("auto_enrich_all_tooltip", appLanguage)}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{t("auto_enrich_all_btn", appLanguage, { count: String(autoEnrichableWords.length) })}</span>
+                  <span>{t("auto_enrich_all_btn", appLanguage, { count: String(incompleteWords.length) })}</span>
                 </button>
-              ) : wordsWithMultipleDefinitions.length > 0 ? (
-                <div
-                  className="px-3 py-2 text-xs font-bold rounded-lg bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1.5 cursor-default"
-                  title={t("incomplete_multiple_defs_tooltip", appLanguage)}
-                >
-                  <AlertCircle className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                  <span>{t("auto_enrich_manual_review_needed", appLanguage, { count: String(wordsWithMultipleDefinitions.length) })}</span>
-                </div>
               ) : null}
             </div>
           </div>
@@ -505,8 +498,8 @@ export default function DraftsManager({
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                        {/* Auto-enrich single word or Manual Review */}
-                        {hasMultipleDefs ? (
+                        {/* Auto-enrich single word and/or Manual Review */}
+                        {hasMultipleDefs && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -518,28 +511,27 @@ export default function DraftsManager({
                           >
                             <Edit3 className="w-4 h-4 text-purple-700 group-hover:scale-110 transition-transform" />
                           </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isEnriching}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEnrichSingle(incWord);
-                            }}
-                            className={`p-1.5 rounded transition-colors cursor-pointer ${
-                              isEnriching
-                                ? "text-amber-600 bg-amber-50"
-                                : "text-stone-400 hover:text-amber-700 hover:bg-amber-50"
-                            }`}
-                            title={t("auto_enrich_single_title", appLanguage)}
-                          >
-                            {isEnriching ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                            ) : (
-                              <Sparkles className="w-4 h-4 text-amber-600 group-hover:scale-110 transition-transform" />
-                            )}
-                          </button>
                         )}
+                        <button
+                          type="button"
+                          disabled={isEnriching}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEnrichSingle(incWord, hasMultipleDefs);
+                          }}
+                          className={`p-1.5 rounded transition-colors cursor-pointer ${
+                            isEnriching
+                              ? "text-amber-600 bg-amber-50"
+                              : "text-stone-400 hover:text-amber-700 hover:bg-amber-50"
+                          }`}
+                          title={t("auto_enrich_single_title", appLanguage)}
+                        >
+                          {isEnriching ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                          ) : (
+                            <Sparkles className="w-4 h-4 text-amber-600 group-hover:scale-110 transition-transform" />
+                          )}
+                        </button>
 
                         <button
                           type="button"

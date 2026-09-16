@@ -105,12 +105,14 @@ export async function enrichSingleWord(
     nativeLanguage: string;
     llmConfig?: LLMConfig;
     signal?: AbortSignal;
+    forceRecheck?: boolean;
   }
 ): Promise<EnrichmentResult> {
-  const { targetLanguage, nativeLanguage, llmConfig, signal } = options;
+  const { targetLanguage, nativeLanguage, llmConfig, signal, forceRecheck } = options;
 
-  // If word is already flagged with multiple definitions, prevent automatic enrichment
+  // If word is already flagged with multiple definitions and forceRecheck is not requested, keep existing definitions
   if (
+    !forceRecheck &&
     word.hasMultipleDefinitions &&
     word.senses &&
     word.senses.length > 1
@@ -302,41 +304,13 @@ export async function enrichIncompleteWordsQueue(
   // Cancel any existing run
   cancelBatchEnrichment();
 
-  // RULE: Prevent automatic enhancement for words that already have multiple definitions identified.
-  // Those words require manual review by the user.
-  const enrichableWords = incompleteWords.filter(
-    (w) => !(w.hasMultipleDefinitions === true || (w.senses && w.senses.length > 1) || w.enrichmentStatus === "has_multiple_definitions")
-  );
-
-  const existingMultiDefCount = incompleteWords.length - enrichableWords.length;
-
-  if (enrichableWords.length === 0) {
-    notifyProgress({
-      isRunning: false,
-      total: incompleteWords.length,
-      processed: incompleteWords.length,
-      completedCount: 0,
-      multipleDefCount: existingMultiDefCount,
-      errorCount: 0,
-      currentWordText: undefined
-    });
-    options.onComplete?.({
-      total: incompleteWords.length,
-      completedCount: 0,
-      multipleDefCount: existingMultiDefCount,
-      errorCount: 0,
-      enrichedWords: []
-    });
-    return;
-  }
-
   const controller = new AbortController();
   activeQueueAbortController = controller;
 
-  const total = enrichableWords.length;
+  const total = incompleteWords.length;
   let processed = 0;
   let completedCount = 0;
-  let multipleDefCount = existingMultiDefCount;
+  let multipleDefCount = 0;
   let errorCount = 0;
   const enrichedWords: Word[] = [];
 
@@ -345,12 +319,12 @@ export async function enrichIncompleteWordsQueue(
     total,
     processed: 0,
     completedCount: 0,
-    multipleDefCount,
+    multipleDefCount: 0,
     errorCount: 0,
-    currentWordText: enrichableWords[0]?.word
+    currentWordText: incompleteWords[0]?.word
   });
 
-  for (const word of enrichableWords) {
+  for (const word of incompleteWords) {
     if (controller.signal.aborted) break;
 
     notifyProgress({
@@ -392,7 +366,7 @@ export async function enrichIncompleteWordsQueue(
         completedCount,
         multipleDefCount,
         errorCount,
-        currentWordText: processed < total ? enrichableWords[processed]?.word : undefined
+        currentWordText: processed < total ? incompleteWords[processed]?.word : undefined
       });
 
       // Brief delay between calls to be courteous to AI rate limits

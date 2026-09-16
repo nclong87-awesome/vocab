@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Word, UserStats, TTSConfig, LLMConfig } from "../types";
 import { calculateNewStreak } from "../utils";
 import { 
@@ -9,11 +9,13 @@ import {
 } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
 import { speakText as speakTextService, registerSpeechTimer } from "../utils/ttsService";
-import { isWordInCollection, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech, areWordsEquivalent } from "../utils/wordNormalization";
+import { isWordInCollection, findWordInCollection, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech, areWordsEquivalent } from "../utils/wordNormalization";
 import { recordLearningInteraction } from "../services/userPersonalityProfileService";
 
 export function useVocabulary() {
   const [words, setWords] = useState<Word[]>([]);
+  const wordsRef = useRef<Word[]>(words);
+  wordsRef.current = words;
   const [stats, setStats] = useState<UserStats>({
     totalQuizzesTaken: 0,
     totalCorrectAnswers: 0,
@@ -172,47 +174,55 @@ export function useVocabulary() {
       suggestedWords?: any[];
     }
   ): Word | null => {
-    let createdWord: Word | null = null;
+    const trimmedWord = (wordData.word || "").trim();
+    if (!trimmedWord) return null;
+
+    const existing = findWordInCollection(wordsRef.current, trimmedWord);
+    if (existing) {
+      return existing;
+    }
+
+    const isPv = isPhrasalVerb(trimmedWord, wordData.partOfSpeech, wordData.category);
+    const normalizedPos = normalizeWordPartOfSpeech(wordData.partOfSpeech, trimmedWord, wordData.category);
+    const normalizedCategory = isPv
+      ? normalizeWordCategory(wordData.category, trimmedWord, normalizedPos)
+      : (wordData.category || "General");
+
+    const newWord: Word = recordStrengthHistory(
+      {
+        id: `incomplete-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        word: trimmedWord,
+        pronunciation: wordData.pronunciation || undefined,
+        partOfSpeech: normalizedPos,
+        category: normalizedCategory,
+        definition: wordData.definition || "",
+        translation: wordData.translation || "",
+        example: wordData.example || undefined,
+        exampleTranslation: wordData.exampleTranslation || undefined,
+        context: wordData.context || undefined,
+        suggestedWords: wordData.suggestedWords || undefined,
+        learned: false,
+        starred: false,
+        completed: false, // Mark as NOT completed
+        createdAt: new Date().toISOString(),
+        lastReviewed: null,
+        strength: 0,
+      },
+      0,
+      "created"
+    );
+
     setWords(prev => {
-      const exists = isWordInCollection(prev, wordData.word);
+      const exists = isWordInCollection(prev, trimmedWord);
       if (exists) {
         return prev;
       }
-      const isPv = isPhrasalVerb(wordData.word, wordData.partOfSpeech, wordData.category);
-      const normalizedPos = normalizeWordPartOfSpeech(wordData.partOfSpeech, wordData.word, wordData.category);
-      const normalizedCategory = isPv
-        ? normalizeWordCategory(wordData.category, wordData.word, normalizedPos)
-        : (wordData.category || "General");
-
-      const newWord: Word = recordStrengthHistory(
-        {
-          id: `incomplete-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          word: wordData.word.trim(),
-          pronunciation: wordData.pronunciation || undefined,
-          partOfSpeech: normalizedPos,
-          category: normalizedCategory,
-          definition: wordData.definition || "",
-          translation: wordData.translation || "",
-          example: wordData.example || undefined,
-          exampleTranslation: wordData.exampleTranslation || undefined,
-          context: wordData.context || undefined,
-          suggestedWords: wordData.suggestedWords || undefined,
-          learned: false,
-          starred: false,
-          completed: false, // Mark as NOT completed
-          createdAt: new Date().toISOString(),
-          lastReviewed: null,
-          strength: 0,
-        },
-        0,
-        "created"
-      );
-      createdWord = newWord;
       const updated = [newWord, ...prev];
       saveAllWordsToDB(updated).catch(e => console.error("IndexedDB add incomplete word save error:", e));
       return updated;
     });
-    return createdWord;
+
+    return newWord;
   }, []);
 
   const handleDeleteWord = useCallback((wordId: string) => {

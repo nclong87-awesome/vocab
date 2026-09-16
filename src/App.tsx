@@ -127,6 +127,9 @@ export default function App() {
     handleFinishQuiz,
   } = useVocabulary();
 
+  const wordsRef = useRef<Word[]>(words);
+  wordsRef.current = words;
+
   const [toastItem, setToastItem] = useState<ToastItem | null>(null);
   const toastTimeoutRef = useRef<any>(null);
 
@@ -244,11 +247,15 @@ export default function App() {
       suggestedWords: wordData.suggestedWords,
     });
 
-    const currentIncomplete = words.filter(w => w.completed === false);
-    const remainingCount = currentIncomplete.length + 1;
+    const currentIncomplete = wordsRef.current.filter(w => w.completed === false);
+    const isAlreadyInList = addedWord && currentIncomplete.some(w => w.id === addedWord.id || w.word.toLowerCase() === addedWord.word.toLowerCase());
+    const remainingCount = isAlreadyInList ? currentIncomplete.length : currentIncomplete.length + 1;
 
     const triggerBatchUpdate = () => {
-      const listToEnrich = [...currentIncomplete, addedWord].filter(Boolean) as Word[];
+      const freshIncomplete = wordsRef.current.filter(w => w.completed === false);
+      const listToEnrich = addedWord && !freshIncomplete.some(w => w.id === addedWord.id || w.word.toLowerCase() === addedWord.word.toLowerCase())
+        ? [addedWord, ...freshIncomplete]
+        : freshIncomplete;
       enrichAllIncomplete(listToEnrich);
     };
 
@@ -277,7 +284,7 @@ export default function App() {
         onClick: navigateToCollection
       }
     }, 6000);
-  }, [handleAddIncompleteWord, words, enrichAllIncomplete, showToast, appLanguage]);
+  }, [handleAddIncompleteWord, enrichAllIncomplete, showToast, appLanguage]);
 
   useEffect(() => {
     const handleToastEvent = (e: any) => {
