@@ -99,10 +99,25 @@ export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] 
 
   // Memory decay only applies to words that have achieved mastered status.
   // If the word was never mastered, filter out spurious memory_decay tuples.
+  // Also filter out any spurious memory_decay tuples that occurred on the same day as a practice session (< 24h after practice).
   const wasEverMastered = word.learned || (word.strength ?? 0) >= 80 || sortedTuples.some(t => t[1] >= 80);
-  const candidateTuples = wasEverMastered
-    ? sortedTuples
-    : sortedTuples.filter(t => t[2] !== "memory_decay");
+  const candidateTuples: StrengthHistoryTuple[] = [];
+  let lastPracticeTimestampSec = 0;
+
+  for (const tuple of sortedTuples) {
+    const [tSec, , rsn] = tuple;
+    if (rsn !== "memory_decay") {
+      if (rsn !== "created" && rsn !== "manual_adjust") {
+        lastPracticeTimestampSec = tSec;
+      }
+      candidateTuples.push(tuple);
+    } else {
+      // Memory decay tuple: only valid if word was mastered AND decay happened at least 24h after last practice
+      if (wasEverMastered && lastPracticeTimestampSec > 0 && (tSec - lastPracticeTimestampSec) >= 86400) {
+        candidateTuples.push(tuple);
+      }
+    }
+  }
 
   // Deduplicate adjacent decay entries with identical strength
   const dedupedTuples: StrengthHistoryTuple[] = [];
@@ -264,7 +279,7 @@ export function recordStrengthHistory(
   };
 
   const nextReviewDate = reason === "memory_decay"
-    ? (word.nextReviewDate && new Date(word.nextReviewDate).getTime() < Date.now() ? word.nextReviewDate : nowIso)
+    ? (word.nextReviewDate || nowIso)
     : calculateNextReviewDate(interimWord, boundedStrength, reason, new Date());
 
   return {

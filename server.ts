@@ -7,7 +7,7 @@ import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload } from ".
 import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quizGenerator";
 import { isPhrasalVerb, findWordInCollection, hasUserIncorporatedWord } from "./src/utils/wordNormalization";
-import { getQuizCandidateWords } from "./src/utils/spacedRepetition";
+import { getTranslationChallengeCandidateWords } from "./src/utils/spacedRepetition";
 import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "./src/config/llmProviders";
 
 dotenv.config();
@@ -3181,21 +3181,19 @@ app.post("/api/generate-challenge", async (req, res) => {
     let candidateCollectionWords: any[] = [];
     if (Array.isArray(words) && words.length > 0) {
       const validWords = words.filter((w: any) => w.completed !== false);
-      candidateCollectionWords = getQuizCandidateWords(validWords, {
+      candidateCollectionWords = getTranslationChallengeCandidateWords(validWords, {
         maxCandidates: 18,
-        includeUnstudied: true,
-        balanceStratified: true,
       });
       if (candidateCollectionWords.length > 0) {
         vocabAnchorSection = `
 USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):
-${candidateCollectionWords.map((w: any) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%]`).join("\n")}
+${candidateCollectionWords.map((w: any) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%, Status: ${!w.lastReviewedAt && !w.lastReviewed ? "New/Unstudied" : (w.learned ? "Due for Review" : "Learning")}]`).join("\n")}
 
 WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
 - Carefully evaluate the candidate words from the user's database above.
-- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life as the primary target word.
+- Select the primary target word from this candidate list. Prioritize candidates labeled "New/Unstudied" or "Learning" to actively challenge and expand the learner's vocabulary.
 - Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
-- TARGET WORD PRESENCE IN NATIVE SENTENCE MANDATE: The "nativeSentence" MUST explicitly, clearly, and unmistakably contain the exact native translation/meaning of the selected target word (e.g. if target word is "set off" with native translation "khởi hành, lên đường", "nativeSentence" MUST explicitly contain "khởi hành" or "lên đường"). The learner MUST be prompted to use the target word by encountering its direct native meaning in "nativeSentence"! NEVER omit or drop the native meaning of the target word.
+- TARGET WORD PRESENCE IN NATIVE SENTENCE MANDATE: The "nativeSentence" MUST explicitly, clearly, and unmistakably contain the exact native translation/meaning of the selected target word (e.g. if target word is "embark" with native translation "bắt đầu, lên đường", "nativeSentence" MUST explicitly contain "bắt đầu" or "lên đường"). The learner MUST be prompted to use the target word by encountering its direct native meaning in "nativeSentence"! NEVER omit or drop the native meaning of the target word.
 - CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
   NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
   Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).

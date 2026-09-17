@@ -2,7 +2,7 @@ import { ChallengeData, ChallengeKeyWord, ChallengeTurnResult, ChallengeSuggeste
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { logApiRequest } from "./requestHistoryService";
-import { getQuizCandidateWords } from "../utils/spacedRepetition";
+import { getTranslationChallengeCandidateWords, isWordPracticedToday } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 
 export interface GenerateChallengeParams {
@@ -54,21 +54,19 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
   let candidateCollectionWords: Word[] = [];
   if (params.words && params.words.length > 0) {
     const validWords = params.words.filter((w) => w.completed !== false);
-    candidateCollectionWords = getQuizCandidateWords(validWords, {
+    candidateCollectionWords = getTranslationChallengeCandidateWords(validWords, {
       maxCandidates: 18,
-      includeUnstudied: true,
-      balanceStratified: true,
     });
     if (candidateCollectionWords.length > 0) {
       vocabAnchorSection = `
 USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):
-${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%]`).join("\n")}
+${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%, Status: ${!w.lastReviewedAt && !w.lastReviewed ? "New/Unstudied" : (w.learned ? "Due for Review" : "Learning")}]`).join("\n")}
 
 WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
 - Carefully evaluate the candidate words from the user's database above.
-- Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life as the primary target word.
+- Select the primary target word from this candidate list. Prioritize candidates labeled "New/Unstudied" or "Learning" to actively challenge and expand the learner's vocabulary.
 - Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
-- TARGET WORD PRESENCE IN NATIVE SENTENCE MANDATE: The "nativeSentence" MUST explicitly, clearly, and unmistakably contain the exact native translation/meaning of the selected target word (e.g. if target word is "set off" with native translation "khởi hành, lên đường", "nativeSentence" MUST explicitly contain "khởi hành" or "lên đường"). The learner MUST be prompted to use the target word by encountering its direct native meaning in "nativeSentence"! NEVER omit or drop the native meaning of the target word.
+- TARGET WORD PRESENCE IN NATIVE SENTENCE MANDATE: The "nativeSentence" MUST explicitly, clearly, and unmistakably contain the exact native translation/meaning of the selected target word (e.g. if target word is "embark" with native translation "bắt đầu, lên đường", "nativeSentence" MUST explicitly contain "bắt đầu" or "lên đường"). The learner MUST be prompted to use the target word by encountering its direct native meaning in "nativeSentence"! NEVER omit or drop the native meaning of the target word.
 - CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
   NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
   Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
@@ -186,9 +184,10 @@ function resolveTargetWordFromCollection(
     }
   }
 
-  // Final check: check any word in words collection against ideal translation
-  if (!matched && parsed.idealTranslation) {
-    const validWords = words.filter((w) => w.completed !== false);
+  // Final check: if candidateWords was provided, candidateWords was already checked.
+  // Otherwise, check validWords from collection that are eligible for practice (not practiced today and not non-due mastered)
+  if (!matched && candidateWords.length === 0 && parsed.idealTranslation) {
+    const validWords = words.filter((w) => w.completed !== false && !isWordPracticedToday(w));
     for (const w of validWords.slice(0, 15)) {
       if (hasUserIncorporatedWord(parsed.idealTranslation, w.word)) {
         matched = w;

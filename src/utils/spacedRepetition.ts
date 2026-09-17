@@ -560,7 +560,7 @@ export function getQuizCandidateWords(words: Word[], options: CandidateWordsOpti
           isDueReviewCandidate(w, now);
         if (isUrgent) {
           dueOrUrgentWords.push(w);
-        } else {
+        } else if (!isWordPracticedToday(w, now)) {
           explorationWords.push(w);
         }
       }
@@ -718,17 +718,16 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
   daysSinceReview: number;
   decayAmount: number;
 } {
-  const { baselineStrength } = getLastPracticeBaseline(word);
-  const daysSinceReview = getDaysSinceLastReview(word, now);
+  const { baselineStrength, lastPracticeDate } = getLastPracticeBaseline(word);
   const currentStrength = word.strength ?? 0;
   const reviewCount = getWordReviewCount(word);
 
   // Memory decay STRICTLY applies ONLY to words that have achieved Mastered status (learned === true or baselineStrength >= 80)
   const isMastered = word.learned || baselineStrength >= 80;
-  if (!isMastered || daysSinceReview <= 0) {
+  if (!isMastered) {
     // Unmastered words retain their earned baseline strength without passive decay.
     // If an unmastered word previously had its strength reduced below baseline due to old decay, restore it.
-    const restoredStrength = !isMastered && baselineStrength > currentStrength
+    const restoredStrength = baselineStrength > currentStrength
       ? baselineStrength
       : currentStrength;
 
@@ -741,14 +740,74 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
     };
   }
 
+  // Determine the scheduled review time for the mastered word
+  const baselineStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed;
+  let scheduledTimeMs = 0;
+  if (word.nextReviewDate) {
+    const parsedNext = new Date(word.nextReviewDate).getTime();
+    if (!isNaN(parsedNext) && parsedNext > 0) {
+      scheduledTimeMs = parsedNext;
+    }
+  }
+  if (!scheduledTimeMs && baselineStr) {
+    const baselineTime = new Date(baselineStr).getTime();
+    if (!isNaN(baselineTime) && baselineTime > 0) {
+      const intervalHours = calculateNextReviewIntervalHours(word, baselineStrength);
+      scheduledTimeMs = baselineTime + intervalHours * 60 * 60 * 1000;
+    }
+  }
+
+  // 1. Active retention interval shield: If before scheduled review time, ZERO decay!
+  if (scheduledTimeMs > 0 && now.getTime() < scheduledTimeMs) {
+    return {
+      newStrength: Math.max(currentStrength, baselineStrength),
+      newLearned: true,
+      hasDecayed: false,
+      daysSinceReview: 0,
+      decayAmount: 0
+    };
+  }
+
+  // 2. Intra-day immunity: if reviewed/practiced within the last 24h, ZERO decay!
+  const daysSincePractice = getDaysSinceLastReview(word, now);
+  if (daysSincePractice < 1.0) {
+    return {
+      newStrength: Math.max(currentStrength, baselineStrength),
+      newLearned: true,
+      hasDecayed: false,
+      daysSinceReview: 0,
+      decayAmount: 0
+    };
+  }
+
+  // 3. Word has passed its scheduled review date and is now overdue / neglected.
+  // Calculate full integer days overdue past scheduled review time
+  let daysOverdue = 0;
+  if (scheduledTimeMs > 0 && now.getTime() >= scheduledTimeMs) {
+    daysOverdue = Math.floor((now.getTime() - scheduledTimeMs) / (1000 * 60 * 60 * 24));
+  } else {
+    daysOverdue = Math.floor(daysSincePractice);
+  }
+
+  if (daysOverdue <= 0) {
+    // Due today (less than 24h overdue), no decay penalty yet on the first due day
+    return {
+      newStrength: currentStrength,
+      newLearned: word.learned,
+      hasDecayed: false,
+      daysSinceReview: Math.round(daysSincePractice * 10) / 10,
+      decayAmount: 0
+    };
+  }
+
   // Memory Stability Factor (S): High reviewCount moderates daily decay (higher retention stability).
   // Low reviewCount words decay at standard rate (~10% per day), whereas high reviewCount words (e.g. 5+ reviews) decay slower.
   const stabilityFactor = Math.max(1.0, Math.min(3.0, 1.0 + 0.25 * Math.max(0, reviewCount - 1)));
   const effectiveDailyDecayRate = 10 / stabilityFactor;
 
-  // Total decay amount based on days elapsed since lastReviewedAt / lastPracticeDate
-  const rawDecayAmount = daysSinceReview * effectiveDailyDecayRate;
-  const decayAmount = Math.round(rawDecayAmount);
+  // Total decay amount based on full integer days overdue
+  const rawDecayAmount = daysOverdue * effectiveDailyDecayRate;
+  const decayAmount = Math.min(baselineStrength, Math.floor(rawDecayAmount));
   const targetStrength = Math.max(0, Math.round(baselineStrength - decayAmount));
 
   // A word remains mastered only if strength >= 80
@@ -762,7 +821,7 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
     newStrength: targetStrength,
     newLearned,
     hasDecayed,
-    daysSinceReview: Math.round(daysSinceReview * 10) / 10,
+    daysSinceReview: Math.round(daysSincePractice * 10) / 10,
     decayAmount
   };
 }
@@ -792,12 +851,28 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
       // 1. Unmastered word with memory_decay entries in strengthHistory
       // 2. Unmastered word with strength lower than baseline due to old decay
       // 3. Mismatch between newStrength/newLearned and word.strength/word.learned
+      // 4. Any spurious intra-day memory_decay entries recorded within 24h of practice
       const { baselineStrength } = getLastPracticeBaseline(word);
       const isMastered = word.learned || baselineStrength >= 80;
       const history = word.strengthHistory || [];
       const hasUnwantedDecayHistory = !isMastered && history.some(t => Array.isArray(t) && t[2] === "memory_decay");
 
-      if (hasUnwantedDecayHistory || newStrength !== word.strength || newLearned !== word.learned) {
+      let hasSpuriousIntraDayDecay = false;
+      let lastPracticeSec = 0;
+      for (const t of history) {
+        if (!Array.isArray(t)) continue;
+        const [tSec, , rsn] = t;
+        if (rsn !== "memory_decay" && rsn !== "created" && rsn !== "manual_adjust") {
+          lastPracticeSec = tSec;
+        } else if (rsn === "memory_decay") {
+          if (lastPracticeSec > 0 && (tSec - lastPracticeSec) < 86400) {
+            hasSpuriousIntraDayDecay = true;
+            break;
+          }
+        }
+      }
+
+      if (hasUnwantedDecayHistory || hasSpuriousIntraDayDecay || newStrength !== word.strength || newLearned !== word.learned) {
         healedCount++;
         return sanitizeAndHealWordHistory(word, newStrength, newLearned);
       }
@@ -977,6 +1052,188 @@ export function sortUnstudiedWordsOldestFirst(words: Word[]): Word[] {
     const tB = getWordCreationTimestamp(b);
     return tA - tB;
   });
+}
+
+/**
+ * Checks whether a word was actively practiced today (within 20 hours or on the same calendar day).
+ */
+export function isWordPracticedToday(word: Word, now: Date = new Date()): boolean {
+  const lastPracticeTs = getWordLastPracticeTimestamp(word);
+  if (!lastPracticeTs) return false;
+
+  const diffMs = now.getTime() - lastPracticeTs;
+  if (diffMs < 0) return true; // future timestamp defensively treated as today
+
+  const diffHours = diffMs / (1000 * 60 * 60);
+  if (diffHours < 20) {
+    return true;
+  }
+
+  // Check same calendar date in user's local timezone
+  const practiceDate = new Date(lastPracticeTs);
+  if (
+    practiceDate.getFullYear() === now.getFullYear() &&
+    practiceDate.getMonth() === now.getMonth() &&
+    practiceDate.getDate() === now.getDate()
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Specifically selects candidate words for Translation Challenge:
+ * - Excludes incomplete words (completed === false).
+ * - STRICTLY EXCLUDES words that were practiced TODAY or mastered TODAY.
+ * - STRICTLY EXCLUDES words that are already mastered and NOT due for review.
+ * - Prioritizes words that actively need learning or review:
+ *   1. Starred words that need practice (starred, not practiced today)
+ *   2. Unstudied / new vocabulary words (FIFO order - oldest added first)
+ *   3. Due review words (past scheduled review date)
+ *   4. Weak words (strength < 50%)
+ *   5. In-progress words (50% <= strength < 80%)
+ * - Fallback: If and ONLY IF the entire collection has been practiced today (e.g. tiny library),
+ *   it falls back gracefully to the least recently practiced words, avoiding mastered words where possible.
+ */
+export function getTranslationChallengeCandidateWords(
+  words: Word[],
+  options: CandidateWordsOptions = {}
+): Word[] {
+  if (!words || words.length === 0) return [];
+
+  const validWords = words.filter(w => w.completed !== false);
+  if (validWords.length === 0) return [];
+
+  const { maxCandidates = 18 } = options;
+  const now = new Date();
+
+  // Run decay sweep so fresh strengths are evaluated
+  const { updatedWords: freshWords } = recalculateWordsMemoryDecay(validWords, now);
+
+  const unstudiedCandidates: Word[] = [];
+  const starredCandidates: Word[] = [];
+  const dueCandidates: Word[] = [];
+  const weakCandidates: Word[] = [];
+  const inProgressCandidates: Word[] = [];
+  const nonDueMasteredCandidates: Word[] = [];
+  const practicedTodayCandidates: Word[] = [];
+
+  for (const w of freshWords) {
+    const isMastered = w.learned || (w.strength ?? 0) >= 80;
+    const isDue = isDueReviewCandidate(w, now);
+    const practicedToday = isWordPracticedToday(w, now);
+
+    if (practicedToday) {
+      practicedTodayCandidates.push(w);
+      continue;
+    }
+
+    if (isMastered && !isDue) {
+      nonDueMasteredCandidates.push(w);
+      continue;
+    }
+
+    // Now w is NOT practiced today, and NOT a mastered word that is non-due
+    if (w.starred) {
+      starredCandidates.push(w);
+    } else if (!hasWordEverBeenPracticed(w) || !isWordLearnedOrStudied(w)) {
+      unstudiedCandidates.push(w);
+    } else if (isDue) {
+      dueCandidates.push(w);
+    } else if ((w.strength ?? 0) < 50 || hasUnresolvedQuizMistake(w)) {
+      weakCandidates.push(w);
+    } else {
+      inProgressCandidates.push(w);
+    }
+  }
+
+  // Sort unstudied FIFO (oldest created first)
+  const sortedUnstudied = sortUnstudiedWordsOldestFirst(unstudiedCandidates);
+
+  // Sort due words by days since review descending
+  const sortedDue = sortWordsByLastPracticeTime(dueCandidates, now);
+
+  // Sort weak words by strength ascending
+  const sortedWeak = [...weakCandidates].sort((a, b) => (a.strength ?? 0) - (b.strength ?? 0));
+
+  // Sort in-progress words by last practice time ascending
+  const sortedInProgress = sortWordsByLastPracticeTime(inProgressCandidates, now);
+
+  const selectedWords: Word[] = [];
+  const selectedIds = new Set<string>();
+  const selectedNorm = new Set<string>();
+
+  const tryAddWord = (w: Word): boolean => {
+    if (selectedWords.length >= maxCandidates) return false;
+    if (selectedIds.has(w.id)) return false;
+    const norm = normalizeWordForComparison(w.word);
+    if (norm && selectedNorm.has(norm)) return false;
+    selectedIds.add(w.id);
+    if (norm) selectedNorm.add(norm);
+    selectedWords.push(w);
+    return true;
+  };
+
+  // 1. Starred words that need practice
+  for (const w of starredCandidates) {
+    tryAddWord(w);
+    if (selectedWords.length >= maxCandidates) return selectedWords;
+  }
+
+  // 2. Unstudied / new vocabulary words
+  for (const w of sortedUnstudied) {
+    tryAddWord(w);
+    if (selectedWords.length >= maxCandidates) return selectedWords;
+  }
+
+  // 3. Due review words
+  for (const w of sortedDue) {
+    tryAddWord(w);
+    if (selectedWords.length >= maxCandidates) return selectedWords;
+  }
+
+  // 4. Weak words needing reinforcement
+  for (const w of sortedWeak) {
+    tryAddWord(w);
+    if (selectedWords.length >= maxCandidates) return selectedWords;
+  }
+
+  // 5. In-progress words
+  for (const w of sortedInProgress) {
+    tryAddWord(w);
+    if (selectedWords.length >= maxCandidates) return selectedWords;
+  }
+
+  // 6. Secondary fallback: Mastered words that are NOT due, but were NOT practiced today
+  // (Only if we still need more candidates to reach maxCandidates)
+  if (selectedWords.length < maxCandidates) {
+    const sortedNonDueMastered = sortWordsByLastPracticeTime(nonDueMasteredCandidates, now);
+    for (const w of sortedNonDueMastered) {
+      tryAddWord(w);
+      if (selectedWords.length >= maxCandidates) return selectedWords;
+    }
+  }
+
+  // 7. Ultimate fallback: If the user's collection is so small that EVERYTHING was practiced today,
+  // pick from practicedTodayCandidates with oldest practice time, prioritizing non-mastered words.
+  if (selectedWords.length === 0 && practicedTodayCandidates.length > 0) {
+    const fallbackSorted = [...practicedTodayCandidates].sort((a, b) => {
+      const aMastered = a.learned || (a.strength ?? 0) >= 80;
+      const bMastered = b.learned || (b.strength ?? 0) >= 80;
+      if (!aMastered && bMastered) return -1;
+      if (aMastered && !bMastered) return 1;
+      const tA = getWordLastPracticeTimestamp(a) ?? 0;
+      const tB = getWordLastPracticeTimestamp(b) ?? 0;
+      return tA - tB;
+    });
+    for (const w of fallbackSorted) {
+      tryAddWord(w);
+      if (selectedWords.length >= maxCandidates) return selectedWords;
+    }
+  }
+
+  return selectedWords;
 }
 
 /**
