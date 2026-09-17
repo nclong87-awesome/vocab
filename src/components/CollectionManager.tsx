@@ -10,7 +10,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Zap
+  Zap,
+  Plus
 } from "lucide-react";
 import { Word, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -365,7 +366,7 @@ function CollectionManager({
       <div className="space-y-4">
         <div className="bg-white border border-stone-200 p-4 space-y-6 shadow-2xs">
           {/* Active List Title & Info */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-xs font-mono font-bold text-stone-500">
                 <Globe2 className="w-3.5 h-3.5 text-stone-900" />
@@ -374,6 +375,19 @@ function CollectionManager({
                 <span className="text-stone-900 font-bold">{collectionWords.length} {t("col_terms_count", appLanguage)}</span>
               </div>
             </div>
+
+            {onAddWord && (
+              <button
+                type="button"
+                onClick={() => onAddWord()}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 active:bg-black rounded-md transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs hover:scale-102 self-start sm:self-auto"
+                id="collection-add-word-btn"
+                title={t("add_word_btn", appLanguage)}
+              >
+                <Plus className="w-3.5 h-3.5 text-green-400" />
+                <span>{t("add_word_btn", appLanguage)}</span>
+              </button>
+            )}
           </div>
 
           {/* Search, Sort & Layout View Bar */}
@@ -534,12 +548,25 @@ function CollectionManager({
               {!isAllContinuous && totalPages > 1 && renderPaginationBar()}
             </div>
           ) : (
-            <div className="p-12 text-center bg-stone-50 border border-stone-200 space-y-3">
+            <div className="p-12 text-center bg-stone-50 border border-stone-200 space-y-4">
               <BookOpen className="w-8 h-8 text-stone-400 mx-auto" />
-              <h4 className="font-bold text-sm text-stone-900">{t("col_no_words_found", appLanguage)}</h4>
-              <p className="text-xs text-stone-500 font-serif italic max-w-sm mx-auto">
-                {searchQuery ? t("col_empty_search", appLanguage) : t("col_empty_list", appLanguage)}
-              </p>
+              <div className="space-y-1">
+                <h4 className="font-bold text-sm text-stone-900">{t("col_no_words_found", appLanguage)}</h4>
+                <p className="text-xs text-stone-500 font-serif italic max-w-sm mx-auto">
+                  {searchQuery ? t("col_empty_search", appLanguage) : t("col_empty_list", appLanguage)}
+                </p>
+              </div>
+              {onAddWord && (
+                <button
+                  type="button"
+                  onClick={() => onAddWord()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 rounded-md transition-all cursor-pointer shadow-3xs hover:scale-102"
+                  id="collection-empty-add-word-btn"
+                >
+                  <Plus className="w-3.5 h-3.5 text-green-400" />
+                  <span>{t("add_word_btn", appLanguage)}</span>
+                </button>
+              )}
             </div>
           )}
         </div>

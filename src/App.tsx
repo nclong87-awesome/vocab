@@ -682,6 +682,7 @@ export default function App() {
         isSidePanelOpen={isSidePanelOpen}
         incompleteCount={words.filter((w) => w.completed === false).length}
         onOpenWordSearch={() => setIsWordSearchModalOpen(true)}
+        onAddWord={() => handleOpenAddWordModal()}
       />
 
       {/* Main Viewport Container */}

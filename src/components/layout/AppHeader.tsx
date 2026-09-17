@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sliders, Search } from "lucide-react";
+import { Sliders, Search, Plus } from "lucide-react";
 import { LLMConfig, LLMProvider, UserStats } from "../../types";
 import QuickAiSwitcher from "./QuickAiSwitcher";
 import QuickLanguageSwitcher from "./QuickLanguageSwitcher";
@@ -23,6 +23,7 @@ interface AppHeaderProps {
   isSidePanelOpen?: boolean;
   incompleteCount?: number;
   onOpenWordSearch?: () => void;
+  onAddWord?: () => void;
 }
 
 export default function AppHeader({
@@ -42,6 +43,7 @@ export default function AppHeader({
   isSidePanelOpen = false,
   incompleteCount = 0,
   onOpenWordSearch,
+  onAddWord,
 }: AppHeaderProps) {
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window !== "undefined") {
@@ -193,6 +195,37 @@ export default function AppHeader({
     );
   };
 
+  const renderAddWordButton = (isMobileBtn = false) => {
+    if (!onAddWord) return null;
+    if (isMobileBtn) {
+      return (
+        <button
+          type="button"
+          onClick={onAddWord}
+          className="p-1 text-stone-600 hover:text-stone-950 hover:bg-stone-100 active:bg-stone-200 rounded-md transition-colors cursor-pointer shrink-0 flex items-center justify-center"
+          title={t("add_word_btn", appLanguage)}
+          aria-label={t("add_word_btn", appLanguage)}
+          id="mobile-header-add-word-btn"
+        >
+          <Plus className="w-4 h-4 text-green-600" />
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={onAddWord}
+        className="px-2.5 py-1 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 active:bg-black rounded-md transition-all flex items-center gap-1 cursor-pointer shadow-3xs hover:scale-102 shrink-0"
+        title={t("add_word_btn", appLanguage)}
+        aria-label={t("add_word_btn", appLanguage)}
+        id="header-add-word-btn"
+      >
+        <Plus className="w-3.5 h-3.5 text-green-400" />
+        <span className="hidden sm:inline">{t("add_word_btn", appLanguage)}</span>
+      </button>
+    );
+  };
+
   return (
     <header className="bg-white border-b border-stone-200 py-1.5 sm:py-2.5 md:py-3 px-2 sm:px-6 md:px-8 sticky top-0 z-40 shrink-0" id="main-header">
       <div className="max-w-7xl mx-auto">
@@ -208,6 +241,7 @@ export default function AppHeader({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {renderAddWordButton()}
               {renderSearchButton()}
               <div className="h-4 w-px bg-stone-200" />
               {renderSwitchers()}
@@ -221,12 +255,13 @@ export default function AppHeader({
               {renderLogo()}
               {renderSwitchers()}
             </div>
-            {/* Row 2: Nav Links (left) & Search Button (far right) */}
+            {/* Row 2: Nav Links (left) & Actions (far right) */}
             <div className="flex items-center justify-between min-w-0 w-full pt-1 border-t border-stone-100">
               <div className="flex items-center gap-3.5 sm:gap-6 text-xs font-medium tracking-normal overflow-x-auto scrollbar-none py-0.5 min-w-0">
                 {renderNavLinks()}
               </div>
-              <div className="pl-2 shrink-0">
+              <div className="pl-2 shrink-0 flex items-center gap-1">
+                {renderAddWordButton(true)}
                 {renderSearchButton()}
               </div>
             </div>

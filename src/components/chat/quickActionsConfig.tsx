@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, RotateCcw, BookOpen } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, RotateCcw, BookOpen } from "lucide-react";
 import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
@@ -116,20 +116,6 @@ export function getRotatedDefaultModel(defaultModels: string[]): { provider: LLM
 export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickActionItem[] {
   return [
     {
-      id: "add_word",
-      label: t("qa_add_word_label", appLanguage),
-      category: "vocab",
-      categoryLabel: t("qa_cat_vocab", appLanguage),
-      icon: <Plus className="w-4 h-4 text-green-600" />,
-      title: t("qa_add_word_title", appLanguage),
-      description: t("qa_add_word_desc", appLanguage),
-      className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 0,
-      getAction: ({ onAddWord }) => {
-        onAddWord();
-      }
-    },
-    {
       id: "generate_topic",
       label: t("qa_generate_words_label", appLanguage),
       category: "vocab",
@@ -138,7 +124,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_generate_words_title", appLanguage),
       description: t("qa_generate_words_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-900 border border-stone-200 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 1,
+      defaultIndex: 0,
       getAction: ({ onGenerateByTopic, onClearHistory }) => {
         onClearHistory();
         onGenerateByTopic();
@@ -153,7 +139,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_import_library_title", appLanguage),
       description: t("qa_import_library_desc", appLanguage),
       className: "bg-sky-50/80 hover:bg-sky-100 text-sky-950 border border-sky-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 2,
+      defaultIndex: 1,
       getAction: ({ onOpenWordLibrary, onClearHistory }) => {
         onClearHistory();
         onOpenWordLibrary?.();
@@ -168,7 +154,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_practice_title", appLanguage),
       description: t("qa_practice_desc", appLanguage),
       className: "bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold py-1.5 px-3 rounded-full shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 3,
+      defaultIndex: 2,
       getAction: ({ startPractice, onClearHistory }) => {
         onClearHistory();
         startPractice();
@@ -183,7 +169,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_fix_grammar_title", appLanguage),
       description: t("qa_fix_grammar_desc", appLanguage),
       className: "bg-rose-50 hover:bg-rose-100 text-rose-950 border border-rose-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 4,
+      defaultIndex: 3,
       getAction: ({ onFixGrammar, onClearHistory }) => {
         onClearHistory();
         onFixGrammar();
@@ -198,7 +184,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_suggest_reply_title", appLanguage),
       description: t("qa_suggest_reply_desc", appLanguage),
       className: "bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300/80 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 5,
+      defaultIndex: 4,
       getAction: ({ onSuggestCasualReplyPrompt, onClearHistory }) => {
         onClearHistory();
         onSuggestCasualReplyPrompt?.();
@@ -213,7 +199,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_new_chat_title", appLanguage),
       description: t("qa_new_chat_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 6,
+      defaultIndex: 5,
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];
