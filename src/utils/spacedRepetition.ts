@@ -742,22 +742,28 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
 
   // Determine the scheduled review time for the mastered word
   const baselineStr = word.lastReviewedAt || lastPracticeDate || word.lastReviewed;
-  let scheduledTimeMs = 0;
-  if (word.nextReviewDate) {
-    const parsedNext = new Date(word.nextReviewDate).getTime();
-    if (!isNaN(parsedNext) && parsedNext > 0) {
-      scheduledTimeMs = parsedNext;
-    }
-  }
-  if (!scheduledTimeMs && baselineStr) {
+  let dynamicScheduledMs = 0;
+  if (baselineStr) {
     const baselineTime = new Date(baselineStr).getTime();
     if (!isNaN(baselineTime) && baselineTime > 0) {
       const intervalHours = calculateNextReviewIntervalHours(word, baselineStrength);
-      scheduledTimeMs = baselineTime + intervalHours * 60 * 60 * 1000;
+      dynamicScheduledMs = baselineTime + intervalHours * 60 * 60 * 1000;
     }
   }
 
+  let storedNextReviewMs = 0;
+  if (word.nextReviewDate) {
+    const parsedNext = new Date(word.nextReviewDate).getTime();
+    if (!isNaN(parsedNext) && parsedNext > 0) {
+      storedNextReviewMs = parsedNext;
+    }
+  }
+
+  // The scheduled review time is the furthest of dynamic retention interval or stored nextReviewDate
+  const scheduledTimeMs = Math.max(dynamicScheduledMs, storedNextReviewMs);
+
   // 1. Active retention interval shield: If before scheduled review time, ZERO decay!
+  // If the word previously lost strength erroneously while still inside its retention period, restore it to baseline.
   if (scheduledTimeMs > 0 && now.getTime() < scheduledTimeMs) {
     return {
       newStrength: Math.max(currentStrength, baselineStrength),
@@ -852,6 +858,7 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
       // 2. Unmastered word with strength lower than baseline due to old decay
       // 3. Mismatch between newStrength/newLearned and word.strength/word.learned
       // 4. Any spurious intra-day memory_decay entries recorded within 24h of practice
+      // 5. Any spurious memory_decay entries recorded while word is inside its scheduled retention window
       const { baselineStrength } = getLastPracticeBaseline(word);
       const isMastered = word.learned || baselineStrength >= 80;
       const history = word.strengthHistory || [];
@@ -872,7 +879,11 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
         }
       }
 
-      if (hasUnwantedDecayHistory || hasSpuriousIntraDayDecay || newStrength !== word.strength || newLearned !== word.learned) {
+      // If word is not decayed and strength is restored or higher, any memory_decay entry after last practice is spurious
+      const hasDecayHistoryAfterPractice = history.some(t => Array.isArray(t) && t[2] === "memory_decay");
+      const hasSpuriousRetentionDecay = !hasDecayed && (newStrength >= baselineStrength) && hasDecayHistoryAfterPractice;
+
+      if (hasUnwantedDecayHistory || hasSpuriousIntraDayDecay || hasSpuriousRetentionDecay || newStrength !== word.strength || newLearned !== word.learned) {
         healedCount++;
         return sanitizeAndHealWordHistory(word, newStrength, newLearned);
       }

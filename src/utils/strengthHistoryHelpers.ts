@@ -169,7 +169,8 @@ export function sanitizeAndHealWordHistory(
     const isMasteredBaseline = targetLearned || (lastPractice && lastPractice[1] >= 80);
     // Memory decay only applies if word reached mastered baseline
     if (isMasteredBaseline && targetStrength < lastPractice[1]) {
-      cleanHistory.push([lastPractice[0], targetStrength, "memory_decay"]);
+      const decayTimeSec = Math.max(lastPractice[0] + 86400, Math.floor(Date.now() / 1000));
+      cleanHistory.push([decayTimeSec, targetStrength, "memory_decay"]);
     }
   }
 
@@ -180,9 +181,17 @@ export function sanitizeAndHealWordHistory(
     strengthHistory: cleanHistory.slice(-30)
   };
 
+  // Align nextReviewDate cleanly with the last practice baseline
+  const lastPractice = practiceTuples.length > 0 ? practiceTuples[practiceTuples.length - 1] : null;
+  const lastPracticeMs = lastPractice ? (lastPractice[0] > 1e11 ? lastPractice[0] : lastPractice[0] * 1000) : 0;
+  const fromDate = lastPracticeMs > 0 ? new Date(lastPracticeMs) : new Date();
+  const dynamicNextReview = calculateNextReviewDate(updatedWord, targetStrength, undefined, fromDate);
+  const storedNextReviewMs = word.nextReviewDate ? new Date(word.nextReviewDate).getTime() : 0;
+  const nextReviewDate = (storedNextReviewMs > Date.now()) ? word.nextReviewDate : dynamicNextReview;
+
   return {
     ...updatedWord,
-    nextReviewDate: word.nextReviewDate || calculateNextReviewDate(updatedWord, targetStrength)
+    nextReviewDate
   };
 }
 

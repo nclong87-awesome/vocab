@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Word, UserStats, LLMConfig, TTSConfig } from "../types";
 import { speakText as speakTextService, DEFAULT_TTS_CONFIG } from "../utils/ttsService";
-import { getDaysSinceLastReview, isWordEligibleForReview, getLastPracticeBaseline } from "../utils/spacedRepetition";
+import { getNextReviewInfo, isWordEligibleForReview, getLastPracticeBaseline } from "../utils/spacedRepetition";
 import { t } from "../config/i18n";
 
 import AiPersonalityProfileCard from "./analytics/AiPersonalityProfileCard";
@@ -82,15 +82,15 @@ export default function AnalyticsDashboard({
     return safeWords.filter(w => !w.learned && w.strength < 50);
   }, [safeWords]);
 
-  // Words needing memory refresher (mastered words that have decayed or are overdue >= 5 days)
+  // Words needing memory refresher (mastered words that have decayed below baseline or are overdue)
   const decayedWords = useMemo(() => {
     return safeWords.filter(w => {
       if (w.lastReviewed === null) return false;
       const { baselineStrength } = getLastPracticeBaseline(w);
       const wasMastered = w.learned || baselineStrength >= 80;
       if (!wasMastered) return false;
-      const days = getDaysSinceLastReview(w);
-      return days >= 5 || w.strength < 80;
+      const reviewInfo = getNextReviewInfo(w);
+      return w.strength < baselineStrength || (reviewInfo.isDue && w.strength < 80);
     });
   }, [safeWords]);
 

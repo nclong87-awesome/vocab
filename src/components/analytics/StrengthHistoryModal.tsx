@@ -48,8 +48,10 @@ export default function StrengthHistoryModal({
   const hasPracticeRecord = Boolean(word.lastReviewedAt || lastPracticeDate || word.lastReviewed || historyEntries.some(e => e.reason !== "created"));
   const elapsedDays = Math.floor(daysSincePractice);
   const isMastered = word.learned || baselineStrength >= 80;
-  const estimatedDecay = isMastered ? elapsedDays * 10 : 0;
   const reviewInfo = getNextReviewInfo(word);
+  const actualDecay = (isMastered && baselineStrength > currentStrength)
+    ? Math.round(baselineStrength - currentStrength)
+    : 0;
 
   const formattedLastPracticed = !hasPracticeRecord
     ? "Never"
@@ -122,6 +124,10 @@ export default function StrengthHistoryModal({
       case "flashcard_review":
       case "flashcard":
         return <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Study Review</span>;
+      case "challenge_bonus":
+        return <span className="bg-purple-50 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Challenge Bonus</span>;
+      case "immersion_review":
+        return <span className="bg-teal-50 text-teal-800 border border-teal-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Immersion</span>;
       case "manual_adjust":
       default:
         return <span className="bg-stone-100 text-stone-700 border border-stone-200 px-1.5 py-0.5 rounded text-[9px] font-bold">Updated</span>;
@@ -206,8 +212,8 @@ export default function StrengthHistoryModal({
                 <span className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
                   {formattedLastPracticed}
                 </span>
-                {hasPracticeRecord && elapsedDays > 0 && isMastered && estimatedDecay > 0 && (
-                  <span className="text-[9px] font-bold text-rose-600">(-{estimatedDecay}%)</span>
+                {hasPracticeRecord && elapsedDays > 0 && isMastered && actualDecay > 0 && (
+                  <span className="text-[9px] font-bold text-rose-600">(-{actualDecay}%)</span>
                 )}
               </div>
             </div>
@@ -471,7 +477,7 @@ export default function StrengthHistoryModal({
         <div className="bg-stone-50 border-t border-stone-200 p-3 sm:p-4 flex items-center justify-between text-xs text-stone-500 shrink-0">
           <div className="flex items-center gap-1 text-[10px] sm:text-[11px]">
             <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span className="line-clamp-1">Memory decay only applies to mastered words to protect long-term retention (~10%/day when neglected). In-progress words retain their strength.</span>
+            <span className="line-clamp-1">Memory decay only applies to mastered words once past their scheduled practice date (~10%/day scaled by stability). Words within their active retention interval do not decay.</span>
           </div>
           <button
             onClick={onClose}

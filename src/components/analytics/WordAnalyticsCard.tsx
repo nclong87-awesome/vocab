@@ -48,8 +48,11 @@ function WordAnalyticsCard({
   const daysSinceReview = getDaysSinceLastReview(word);
   const { baselineStrength } = getLastPracticeBaseline(word);
   const wasMastered = word.learned || baselineStrength >= 80;
-  const isMemoryDecayed = wasMastered && (daysSinceReview >= 5 || (word.lastReviewed !== null && strengthLevel < 80 && daysSinceReview >= 1));
   const reviewInfo = getNextReviewInfo(word);
+  const isMemoryDecayed = wasMastered && (
+    (baselineStrength > strengthLevel) ||
+    (reviewInfo.isDue && daysSinceReview >= 1 && strengthLevel < 80)
+  );
 
   const handleModalWordUpdate = (updated: Word) => {
     setLocalWord(updated);
