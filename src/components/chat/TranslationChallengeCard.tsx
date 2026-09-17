@@ -755,10 +755,15 @@ export default function TranslationChallengeCard({
               </div>
             </div>
             <p className="text-xs text-emerald-900 leading-relaxed">
-              You incorporated <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> from your collection in your translation.
+              {isVietnamese ? (
+                <>Bạn đã sử dụng từ <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> từ bộ sưu tập trong bài dịch.</>
+              ) : (
+                <>You incorporated <strong className="font-bold font-mono">"{evaluation.targetWordUsed}"</strong> from your collection in your translation.</>
+              )}
               {typeof evaluation.targetWordPrevStrength === "number" && typeof evaluation.targetWordNewStrength === "number" && (
                 <span className="block text-[11px] font-medium text-emerald-800 mt-0.5">
-                  Memory strength augmented: {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-emerald-950">{evaluation.targetWordNewStrength}%</strong>
+                  {isVietnamese ? "Độ ghi nhớ tăng cường: " : "Memory strength augmented: "}
+                  {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-emerald-950">{evaluation.targetWordNewStrength}%</strong>
                 </span>
               )}
             </p>
@@ -828,49 +833,58 @@ export default function TranslationChallengeCard({
         })()}
 
         {/* Target Word Feedback Banner (When NOT Incorporated) */}
-        {!evaluation.incorporatedTargetWord && targetWordText && (
-          <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-orange-50/50 border border-amber-300 rounded-xl shadow-2xs space-y-1.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 bg-amber-600 text-white rounded-lg shadow-2xs">
-                  <Lightbulb className="w-4 h-4" />
-                </span>
-                <span className="font-bold text-xs sm:text-sm text-amber-950">
-                  Featured Target Word: "{targetWordText}"
-                </span>
+        {!evaluation.incorporatedTargetWord && targetWordText && (() => {
+          const targetWordMeaning =
+            challenge?.targetWordFromCollection?.translation ||
+            challenge?.targetWordFromCollection?.definition ||
+            words.find((w) => w.word.toLowerCase() === targetWordText.toLowerCase())?.translation;
+
+          return (
+            <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-orange-50/50 border border-amber-300 rounded-xl shadow-2xs space-y-1.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-amber-600 text-white rounded-lg shadow-2xs">
+                    <Lightbulb className="w-4 h-4" />
+                  </span>
+                  <span className="font-bold text-xs sm:text-sm text-amber-950">
+                    Featured Target Word: "{targetWordText}"
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    id="btn-play-target-word-featured"
+                    type="button"
+                    onClick={() => handlePlayText(targetWordText, targetLanguage || "English", "target-word-feat")}
+                    className="p-1 rounded-md text-amber-800 hover:text-amber-950 hover:bg-amber-100 transition-colors cursor-pointer"
+                    title={`Pronounce "${targetWordText}"`}
+                  >
+                    {playingItemKey === "target-word-feat" ? (
+                      <Square className="w-3.5 h-3.5 fill-amber-800 text-amber-800 animate-pulse" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                  <span className="px-2.5 py-0.5 bg-amber-600 text-white text-[11px] font-black rounded-full shadow-2xs">
+                    +10 Points • Marked Learned
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  id="btn-play-target-word-featured"
-                  type="button"
-                  onClick={() => handlePlayText(targetWordText, targetLanguage || "English", "target-word-feat")}
-                  className="p-1 rounded-md text-amber-800 hover:text-amber-950 hover:bg-amber-100 transition-colors cursor-pointer"
-                  title={`Pronounce "${targetWordText}"`}
-                >
-                  {playingItemKey === "target-word-feat" ? (
-                    <Square className="w-3.5 h-3.5 fill-amber-800 text-amber-800 animate-pulse" />
-                  ) : (
-                    <Volume2 className="w-3.5 h-3.5" />
-                  )}
-                </button>
-                <span className="px-2.5 py-0.5 bg-amber-600 text-white text-[11px] font-black rounded-full shadow-2xs">
-                  +10 Points • Marked Learned
-                </span>
-              </div>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                <strong className="font-bold font-mono">"{targetWordText}"</strong>
+                {targetWordMeaning && <span> ({targetWordMeaning})</span>}{" "}
+                {isVietnamese
+                  ? "chưa có trong câu trả lời, nhưng đã được tính là đã học để chuyển tiếp lượt ôn tập."
+                  : "was not used, but marked as learned to rotate your study queue."}
+                {typeof evaluation.targetWordPrevStrength === "number" && typeof evaluation.targetWordNewStrength === "number" && (
+                  <span className="block text-[11px] font-medium text-amber-800 mt-0.5">
+                    {isVietnamese ? "Độ ghi nhớ cập nhật: " : "Memory strength updated: "}
+                    {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-amber-950">{evaluation.targetWordNewStrength}%</strong>
+                  </span>
+                )}
+              </p>
             </div>
-            <p className="text-xs text-amber-900 leading-relaxed">
-              The featured word from your collection was <strong className="font-bold font-mono">"{targetWordText}"</strong>
-              {(challenge?.targetWordFromCollection?.translation || challenge?.targetWordFromCollection?.definition) && (
-                <span> ({challenge.targetWordFromCollection.translation || challenge.targetWordFromCollection.definition})</span>
-              )}. Even though it was not included in your answer, it has been marked as learned (+10 strength points) to rotate your study queue and prevent repetition in subsequent challenges.
-              {typeof evaluation.targetWordPrevStrength === "number" && typeof evaluation.targetWordNewStrength === "number" && (
-                <span className="block text-[11px] font-medium text-amber-800 mt-0.5">
-                  Memory strength updated: {evaluation.targetWordPrevStrength}% → <strong className="font-bold text-amber-950">{evaluation.targetWordNewStrength}%</strong>
-                </span>
-              )}
-            </p>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Insights Section */}
         <div className="space-y-2 text-xs">
