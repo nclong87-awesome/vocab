@@ -1,6 +1,7 @@
 import { ChallengeData, ChallengeKeyWord, ChallengeTurnResult, ChallengeSuggestedVocab, UserPersonalityProfile, Word, LLMConfig } from "../types";
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
+import { logApiRequest } from "./requestHistoryService";
 import { getQuizCandidateWords } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 
@@ -318,11 +319,18 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const targetLanguage = params.targetLanguage || "English";
   const { prompt, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
-  const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lên đường' for 'set off'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
+  const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lên đường' for 'set off'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
   const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
-  const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, effectiveConfig);
+  const resWithMeta = await callLLMClientSideWithMeta(
+    prompt,
+    systemInstruction,
+    schemaDescription,
+    effectiveConfig,
+    undefined,
+    { action: "Translation Challenge" }
+  );
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);
 
@@ -405,6 +413,19 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
         targetWord || data.targetWordFromCollection,
         keyTargetWords
       );
+
+      const duration = data.responseTimeMs || 0;
+      logApiRequest({
+        provider: data.provider || "auto",
+        model: data.model || "auto",
+        prompt: `Generate translation challenge for ${effectiveParams.targetLanguage || "English"} (Native: ${effectiveParams.nativeLanguage || "Vietnamese"})`,
+        systemInstruction: "AI Translation Practice & Challenge Coach",
+        response: JSON.stringify(data),
+        responseTimeMs: duration,
+        status: "success",
+        statusCode: 200,
+        action: "Translation Challenge"
+      }).catch(() => undefined);
 
       return {
         id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -655,11 +676,18 @@ Return STRICTLY raw JSON matching:
   }
 }`;
 
-  const systemInstruction = `You are an AI Language Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
+  const systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
   const schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
 
   const startTime = performance.now();
-  const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDescription, llmConfig);
+  const resWithMeta = await callLLMClientSideWithMeta(
+    prompt,
+    systemInstruction,
+    schemaDescription,
+    llmConfig,
+    undefined,
+    { action: "Challenge Evaluation" }
+  );
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);
 
@@ -737,6 +765,19 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
           data.evaluation.incorporatedVocabClues = incClues;
         }
       }
+
+      logApiRequest({
+        provider: data.provider || "auto",
+        model: data.model || "auto",
+        prompt: `Evaluate translation attempt for "${params.challenge.nativeSentence}": "${params.userMessage}"`,
+        systemInstruction: "AI Translation Challenge Evaluation Coach",
+        response: JSON.stringify(data),
+        responseTimeMs: data.responseTimeMs || 0,
+        status: "success",
+        statusCode: 200,
+        action: "Challenge Evaluation"
+      }).catch(() => undefined);
+
       return data as ChallengeTurnResult;
     }
     throw new Error(data?.error || `Server returned status ${res.status}`);

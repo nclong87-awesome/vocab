@@ -28,6 +28,40 @@ interface RequestHistoryModalProps {
   initialSelectedLogId?: string;
 }
 
+function getActionBadgeStyle(action?: string): string {
+  switch (action) {
+    case "Translation Challenge":
+      return "text-violet-800 bg-violet-50 border-violet-200/90";
+    case "Challenge Evaluation":
+      return "text-indigo-800 bg-indigo-50 border-indigo-200/90";
+    case "Challenge Ask AI":
+      return "text-purple-800 bg-purple-50 border-purple-200/90";
+    case "Grammar Polish":
+      return "text-amber-800 bg-amber-50 border-amber-200/90";
+    case "AI Quiz":
+      return "text-blue-800 bg-blue-50 border-blue-200/90";
+    case "Sense Lookup":
+      return "text-teal-800 bg-teal-50 border-teal-200/90";
+    case "Topic Vocabulary":
+      return "text-emerald-800 bg-emerald-50 border-emerald-200/90";
+    case "Chat Message":
+      return "text-sky-800 bg-sky-50 border-sky-200/90";
+    case "Autofill Word":
+      return "text-cyan-800 bg-cyan-50 border-cyan-200/90";
+    case "Image Analysis":
+      return "text-fuchsia-800 bg-fuchsia-50 border-fuchsia-200/90";
+    case "Learner Profiling":
+    case "Performance Coach":
+      return "text-rose-800 bg-rose-50 border-rose-200/90";
+    case "JIT Action Chips":
+      return "text-slate-800 bg-slate-100 border-slate-200/90";
+    case "Connection Test":
+      return "text-stone-700 bg-stone-100 border-stone-200/90";
+    default:
+      return "text-stone-800 bg-stone-100 border-stone-200/90";
+  }
+}
+
 export default function RequestHistoryModal({
   isOpen,
   onClose,
@@ -40,6 +74,7 @@ export default function RequestHistoryModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "error">("all");
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
+  const [selectedAction, setSelectedAction] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<ApiRequestLog | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"response" | "prompt" | "system" | "meta">("response");
@@ -105,6 +140,15 @@ export default function RequestHistoryModal({
     return Array.from(set);
   }, [logs]);
 
+  // Extract unique actions/categories for filter
+  const uniqueActions = useMemo(() => {
+    const set = new Set<string>();
+    logs.forEach(l => {
+      if (l.action) set.add(l.action);
+    });
+    return Array.from(set).sort();
+  }, [logs]);
+
   // Filtered logs
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
@@ -112,6 +156,9 @@ export default function RequestHistoryModal({
         return false;
       }
       if (selectedProvider !== "all" && log.provider !== selectedProvider) {
+        return false;
+      }
+      if (selectedAction !== "all" && log.action !== selectedAction) {
         return false;
       }
       if (!searchQuery.trim()) return true;
@@ -126,12 +173,12 @@ export default function RequestHistoryModal({
 
       return promptMatch || respMatch || modelMatch || actionMatch || providerMatch || errMatch;
     });
-  }, [logs, statusFilter, selectedProvider, searchQuery]);
+  }, [logs, statusFilter, selectedProvider, selectedAction, searchQuery]);
 
   // Reset pagination to page 1 on filter or search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, selectedProvider, pageSize]);
+  }, [searchQuery, statusFilter, selectedProvider, selectedAction, pageSize]);
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(filteredLogs.length / pageSize));
@@ -342,6 +389,21 @@ export default function RequestHistoryModal({
                   ))}
                 </select>
               )}
+
+              {/* Action / Category Filter */}
+              {uniqueActions.length > 1 && (
+                <select
+                  value={selectedAction}
+                  onChange={(e) => setSelectedAction(e.target.value)}
+                  className="bg-stone-50 border border-stone-200 text-stone-700 text-xs font-medium rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shrink-0"
+                  id="filter-action-select"
+                >
+                  <option value="all">All Categories ({uniqueActions.length})</option>
+                  {uniqueActions.map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
         </div>
@@ -404,7 +466,7 @@ export default function RequestHistoryModal({
                               </span>
                             )}
 
-                            <span className="text-[11px] font-bold text-stone-900 uppercase tracking-wider truncate bg-stone-100 px-1.5 py-0.5 rounded">
+                            <span className={`text-[11px] font-bold uppercase tracking-wider truncate px-1.5 py-0.5 rounded border ${getActionBadgeStyle(log.action)}`}>
                               {log.action || "LLM"}
                             </span>
                           </div>
@@ -552,7 +614,7 @@ export default function RequestHistoryModal({
                           <span>{selectedLog.status === "success" ? `200 OK` : `Status ${selectedLog.statusCode || "ERR"}`}</span>
                         </span>
 
-                        <span className="font-bold text-stone-900 text-xs sm:text-sm">
+                        <span className={`font-bold text-xs sm:text-sm px-2 py-0.5 rounded border ${getActionBadgeStyle(selectedLog.action)}`}>
                           {selectedLog.action || "LLM Request"}
                         </span>
 

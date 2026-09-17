@@ -270,7 +270,8 @@ USER LATEST INQUIRY:
         systemInstruction,
         schemaDescription,
         effectiveConfig,
-        controller.signal
+        controller.signal,
+        { action: "Challenge Ask AI" }
       );
 
       const formattedContent = formatLlmResponseText(resWithMeta.text);

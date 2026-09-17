@@ -3269,7 +3269,7 @@ Return STRICTLY raw JSON-only matching this schema:
   "personalityNote": "Explanation of profile alignment"
 } `;
 
-    const systemInstruction = `You are a personalized AI Language Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lên đường' for 'set off'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
+    const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lên đường' for 'set off'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
     const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
     let effectiveLlmConfig = llmConfig ? { ...llmConfig, onlyReliableModels: true } : { onlyReliableModels: true };
@@ -3576,7 +3576,7 @@ Return STRICTLY raw JSON matching:
   }
 }`;
 
-    const systemInstruction = `You are an AI Language Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
+    const systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
     const schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
 
     const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, controller.signal);
