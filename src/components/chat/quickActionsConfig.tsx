@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckSquare, Brain, Sparkles, Plus, FileText, HelpCircle, Languages, RotateCcw, BookOpen } from "lucide-react";
+import { CheckSquare, Brain, Sparkles, Plus, RotateCcw, BookOpen } from "lucide-react";
 import { LLMProvider } from "../../types";
 import PROVIDER_OPTIONS from "../../config/llmProviders";
 import { 
@@ -204,75 +204,6 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
         onSuggestCasualReplyPrompt?.();
       }
     },
-    // {
-    //   id: "interactive_chat_coach",
-    //   label: t("qa_interactive_prompts_label", appLanguage),
-    //   category: "writing",
-    //   categoryLabel: t("qa_cat_writing", appLanguage),
-    //   icon: <Sparkles className="w-4 h-4 text-amber-500" />,
-    //   title: t("qa_interactive_prompts_title", appLanguage),
-    //   description: t("qa_interactive_prompts_desc", appLanguage),
-    //   className: "bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 text-xs font-bold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-    //   defaultIndex: 6,
-    //   defaultModels: RELIABLE_MODELS,
-    //   getAction: ({ onSendMessage, onClearHistory }) => {
-    //     onClearHistory();
-    //     onSendMessage(
-    //       `Help me practice with Interactive Language Prompts (Grammar, Translation, or Common Phrases).`
-    //     );
-    //   }
-    // },
-    {
-      id: "explain_grammar",
-      label: t("qa_explain_grammar_label", appLanguage),
-      category: "writing",
-      categoryLabel: t("qa_cat_writing", appLanguage),
-      icon: <FileText className="w-4 h-4 text-blue-600" />,
-      title: t("qa_explain_grammar_title", appLanguage),
-      description: t("qa_explain_grammar_desc", appLanguage),
-      className: "bg-blue-50/70 hover:bg-blue-100 text-blue-950 border border-blue-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 7,
-      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
-        onClearHistory();
-        onSendMessage(
-          `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
-        );
-      }
-    },
-    {
-      id: "common_phrases",
-      label: t("qa_common_phrases_label", appLanguage),
-      category: "study",
-      categoryLabel: t("qa_cat_study", appLanguage),
-      icon: <HelpCircle className="w-4 h-4 text-emerald-600" />,
-      title: t("qa_common_phrases_title", appLanguage),
-      description: t("qa_common_phrases_desc", appLanguage),
-      className: "bg-emerald-50/70 hover:bg-emerald-100 text-emerald-950 border border-emerald-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 8,
-      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
-        onClearHistory();
-        onSendMessage(
-          `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
-        );
-      }
-    },
-    {
-      id: "translate_contrast",
-      label: t("qa_translate_contrast_label", appLanguage),
-      category: "writing",
-      categoryLabel: t("qa_cat_writing", appLanguage),
-      icon: <Languages className="w-4 h-4 text-purple-600" />,
-      title: t("qa_translate_contrast_title", appLanguage),
-      description: t("qa_translate_contrast_desc", appLanguage),
-      className: "bg-purple-50/70 hover:bg-purple-100 text-purple-950 border border-purple-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 9,
-      getAction: ({ targetLanguage, nativeLanguage, onSendMessage, onClearHistory }) => {
-        onClearHistory();
-        onSendMessage(
-          `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
-        );
-      }
-    },
     {
       id: "new_chat",
       label: t("qa_new_chat_label", appLanguage),
@@ -282,7 +213,7 @@ export function getQuickActionItems(appLanguage: string = "Vietnamese"): QuickAc
       title: t("qa_new_chat_title", appLanguage),
       description: t("qa_new_chat_desc", appLanguage),
       className: "bg-white hover:bg-stone-50 text-stone-700 hover:text-stone-900 border border-stone-200 text-xs font-semibold py-1.5 px-3 rounded-full shadow-2xs transition-all hover:scale-102 cursor-pointer shrink-0 flex items-center gap-1.5",
-      defaultIndex: 10,
+      defaultIndex: 6,
       getAction: ({ onClearHistory }) => onClearHistory()
     }
   ];

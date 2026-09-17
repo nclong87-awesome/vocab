@@ -46,61 +46,6 @@ export const CUSTOM_ACTIONS_UPDATED_EVENT = "vocab-custom-actions-updated";
  */
 export const STARTER_PRESET_ACTIONS: CustomQuickAction[] = [
   {
-    id: "preset-vietnamese-explanation",
-    label: "Giải thích tiếng Việt",
-    iconEmoji: "🇻🇳",
-    promptTemplate: "Giải thích chi tiết nghĩa, sắc thái và cách dùng tự nhiên của '{word}' bằng tiếng Việt, kèm theo ví dụ song ngữ và lỗi người Việt hay gặp.",
-    category: "study",
-    scope: "both",
-    description: "Giải thích sâu sắc thái bằng tiếng Việt cùng ví dụ ngữ cảnh thực tế",
-    isPinned: true,
-    createdAt: 1700000000001
-  },
-  {
-    id: "preset-ielts-band8",
-    label: "IELTS Band 8 Usage",
-    iconEmoji: "🎓",
-    promptTemplate: "Demonstrate how to use '{word}' in an IELTS Speaking Part 2/3 response or Writing Task 2 essay with Band 8+ vocabulary, collocations, and complex sentence structures.",
-    category: "writing",
-    scope: "both",
-    description: "Academic band 8+ collocations, speaking dialogues, and essay phrases",
-    isPinned: true,
-    createdAt: 1700000000002
-  },
-  {
-    id: "preset-workplace-email",
-    label: "Workplace Email",
-    iconEmoji: "💼",
-    promptTemplate: "Draft a polite and professional workplace email between colleagues showing natural usage of '{word}'. Highlight alternative formal synonyms.",
-    category: "writing",
-    scope: "both",
-    description: "Natural business correspondence and corporate email phrasing",
-    isPinned: true,
-    createdAt: 1700000000003
-  },
-  {
-    id: "preset-common-mistakes",
-    label: "Common Mistakes",
-    iconEmoji: "⚠️",
-    promptTemplate: "What are the most frequent grammatical, prepositional, or pronunciation mistakes learners make when using '{word}', and how do native speakers avoid them?",
-    category: "study",
-    scope: "both",
-    description: "Frequent traps, wrong prepositions, and unnatural word pairings",
-    isPinned: false,
-    createdAt: 1700000000004
-  },
-  {
-    id: "preset-casual-spoken",
-    label: "Casual Spoken & Texting",
-    iconEmoji: "🗣️",
-    promptTemplate: "Show 3 realistic chat or texting dialogues between close friends using '{word}' in casual spoken English, including modern slang or contractions.",
-    category: "chat",
-    scope: "both",
-    description: "Authentic texting, informal banter, and daily conversational usage",
-    isPinned: false,
-    createdAt: 1700000000005
-  },
-  {
     id: "preset-mnemonic-hook",
     label: "Vivid Memory Hook",
     iconEmoji: "🧠",
@@ -135,6 +80,35 @@ export const STARTER_PRESET_ACTIONS: CustomQuickAction[] = [
   }
 ];
 
+const BANNED_ACTION_IDS = new Set([
+  "preset-vietnamese-explanation",
+  "preset-ielts-band8",
+  "preset-workplace-email",
+  "preset-common-mistakes",
+  "preset-casual-spoken",
+  "explain_grammar",
+  "common_phrases",
+  "translate_contrast",
+]);
+
+const BANNED_ACTION_LABELS = new Set([
+  "giải thích tiếng việt",
+  "ielts band 8 usage",
+  "workplace email",
+  "common mistakes",
+  "casual spoken & texting",
+  "explain grammar rules",
+  "common phrases",
+  "translate & compare",
+]);
+
+function isBannedAction(a: any): boolean {
+  if (!a) return true;
+  if (typeof a.id === "string" && BANNED_ACTION_IDS.has(a.id)) return true;
+  if (typeof a.label === "string" && BANNED_ACTION_LABELS.has(a.label.toLowerCase().trim())) return true;
+  return false;
+}
+
 /**
  * Retrieves custom quick actions from localStorage (with auto-initialization from starter presets).
  */
@@ -142,17 +116,25 @@ export function getCustomQuickActions(): CustomQuickAction[] {
   try {
     const raw = localStorage.getItem(STORAGE_CUSTOM_ACTIONS_KEY);
     if (!raw) {
-      // First time initialization with top starter presets
-      const initial = STARTER_PRESET_ACTIONS.slice(0, 5);
+      // First time initialization with remaining starter presets
+      const initial = STARTER_PRESET_ACTIONS;
       localStorage.setItem(STORAGE_CUSTOM_ACTIONS_KEY, JSON.stringify(initial));
       void saveSettingToDB(DB_SETTINGS_CUSTOM_ACTIONS_KEY, JSON.stringify(initial));
       return initial;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed)) {
+      const filtered = parsed.filter(a => !isBannedAction(a));
+      if (filtered.length !== parsed.length) {
+        localStorage.setItem(STORAGE_CUSTOM_ACTIONS_KEY, JSON.stringify(filtered));
+        void saveSettingToDB(DB_SETTINGS_CUSTOM_ACTIONS_KEY, JSON.stringify(filtered));
+      }
+      return filtered;
+    }
+    return [];
   } catch (e) {
     console.warn("Failed to load custom quick actions:", e);
-    return STARTER_PRESET_ACTIONS.slice(0, 5);
+    return STARTER_PRESET_ACTIONS;
   }
 }
 
@@ -165,9 +147,13 @@ export async function hydrateCustomQuickActionsFromDB(): Promise<CustomQuickActi
     if (dbRaw) {
       const parsed = JSON.parse(dbRaw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        localStorage.setItem(STORAGE_CUSTOM_ACTIONS_KEY, dbRaw);
+        const filtered = parsed.filter(a => !isBannedAction(a));
+        localStorage.setItem(STORAGE_CUSTOM_ACTIONS_KEY, JSON.stringify(filtered));
+        if (filtered.length !== parsed.length) {
+          await saveSettingToDB(DB_SETTINGS_CUSTOM_ACTIONS_KEY, JSON.stringify(filtered));
+        }
         dispatchCustomActionsUpdated();
-        return parsed;
+        return filtered;
       }
     }
   } catch (e) {
@@ -236,7 +222,7 @@ export async function deleteCustomQuickAction(id: string): Promise<void> {
  * Resets custom quick actions to the default starter presets.
  */
 export async function resetCustomQuickActionsToDefault(): Promise<void> {
-  const initial = STARTER_PRESET_ACTIONS.slice(0, 6);
+  const initial = STARTER_PRESET_ACTIONS;
   const jsonStr = JSON.stringify(initial);
   try {
     localStorage.setItem(STORAGE_CUSTOM_ACTIONS_KEY, jsonStr);
@@ -412,16 +398,6 @@ export function getDynamicJitChipsForWord(params: {
   // 2. PERSONALITY PROFILE ALIGNED CHIPS
   // ==========================================
   if (archetype.includes("Pragmatic") || archetype.includes("Business") || archetype.includes("Professional")) {
-    chips.push({
-      id: `persona-workplace-email`,
-      label: "Workplace Email",
-      query: `How do I naturally phrase a professional workplace email using "${w}"?`,
-      iconEmoji: "💼",
-      category: "workplace",
-      categoryLabel: "Workplace",
-      source: "persona",
-      confidence: 0.95
-    });
     chips.push({
       id: `persona-biz-collocations`,
       label: "Business Collocations",

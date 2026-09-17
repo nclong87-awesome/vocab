@@ -1264,9 +1264,9 @@ export function useChat({
             { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },
           ]
         : [
+            { label: t("action_next_balanced_session", currentAppLang), action: "start_practice_balanced" },
             { label: t("action_next_quiz", currentAppLang), action: "next_quiz" },
             { label: t("action_confuser_duel", currentAppLang), action: "start_practice_confuser_duel" },
-            { label: t("chat_quiz_common_phrases_action", currentAppLang), action: "common_phrases" },
           ];
 
       const now = Date.now();

@@ -44,9 +44,6 @@ const ACTION_THEMES: Record<string, { cardHover: string; iconBgHover: string }> 
   practice: { cardHover: "hover:bg-stone-50 hover:border-stone-400/60", iconBgHover: "group-hover:bg-stone-200" },
   fix_grammar: { cardHover: "hover:bg-rose-50/50 hover:border-rose-300/80", iconBgHover: "group-hover:bg-rose-100" },
   suggest_reply: { cardHover: "hover:bg-amber-50/50 hover:border-amber-300/80", iconBgHover: "group-hover:bg-amber-100" },
-  explain_grammar: { cardHover: "hover:bg-blue-50/50 hover:border-blue-300/80", iconBgHover: "group-hover:bg-blue-100" },
-  common_phrases: { cardHover: "hover:bg-emerald-50/50 hover:border-emerald-300/80", iconBgHover: "group-hover:bg-emerald-100" },
-  translate_contrast: { cardHover: "hover:bg-purple-50/50 hover:border-purple-300/80", iconBgHover: "group-hover:bg-purple-100" },
   new_chat: { cardHover: "hover:bg-stone-50 hover:border-stone-300", iconBgHover: "group-hover:bg-stone-100" },
 };
 

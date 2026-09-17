@@ -175,7 +175,7 @@ function ChatMessageItem({
   onSelectDefinition,
   showToast,
   scrollToBottom,
-  focusInput,
+  focusInput: _focusInput,
   setIsPhotoModalOpen,
   handleRecordActionUse,
   words,
@@ -817,27 +817,6 @@ function ChatMessageItem({
       return;
     } else if (act.action === "select_definition" && act.payload && onSelectDefinition) {
       onSelectDefinition(act.payload.word, act.payload.senseIndex, act.payload.translation);
-    } else if (act.action === "common_phrases") {
-      handleRecordActionUse("common_phrases");
-      onSendMessage(
-        `I'd like to learn common phrases and idioms in ${targetLanguage} (with ${nativeLanguage} translations).`
-      );
-      scrollToBottom("smooth");
-      focusInput();
-    } else if (act.action === "explain_grammar") {
-      handleRecordActionUse("explain_grammar");
-      onSendMessage(
-        `I'd like to explore grammar rules in ${targetLanguage} (explained in ${nativeLanguage}).`
-      );
-      scrollToBottom("smooth");
-      focusInput();
-    } else if (act.action === "translate_contrast") {
-      handleRecordActionUse("translate_contrast");
-      onSendMessage(
-        `I'd like to translate a phrase and compare nuances between ${nativeLanguage} and ${targetLanguage}.`
-      );
-      scrollToBottom("smooth");
-      focusInput();
     } else if (act.action === "retry_analyze_image" && onAnalyzeImageVocab) {
       const imageToRetry = act.payload?.imageDataUrl || [...messages].reverse().find(m => Boolean(m.imageUrl))?.imageUrl;
       if (imageToRetry) {
