@@ -30,20 +30,22 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
   const targetLanguage = params.targetLanguage || "English";
   const profile = params.personalityProfile;
-  const archetype = profile?.archetype || "Practical Learner";
+  const archetype = profile?.archetype || "Pragmatic Professional";
   const rawInterests = profile?.detectedInterests && profile.detectedInterests.length > 0
     ? profile.detectedInterests
-    : ["Daily Life & Routines", "Travel & Transit", "Food & Dining", "Casual Social Chats", "Hobbies & Entertainment", "Practical Living"];
+    : ["Travel & Dining", "Physics", "programming", "Daily Life & Hobbies"];
   const interests = rawInterests.join(", ");
-  const traits = (profile?.archetypeTraits || ["Practical", "Conversational"]).join(", ");
+  const traits = (profile?.archetypeTraits && profile.archetypeTraits.length > 0
+    ? profile.archetypeTraits
+    : ["Goal-Oriented", "Career-Driven", "Nuance-Sensitive"]).join(", ");
   const modality = profile?.learningPreferences?.primaryModality || "contextual_examples";
 
   // Diverse domain inspirations for rotating vibrant real-life scenarios
   const DIVERSE_DOMAINS = [
+    "Daily Life, Home & Errands (neighborhood strolls, grocery shopping, morning routines, home improvement, pet care, weather reactions)",
     "Casual Social & Friendship (coffee chats, catching up with friends, weekend plans, sharing humorous stories, casual banter)",
     "Food, Dining & Culinary (ordering at restaurants, street food exploration, tasting new recipes, coffee breaks, market shopping)",
     "Travel, Transit & Exploration (airport journeys, train stations, asking for directions, hotel check-ins, exploring vibrant city streets)",
-    "Daily Life, Home & Errands (neighborhood strolls, grocery shopping, morning routines, home improvement, pet care, weather reactions)",
     "Culture, Entertainment & Hobbies (movies, music events, sports, fitness routines, gaming, books, cultural festivals)",
     "Personal Lifestyle & Friendly Opinions (sharing thoughts on daily habits, lighthearted advice, casual debates, lifestyle choices)"
   ];
@@ -60,19 +62,25 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
     if (candidateCollectionWords.length > 0) {
       vocabAnchorSection = `
 USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):
-${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%, Status: ${!w.lastReviewedAt && !w.lastReviewed ? "New/Unstudied" : (w.learned ? "Due for Review" : "Learning")}]`).join("\n")}
+${candidateCollectionWords.map((w) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%]`).join("\n")}
 
-WORDS COLLECTION TARGET IDENTIFICATION MANDATE:
-- Carefully evaluate the candidate words from the user's database above.
-- Select the primary target word from this candidate list. Prioritize candidates labeled "New/Unstudied" or "Learning" to actively challenge and expand the learner's vocabulary.
-- Construct a natural, commonly used sentence whose ideal translation incorporates this selected word.
-- TARGET WORD PRESENCE IN NATIVE SENTENCE MANDATE: The "nativeSentence" MUST explicitly, clearly, and unmistakably contain the exact native translation/meaning of the selected target word (e.g. if target word is "embark" with native translation "bắt đầu, lên đường", "nativeSentence" MUST explicitly contain "bắt đầu" or "lên đường"). The learner MUST be prompted to use the target word by encountering its direct native meaning in "nativeSentence"! NEVER omit or drop the native meaning of the target word.
-- CRITICAL LANGUAGE PURITY MANDATE: The "nativeSentence" MUST be 100% written in the learner's NATIVE language (${nativeLanguage}).
-  NEVER include untranslated words in the target language (${targetLanguage}) directly inside "nativeSentence".
-  Instead, express the concept/meaning purely in natural ${nativeLanguage}, and use the actual target vocabulary term only in "idealTranslation" (${targetLanguage}).
-- Explicitly output this word in the "targetWordFromCollection" field so that when the user incorporates this word in their translation response, its strength is boosted by 30 points.
-- COLLECTION VOCAB SYNERGY: If other words from the candidate collection list above fit as natural vocabulary or alternative translations in this sentence, prioritize including them in "keyTargetWords"!`;
+WORD SELECTION RULES:
+1. Carefully evaluate all candidate words.
+2. Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life.
+3. Prefer words with lower strength when they fit equally well (to give weaker words a chance to grow).
+4. The selected word’s exact native meaning MUST appear explicitly and unmistakably in the nativeSentence so the learner is forced to produce the target word.
+5. Output the selected word in the "targetWordFromCollection" field.
+6. If other collection words fit naturally as synonyms or related vocabulary, include them in "keyTargetWords".`;
     }
+  }
+
+  if (!vocabAnchorSection) {
+    vocabAnchorSection = `
+WORD SELECTION RULES:
+1. Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life.
+2. The selected word’s exact native meaning MUST appear explicitly and unmistakably in the nativeSentence so the learner is forced to produce the target word.
+3. Output the selected word in the "targetWordFromCollection" field.
+4. If other related vocabulary fits naturally as synonyms or related vocabulary, include them in "keyTargetWords".`;
   }
 
   // Avoid recently generated sentences
@@ -88,8 +96,8 @@ ${recentList}
   const prompt = `Generate a single personalized translation challenge for a language learner based on common sentences used in daily conversation and real-life interactions.
 
 DIVERSITY SEED: ${randomSeed}
-SUGGESTED SCENARIO DOMAIN: ${suggestedDomain}
-(Feel free to explore this domain or any other dynamic everyday scenario. Actively avoid defaulting to corporate meetings, business emails, or office tasks.)
+
+SUGGESTED SCENARIO DOMAIN: ${suggestedDomain}. Feel free to explore this domain or any other dynamic everyday scenario. Actively avoid defaulting to corporate meetings, business emails, or office tasks.
 
 LEARNER CONTEXT:
 - Native Language: ${nativeLanguage}
@@ -100,45 +108,73 @@ LEARNER CONTEXT:
 - Primary Learning Modality: ${modality}
 ${vocabAnchorSection}
 ${recentAvoidanceSection}
-CRITICAL MANDATES:
-1. BROAD REAL-WORLD SITUATIONAL DIVERSITY (ANTI-WORKPLACE-BIAS MANDATE):
-   - Actively vary scenarios across the rich spectrum of real-life human experiences:
-     * Casual Social & Friendship: Meeting friends, coffee chats, weekend plans, humorous remarks, neighborhood gossip.
-     * Food, Dining & Cafes: Ordering food, culinary preferences, street food, cooking together, cafe interactions.
-     * Travel, Transit & Exploration: Flights, road trips, hotels, navigating unfamiliar transit, discovering local spots.
-     * Daily Life, Home & Errands: Morning routines, home repairs, shopping, appointments, fitness, weather reactions.
-     * Leisure, Culture & Hobbies: Watching movies, listening to music, sports, outdoor adventures, gaming, reading.
-   - DO NOT OVER-INDEX ON OFFICE/WORKPLACE SCENARIOS: Avoid defaulting to corporate offices, staff downsizing, technical system backups, team syncs, boardroom meetings, or formal business correspondence. Even if the learner profile indicates a pragmatic or career-focused style, real fluency requires engaging across all human social and lifestyle contexts. Real-life professionals also eat, travel, shop, relax, and socialize. Strictly reserve workplace contexts for when a chosen vocabulary word specifically and exclusively demands it.
-2. DYNAMIC TOPIC CATEGORY: Dynamically determine a vivid, specific 2-4 word topic label (e.g. "Coffee Shop Catch-up", "Street Food Discovery", "Weekend Getaway", "Airport Navigation", "Grocery Run", "Home Cooking", "Fitness Routine", "Movie Night", "Neighborhood Walk", "Casual Banter", "Outdoor Adventure") that accurately describes the context of the sentence, and return it in "topicContext".
-3. CONCISE SENTENCE STRUCTURE: Aim for a concise, compact, and punchy sentence structure (strictly 6 to 14 words). Avoid verbose rambling or convoluted multi-clause sentences. Keep the phrasing natural, modern, clear, and direct.
-4. ZERO TARGET-LANGUAGE LOANWORDS IN NATIVE SENTENCE: Create the concise sentence (6-14 words) entirely in the user's NATIVE language (${nativeLanguage}). The 'nativeSentence' MUST NOT contain any ${targetLanguage} words, English loanwords, or untranslated target terms. Express every concept strictly in natural ${nativeLanguage}.
-5. NATURAL IDIOMATIC PHRASING: Ensure the sentence sounds completely natural, authentic, and idiomatic for real-life conversational speech in ${nativeLanguage}.
-6. IDEAL POLISHED TRANSLATION: Provide the ideal, concise, and polished natural translation in ${targetLanguage}. The target vocabulary word MUST appear in this 'idealTranslation'.
-7. FEATURE VOCABULARY: Endeavor to feature the chosen word from the user's database and output it in "targetWordFromCollection".
-8. WIDE VARIETY OF VOCABULARY CLUES & SYNONYMS (5-8 CLUES):
-   - Provide a rich, diverse list of 5 to 8 vocabulary clues in "keyTargetWords" covering the key actions, entities, modifiers, and expressions from the sentence.
-   - Crucially include natural synonyms and alternative valid translations for the key concepts (e.g. if the sentence has "chờ đợi", provide both "await" and "wait for"; if "phản hồi", provide both "feedback" and "response"; if "khách hàng", provide both "client" and "customer"; if "hợp đồng", provide both "contract" and "agreement").
-   - Prefer words and synonyms that match candidate words from the user's collection whenever appropriate.
-   - This empowers learners to write multiple correct, idiomatic translations of the sentence while dramatically increasing the likelihood that words they use already exist in their collection (earning them memory strength boosts).
-   - Ensure the primary featured target word is included in this list.
-9. PROFILE NOTE: Provide a short note (personalityNote) explaining why this specific scenario and vocabulary were selected. For pragmatic or goal-oriented learners, emphasize how this vocabulary supports versatile, effective communication across real-life daily, travel, dining, and social settings rather than repetitive office work.
-10. TARGET WORD PRESENCE IN NATIVE SENTENCE: The chosen target word's native translation/meaning MUST appear explicitly in 'nativeSentence' so that the learner is directly prompted to translate it into the target word. For example, if target word is "set off" ("khởi hành, lên đường"), 'nativeSentence' MUST contain "khởi hành" or "lên đường".
-11. STRICT 1-TO-1 BIDIRECTIONAL SEMANTIC EQUIVALENCE: 'nativeSentence' and 'idealTranslation' MUST be exact 1-to-1 semantic translations of each other. Every single clause, action, or verb phrase in 'idealTranslation' MUST correspond directly to a clause in 'nativeSentence', and vice versa. NEVER drop clauses (e.g. keeping "settle" while dropping "set off"), NEVER invent extra actions in 'idealTranslation' not present in 'nativeSentence', and NEVER confuse false-friend verbs (e.g. confusing "set off" or "settle" with "set up / thiết lập").
+CRITICAL MANDATES (MUST FOLLOW ALL):
 
-Return STRICTLY raw JSON-only matching this schema:
+1. REAL-WORLD SITUATIONAL DIVERSITY
+Vary across everyday human experiences: casual social/friendship, food & dining, travel & transit, daily life/home/errands, leisure/hobbies.
+Strictly avoid office/workplace scenarios unless the chosen vocabulary word can only work in that context.
+
+2. TOPIC LABEL (HIGH DIVERSITY REQUIRED)
+Create a vivid, specific, and highly diverse 2–4 word topic label.
+Actively avoid repeating common or generic labels.
+Draw from a wide range of everyday situations such as:
+- "Rainy Morning Commute"
+- "Pet Vet Visit"
+- "Late-Night Snack Run"
+- "Balcony Plant Care"
+- "Neighbor Fence Chat"
+- "Sudden Power Outage"
+- "Weekend Market Haul"
+- "Laundry Day Struggle"
+- "Sunset Park Walk"
+- "Spilled Coffee Chaos"
+Put the chosen label in "topicContext".
+
+3. SENTENCE LENGTH & STYLE
+- nativeSentence: exactly 6–14 words.
+- Concise, punchy, natural spoken ${nativeLanguage}.
+- No multi-clause complexity.
+
+4. LANGUAGE PURITY (ZERO TOLERANCE)
+- nativeSentence must be 100% ${nativeLanguage}.
+- Absolutely no ${targetLanguage} words, loanwords, or untranslated target terms.
+- Express every concept in natural ${nativeLanguage}.
+
+5. TARGET WORD PRESENCE
+The exact native meaning of the chosen target word MUST appear clearly in nativeSentence.
+Example: if target = "push back" (lùi lại / hoãn lại), nativeSentence must contain “lùi lại” or “hoãn lại”.
+
+6. 1-TO-1 SEMANTIC EQUIVALENCE
+nativeSentence and idealTranslation must be exact bidirectional translations.
+No added actions, no dropped clauses, no false-friend verbs.
+
+7. IDEAL TRANSLATION
+- Concise, polished, natural modern ${targetLanguage}.
+- Must contain the exact selected targetWordFromCollection.
+
+8. KEY TARGET WORDS (5–8 items)
+Provide a rich list of useful words and natural synonyms from the sentence.
+Prefer collection words whenever they fit.
+Always include the primary target word.
+Format each as: { "word": "...", "translation": "...", "hint": "..." }
+
+9. PERSONALITY NOTE
+Short explanation of why this scenario + vocabulary suits a ${archetype?.toLowerCase() || "pragmatic"}, ${traits ? traits.toLowerCase().split(",")[0]?.trim() || "goal-oriented" : "goal-oriented"} learner. Emphasize real-life utility across daily, social, travel, and dining contexts (not office work).
+
+OUTPUT FORMAT (STRICT RAW JSON ONLY — no markdown, no extra text):
 {
-  "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words, ZERO ${targetLanguage} words)",
+  "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words, ZERO ${targetLanguage})",
   "idealTranslation": "Concise ideal translation in ${targetLanguage}",
-  "topicContext": "Concise 2-4 word topic category dynamically created by AI",
+  "topicContext": "2-4 word topic label",
   "targetWordFromCollection": {
-    "word": "most_suitable_word_from_collection",
-    "translation": "translation_in_native",
-    "hint": "context hint"
+    "word": "selected_word",
+    "translation": "native meaning",
+    "hint": "brief context hint"
   },
   "keyTargetWords": [
-    { "word": "word_or_synonym_in_target", "translation": "translation_in_native", "hint": "synonym or part of speech" }
+    { "word": "${targetLanguage === "English" ? "english_word" : "target_word"}", "translation": "${nativeLanguage.toLowerCase()}", "hint": "synonym / pos / note" }
   ],
-  "personalityNote": "Explanation of profile alignment"
+  "personalityNote": "Short profile-alignment explanation"
 }`;
 
   return { prompt, candidateCollectionWords };
@@ -318,7 +354,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const targetLanguage = params.targetLanguage || "English";
   const { prompt, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
-  const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lên đường' for 'set off'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
+  const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lùi lại' or 'hoãn lại' for 'push back'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
   const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
