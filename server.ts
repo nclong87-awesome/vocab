@@ -3198,13 +3198,14 @@ USER'S WORDS COLLECTION CANDIDATES (FROM DATABASE):
 ${displayedCandidates.map((w: any) => `- "${w.word}" (${w.translation || w.definition || "target term"}) [Strength: ${w.strength ?? 0}%]`).join("\n")}
 
 WORD SELECTION RULES:
-1. Carefully evaluate all candidate words.
-2. Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life.
-3. Explore different words across the candidate list rather than always selecting the first word.
-4. Prefer words with lower strength when they fit equally well (to give weaker words a chance to grow).
-5. The selected word’s exact native meaning MUST appear explicitly and unmistakably in the nativeSentence so the learner is forced to produce the target word.
-6. Output the selected word in the "targetWordFromCollection" field.
-7. If other collection words fit naturally as synonyms or related vocabulary, include them in "keyTargetWords".`;
+1. STRICT CONSTRAINT: You MUST select targetWordFromCollection EXCLUSIVELY and VERBATIM from the "USER'S WORDS COLLECTION CANDIDATES" list above.
+2. ABSOLUTE PROHIBITION: Under NO circumstances should you select, invent, or output any word outside this candidate list. Do NOT invent new words, and do NOT use placeholder/example words.
+3. Carefully evaluate all candidate words and select the SINGLE MOST SUITABLE word from the candidate list that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life.
+4. Explore different words across the candidate list rather than always selecting the first word.
+5. Prefer words with lower strength when they fit equally well (to give weaker words a chance to grow).
+6. The selected candidate word’s exact native meaning MUST appear explicitly and unmistakably in the nativeSentence so the learner is forced to produce that exact candidate word.
+7. Output the chosen candidate word in the "targetWordFromCollection" field with the exact "word" string copied verbatim from the candidate list.
+8. If other collection words fit naturally as synonyms or related vocabulary, include them in "keyTargetWords".`;
       }
     }
 
@@ -3275,8 +3276,8 @@ Put the chosen label in "topicContext".
 - Express every concept in natural ${nativeLanguage}.
 
 5. TARGET WORD PRESENCE
-The exact native meaning of the chosen target word MUST appear clearly in nativeSentence.
-Example: if target = "push back" (lùi lại / hoãn lại), nativeSentence must contain “lùi lại” or “hoãn lại”.
+The exact native meaning of the chosen candidate target word MUST appear clearly in nativeSentence.
+For example, if your chosen candidate word means "sự phân biệt" or "dệt vải", nativeSentence must explicitly contain that exact native meaning so the user is tested on that exact candidate vocabulary item. Never borrow external words or examples.
 
 6. 1-TO-1 SEMANTIC EQUIVALENCE
 nativeSentence and idealTranslation must be exact bidirectional translations.
@@ -3284,7 +3285,7 @@ No added actions, no dropped clauses, no false-friend verbs.
 
 7. IDEAL TRANSLATION
 - Concise, polished, natural modern ${targetLanguage}.
-- Must contain the exact selected targetWordFromCollection.
+- Must contain the exact selected targetWordFromCollection chosen from the candidate list.
 
 8. KEY TARGET WORDS (5–8 items)
 Provide a rich list of useful words and natural synonyms from the sentence.
@@ -3301,8 +3302,8 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY — no markdown, no extra text):
   "idealTranslation": "Concise ideal translation in ${targetLanguage}",
   "topicContext": "2-4 word topic label",
   "targetWordFromCollection": {
-    "word": "selected_word",
-    "translation": "native meaning",
+    "word": "EXACT word chosen strictly and verbatim from the USER'S WORDS COLLECTION CANDIDATES above",
+    "translation": "native meaning of this chosen candidate word",
     "hint": "brief context hint"
   },
   "keyTargetWords": [
@@ -3311,7 +3312,7 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY — no markdown, no extra text):
   "personalityNote": "Short profile-alignment explanation"
 }`;
 
-    const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, highly diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Ensure high scenario originality and sentence variety; actively avoid repetitive tropes, clichés, or boilerplate structures. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection (e.g. 'lùi lại' or 'hoãn lại' for 'push back'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
+    const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, highly diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Ensure high scenario originality and sentence variety; actively avoid repetitive tropes, clichés, or boilerplate structures. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection chosen strictly and verbatim from the candidate list (never invent external words or use placeholder examples like 'push back'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
     const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
     let effectiveLlmConfig = llmConfig ? { ...llmConfig, onlyReliableModels: true } : { onlyReliableModels: true };
@@ -3344,15 +3345,26 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY — no markdown, no extra text):
             }
           }
         }
+        if (!matched && candidateCollectionWords.length > 0 && parsed.nativeSentence) {
+          for (const cand of candidateCollectionWords) {
+            if (cand?.translation && parsed.nativeSentence.toLowerCase().includes(cand.translation.toLowerCase().trim())) {
+              matched = cand; break;
+            }
+          }
+        }
         if (matched) {
+          const isDirectMatch = rawTarget && matched.word.toLowerCase() === rawTarget.toLowerCase();
           parsed.targetWordFromCollection = {
             id: matched.id,
             word: matched.word,
-            translation: matched.translation || parsed.targetWordFromCollection?.translation,
+            translation: matched.translation || (isDirectMatch ? parsed.targetWordFromCollection?.translation : undefined),
             definition: matched.definition,
-            hint: parsed.targetWordFromCollection?.hint || matched.translation,
+            hint: (isDirectMatch ? parsed.targetWordFromCollection?.hint : undefined) || matched.translation || matched.definition,
             strength: matched.strength ?? 0,
           };
+        } else {
+          // Do not retain an external hallucinated word that is not in the user's collection candidates
+          delete parsed.targetWordFromCollection;
         }
       }
 
