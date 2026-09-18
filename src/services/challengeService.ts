@@ -23,11 +23,120 @@ export interface ChallengeTurnParams {
   llmConfig?: LLMConfig;
 }
 
+function buildVietnameseChallengePrompt(params: GenerateChallengeParams, randomSeed: string): {
+  prompt: string;
+  candidateCollectionWords: Word[];
+} {
+  const targetLanguage = params.targetLanguage || "English";
+  const profile = params.personalityProfile;
+  const archetype = profile?.archetype || "Pragmatic Professional";
+  const rawInterests = profile?.detectedInterests && profile.detectedInterests.length > 0
+    ? profile.detectedInterests
+    : ["Du lịch & Ẩm thực", "Công nghệ & Lập trình", "Đời sống thường nhật & Sở thích"];
+  const interests = rawInterests.join(", ");
+  const traits = (profile?.archetypeTraits && profile.archetypeTraits.length > 0
+    ? profile.archetypeTraits
+    : ["Thực tế", "Thực dụng", "Quan tâm đến sắc thái tự nhiên"]).join(", ");
+
+  let vocabAnchorSection = "";
+  let candidateCollectionWords: Word[] = [];
+  if (params.words && params.words.length > 0) {
+    const validWords = params.words.filter((w) => w.completed !== false);
+    candidateCollectionWords = getTranslationChallengeCandidateWords(validWords, {
+      maxCandidates: 18,
+    });
+    if (candidateCollectionWords.length > 0) {
+      const displayedCandidates = [...candidateCollectionWords].sort(() => Math.random() - 0.5);
+      vocabAnchorSection = `
+DANH SÁCH TỪ VỰNG TIẾNG ANH ỨNG VIÊN TRONG BỘ SƯU TẬP CỦA HỌC VIÊN:
+${displayedCandidates.map((w) => `- "${w.word}" (nghĩa: ${w.translation || w.definition || "từ mục tiêu"}) [Độ ghi nhớ: ${w.strength ?? 0}%]`).join("\n")}
+
+QUY TẮC BẮT BUỘC KHI CHỌN TỪ:
+1. Bạn PHẢI chọn CHÍNH XÁC một từ tiếng Anh từ danh sách ứng viên trên làm "targetWordFromCollection" (sao chép đúng từng ký tự của từ đó).
+2. TUYỆT ĐỐI KHÔNG tự bịa ra từ bên ngoài danh sách ứng viên này.
+3. TỰ DO CHỌN NGỮ CẢNH: Chọn bất kỳ từ nào trong danh sách mà bạn có thể sáng tạo một chủ đề/ngữ cảnh tự nhiên và thú vị (khám phá nhiều từ khác nhau trên danh sách).
+4. Ưu tiên các từ có độ ghi nhớ (Strength) còn thấp hoặc chưa luyện tập hôm nay để giúp học viên củng cố từ vựng.
+5. Câu tiếng Việt ('nativeSentence') BẮT BUỘC phải thể hiện rõ ý nghĩa của từ vựng tiếng Anh này (dưới dạng tiếng Việt tự nhiên), để khi dịch sang tiếng Anh, học viên sẽ phải nhớ và sử dụng từ này!
+6. Cung cấp thêm 3-6 từ/cụm từ tiếng Anh hữu ích liên quan trong "keyTargetWords" làm gợi ý từ vựng cho học viên.`;
+    }
+  }
+
+  if (!vocabAnchorSection) {
+    vocabAnchorSection = `
+QUY TẮC CHỌN TỪ:
+1. Chọn 1 từ vựng tiếng Anh hữu ích, phong phú làm từ mục tiêu ("targetWordFromCollection").
+2. Câu tiếng Việt ('nativeSentence') BẮT BUỘC phải thể hiện rõ ý nghĩa của từ này một cách tự nhiên.
+3. Cung cấp các từ liên quan hữu ích trong "keyTargetWords".`;
+  }
+
+  const prompt = `Hãy tạo một thử thách dịch thuật (Translation Challenge) dành cho học viên học tiếng Anh có tiếng mẹ đẻ là tiếng Việt.
+
+HẠT GIỐNG ĐA DẠNG: ${randomSeed}
+
+TỰ DO TUYỆT ĐỐI VỀ CHỦ ĐỀ & NGỮ CẢNH (TOTAL TOPIC FREEDOM):
+Bạn có toàn quyền TỰ DO lựa chọn BẤT KỲ chủ đề và ngữ cảnh phong phú, độc đáo nào!
+Không bị gò bó trong bất kỳ khuôn mẫu nào: bạn có thể tự do lấy cảm hứng từ khoa học, công nghệ, vũ trụ, nghệ thuật, âm nhạc, điện ảnh, sách báo, du lịch khám phá, văn hóa thế giới, ẩm thực độc đáo, thiên nhiên kỳ thú, triết lý sống nhẹ nhàng, thể thao, sở thích cá nhân, các tình huống giao tiếp đời thực, tình bạn, các tình huống bất ngờ hay những mẩu đối thoại hóm hỉnh thường ngày.
+Hãy chủ động đa dạng hóa chủ đề tối đa giữa các thử thách để người học luôn cảm thấy hào hứng và bất ngờ!
+
+THÔNG TIN HỌC VIÊN:
+- Tiếng mẹ đẻ (Native Language): Tiếng Việt
+- Ngôn ngữ cần học (Target Language): ${targetLanguage}
+- Phong cách học: ${archetype}
+- Đặc điểm: ${traits}
+- Sở thích tham khảo: ${interests}
+${vocabAnchorSection}
+
+YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
+
+1. SÁNG TẠO CÂU TIẾNG VIỆT TỰ NHIÊN THUẦN TÚY (NATIVE-FIRST):
+- 'nativeSentence' phải là 100% tiếng Việt tự nhiên, như người Việt nói chuyện thực tế hoặc chia sẻ suy nghĩ.
+- Dùng từ ngữ tự nhiên, giàu biểu cảm, các hư từ/thán từ khẩu ngữ nếu phù hợp ngữ cảnh (ví dụ: "nhé", "cơ", "đấy", "ghê", "suýt nữa", "thôi", "ạ"...).
+- TUYỆT ĐỐI KHÔNG DỊCH NGƯỢC TỪ CÂU TIẾNG ANH SANG. Hãy tư duy trực tiếp bằng tiếng Việt bản ngữ từ đầu!
+- TUYỆT ĐỐI KHÔNG chèn từ tiếng Anh, từ mượn tiếng Anh chưa Việt hóa hay từ mục tiêu vào trong 'nativeSentence'.
+- Độ dài: chính xác từ 6 đến 14 từ tiếng Việt. Ngắn gọn, súc tích, gãy gọn, không viết câu ghép rườm rà 3-4 vế.
+
+2. KHÔNG CẦN TẠO BẢN DỊCH MẪU ('idealTranslation') TRONG BƯỚC NÀY:
+- Để tránh tư duy bị gò bó hoặc câu tiếng Việt bị "mùi dịch máy", bạn KHÔNG cần cung cấp trường 'idealTranslation' ở đây. Bản dịch chuẩn sẽ được hệ thống tạo riêng ở bước đánh giá phản hồi khi học viên nộp bài.
+
+3. NHÃN CHỦ ĐỀ ĐA DẠNG & ĐỘC ĐÁO (TOPIC CONTEXT):
+- Bạn hoàn toàn tự do sáng tạo nhãn chủ đề 2–4 từ tiếng Việt (hoặc song ngữ) phản ánh chính xác lát cắt nội dung bạn đã chọn, ví dụ: "Kính thiên văn nghiệp dư", "Hương vị trà đào", "Chuyến bay đêm", "Thuật toán tối ưu", "Cơn mưa rào bất chợt", "Kỷ niệm tuổi thơ", "Triển lãm tranh sơn dầu", "Cắm trại ven hồ", "Kỹ năng sinh tồn"...
+- Hãy sáng tạo nhãn chủ đề thật phong phú và đa dạng! Ghi vào trường "topicContext".
+
+4. TỪ VỰNG MỤC TIÊU & TỪ KHÓA HỮU ÍCH:
+- Ghi rõ từ tiếng Anh đã chọn từ danh sách ứng viên vào "targetWordFromCollection" kèm nghĩa tiếng Việt và gợi ý ngắn.
+- Cung cấp danh sách 3–6 từ/cụm từ tiếng Anh hữu ích liên quan đến câu này trong "keyTargetWords" (để học viên có thể xem gợi ý từ vựng nếu cần). Mỗi mục gồm { "word": "english_word", "translation": "nghĩa tiếng việt", "hint": "loại từ hoặc gợi ý" }.
+
+5. LỜI NHẮN NGỮ CẢNH (PERSONALITY NOTE):
+- Viết 1 câu ngắn gọn bằng tiếng Việt giải thích lý do tình huống và từ vựng này hữu ích trong giao tiếp thực tế.
+
+ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ JSON THUẦN, KHÔNG DÙNG MARKDOWN BACKTICKS):
+{
+  "nativeSentence": "Câu tiếng Việt tự nhiên 100%, 6-14 từ, giàu biểu cảm và tự nhiên",
+  "topicContext": "Nhãn chủ đề 2-4 từ do bạn tự do sáng tạo",
+  "targetWordFromCollection": {
+    "word": "từ tiếng Anh chọn từ danh sách ứng viên",
+    "translation": "nghĩa tiếng Việt tương ứng trong câu",
+    "hint": "gợi ý ngắn gọn về ngữ cảnh"
+  },
+  "keyTargetWords": [
+    { "word": "từ_tiếng_anh", "translation": "nghĩa_tiếng_việt", "hint": "gợi_ý" }
+  ],
+  "personalityNote": "Lời khuyên ngắn gọn về ngữ cảnh"
+}`;
+
+  return { prompt, candidateCollectionWords };
+}
+
 function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: string): {
   prompt: string;
   candidateCollectionWords: Word[];
 } {
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
+  const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
+  if (isVietnameseNative) {
+    return buildVietnameseChallengePrompt(params, randomSeed);
+  }
+
   const targetLanguage = params.targetLanguage || "English";
   const profile = params.personalityProfile;
   const archetype = profile?.archetype || "Pragmatic Professional";
@@ -39,21 +148,6 @@ function buildChallengePrompt(params: GenerateChallengeParams, randomSeed: strin
     ? profile.archetypeTraits
     : ["Goal-Oriented", "Career-Driven", "Nuance-Sensitive"]).join(", ");
   const modality = profile?.learningPreferences?.primaryModality || "contextual_examples";
-
-  // Diverse domain inspirations for rotating vibrant real-life scenarios
-  const DIVERSE_DOMAINS = [
-    "Daily Life, Home & Neighborhood (neighborhood strolls, grocery shopping, morning routines, home improvement, pet care, weather reactions, balcony gardening, laundry routines)",
-    "Casual Social & Friendship (coffee chats, catching up with old friends, weekend plans, sharing humorous stories, casual banter, group dinners)",
-    "Food, Dining & Culinary (ordering at restaurants, street food exploration, tasting new recipes, coffee brewing, market shopping, bakery visits, cooking experiments)",
-    "Travel, Transit & Exploration (airport journeys, train stations, asking for directions, hotel check-ins, exploring vibrant city streets, scenic viewpoints, packing dilemmas)",
-    "Culture, Entertainment & Hobbies (movies, live music events, sports, fitness routines, gaming, books, cultural festivals, photography walks, crafts)",
-    "Personal Lifestyle & Everyday Thoughts (daily habits, lighthearted advice, casual debates, lifestyle choices, relaxing weekends, healthy habits)",
-    "Nature, Weather & Outdoors (park walks, sudden downpours, seasonal changes, gardening triumphs, beach strolls, stargazing, hiking trails, breezy evenings)",
-    "Unexpected Everyday Surprises & Minor Mishaps (lost-and-found items, quirky coincidences, sudden power glitches, playful pet antics, fixing everyday objects)",
-    "Local Community & Independent Shops (flea market finds, indie bookstores, farmers' market hauls, craft workshops, neighborhood bakery aromas)",
-    "Wellness, Recreation & Leisure (gym workouts, yoga relaxation, bike rides, weekend picnics, board game nights, relaxing by the water)"
-  ];
-  const suggestedDomain = DIVERSE_DOMAINS[Math.floor(Math.random() * DIVERSE_DOMAINS.length)];
 
   // Grounding in user vocabulary words: endeavor to select the single most suitable word from collection
   let vocabAnchorSection = "";
@@ -73,7 +167,7 @@ ${displayedCandidates.map((w) => `- "${w.word}" (${w.translation || w.definition
 WORD SELECTION RULES:
 1. STRICT CONSTRAINT: You MUST select targetWordFromCollection EXCLUSIVELY and VERBATIM from the "USER'S WORDS COLLECTION CANDIDATES" list above.
 2. ABSOLUTE PROHIBITION: Under NO circumstances should you select, invent, or output any word outside this candidate list. Do NOT invent new words, and do NOT use placeholder/example words.
-3. Carefully evaluate all candidate words and select the SINGLE MOST SUITABLE word from the candidate list that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life.
+3. Carefully evaluate all candidate words and select the SINGLE MOST SUITABLE word from the candidate list that fits naturally into any engaging topic or scenario you freely choose.
 4. Explore different words across the candidate list rather than always selecting the first word.
 5. Prefer words with lower strength when they fit equally well (to give weaker words a chance to grow).
 6. The selected candidate word’s exact native meaning MUST appear explicitly and unmistakably in the nativeSentence so the learner is forced to produce that exact candidate word.
@@ -85,18 +179,19 @@ WORD SELECTION RULES:
   if (!vocabAnchorSection) {
     vocabAnchorSection = `
 WORD SELECTION RULES:
-1. Select the SINGLE MOST SUITABLE word that fits naturally in everyday spoken conversation, social chats, travel, dining, or practical real-world life.
-2. Explore varied everyday vocabulary to keep practice fresh and dynamic.
+1. Select the SINGLE MOST SUITABLE word that fits naturally into your chosen topic.
+2. Explore varied vocabulary to keep practice fresh and dynamic.
 3. The selected word’s exact native meaning MUST appear explicitly and unmistakably in the nativeSentence so the learner is forced to produce the target word.
 4. Output the selected word in the "targetWordFromCollection" field.
 5. If other related vocabulary fits naturally as synonyms or related vocabulary, include them in "keyTargetWords".`;
   }
 
-  const prompt = `Generate a single personalized translation challenge for a language learner based on common sentences used in daily conversation and real-life interactions.
+  const prompt = `Generate a single personalized translation challenge for a language learner based on real-world sentences.
 
 DIVERSITY SEED: ${randomSeed}
 
-SUGGESTED SCENARIO DOMAIN: ${suggestedDomain}. Feel free to explore this domain or any other dynamic everyday scenario. Actively avoid defaulting to corporate meetings, business emails, or office tasks.
+TOTAL FREEDOM OF TOPICS & CONTEXT (HIGH DIVERSITY):
+You have complete freedom to choose ANY captivating, authentic, and diverse topic or scenario across human life and thought: science, technology, arts, travel, dining, outdoor exploration, sports, cinema, literature, personal musings, daily encounters, friendships, culture, nature, creative hobbies, unexpected surprises, or lighthearted humor. Keep topics varied and dynamic across challenges.
 
 LEARNER CONTEXT:
 - Native Language: ${nativeLanguage}
@@ -109,33 +204,11 @@ ${vocabAnchorSection}
 
 CRITICAL MANDATES (MUST FOLLOW ALL):
 
-1. REAL-WORLD SITUATIONAL DIVERSITY
-Vary across everyday human experiences: casual social/friendship, food & dining, travel & transit, daily life/home/errands, leisure/hobbies, nature & outdoors, unexpected everyday surprises.
-Strictly avoid office/workplace scenarios unless the chosen vocabulary word can only work in that context.
-HIGH DIVERSITY MANDATE: Actively invent unique, original conversational scenarios. Do NOT reuse repetitive formulas, clichés, or common tropes. Choose varied conversational angles: a spontaneous reaction, friendly storytelling, a lighthearted recommendation, an observational remark, a shared realization, or an everyday dilemma.
+1. REAL-WORLD SITUATIONAL & TOPIC DIVERSITY
+Freely explore diverse topics and human experiences across science, nature, travel, food, friendships, creativity, sports, daily life, culture, philosophy, and unexpected encounters. Actively invent unique, original conversational angles.
 
 2. TOPIC LABEL (HIGH DIVERSITY REQUIRED)
-Create a vivid, specific, and highly diverse 2–4 word topic label that captures a distinct slice of life.
-Actively avoid repeating common or generic labels.
-Draw from a wide range of everyday situations such as:
-- "Rainy Morning Commute"
-- "Pet Vet Visit"
-- "Late-Night Snack Run"
-- "Balcony Plant Care"
-- "Neighbor Fence Chat"
-- "Sudden Power Outage"
-- "Weekend Market Haul"
-- "Laundry Day Struggle"
-- "Sunset Park Walk"
-- "Spilled Coffee Chaos"
-- "Antique Market Find"
-- "Bike Chain Slip"
-- "Board Game Showdown"
-- "Street Food Line"
-- "Missed Bus Dash"
-- "Attic Box Discovery"
-Do NOT copy or restrict yourself to these examples—actively invent a fresh, distinct label uniquely tailored to this sentence.
-Put the chosen label in "topicContext".
+Freely create a vivid, specific, and unique 2–4 word topic label in "topicContext" describing your chosen scenario.
 
 3. SENTENCE LENGTH & STYLE
 - nativeSentence: exactly 6–14 words.
@@ -167,13 +240,13 @@ Always include the primary target word.
 Format each as: { "word": "...", "translation": "...", "hint": "..." }
 
 9. PERSONALITY NOTE
-Short explanation of why this scenario + vocabulary suits a ${archetype?.toLowerCase() || "pragmatic"}, ${traits ? traits.toLowerCase().split(",")[0]?.trim() || "goal-oriented" : "goal-oriented"} learner. Emphasize real-life utility across daily, social, travel, and dining contexts (not office work).
+Short explanation of why this scenario + vocabulary suits a ${archetype?.toLowerCase() || "pragmatic"}, ${traits ? traits.toLowerCase().split(",")[0]?.trim() || "goal-oriented" : "goal-oriented"} learner.
 
 OUTPUT FORMAT (STRICT RAW JSON ONLY — no markdown, no extra text):
 {
   "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words, ZERO ${targetLanguage})",
   "idealTranslation": "Concise ideal translation in ${targetLanguage}",
-  "topicContext": "2-4 word topic label",
+  "topicContext": "Freely chosen 2-4 word topic label",
   "targetWordFromCollection": {
     "word": "EXACT word chosen strictly and verbatim from the USER'S WORDS COLLECTION CANDIDATES above",
     "translation": "native meaning of this chosen candidate word",
@@ -370,11 +443,17 @@ export function enrichKeyTargetWords(
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
   const effectiveConfig = getOverrideConfig(params.llmConfig);
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
+  const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
   const targetLanguage = params.targetLanguage || "English";
   const { prompt, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
-  const systemInstruction = `You are an AI Translation Practice & Challenge Coach creating concise, highly diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Ensure high scenario originality and sentence variety; actively avoid repetitive tropes, clichés, or boilerplate structures. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection chosen strictly and verbatim from the candidate list (never invent external words or use placeholder examples like 'push back'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
-  const schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
+  const systemInstruction = isVietnameseNative
+    ? `Bạn là chuyên gia ngôn ngữ và huấn luyện viên dịch thuật tiếng Việt bản ngữ. Nhiệm vụ của bạn là tạo ra câu tiếng Việt tự nhiên, đời thường, sống động và đậm chất văn hóa giao tiếp thực tế hàng ngày (6-14 từ), không bị ảnh hưởng bởi văn phong dịch máy tiếng Anh, và chứa đựng ý nghĩa của từ vựng tiếng Anh mục tiêu được chọn từ danh sách học viên. Trả về JSON thuần tuý không kèm idealTranslation.`
+    : `You are an AI Translation Practice & Challenge Coach creating concise, highly diverse, real-world translation challenges across vibrant daily life, travel, dining, leisure, social, and cultural contexts. Ensure high scenario originality and sentence variety; actively avoid repetitive tropes, clichés, or boilerplate structures. Always output strictly raw valid JSON without markdown formatting. MANDATORY: The 'nativeSentence' MUST be 100% in ${nativeLanguage} with ZERO ${targetLanguage} loanwords or untranslated target terms, MUST explicitly contain the exact native translation of the selected targetWordFromCollection chosen strictly and verbatim from the candidate list (never invent external words or use placeholder examples like 'push back'), and MUST have strict 1-to-1 semantic equivalence with 'idealTranslation' without missing or dropped clauses. Concise (6-14 words). Actively avoid defaulting to corporate office or business management scenarios.`;
+
+  const schemaDescription = isVietnameseNative
+    ? `JSON object with nativeSentence, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`
+    : `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
 
   const startTime = performance.now();
   const resWithMeta = await callLLMClientSideWithMeta(
@@ -388,7 +467,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);
 
-  if (!parsed || !parsed.nativeSentence || !parsed.idealTranslation) {
+  if (!parsed || !parsed.nativeSentence || (!isVietnameseNative && !parsed.idealTranslation)) {
     throw new Error("Invalid payload structure returned from AI model for translation challenge");
   }
 
@@ -576,21 +655,24 @@ export function isIncompleteSubmission(userMessage: string, challenge: Challenge
  * Creates an incomplete submission turn result prompting the user to complete their answer
  */
 export function createIncompleteSubmissionResponse(params: ChallengeTurnParams): ChallengeTurnResult {
-  const { userMessage } = params;
+  const { userMessage, nativeLanguage = "Vietnamese" } = params;
+  const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
   const draft = userMessage.trim();
   const shortDraft = draft.length > 25 ? draft.slice(0, 25) + "…" : draft;
 
   return {
     intent: "incomplete",
-    agentReply: `⚠️ **Incomplete Answer Detected**\n\nIt looks like your answer was sent before you finished typing *(did you press Enter by mistake? 😉)*\n\n**Your draft:** *"${draft}"*\n\n👉 Please type your full translation below or tap the button to repopulate your draft!`,
+    agentReply: isVietnameseNative
+      ? `⚠️ **Phát hiện câu trả lời chưa hoàn thành**\n\nCó vẻ như bạn đã gửi câu khi chưa gõ xong *(bạn có bấm nhầm phím Enter không? 😉)*\n\n**Bản nháp của bạn:** *"${draft}"*\n\n👉 Hãy tiếp tục gõ bản dịch hoàn chỉnh bên dưới hoặc bấm nút để điền lại bản nháp!`
+      : `⚠️ **Incomplete Answer Detected**\n\nIt looks like your answer was sent before you finished typing *(did you press Enter by mistake? 😉)*\n\n**Your draft:** *"${draft}"*\n\n👉 Please type your full translation below or tap the button to repopulate your draft!`,
     suggestedActions: [
       {
         label: `✏️ Repopulate draft: "${shortDraft}"`,
         action: "repopulate_input",
         payload: { text: draft }
       },
-      { label: "🏳️ Reveal answer & skip", action: "submit_empty_challenge" },
-      { label: "🏆 Practice overview", action: "start_practice" }
+      { label: isVietnameseNative ? "🏳️ Xem đáp án & bỏ qua" : "🏳️ Reveal answer & skip", action: "submit_empty_challenge" },
+      { label: isVietnameseNative ? "🏆 Tổng quan luyện tập" : "🏆 Practice overview", action: "start_practice" }
     ],
     provider: "local",
     model: "instant-detection",
@@ -602,7 +684,8 @@ export function createIncompleteSubmissionResponse(params: ChallengeTurnParams):
  * Creates a complete evaluation for an empty submission showing ideal translation and target word
  */
 export function createEmptySubmissionEvaluation(params: ChallengeTurnParams): ChallengeTurnResult {
-  const { challenge } = params;
+  const { challenge, nativeLanguage = "Vietnamese" } = params;
+  const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
   const targetCol = challenge.targetWordFromCollection;
   const targetWord = targetCol?.word || (challenge.keyTargetWords?.[0]?.word || "");
 
@@ -636,12 +719,16 @@ export function createEmptySubmissionEvaluation(params: ChallengeTurnParams): Ch
     intent: "submission",
     evaluation: {
       score: 0,
-      scoreLabel: "Review & Learn! 💡",
+      scoreLabel: isVietnameseNative ? "Xem đáp án & Học tập! 💡" : "Review & Learn! 💡",
       userTranslation: "(No answer provided)",
       incorporatedTargetWord: false,
       targetWordUsed: targetWord,
-      whatWentWell: "You took this opportunity to review the sentence structure and learn the target vocabulary.",
-      areasForImprovement: `Study the ideal translation: "${challenge.idealTranslation}" and practice incorporating the target word "${targetWord}" into future sentences.`,
+      whatWentWell: isVietnameseNative
+        ? "Bạn đã chủ động xem đáp án mẫu để củng cố cách diễn đạt và ghi nhớ từ vựng mục tiêu."
+        : "You took this opportunity to review the sentence structure and learn the target vocabulary.",
+      areasForImprovement: isVietnameseNative
+        ? `Hãy ghi nhớ cách dùng từ vựng "${targetWord}" trong câu mẫu: "${challenge.idealTranslation}".`
+        : `Study the ideal translation: "${challenge.idealTranslation}" and practice incorporating the target word "${targetWord}" into future sentences.`,
       correctedSentence: challenge.idealTranslation,
       suggestedVocabulary,
     },
@@ -656,8 +743,10 @@ export function createEmptySubmissionEvaluation(params: ChallengeTurnParams): Ch
  */
 async function processChallengeTurnClientSide(params: ChallengeTurnParams): Promise<ChallengeTurnResult> {
   const { challenge, userMessage, chatHistory = [], nativeLanguage = "Vietnamese", targetLanguage = "English", llmConfig } = params;
+  const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
+  const isEmptySub = isEmptySubmissionMessage(userMessage);
 
-  if (isEmptySubmissionMessage(userMessage)) {
+  if (isEmptySub && challenge.idealTranslation) {
     return createEmptySubmissionEvaluation(params);
   }
 
@@ -672,11 +761,84 @@ async function processChallengeTurnClientSide(params: ChallengeTurnParams): Prom
 
   const formattedHistory = chatHistory.map((m: any) => `${m.sender.toUpperCase()}: ${m.text}`).join("\n");
 
-  const prompt = `Evaluate a language learner's translation attempt during a Translation Challenge.
+  let prompt = "";
+  let systemInstruction = "";
+  let schemaDescription = "";
+
+  if (isVietnameseNative) {
+    prompt = `Đánh giá thử thách dịch thuật (Translation Challenge) từ tiếng Việt sang ${targetLanguage}.
+
+THÔNG TIN THỬ THÁCH:
+- Câu tiếng Việt gốc: "${nativeSentence}"
+- Từ vựng mục tiêu từ bộ sưu tập: "${targetWord}"
+${idealTranslation ? `- Bản dịch tham khảo trước đó: "${idealTranslation}"` : `- Chưa có bản dịch mẫu (BẠN BẮT BUỘC TẠO CÂU DỊCH CHUẨN TỰ NHIÊN NHẤT TRONG "correctedSentence")`}
+- Gợi ý từ vựng hữu ích: ${keyTargetWords}
+- Ngôn ngữ đích: ${targetLanguage}
+- Tiếng mẹ đẻ: Tiếng Việt
+
+LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:
+${formattedHistory || "(Không có)"}
+
+${isEmptySub
+  ? "HỌC VIÊN YÊU CẦU: Học viên đã bấm 'Xem đáp án & bỏ qua' mà không nhập câu trả lời."
+  : `BẢN DỊCH HỌC VIÊN NỘP:\n"${userMessage}"`
+}
+
+NHIỆM VỤ ĐÁNH GIÁ:
+1. TẠO CÂU DỊCH MẪU CHUẨN XÁC, TỰ NHIÊN NHẤT ("correctedSentence"):
+   - Dịch câu tiếng Việt gốc sang ${targetLanguage} một cách tự nhiên, chuẩn mực, giàu tính khẩu ngữ đời thường của người bản xứ ${targetLanguage}.
+   - Câu dịch mẫu BẮT BUỘC phải chứa từ vựng mục tiêu "${targetWord}" (hoặc dạng biến cách/thì phù hợp của từ đó).
+
+2. ĐÁNH GIÁ VÀ PHẢN HỒI (NẾU HỌC VIÊN NỘP BÀI):
+   - ĐÁNH GIÁ LINH HOẠT VỚI NHIỀU CÁCH DIỄN ĐẠT & TỪ ĐỒNG NGHĨA: Real-life language có nhiều cách nói tương đương. Hãy công nhận và cho điểm cao nếu học viên dùng từ đồng nghĩa tự nhiên hoặc cấu trúc khác mà truyền tải trọn vẹn, tự nhiên ý nghĩa câu tiếng Việt.
+   - Chấm điểm độ chính xác (0 đến 100).
+   - Gán scoreLabel: "Xuất sắc! 🌟" (90-100), "Làm tốt lắm! 👏" (75-89), "Khá tốt! 👍" (60-74), "Cần luyện tập thêm! 💪" (<60).
+   - Kiểm tra xem học viên có sử dụng từ vựng mục tiêu "${targetWord}" không -> gán "incorporatedTargetWord": true/false. Nếu dùng từ đồng nghĩa khác vẫn hợp lý, hãy khen ngợi trong "whatWentWell" và gợi ý thêm cách dùng "${targetWord}" trong "areasForImprovement".
+   - "whatWentWell": Lời khen ngợi chi tiết, thân thiện bằng TIẾNG VIỆT (chỉ ra cụm từ dùng hay, ngữ pháp chuẩn).
+   - "areasForImprovement": Góp ý xây dựng bằng TIẾNG VIỆT giải thích rõ ràng về giới từ, thì, sắc thái tự nhiên hoặc lưu ý để câu mượt mà hơn.
+   - "suggestedVocabulary": Danh sách 3-5 từ vựng/cụm từ hay trong câu kèm nghĩa tiếng Việt.
+
+3. NẾU HỌC VIÊN BỎ QUA / XEM ĐÁP ÁN:
+   - score: 0, scoreLabel: "Xem đáp án & Học tập! 💡", userTranslation: "(No answer provided)", incorporatedTargetWord: false.
+   - "whatWentWell": Lời động viên bằng tiếng Việt.
+   - "areasForImprovement": Giải thích ngắn gọn bằng tiếng Việt về cách dùng từ "${targetWord}" trong câu dịch mẫu "${targetLanguage}".
+
+TRẢ VỀ JSON THUẦN:
+{
+  "intent": "submission",
+  "evaluation": {
+    "score": 85,
+    "scoreLabel": "Làm tốt lắm! 👏",
+    "userTranslation": "${isEmptySub ? "(No answer provided)" : "bản dịch của học viên"}",
+    "incorporatedTargetWord": true,
+    "targetWordUsed": "${targetWord}",
+    "incorporatedVocabClues": ["word1"],
+    "whatWentWell": "Lời khen cụ thể bằng tiếng Việt...",
+    "areasForImprovement": "Góp ý chi tiết bằng tiếng Việt...",
+    "correctedSentence": "Câu dịch tiếng Anh chuẩn tự nhiên nhất",
+    "suggestedVocabulary": [
+      {
+        "word": "word",
+        "translation": "nghĩa tiếng Việt",
+        "definition": "định nghĩa",
+        "partOfSpeech": "loại từ",
+        "hint": "gợi ý ngữ cảnh",
+        "example": "câu ví dụ",
+        "exampleTranslation": "dịch ví dụ",
+        "askedByUser": false
+      }
+    ]
+  }
+}`;
+
+    systemInstruction = `Bạn là chuyên gia đánh giá thử thách dịch thuật tiếng Việt sang ${targetLanguage}. Tạo câu dịch mẫu tự nhiên nhất ("correctedSentence") có chứa từ vựng mục tiêu "${targetWord}", đánh giá linh hoạt bản dịch của học viên, và đưa ra nhận xét bằng tiếng Việt chi tiết, dễ hiểu. Trả về JSON thuần.`;
+    schemaDescription = `JSON object with intent: "submission" and evaluation object containing correctedSentence, score, scoreLabel, whatWentWell, areasForImprovement, incorporatedTargetWord, and suggestedVocabulary.`;
+  } else {
+    prompt = `Evaluate a language learner's translation attempt during a Translation Challenge.
 
 CHALLENGE DETAILS:
 - Native Sentence (${nativeLanguage}): "${nativeSentence}"
-- Ideal Target Translation (${targetLanguage}): "${idealTranslation}"
+- Ideal Target Translation (${targetLanguage}): "${idealTranslation || "(Not pre-computed - please generate the optimal natural translation)"}"
 - Key Target Words: ${keyTargetWords}
 - Featured Target Word from Collection: "${targetWord}"
 - Target Language: ${targetLanguage}
@@ -685,26 +847,24 @@ CHALLENGE DETAILS:
 CONVERSATION HISTORY SO FAR:
 ${formattedHistory || "(No prior messages in this challenge session)"}
 
-LATEST USER SUBMISSION:
-"${userMessage}"
+${isEmptySub
+  ? "LEARNER REQUEST: Learner chose to reveal answer / skip without entering a translation."
+  : `LATEST USER SUBMISSION:\n"${userMessage}"`
+}
 
 TASK:
 1. Check if the user's submission is an incomplete fragment (e.g. accidentally pressed Enter before finishing the sentence).
    If it is clearly an incomplete sentence fragment, set intent: "incomplete" and provide agentReply in ${nativeLanguage} or simple English noting that their answer looks incomplete.
 
 2. Otherwise, treat as a complete translation attempt (intent: "submission"):
-   - Evaluate their translation against the native sentence and ideal target translation.
+   - GENERATE THE OPTIMAL TARGET TRANSLATION ("correctedSentence"):
+     Create a concise, idiomatic, natural modern ${targetLanguage} translation incorporating the target word "${targetWord}".
+   - Evaluate their translation against the native sentence and optimal translation.
    - FLEXIBILITY FOR MULTIPLE CORRECT TRANSLATIONS & SYNONYMS:
-     Real-world language has multiple valid ways to express the same thought. Acknowledge and credit valid alternative vocabulary, natural synonyms (e.g., using "client" vs "customer", "feedback" vs "response", "contract" vs "agreement", "await" vs "wait for", etc.), and different correct grammatical structures that accurately convey the native sentence.
-     Do NOT penalize the learner for choosing valid synonyms or natural phrasing alternatives. Reward authentic, accurate communication!
-   - Calculate an overall accuracy score from 0 to 100 based on grammatical correctness, semantic faithfulness, and naturalness.
-   - Provide a scoreLabel (e.g. "Mastery! 🌟" for 90-100, "Great Job! 👏" for 75-89, "Good Attempt! 👍" for 60-74, "Keep Practicing! 💪" for <60).
-   - Provide "userTranslation": the learner's submitted translation attempt.
-   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}" (or its natural grammatical variants such as past tense, plural, or inflected forms). Set "incorporatedTargetWord": true if used, false otherwise. Set "targetWordUsed": "${targetWord}". If they used a valid synonym instead, praise their alternative choice in "whatWentWell" and gently mention how "${targetWord}" also works in "areasForImprovement".
-   - VOCAB CLUES INCORPORATED: Check which words from "Key Target Words" (or their synonyms) the learner used in their translation. List all incorporated clue words in "incorporatedVocabClues".
-   - List "whatWentWell": specific praise for correct grammar, vocabulary, or phrasing (mentioning the target word or synonyms if used).
-   - List "areasForImprovement": constructive tips for grammar, prepositions, natural phrasing, or alternative choices.
-   - Provide "correctedSentence": the optimal target translation.
+     Real-world language has multiple valid ways to express the same thought. Acknowledge and credit valid alternative vocabulary, natural synonyms, and different correct grammatical structures.
+   - Calculate an overall accuracy score from 0 to 100. If skipped/empty: score 0, scoreLabel: "Review & Learn! 💡".
+   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}".
+   - List "whatWentWell" and "areasForImprovement".
    - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing key terms from the challenge.
 
 Return STRICTLY raw JSON matching:
@@ -736,8 +896,9 @@ Return STRICTLY raw JSON matching:
   }
 }`;
 
-  const systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
-  const schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
+    systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
+    schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
+  }
 
   const startTime = performance.now();
   const resWithMeta = await callLLMClientSideWithMeta(
