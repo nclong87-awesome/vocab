@@ -156,6 +156,105 @@ export const RELIABLE_MODELS: string[] = [
   "@cf/aisingapore/gemma-sea-lion-v4-27b-it"
 ];
 
+/**
+ * Language-specific suggested/preferred models for Translation Challenges,
+ * sentence generation, and linguistic evaluation.
+ * Prioritizes models with exceptional multilingual pre-training, colloquial naturalness,
+ * authentic localized phrasing, and empathetic pedagogical feedback.
+ */
+export const LANGUAGE_PREFERRED_MODELS: Record<string, string[]> = {
+  vietnamese: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.5-flash-lite",
+    "openai/gpt-oss-120b",
+    "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+    "pro/gpt-5.6-luna"
+  ],
+  vi: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.5-flash-lite",
+    "openai/gpt-oss-120b",
+    "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
+    "pro/gpt-5.6-luna"
+  ],
+  japanese: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.5-flash",
+    "openai/gpt-oss-120b"
+  ],
+  ja: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.5-flash",
+    "openai/gpt-oss-120b"
+  ],
+  chinese: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.5-flash",
+    "openai/gpt-oss-120b"
+  ],
+  zh: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "google/gemini-3.5-flash",
+    "openai/gpt-oss-120b"
+  ],
+  spanish: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "openai/gpt-oss-120b",
+    "cohere/command-a"
+  ],
+  es: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "openai/gpt-oss-120b",
+    "cohere/command-a"
+  ],
+  french: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "openai/gpt-oss-120b",
+    "cohere/command-a"
+  ],
+  fr: [
+    "google/gemini-3.8-flash",
+    "google/gemini-3.7-flash",
+    "openai/gpt-oss-120b",
+    "cohere/command-a"
+  ]
+};
+
+/**
+ * Returns the list of preferred models for a specified language, or empty array if none configured.
+ */
+export function getPreferredModelsForLanguage(language?: string): string[] {
+  if (!language) return [];
+  const normalized = language.trim().toLowerCase();
+  if (normalized.includes("viet") || normalized === "vi") {
+    return LANGUAGE_PREFERRED_MODELS.vietnamese;
+  }
+  if (normalized.includes("japan") || normalized === "ja") {
+    return LANGUAGE_PREFERRED_MODELS.japanese;
+  }
+  if (normalized.includes("chin") || normalized === "zh") {
+    return LANGUAGE_PREFERRED_MODELS.chinese;
+  }
+  if (normalized.includes("span") || normalized === "es") {
+    return LANGUAGE_PREFERRED_MODELS.spanish;
+  }
+  if (normalized.includes("fren") || normalized === "fr") {
+    return LANGUAGE_PREFERRED_MODELS.french;
+  }
+  return LANGUAGE_PREFERRED_MODELS[normalized] || [];
+}
+
 export const getRotatedVisionModel = () : { provider: LLMProvider; model: string } | null => {
   const visionModels = PROVIDER_OPTIONS.flatMap(p => (p.visionModels || []).map(m => ({ provider: p.id, model: m })));
   if (visionModels.length === 0) return null;

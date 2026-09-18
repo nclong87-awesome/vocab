@@ -51,6 +51,10 @@ export interface LLMConfig {
   savedProviders?: SavedProvidersMap;
   preferredProvider?: string;
   preferredModel?: string;
+  preferredModels?: string[];
+  onlyReliableModels?: boolean;
+  language?: string;
+  nativeLanguage?: string;
 }
 
 export type StrengthHistoryReason = 

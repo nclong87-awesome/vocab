@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   X, 
   Activity, 
@@ -25,6 +25,7 @@ import {
   unlockModel,
   syncMetricsFromRequestHistory,
 } from "../utils/autoModeManager";
+import { getPreferredModelsForLanguage } from "../config/llmProviders";
 
 interface ModelStatusModalProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export default function ModelStatusModal({
   const [modelStatuses, setModelStatuses] = useState<ModelStatusItem[]>([]);
   const [tierFilter, setTierFilter] = useState<'all' | PerformanceTierNumber>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const vnPreferredModels = useMemo(() => getPreferredModelsForLanguage("vietnamese"), []);
 
   const refreshStatuses = async () => {
     await syncMetricsFromRequestHistory();
@@ -350,6 +352,16 @@ export default function ModelStatusModal({
                         <Zap className="w-3 h-3 shrink-0" />
                         <span>{tierMeta.badgeLabel}</span>
                       </span>
+
+                      {vnPreferredModels.includes(item.model) && (
+                        <span 
+                          className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0"
+                          title="Suggested candidate for Vietnamese translation challenges & natural phrasing"
+                        >
+                          <span>🇻🇳</span>
+                          <span>VN Preferred</span>
+                        </span>
+                      )}
 
                       {isActive && (
                         <span className="text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded shrink-0">

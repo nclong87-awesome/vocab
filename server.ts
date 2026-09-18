@@ -8,7 +8,7 @@ import { extractOrGenerateTopicActions } from "./src/utils/actionExtractor";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quizGenerator";
 import { isPhrasalVerb, findWordInCollection, hasUserIncorporatedWord } from "./src/utils/wordNormalization";
 import { getTranslationChallengeCandidateWords } from "./src/utils/spacedRepetition";
-import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "./src/config/llmProviders";
+import { PROVIDER_OPTIONS, RELIABLE_MODELS, getPreferredModelsForLanguage } from "./src/config/llmProviders";
 
 dotenv.config();
 
@@ -27,6 +27,10 @@ interface LLMRequestConfig {
   savedProviders?: Record<string, { proxyKey?: string; [key: string]: any }>;
   preferredProvider?: string;
   preferredModel?: string;
+  preferredModels?: string[];
+  onlyReliableModels?: boolean;
+  language?: string;
+  nativeLanguage?: string;
 }
 
 
@@ -334,15 +338,51 @@ function getServerAutoModelCandidates(llmConfig?: LLMRequestConfig): { provider:
 let serverAutoRotationIndex = 0;
 
 function getNextServerAutoCandidate(llmConfig?: LLMRequestConfig, excludedKeys?: Set<string>): { provider: string; model: string } {
-  const candidates = getServerAutoModelCandidates(llmConfig);
-  for (let i = 0; i < candidates.length; i++) {
-    const idx = (serverAutoRotationIndex + i) % candidates.length;
-    const cand = candidates[idx];
-    const key = `${cand.provider}:${cand.model}`;
+  let candidates = getServerAutoModelCandidates(llmConfig);
+  if ((llmConfig as any)?.onlyReliableModels) {
+    candidates = candidates.filter(c => RELIABLE_MODELS.some(m => m === c.model));
+  }
 
-    if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
-      serverAutoRotationIndex = (idx + 1) % candidates.length;
-      return cand;
+  const preferredModels = (llmConfig as any)?.preferredModels ||
+    getPreferredModelsForLanguage((llmConfig as any)?.nativeLanguage || (llmConfig as any)?.language);
+
+  if (Array.isArray(preferredModels) && preferredModels.length > 0) {
+    const priorityCandidates = candidates.filter(c => preferredModels.includes(c.model));
+    const fallbackCandidates = candidates.filter(c => !preferredModels.includes(c.model));
+
+    // 1. Rotate through available priority candidates
+    for (let i = 0; i < priorityCandidates.length; i++) {
+      const idx = (serverAutoRotationIndex + i) % priorityCandidates.length;
+      const cand = priorityCandidates[idx];
+      const key = `${cand.provider}:${cand.model}`;
+
+      if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
+        serverAutoRotationIndex = (idx + 1) % priorityCandidates.length;
+        return cand;
+      }
+    }
+
+    // 2. Fall back to general candidates if all priority candidates are locked/excluded
+    for (let i = 0; i < fallbackCandidates.length; i++) {
+      const idx = (serverAutoRotationIndex + i) % fallbackCandidates.length;
+      const cand = fallbackCandidates[idx];
+      const key = `${cand.provider}:${cand.model}`;
+
+      if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
+        serverAutoRotationIndex = (idx + 1) % fallbackCandidates.length;
+        return cand;
+      }
+    }
+  } else {
+    for (let i = 0; i < candidates.length; i++) {
+      const idx = (serverAutoRotationIndex + i) % candidates.length;
+      const cand = candidates[idx];
+      const key = `${cand.provider}:${cand.model}`;
+
+      if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
+        serverAutoRotationIndex = (idx + 1) % candidates.length;
+        return cand;
+      }
     }
   }
 
@@ -601,6 +641,16 @@ async function callLLMAutoCandidatesWithMeta(
   if ((llmConfig as any)?.onlyReliableModels) {
     candidates = candidates.filter(c => RELIABLE_MODELS.some(m => m === c.model));
   }
+
+  const preferredModels = (llmConfig as any)?.preferredModels ||
+    getPreferredModelsForLanguage((llmConfig as any)?.nativeLanguage || (llmConfig as any)?.language);
+
+  if (Array.isArray(preferredModels) && preferredModels.length > 0) {
+    const priority = candidates.filter(c => preferredModels.includes(c.model));
+    const fallback = candidates.filter(c => !preferredModels.includes(c.model));
+    candidates = [...priority, ...fallback];
+  }
+
   const excludedKeys = new Set<string>(initialExcludedKeys || []);
   let lastError: any = null;
 
@@ -3360,7 +3410,11 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY):
       schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
     }
 
-    let effectiveLlmConfig = llmConfig ? { ...llmConfig, onlyReliableModels: true } : { onlyReliableModels: true };
+    const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+
+    let effectiveLlmConfig: LLMRequestConfig = llmConfig 
+      ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage } 
+      : { onlyReliableModels: true, preferredModels, nativeLanguage };
     if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
       delete effectiveLlmConfig.model;
       delete effectiveLlmConfig.provider;
@@ -3758,7 +3812,17 @@ Return STRICTLY raw JSON matching:
       schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
     }
 
-    const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, llmConfig, undefined, controller.signal);
+    const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+
+    let effectiveLlmConfig: LLMRequestConfig = llmConfig 
+      ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage } 
+      : { onlyReliableModels: true, preferredModels, nativeLanguage };
+    if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
+      delete effectiveLlmConfig.model;
+      delete effectiveLlmConfig.provider;
+    }
+
+    const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
     const parsed = cleanAndParseJson(rawResult);
 
     if (parsed && (parsed.intent === "assistance" || parsed.intent === "submission")) {

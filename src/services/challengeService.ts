@@ -4,6 +4,7 @@ import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from 
 import { logApiRequest } from "./requestHistoryService";
 import { getTranslationChallengeCandidateWords, isWordPracticedToday } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
+import { getPreferredModelsForLanguage } from "../config/llmProviders";
 
 export interface GenerateChallengeParams {
   nativeLanguage?: string;
@@ -443,6 +444,12 @@ export function enrichKeyTargetWords(
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
   const effectiveConfig = getOverrideConfig(params.llmConfig);
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
+  const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+  effectiveConfig.preferredModels = preferredModels;
+  effectiveConfig.language = nativeLanguage;
+  effectiveConfig.nativeLanguage = nativeLanguage;
+  effectiveConfig.onlyReliableModels = true;
+
   const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
   const targetLanguage = params.targetLanguage || "English";
   const { prompt, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
@@ -901,11 +908,18 @@ Return STRICTLY raw JSON matching:
   }
 
   const startTime = performance.now();
+  const effectiveConfig = getOverrideConfig(llmConfig);
+  const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+  effectiveConfig.preferredModels = preferredModels;
+  effectiveConfig.language = nativeLanguage;
+  effectiveConfig.nativeLanguage = nativeLanguage;
+  effectiveConfig.onlyReliableModels = true;
+
   const resWithMeta = await callLLMClientSideWithMeta(
     prompt,
     systemInstruction,
     schemaDescription,
-    llmConfig,
+    effectiveConfig,
     undefined,
     { action: "Challenge Evaluation" }
   );

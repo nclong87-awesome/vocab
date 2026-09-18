@@ -1,5 +1,5 @@
 import { LLMConfig, LLMProvider } from "../types";
-import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, RELIABLE_MODELS, getPreferredModelsForLanguage } from "../config/llmProviders";
 import { getRecentApiLogs } from "../services/requestHistoryService";
 
 const STORAGE_KEY = "vocab_learner_locked_models";
@@ -1218,16 +1218,30 @@ export function getNextAutoCandidate(
   excludedKeys?: Set<string>,
   advance: boolean = true
 ): AutoCandidate {
-  const candidates = getAutoModelCandidates(llmConfig);
+  let candidates = getAutoModelCandidates(llmConfig);
+  if (llmConfig?.onlyReliableModels) {
+    candidates = candidates.filter(c => RELIABLE_MODELS.some(m => m === c.model));
+  }
   const lockedMap = getLockedModels();
   const metricsMap = getModelMetricsMap();
 
-  const available = candidates.filter(cand => {
+  let available = candidates.filter(cand => {
     const key = `${cand.provider}:${cand.model}`;
     const isLocked = Boolean(lockedMap[key] && lockedMap[key].expiresAt > Date.now());
     const isExcluded = Boolean(excludedKeys && excludedKeys.has(key));
     return !isLocked && !isExcluded;
   });
+
+  const preferredModels = llmConfig?.preferredModels || 
+    getPreferredModelsForLanguage(llmConfig?.nativeLanguage || llmConfig?.language);
+
+  // If language-preferred models exist, prioritize available models from the preferred list first!
+  if (Array.isArray(preferredModels) && preferredModels.length > 0) {
+    const preferredAvailable = available.filter(cand => preferredModels.includes(cand.model));
+    if (preferredAvailable.length > 0) {
+      available = preferredAvailable;
+    }
+  }
 
   if (available.length > 0) {
     const tier1Probes: AutoCandidate[] = [];
