@@ -3,7 +3,7 @@ import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils"
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { logApiRequest } from "./requestHistoryService";
 import { getTranslationChallengeCandidateWords, isWordPracticedToday } from "../utils/spacedRepetition";
-import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
+import { findWordInCollection, hasUserIncorporatedWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
 import { getPreferredModelsForLanguage } from "../config/llmProviders";
 
 export interface GenerateChallengeParams {
@@ -800,7 +800,9 @@ NHIỆM VỤ ĐÁNH GIÁ:
    - ĐÁNH GIÁ LINH HOẠT VỚI NHIỀU CÁCH DIỄN ĐẠT & TỪ ĐỒNG NGHĨA: Real-life language có nhiều cách nói tương đương. Hãy công nhận và cho điểm cao nếu học viên dùng từ đồng nghĩa tự nhiên hoặc cấu trúc khác mà truyền tải trọn vẹn, tự nhiên ý nghĩa câu tiếng Việt.
    - Chấm điểm độ chính xác (0 đến 100).
    - Gán scoreLabel: "Xuất sắc! 🌟" (90-100), "Làm tốt lắm! 👏" (75-89), "Khá tốt! 👍" (60-74), "Cần luyện tập thêm! 💪" (<60).
-   - Kiểm tra xem học viên có sử dụng từ vựng mục tiêu "${targetWord}" không -> gán "incorporatedTargetWord": true/false. Nếu dùng từ đồng nghĩa khác vẫn hợp lý, hãy khen ngợi trong "whatWentWell" và gợi ý thêm cách dùng "${targetWord}" trong "areasForImprovement".
+   - Kiểm tra xem học viên có sử dụng từ vựng mục tiêu "${targetWord}" không:
+     + CHỈ gán "incorporatedTargetWord": true NẾU VÀ CHỈ NẾU câu của học viên thực sự chứa từ/cụm từ "${targetWord}" (hoặc các biến thể chia thì/ngữ pháp như ${targetWord}s, ${targetWord}ed, ${targetWord}ing).
+     + NẾU HỌC VIÊN DÙNG TỪ ĐỒNG NGHĨA KHÁC (ví dụ dùng 'come over', 'visit' thay vì '${targetWord}'): BẮT BUỘC gán "incorporatedTargetWord": false. TUYỆT ĐỐI KHÔNG khen là học viên đã dùng '${targetWord}' trong "whatWentWell". Thay vào đó, hãy khen ngợi cách diễn đạt tự nhiên bằng từ đồng nghĩa của họ trong "whatWentWell", và trong "areasForImprovement" hãy gợi ý cách áp dụng từ vựng mục tiêu "${targetWord}".
    - "whatWentWell": Lời khen ngợi chi tiết, thân thiện bằng TIẾNG VIỆT (chỉ ra cụm từ dùng hay, ngữ pháp chuẩn).
    - "areasForImprovement": Góp ý xây dựng bằng TIẾNG VIỆT giải thích rõ ràng về giới từ, thì, sắc thái tự nhiên hoặc lưu ý để câu mượt mà hơn.
    - "suggestedVocabulary": Danh sách 3-5 từ vựng/cụm từ hay trong câu kèm nghĩa tiếng Việt.
@@ -817,7 +819,7 @@ TRẢ VỀ JSON THUẦN:
     "score": 85,
     "scoreLabel": "Làm tốt lắm! 👏",
     "userTranslation": "${isEmptySub ? "(No answer provided)" : "bản dịch của học viên"}",
-    "incorporatedTargetWord": true,
+    "incorporatedTargetWord": false,
     "targetWordUsed": "${targetWord}",
     "incorporatedVocabClues": ["word1"],
     "whatWentWell": "Lời khen cụ thể bằng tiếng Việt...",
@@ -870,7 +872,9 @@ TASK:
    - FLEXIBILITY FOR MULTIPLE CORRECT TRANSLATIONS & SYNONYMS:
      Real-world language has multiple valid ways to express the same thought. Acknowledge and credit valid alternative vocabulary, natural synonyms, and different correct grammatical structures.
    - Calculate an overall accuracy score from 0 to 100. If skipped/empty: score 0, scoreLabel: "Review & Learn! 💡".
-   - SPECIFIC TARGET WORD INCORPORATION CHECK: Check whether the user's submission incorporates the specific featured target word "${targetWord}".
+   - SPECIFIC TARGET WORD INCORPORATION CHECK:
+     Check whether the learner actually typed the featured target word "${targetWord}" or its valid grammatical inflections.
+     If the user used a natural synonym (e.g. "come over" instead of "${targetWord}"): praise the natural phrasing in "whatWentWell", but set "incorporatedTargetWord": false. Never claim in "whatWentWell" that the user used "${targetWord}" if they didn't write it.
    - List "whatWentWell" and "areasForImprovement".
    - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing key terms from the challenge.
 
@@ -882,7 +886,7 @@ Return STRICTLY raw JSON matching:
     "score": 85,
     "scoreLabel": "Great Job! 👏",
     "userTranslation": "learner's submitted translation text",
-    "incorporatedTargetWord": true,
+    "incorporatedTargetWord": false,
     "targetWordUsed": "${targetWord}",
     "incorporatedVocabClues": ["word1", "word2"],
     "whatWentWell": "Praise paragraph...",
@@ -933,16 +937,27 @@ Return STRICTLY raw JSON matching:
   if (parsed.evaluation) {
     parsed.evaluation.userTranslation = parsed.evaluation.userTranslation?.trim() || userMessage.trim();
     if (targetWord) {
-      const incorporated = parsed.evaluation.incorporatedTargetWord === true ||
+      // Programmatic gate: Target word must actually be present in the user text or translation
+      const textHasTargetWord = !isEmptySub && (
         hasUserIncorporatedWord(parsed.evaluation.userTranslation, targetWord) ||
-        hasUserIncorporatedWord(userMessage, targetWord);
-      parsed.evaluation.incorporatedTargetWord = incorporated;
+        hasUserIncorporatedWord(userMessage, targetWord)
+      );
+      parsed.evaluation.incorporatedTargetWord = textHasTargetWord;
       parsed.evaluation.targetWordUsed = targetWord;
+
+      // Sanitize whatWentWell in case the model falsely claimed the user incorporated the word
+      if (parsed.evaluation.whatWentWell) {
+        parsed.evaluation.whatWentWell = sanitizeEvaluationWhatWentWell(
+          parsed.evaluation.whatWentWell,
+          targetWord,
+          textHasTargetWord
+        );
+      }
     }
     if (Array.isArray(challenge.keyTargetWords)) {
       const incClues: string[] = [];
       for (const kw of challenge.keyTargetWords) {
-        if (kw?.word && (hasUserIncorporatedWord(parsed.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(userMessage, kw.word))) {
+        if (kw?.word && !isEmptySub && (hasUserIncorporatedWord(parsed.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(userMessage, kw.word))) {
           incClues.push(kw.word);
         }
       }
@@ -981,19 +996,31 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
 
     if (res.ok && data && data.intent) {
       if (data.evaluation) {
+        const isEmptySub = params.userMessage.trim() === "" || params.userMessage.trim() === "🔍";
         data.evaluation.userTranslation = data.evaluation.userTranslation?.trim() || params.userMessage.trim();
         const targetWord = params.challenge.targetWordFromCollection?.word;
         if (targetWord) {
-          const incorporated = data.evaluation.incorporatedTargetWord === true ||
+          // Programmatic gate: Target word must actually be present in the user text or translation
+          const textHasTargetWord = !isEmptySub && (
             hasUserIncorporatedWord(data.evaluation.userTranslation, targetWord) ||
-            hasUserIncorporatedWord(params.userMessage, targetWord);
-          data.evaluation.incorporatedTargetWord = incorporated;
+            hasUserIncorporatedWord(params.userMessage, targetWord)
+          );
+          data.evaluation.incorporatedTargetWord = textHasTargetWord;
           data.evaluation.targetWordUsed = targetWord;
+
+          // Sanitize whatWentWell in case the model falsely claimed the user incorporated the word
+          if (data.evaluation.whatWentWell) {
+            data.evaluation.whatWentWell = sanitizeEvaluationWhatWentWell(
+              data.evaluation.whatWentWell,
+              targetWord,
+              textHasTargetWord
+            );
+          }
         }
         if (Array.isArray(params.challenge.keyTargetWords)) {
           const incClues: string[] = [];
           for (const kw of params.challenge.keyTargetWords) {
-            if (kw?.word && (hasUserIncorporatedWord(data.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(params.userMessage, kw.word))) {
+            if (kw?.word && !isEmptySub && (hasUserIncorporatedWord(data.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(params.userMessage, kw.word))) {
               incClues.push(kw.word);
             }
           }

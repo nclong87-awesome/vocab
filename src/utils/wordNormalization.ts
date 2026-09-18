@@ -271,62 +271,299 @@ export function normalizeWordPartOfSpeech(
 }
 
 /**
+ * Common English irregular verbs and their inflected forms (past, past participle, 3rd person, gerund).
+ */
+const IRREGULAR_VERBS: Record<string, string[]> = {
+  be: ["is", "am", "are", "was", "were", "been", "being"],
+  bear: ["bore", "borne", "bearing", "bears"],
+  beat: ["beat", "beaten", "beating", "beats"],
+  become: ["became", "become", "becoming", "becomes"],
+  begin: ["began", "begun", "beginning", "begins"],
+  bend: ["bent", "bending", "bends"],
+  bet: ["bet", "betting", "bets"],
+  bite: ["bit", "bitten", "biting", "bites"],
+  blow: ["blew", "blown", "blowing", "blows"],
+  break: ["broke", "broken", "breaking", "breaks"],
+  bring: ["brought", "bringing", "brings"],
+  build: ["built", "building", "builds"],
+  burn: ["burnt", "burned", "burning", "burns"],
+  buy: ["bought", "buying", "buys"],
+  catch: ["caught", "catching", "catches"],
+  choose: ["chose", "chosen", "choosing", "chooses"],
+  come: ["came", "come", "coming", "comes"],
+  cost: ["cost", "costing", "costs"],
+  cut: ["cut", "cutting", "cuts"],
+  deal: ["dealt", "dealing", "deals"],
+  dig: ["dug", "digging", "digs"],
+  do: ["did", "done", "doing", "does"],
+  draw: ["drew", "drawn", "drawing", "draws"],
+  dream: ["dreamt", "dreamed", "dreaming", "dreams"],
+  drink: ["drank", "drunk", "drinking", "drinks"],
+  drive: ["drove", "driven", "driving", "drives"],
+  drop: ["dropped", "dropping", "drops"],
+  eat: ["ate", "eaten", "eating", "eats"],
+  fall: ["fell", "fallen", "falling", "falls"],
+  feed: ["fed", "feeding", "feeds"],
+  feel: ["felt", "feeling", "feels"],
+  fight: ["fought", "fighting", "fights"],
+  find: ["found", "finding", "finds"],
+  fit: ["fitted", "fit", "fitting", "fits"],
+  fly: ["flew", "flown", "flying", "flies"],
+  forbid: ["forbade", "forbidden", "forbidding", "forbids"],
+  forget: ["forgot", "forgotten", "forgetting", "forgets"],
+  forgive: ["forgave", "forgiven", "forgiving", "forgives"],
+  freeze: ["froze", "frozen", "freezing", "freezes"],
+  get: ["got", "gotten", "getting", "gets"],
+  give: ["gave", "given", "giving", "gives"],
+  go: ["went", "gone", "going", "goes"],
+  grow: ["grew", "grown", "growing", "grows"],
+  hang: ["hung", "hanged", "hanging", "hangs"],
+  have: ["had", "having", "has"],
+  hear: ["heard", "hearing", "hears"],
+  hide: ["hid", "hidden", "hiding", "hides"],
+  hit: ["hit", "hitting", "hits"],
+  hold: ["held", "holding", "holds"],
+  hurt: ["hurt", "hurting", "hurts"],
+  keep: ["kept", "keeping", "keeps"],
+  know: ["knew", "known", "knowing", "knows"],
+  lay: ["laid", "laying", "lays"],
+  lead: ["led", "leading", "leads"],
+  leave: ["left", "leaving", "leaves"],
+  lend: ["lent", "lending", "lends"],
+  let: ["let", "letting", "lets"],
+  lie: ["lay", "lain", "lying", "lies"],
+  lose: ["lost", "losing", "loses"],
+  make: ["made", "making", "makes"],
+  mean: ["meant", "meaning", "means"],
+  meet: ["met", "meeting", "meets"],
+  pay: ["paid", "paying", "pays"],
+  put: ["put", "putting", "puts"],
+  quit: ["quit", "quitting", "quits"],
+  read: ["read", "reading", "reads"],
+  ride: ["rode", "ridden", "riding", "rides"],
+  ring: ["rang", "rung", "ringing", "rings"],
+  rise: ["rose", "risen", "rising", "rises"],
+  run: ["ran", "run", "running", "runs"],
+  say: ["said", "saying", "says"],
+  see: ["saw", "seen", "seeing", "sees"],
+  seek: ["sought", "seeking", "seeks"],
+  sell: ["sold", "selling", "sells"],
+  send: ["sent", "sending", "sends"],
+  set: ["set", "setting", "sets"],
+  shake: ["shook", "shaken", "shaking", "shakes"],
+  shine: ["shone", "shining", "shines"],
+  shoot: ["shot", "shooting", "shoots"],
+  show: ["showed", "shown", "showing", "shows"],
+  shut: ["shut", "shutting", "shuts"],
+  sing: ["sang", "sung", "singing", "sings"],
+  sink: ["sank", "sunk", "sinking", "sinks"],
+  sit: ["sat", "sitting", "sits"],
+  sleep: ["slept", "sleeping", "sleeps"],
+  slide: ["slid", "sliding", "slides"],
+  speak: ["spoke", "spoken", "speaking", "speaks"],
+  spend: ["spent", "spending", "spends"],
+  spin: ["spun", "spinning", "spins"],
+  stand: ["stood", "standing", "stands"],
+  steal: ["stole", "stolen", "stealing", "steals"],
+  stick: ["stuck", "sticking", "sticks"],
+  strike: ["struck", "striking", "strikes"],
+  sweep: ["swept", "sweeping", "sweeps"],
+  swim: ["swam", "swum", "swimming", "swims"],
+  swing: ["swung", "swinging", "swings"],
+  take: ["took", "taken", "taking", "takes"],
+  teach: ["taught", "teaching", "teaches"],
+  tear: ["tore", "torn", "tearing", "tears"],
+  tell: ["told", "telling", "tells"],
+  think: ["thought", "thinking", "thinks"],
+  throw: ["threw", "thrown", "throwing", "throws"],
+  understand: ["understood", "understanding", "understands"],
+  wake: ["woke", "woken", "waking", "wakes"],
+  wear: ["wore", "worn", "wearing", "wears"],
+  win: ["won", "winning", "wins"],
+  withdraw: ["withdrew", "withdrawn", "withdrawing", "withdraws"],
+  write: ["wrote", "written", "writing", "writes"],
+};
+
+/**
+ * Returns common grammatical inflections of a single word/verb.
+ */
+function getWordInflections(word: string): string[] {
+  const w = word.trim().toLowerCase();
+  if (!w || w.length < 2) return [w];
+
+  const forms = new Set<string>([w]);
+
+  // Check irregular verb dictionary
+  if (IRREGULAR_VERBS[w]) {
+    for (const f of IRREGULAR_VERBS[w]) {
+      forms.add(f);
+    }
+  }
+
+  // CVC doubling consonants (e.g. drop -> dropped, dropping; plan -> planned, planning)
+  const isCvc = /^[bcdfghjklmnpqrstvwxyz][aeiou][bcdfghjklmnprstvz]$/i.test(w) ||
+    /^(?:.*[bcdfghjklmnpqrstvwxyz])?[aeiou][bcdfghjklmnprstvz]$/i.test(w);
+  const lastChar = w[w.length - 1];
+
+  if (isCvc && w.length <= 6 && !["w", "x", "y"].includes(lastChar)) {
+    forms.add(`${w}${lastChar}ed`);
+    forms.add(`${w}${lastChar}ing`);
+  }
+
+  // Regular verb rules
+  if (w.endsWith("e")) {
+    forms.add(`${w}d`);
+    forms.add(`${w.slice(0, -1)}ing`);
+    forms.add(`${w}s`);
+  } else if (w.endsWith("y") && w.length > 2 && !/[aeiou]y$/i.test(w)) {
+    forms.add(`${w.slice(0, -1)}ied`);
+    forms.add(`${w.slice(0, -1)}ies`);
+    forms.add(`${w}ing`);
+  } else if (/(?:s|x|z|ch|sh)$/i.test(w)) {
+    forms.add(`${w}es`);
+    forms.add(`${w}ed`);
+    forms.add(`${w}ing`);
+  } else {
+    forms.add(`${w}s`);
+    forms.add(`${w}ed`);
+    forms.add(`${w}ing`);
+  }
+
+  return Array.from(forms).filter(Boolean);
+}
+
+/**
+ * Strips dictionary annotations, leading "to", or parenthetical notes from target word.
+ * e.g. "(to) drop by" -> "drop by", "drop by (sb)" -> "drop by", "drop by / drop in" -> ["drop by", "drop in"]
+ */
+function extractTargetWordCandidates(targetWord: string): string[] {
+  if (!targetWord) return [];
+  const raw = targetWord.trim().toLowerCase();
+
+  // Split by slash if user collection has "term1 / term2"
+  const segments = raw.includes("/") ? raw.split("/").map((s) => s.trim()) : [raw];
+  const candidates = new Set<string>();
+
+  for (const seg of segments) {
+    if (!seg) continue;
+    // Strip leading "(to) " or "to "
+    let cleaned = seg.replace(/^(?:\(to\)|to)\s+/i, "");
+    // Strip parenthetical notes like "(someone)", "(sth)", "(phr. v.)"
+    cleaned = cleaned.replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").trim();
+    // Collapse extra whitespace
+    cleaned = cleaned.replace(/\s+/g, " ");
+    if (cleaned) {
+      candidates.add(cleaned);
+    }
+  }
+
+  return Array.from(candidates);
+}
+
+/**
  * Checks if a user's response text incorporates a specific target word,
  * handling case insensitivity, punctuation, word boundaries, plural/singular forms,
- * and common verb inflections (e.g. "streamlined", "streamlining", "streamlines").
+ * and common verb inflections (e.g. "dropped", "dropping", "drops", "streamlined", "streamlining").
+ * Also accurately handles phrasal verbs, irregular verbs, and separable particles (e.g. "pick the documents up").
  */
 export function hasUserIncorporatedWord(text?: string | null, targetWord?: string | null): boolean {
   if (!text || !targetWord) return false;
   const t = text.trim().toLowerCase();
-  const tw = targetWord.trim().toLowerCase();
-  if (!t || !tw) return false;
+  if (!t) return false;
 
-  // 1. Direct whole-word regex check with non-word boundary matching
-  const escaped = tw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const boundaryRegex = new RegExp(`(?:^|[^a-zA-Z0-9_-])${escaped}(?:$|[^a-zA-Z0-9_-])`, 'i');
-  if (boundaryRegex.test(t)) return true;
+  const candidates = extractTargetWordCandidates(targetWord);
+  if (candidates.length === 0) return false;
 
-  // 2. Singular / Plural regex check
-  const singular = normalizeWordForComparison(tw);
-  const plural = getPluralForComparison(tw);
-  if (singular && singular !== tw) {
-    const escSingular = singular.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${escSingular}(?:$|[^a-zA-Z0-9_-])`, 'i').test(t)) return true;
-  }
-  if (plural && plural !== tw) {
-    const escPlural = plural.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${escPlural}(?:$|[^a-zA-Z0-9_-])`, 'i').test(t)) return true;
-  }
+  for (const cand of candidates) {
+    // 1. Direct whole-word regex check with non-word boundary matching
+    const escaped = cand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const boundaryRegex = new RegExp(`(?:^|[^a-zA-Z0-9_-])${escaped}(?:$|[^a-zA-Z0-9_-])`, "i");
+    if (boundaryRegex.test(t)) return true;
 
-  // 3. Multi-word phrase check (e.g. phrasal verbs "look into", "bring up")
-  if (tw.includes(" ")) {
-    const phrasePattern = tw.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
-    if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${phrasePattern}(?:$|[^a-zA-Z0-9_-])`, 'i').test(t)) {
-      return true;
+    // 2. Multi-word phrase or phrasal verb check (e.g. "drop by", "look into", "pick up")
+    if (cand.includes(" ")) {
+      const parts = cand.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        const headWord = parts[0];
+        const tailWords = parts.slice(1);
+        const headForms = getWordInflections(headWord);
+
+        const tailEscaped = tailWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
+        const headEscapedPattern = headForms.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+
+        // 2a. Contiguous match (e.g. "dropped by", "dropping by", "drops by", "looking into")
+        const contiguousRegex = new RegExp(
+          `(?:^|[^a-zA-Z0-9_-])(?:${headEscapedPattern})\\s+${tailEscaped}(?:$|[^a-zA-Z0-9_-])`,
+          "i"
+        );
+        if (contiguousRegex.test(t)) return true;
+
+        // 2b. Separable phrasal verb match with up to 4 words in between (e.g. "picked the documents up")
+        if (tailWords.length === 1) {
+          const singleParticle = tailWords[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const separableRegex = new RegExp(
+            `\\b(?:${headEscapedPattern})\\b(?:\\s+[^\\s.,!?;:()]+){1,4}\\s+\\b${singleParticle}\\b`,
+            "i"
+          );
+          if (separableRegex.test(t)) return true;
+        }
+      }
+      continue;
     }
-  }
 
-  // 4. Token-by-token check with grammatical inflections and equivalence
-  const tokens = t.replace(/[^\w\s-]/g, ' ').split(/\s+/).filter(Boolean);
-  for (const token of tokens) {
-    if (areWordsEquivalent(token, tw)) return true;
-    if (singular && normalizeWordForComparison(token) === singular) return true;
-    if (tw.length >= 4) {
-      const baseStem = tw.endsWith('e') ? tw.slice(0, -1) : tw;
-      if (
-        token === `${baseStem}ed` ||
-        token === `${baseStem}ing` ||
-        token === `${tw}s` ||
-        token === `${tw}es` ||
-        token === `${tw}d`
-      ) {
+    // 3. Single-word inflections (regular and irregular)
+    const allForms = getWordInflections(cand);
+    const singular = normalizeWordForComparison(cand);
+    const plural = getPluralForComparison(cand);
+    if (singular) allForms.push(singular);
+    if (plural) allForms.push(plural);
+
+    for (const form of allForms) {
+      const escForm = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${escForm}(?:$|[^a-zA-Z0-9_-])`, "i").test(t)) {
         return true;
       }
+    }
+
+    // 4. Token-by-token check with grammatical inflections and equivalence
+    const tokens = t.replace(/[^\w\s-]/g, " ").split(/\s+/).filter(Boolean);
+    for (const token of tokens) {
+      if (areWordsEquivalent(token, cand)) return true;
+      if (singular && normalizeWordForComparison(token) === singular) return true;
+      if (allForms.includes(token)) return true;
     }
   }
 
   return false;
 }
 
+/**
+ * Sanitizes "whatWentWell" feedback if the model hallucinated that the user incorporated
+ * the target word when in fact they did not.
+ */
+export function sanitizeEvaluationWhatWentWell(
+  whatWentWell?: string | null,
+  targetWord?: string | null,
+  incorporatedTargetWord?: boolean
+): string {
+  if (!whatWentWell) return "";
+  if (incorporatedTargetWord || !targetWord) return whatWentWell;
 
+  const tw = targetWord.trim();
+  const escapedTw = tw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let result = whatWentWell;
 
+  // Regexes matching false target word praise in Vietnamese
+  result = result.replace(
+    new RegExp(`(?:Bạn\\s+đã\\s+sử\\s+dụng\\s+(?:thành\\s+công\\s+)?(?:từ\\s+vựng\\s+mục\\s+tiêu|cụm\\s+từ\\s+mục\\s+tiêu|từ)\\s+['"]?${escapedTw}['"]?[^,.]*[,.]?\\s*)`, "gi"),
+    "Bạn đã truyền tải ý nghĩa câu một cách tự nhiên và dễ hiểu. "
+  );
+
+  // Regexes matching false target word praise in English
+  result = result.replace(
+    new RegExp(`(?:You\\s+(?:successfully\\s+)?(?:incorporated|used)\\s+(?:the\\s+target\\s+word|the\\s+phrase|the\\s+word)?\\s*['"]?${escapedTw}['"]?[^,.]*[,.]?\\s*)`, "gi"),
+    "You expressed the meaning naturally and clearly. "
+  );
+
+  return result.trim();
+}

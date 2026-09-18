@@ -30,7 +30,7 @@ import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
-import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, hasUserIncorporatedWord } from "../utils/wordNormalization";
+import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, hasUserIncorporatedWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 import { ChallengeData } from "../types";
@@ -1719,15 +1719,24 @@ export function useChat({
 
           const primaryTargetWordText = primaryTargetWord?.word || targetColWord?.word || evalRes.targetWordUsed;
 
-          const didIncorporatePrimary = primaryTargetWordText ? (
-            evalRes.incorporatedTargetWord === true ||
+          const isUserEmpty = userText.trim() === "" || userText.trim() === "🔍" || (evalRes.score === 0 && evalRes.userTranslation === "(No answer provided)");
+          const textHasPrimaryWord = primaryTargetWordText && !isUserEmpty ? (
             hasUserIncorporatedWord(userText, primaryTargetWordText) ||
             hasUserIncorporatedWord(evalRes.userTranslation, primaryTargetWordText)
           ) : false;
 
+          const didIncorporatePrimary = Boolean(textHasPrimaryWord);
+
           evalRes.incorporatedTargetWord = didIncorporatePrimary;
           if (primaryTargetWordText) {
             evalRes.targetWordUsed = primaryTargetWordText;
+            if (evalRes.whatWentWell) {
+              evalRes.whatWentWell = sanitizeEvaluationWhatWentWell(
+                evalRes.whatWentWell,
+                primaryTargetWordText,
+                didIncorporatePrimary
+              );
+            }
           }
 
           const augmentedWordsList: ChallengeAugmentedWord[] = [];
