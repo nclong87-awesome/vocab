@@ -166,7 +166,7 @@ The following code constitutes the complete, production-ready Cloudflare Worker 
 ### 4.1 Project Configuration: `wrangler.toml`
 
 ```toml
-name = "llm-edge-router"
+name = "groq-worker" # or "openrouter-worker", "cloudflare-worker", etc.
 main = "src/index.ts"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
@@ -263,7 +263,6 @@ export interface ChatCompletionPayload {
   response_format?: { type: string };
   preferred_provider?: LLMProviderId;
   preferred_models?: string[];
-  only_reliable_models?: boolean;
 }
 ```
 
@@ -283,7 +282,8 @@ Default upstream public base URLs (e.g. `api.groq.com`, `openrouter.ai`, `genera
 | **Ollama** | Edge/Local Models | `https://ollama.nclong87.workers.dev/v1` | Standard OpenAI `/chat/completions` |
 | **Cloudflare Workers AI** | Native Edge AI | `https://cloudflare.nclong87.workers.dev` | OpenAI / Workers AI JSON |
 | **Image Analysis** | Multimodal OCR/Vision | `https://image-analysis.nclong87.workers.dev` | Multi-part vision payload |
-| **Unified Edge Router** | Rotation & Failover | `https://llm-edge-router.nclong87.workers.dev/v1` | Standard OpenAI `/chat/completions` |
+
+> **Note on Deployed Workers**: There is **no standalone `llm-edge-router` Worker**. All worker traffic and testing are routed through individual provider microservices (e.g., `groq.nclong87.workers.dev`, `openrouter.nclong87.workers.dev`).
 
 ```typescript
 import { LLMProviderId, ModelCandidate } from './types';
@@ -360,20 +360,11 @@ export const PROVIDER_REGISTRY: ProviderDefinition[] = [
   }
 ];
 
-export const RELIABLE_MODELS: string[] = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'openai/gpt-oss-120b',
-  'llama-3.3-70b-versatile',
-  'google/gemini-2.5-flash',
-  'pro/gpt-5.6-luna'
-];
-
 /**
  * Returns an interleaved list of candidates across providers so fair rotation
  * naturally alternates between different providers.
  */
-export function getAllRegisteredCandidates(onlyReliable?: boolean): ModelCandidate[] {
+export function getAllRegisteredCandidates(): ModelCandidate[] {
   const candidates: ModelCandidate[] = [];
   const providers = PROVIDER_REGISTRY;
   const maxModels = Math.max(...providers.map(p => p.models.length), 0);
@@ -381,13 +372,9 @@ export function getAllRegisteredCandidates(onlyReliable?: boolean): ModelCandida
   for (let i = 0; i < maxModels; i++) {
     for (const p of providers) {
       if (p.models[i]) {
-        const modelName = p.models[i];
-        if (onlyReliable && !RELIABLE_MODELS.includes(modelName)) {
-          continue;
-        }
         candidates.push({
           provider: p.id,
-          model: modelName,
+          model: p.models[i],
           workerUrl: p.workerUrl
         });
       }
@@ -749,10 +736,9 @@ export function getPerformanceTier(
 export function getNextCandidate(
   preferredProvider?: string,
   preferredModels?: string[],
-  onlyReliable?: boolean,
   excludedKeys?: Set<string>
 ): RoutingDecision {
-  let allCandidates = getAllRegisteredCandidates(onlyReliable);
+  let allCandidates = getAllRegisteredCandidates();
 
   if (preferredProvider) {
     allCandidates = allCandidates.filter(c => c.provider === preferredProvider);
@@ -1239,7 +1225,6 @@ export default {
         const routing = getNextCandidate(
           payload.preferred_provider,
           payload.preferred_models,
-          payload.only_reliable_models,
           excludedKeys
         );
 
@@ -1316,8 +1301,8 @@ Gemini or an autonomous build agent must execute the following commands to provi
 ### 5.1 Initialize Project & Dependencies
 
 ```bash
-mkdir llm-edge-router
-cd llm-edge-router
+mkdir llm-proxy-worker
+cd llm-proxy-worker
 npm init -y
 npm install -D typescript @cloudflare/workers-types wrangler
 npx tsc --init
@@ -1380,17 +1365,24 @@ wrangler deploy
 
 ## 6. Verification, Testing & Operational Runbook
 
-### 6.1 Test Chat Completion (Auto-Rotating via Edge Router)
+> **Important Deployment Notice**:
+> We do **not** have a standalone `llm-edge-router` Worker. If you want to use a Cloudflare Worker to test, please use the **Groq** (`groq.nclong87.workers.dev`) or **OpenRouter** (`openrouter.nclong87.workers.dev`) workers. Always pass the access key in the `X-Proxy-Key` header on every request.
+
+### 6.1 Test Chat Completion via Groq Worker (`groq.nclong87.workers.dev`)
 
 ```bash
-curl -X POST https://llm-edge-router.nclong87.workers.dev/v1/chat/completions \
+curl -X POST https://groq.nclong87.workers.dev/openai/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Proxy-Key: your-secure-client-proxy-secret" \
+  -H "X-Proxy-Key: your-access-key" \
+  -H "Authorization: Bearer your-access-key" \
   -d '{
+    "model": "llama-3.3-70b-versatile",
     "messages": [
       { "role": "system", "content": "You are a concise AI tutor." },
       { "role": "user", "content": "Explain spaced repetition in 1 sentence." }
-    ]
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100
   }' -i
 ```
 
@@ -1398,75 +1390,111 @@ curl -X POST https://llm-edge-router.nclong87.workers.dev/v1/chat/completions \
 ```http
 HTTP/2 200 OK
 content-type: application/json
-x-routed-provider: groq
-x-routed-model: openai/gpt-oss-120b
-x-routed-tier: 1
-x-response-time-ms: 412
-x-retry-attempts: 1
+x-ratelimit-limit-requests: 14400
+x-ratelimit-remaining-requests: 14399
 ```
 
-> **Direct Microservice Verification**:
-> You can also verify individual provider workers directly:
-> - **Groq**: `curl https://groq.nclong87.workers.dev/openai/v1/chat/completions ...`
-> - **Gemini**: `curl -X POST https://gemini.nclong87.workers.dev/v1beta/models/gemini-2.5-flash:generateContent ...`
-> - **OpenRouter**: `curl https://openrouter.nclong87.workers.dev/api/v1/chat/completions ...`
-> - **9Flare**: `curl https://9flare.nclong87.workers.dev/api/v1/chat/completions ...`
-> - **Ollama**: `curl https://ollama.nclong87.workers.dev/v1/chat/completions ...`
-> - **Cloudflare**: `curl https://cloudflare.nclong87.workers.dev ...`
-
-### 6.2 Inspect Real-Time Health & Circuit Breaker Locks
-
-```bash
-curl https://llm-edge-router.nclong87.workers.dev/v1/status \
-  -H "X-Proxy-Key: your-secure-client-proxy-secret"
-```
-
-**Sample Output:**
+**Expected Response Body:**
 ```json
 {
-  "metrics": {
-    "groq:openai/gpt-oss-120b": {
-      "provider": "groq",
-      "model": "openai/gpt-oss-120b",
-      "lastResponseTimeMs": 412,
-      "avgResponseTimeMs": 425,
-      "totalCalls": 18,
-      "totalSuccesses": 18,
-      "lastError": null
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "created": 1726752000,
+  "model": "llama-3.3-70b-versatile",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Spaced repetition is a learning technique that reviews information at increasing intervals to optimize long-term memory retention."
+      },
+      "finish_reason": "stop"
     }
-  },
-  "lockedModels": {
-    "gemini:gemini-1.5-pro": {
-      "provider": "gemini",
-      "model": "gemini-1.5-pro",
-      "lockedAt": 1726752000000,
-      "expiresAt": 1726755600000,
-      "reason": "HTTP 429: Resource has been exhausted"
-    }
-  }
+  ]
 }
 ```
 
-### 6.3 Simulate Fault Recovery & Fallback Cascade
-1. Pass an invalid API key for a specific provider in test mode or deliberately trigger rate limits.
-2. Observe in server logs how the failing model is immediately locked for $\ge 1\text{ hour}$.
-3. Verify that the response header returns `X-Retry-Attempts: 2`, and the caller receives an immediate, uninterrupted completion from the backup provider.
-
-### 6.4 Manual Cooldown Reset
+### 6.2 Test Chat Completion via OpenRouter Worker (`openrouter.nclong87.workers.dev`)
 
 ```bash
-# Unlock single model
-curl -X POST https://llm-edge-router.nclong87.workers.dev/v1/unlock \
+curl -X POST https://openrouter.nclong87.workers.dev/api/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Proxy-Key: your-secure-client-proxy-secret" \
-  -d '{"provider": "gemini", "model": "gemini-1.5-pro"}'
-
-# Clear all active locks
-curl -X POST https://llm-edge-router.nclong87.workers.dev/v1/unlock \
-  -H "Content-Type: application/json" \
-  -H "X-Proxy-Key: your-secure-client-proxy-secret" \
-  -d '{"all": true}'
+  -H "X-Proxy-Key: your-access-key" \
+  -H "Authorization: Bearer your-access-key" \
+  -H "HTTP-Referer: https://workers.cloudflare.com" \
+  -H "X-Title: Cloudflare LLM Edge Proxy" \
+  -d '{
+    "model": "google/gemini-2.5-flash",
+    "messages": [
+      { "role": "system", "content": "You are a concise AI tutor." },
+      { "role": "user", "content": "Explain spaced repetition in 1 sentence." }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100
+  }' -i
 ```
+
+**Expected Response Headers:**
+```http
+HTTP/2 200 OK
+content-type: application/json
+```
+
+**Expected Response Body:**
+```json
+{
+  "id": "gen-...",
+  "model": "google/gemini-2.5-flash",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Spaced repetition is an evidence-based memory technique where study sessions are spaced over expanding intervals to maximize recall."
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+### 6.3 Direct Microservice Verification Summary
+
+All Cloudflare Worker testing must target the deployed microservices directly:
+
+| Provider | Worker Test Endpoint | Sample Model | Required Auth Headers |
+| :--- | :--- | :--- | :--- |
+| **Groq** | `https://groq.nclong87.workers.dev/openai/v1/chat/completions` | `llama-3.3-70b-versatile` | `X-Proxy-Key`, `Authorization` |
+| **OpenRouter** | `https://openrouter.nclong87.workers.dev/api/v1/chat/completions` | `google/gemini-2.5-flash` | `X-Proxy-Key`, `Authorization` |
+| **Gemini** | `https://gemini.nclong87.workers.dev/v1beta/models/gemini-2.5-flash:generateContent` | `gemini-2.5-flash` | `X-Proxy-Key`, `x-goog-api-key` |
+| **9Flare** | `https://9flare.nclong87.workers.dev/api/v1/chat/completions` | `pro/gpt-5.6-luna` | `X-Proxy-Key`, `Authorization` |
+| **Ollama** | `https://ollama.nclong87.workers.dev/v1/chat/completions` | `llama3.2:latest` | `X-Proxy-Key` |
+| **Cloudflare** | `https://cloudflare.nclong87.workers.dev` | `@cf/meta/llama-3-8b-instruct` | `X-Proxy-Key`, `Authorization` |
+
+### 6.4 Verification of Security Ingress (`X-Proxy-Key`)
+
+To verify that the Cloudflare Worker security boundary is functioning as expected:
+
+1. **Reject Unauthorized Requests (Missing or Invalid `X-Proxy-Key`)**:
+   ```bash
+   curl -X POST https://groq.nclong87.workers.dev/openai/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -d '{"messages": [{"role": "user", "content": "ping"}]}' -i
+   ```
+   **Result**: HTTP `401 Unauthorized` or `403 Forbidden` from edge worker ingress.
+
+2. **Accept Authorized Requests**:
+   ```bash
+   curl -X POST https://groq.nclong87.workers.dev/openai/v1/chat/completions \
+     -H "Content-Type: application/json" \
+     -H "X-Proxy-Key: your-access-key" \
+     -H "Authorization: Bearer your-access-key" \
+     -d '{
+       "model": "llama-3.3-70b-versatile",
+       "messages": [{"role": "user", "content": "ping"}]
+     }' -i
+   ```
+   **Result**: HTTP `200 OK` with valid chat completion payload.
 
 ---
 
