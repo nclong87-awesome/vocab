@@ -1,16 +1,16 @@
 # LLM Estimated Response Time & Request Retry Architecture Guide
-## Technical Specification & Implementation Guide
+## General Architecture & Engineering Specification
 
 ---
 
 ### Executive Summary
 
-In high-reliability AI-assisted learning applications, Large Language Model (LLM) requests are subject to variable generation latencies, token streaming times, cloud queue delays, rate limits (HTTP 429), and upstream service outages (HTTP 500/502/503/504). Providing an intuitive, transparent user experience requires two coupled subsystems:
+In high-reliability AI applications, Large Language Model (LLM) inference requests are subject to variable generation latencies, token streaming times, cloud queue delays, rate limits (HTTP 429), and upstream provider outages (HTTP 500/502/503/504). Ensuring an optimal and resilient user experience requires two decoupled yet coordinated subsystems:
 
-1. **Estimated Response Time Engine**: A predictive, dynamic feedback system that resolves the active provider and model prior to dispatch, computes expected latency based on rolling historical benchmarks, and renders an animated progress indicator with real-time elapsed and remaining seconds without prematurely jumping to 100%.
-2. **Multi-Layer Request Retry & Resilience Engine**: A 3-tier defense-in-depth architecture spanning transport-level exponential backoff with jitter, protocol-level payload self-healing, dynamic multi-candidate circuit-breaker lockouts, and an automated 5-second in-chat countdown card with instant manual overrides and transparent failover routing.
+1. **Estimated Response Time Engine**: A predictive, dynamic feedback system that determines the active provider and model prior to dispatch, computes expected latency based on historical benchmarks, and provides real-time elapsed and remaining seconds without prematurely reaching 100%.
+2. **Multi-Layer Request Retry & Resilience Engine**: A 3-tier defense-in-depth architecture spanning transport-level exponential backoff with jitter, protocol-level payload self-healing, dynamic multi-candidate circuit-breaker lockouts, and an automated countdown retry mechanism with manual bypass and transparent failover routing.
 
-This document details the end-to-end data flow, mathematical formulations, state lifecycles, and component architectures governing both systems.
+This document serves as a generalized engineering specification and blueprint for implementing these systems across AI-assisted applications.
 
 ---
 
@@ -19,24 +19,22 @@ This document details the end-to-end data flow, mathematical formulations, state
 ```
                       ┌─────────────────────────────────┐
                       │    User Triggers LLM Action     │
-                      │ (Chat / Quiz / Definition / Fix)│
                       └────────────────┬────────────────┘
                                        │
                                        ▼
        [ Pre-Flight Candidate Resolution & Event Broadcast ]
-         • notifyLlmRequestStartFromConfig(llmConfig)
-         • Non-advancing candidate lookahead: getNextAutoCandidate()
-         • Event emission: publishLlmRequestStart({ provider, model })
+         • Non-advancing candidate lookahead: inspect next operational model
+         • Event emission: publish request start event (provider, model, timestamp)
                                        │
                  ┌─────────────────────┴─────────────────────┐
                  ▼                                           ▼
 ┌─────────────────────────────────┐         ┌─────────────────────────────────┐
-│     LlmProgressIndicator UX     │         │   Transport Dispatch Layer      │
-│ • Subscribes to start events    │         │ • callLLMClientSideWithMeta()   │
-│ • Resolves target avgTimeMs     │         │ • fetchWithTimeout (30s abort)  │
-│ • 100ms interval clock tick     │         │ • callWithRetry() backoff loop  │
-│ • Progress capped strictly at 99%│         └────────────────┬────────────────┘
-│ • "just a moment..." overflow   │                          │
+│     Progress Indicator UX       │         │   Transport Dispatch Layer      │
+│ • Subscribes to start events    │         │ • High-level client wrapper     │
+│ • Resolves target benchmark     │         │ • Configured abort timeout      │
+│ • High-frequency clock tick     │         │ • Exponential backoff loop      │
+│ • Progress capped at 99% max    │         └────────────────┬────────────────┘
+│ • "Just a moment..." overflow   │                          │
 └─────────────────────────────────┘                          │
                                                              ▼
                                                 [ Request Outcome Check ]
@@ -46,14 +44,14 @@ This document details the end-to-end data flow, mathematical formulations, state
                                            ▼                                 ▼
                      ┌───────────────────────────┐         ┌───────────────────────────┐
                      │ Metric & History Logging  │         │   Circuit Breaker Lock    │
-                     │ • recordModelResponse()   │         │ • recordModelFailure()    │
-                     │ • Rolling avg recalculation│         │ • Dynamic lock (1h - 96h) │
+                     │ • Record model response   │         │ • Record model failure    │
+                     │ • Rolling avg recalculation│        │ • Dynamic lock (1h - 96h) │
                      │ • Dismiss typing indicator│         └─────────────┬─────────────┘
                      └───────────────────────────┘                       │
                                                                          ▼
                                                            ┌───────────────────────────┐
-                                                           │ ChatErrorMessageCard UI   │
-                                                           │ • 5s Auto-Retry Countdown │
+                                                           │ Error Presentation Layer  │
+                                                           │ • Automated Countdown     │
                                                            │ • "Try again now" bypass  │
                                                            │ • "Cancel" override       │
                                                            └─────────────┬─────────────┘
@@ -63,7 +61,7 @@ This document details the end-to-end data flow, mathematical formulations, state
                                                            ┌───────────────────────────┐
                                                            │ Execute Retry Handler     │
                                                            │ • Previous model locked   │
-                                                           │ • Auto Mode selects next  │
+                                                           │ • Auto-router selects next│
                                                            │   healthy candidate       │
                                                            └───────────────────────────┘
 ```
@@ -72,223 +70,203 @@ This document details the end-to-end data flow, mathematical formulations, state
 
 ### 2. Logic for Displaying Estimated Response Time
 
-The estimated response time system provides continuous, non-blocking visual feedback to the user while an LLM inference request is pending. It prevents user abandonment, communicates operational transparency, and provides immediate control via a cancellation trigger.
+The estimated response time system provides continuous, non-blocking visual feedback to the user while an LLM inference request is pending. It prevents perceived freezing, communicates operational transparency, and provides immediate control via an abort/cancel trigger.
 
 #### 2.1 Pre-Flight Candidate Resolution & Start Notification
 
-Before initiating the network request, the application must immediately inform the UI which provider and model will handle the request. This eliminates latency between when the user submits a message and when the progress UI appears.
+Before initiating the network request, the application must immediately resolve and publish the active provider and model to the presentation layer. This eliminates any lag between when the user submits an input and when the progress UI appears.
 
-1. **Pre-Request Event Bus (`src/utils/llmEvents.ts`)**:
-   - An event listener pattern decoupled from React rendering cycles:
+1. **Pre-Request Event Bus Pattern**:
+   - The UI components subscribe to a decoupled event emitter rather than relying on synchronous props or delayed network hooks.
+   - The event payload transmits:
      ```typescript
-     export interface LlmRequestStartEvent {
+     interface RequestStartEvent {
        provider: string;
        model: string;
-       timestamp?: number;
+       timestamp: number;
      }
      ```
-   - `publishLlmRequestStart(data)` broadcasts the event to all registered subscribers.
-   - `notifyLlmRequestStartFromConfig(llmConfig)` performs pre-flight resolution:
-     - If `provider === "auto"` or `model === "auto"`, it calls `getNextAutoCandidate(llmConfig, undefined, false)` with `advance = false`. This peeks at the upcoming candidate without incrementing the global round-robin rotation index.
-     - In fixed mode, it sanitizes the provider and model against available options.
-     - Dispatches `{ provider, model, timestamp: Date.now() }` and returns the resolved tuple.
-2. **Hook Integration (`src/hooks/useChat.ts`)**:
-   - When initiating generation, `startTypingWithConfig()` calls `notifyLlmRequestStartFromConfig(cfgToUse)`.
-   - Sets local state `activeModelInfo` and sets `isTypingState = true`.
-   - A secondary listener inside `LlmProgressIndicator.tsx` guarantees that even if the active candidate changes mid-flight (e.g. during an automated fallback), the UI immediately reflects the updated model.
+2. **Non-Advancing Candidate Lookahead**:
+   - When dynamic multi-model auto-routing is enabled, the router peeks at the upcoming candidate without incrementing the global round-robin rotation index.
+   - When fixed mode is enabled, the configured provider and model are validated against available credentials.
+   - The resolved tuple is published immediately to the event bus and returned to the caller.
+   - If an automated fallback switches models mid-flight, a new start event is emitted so the UI reflects the updated model and its specific latency expectation instantly.
 
 #### 2.2 Expected Duration Formulation ($T_{\text{expected}}$)
 
-In `src/components/chat/LlmProgressIndicator.tsx`, the estimated response time $T_{\text{expected}}$ (`avgTimeMs`) is resolved using the model metrics engine:
+The estimated response duration $T_{\text{expected}}$ is resolved using an adaptive hierarchy:
 
-```typescript
-const statuses = getAllModelStatuses(llmConfig);
-const match = statuses.find((s) => s.provider === provider && s.model === model);
-const avgTimeMs = match?.avgResponseTimeMs ?? match?.lastResponseTimeMs ?? 20000;
+```
+[ Model Latency Resolution Hierarchy ]
+  1. Rolling Historical Average (from verified successful requests)
+       └─ If unavailable ──> 2. Most Recent Single Latency Benchmark
+                                └─ If untested ──> 3. Conservative Default Fallback (e.g. 20.0s)
 ```
 
-##### Fallback Hierarchy:
-1. **`match.avgResponseTimeMs` (Rolling Historical Average)**:
-   - Derived from up to 100 historical successful requests recorded in `ModelMetricsRecord.recentResponseTimes` and IndexedDB logs.
-   - Calculated as:
-     $$\text{avgResponseTimeMs} = \operatorname{round}\left(\frac{1}{K} \sum_{i=1}^{K} d_i\right)$$
-     where $d_i$ represents the verified duration in milliseconds of each successful request $i$, and $K \ge 1$.
-2. **`match.lastResponseTimeMs` (Single Benchmark Sample)**:
-   - Used when a model has only been executed once or when rolling averages are being initialized.
-3. **Default Benchmark Fallback ($20{,}000\text{ ms} = 20.0\text{ s}$)**:
-   - If a model is completely untested (e.g., a newly introduced Tier 1 probe with 0 previous calls, or an unbenchmarked custom endpoint), the system defaults to $20{,}000\text{ ms}$. This represents the conservative empirical median for multi-turn generative language tasks across edge providers.
+##### 1. Rolling Historical Average
+Derived from up to $K$ recent successful requests recorded for the exact provider/model pair:
+$$\text{avgResponseTimeMs} = \operatorname{round}\left(\frac{1}{K} \sum_{i=1}^{K} d_i\right)$$
+where $d_i$ represents the verified duration in milliseconds of each successful request $i$, and $K \ge 1$ (typically $K = 50\text{ to }100$).
+
+##### 2. Single Benchmark Sample
+Used when a model has only been executed once or when cold-start benchmarks are being established.
+
+##### 3. Default Conservative Fallback ($20{,}000\text{ ms} = 20.0\text{ s}$)
+If a model is completely untested (e.g., a newly introduced endpoint or an unbenchmarked custom model), the system falls back to a conservative default of $20{,}000\text{ ms}$. This represents an empirical median for complex multi-turn generation tasks across cloud and edge providers.
 
 #### 2.3 Real-Time Clock & Progress Math
 
-The progress indicator mounts a high-resolution 100ms interval timer:
+The progress indicator mounts a high-frequency interval timer (e.g., every 100ms) to update the elapsed duration:
 
-```typescript
-const [elapsedMs, setElapsedMs] = useState(0);
-
-useEffect(() => {
-  const startTime = Date.now();
-  const interval = setInterval(() => {
-    setElapsedMs(Date.now() - startTime);
-  }, 100);
-  return () => clearInterval(interval);
-}, []);
-```
+$$t_{\text{elapsed}} = \text{Date.now()} - t_{\text{start}}$$
 
 ##### Mathematical Formulations:
 
 1. **Elapsed Time**:
-   $$t_{\text{elapsed}} = \text{Date.now()} - t_{\text{start}}$$
-   Displayed in whole seconds: $\lfloor t_{\text{elapsed}} / 1000 \rfloor\text{s}$.
+   Displayed in whole seconds:
+   $$\text{Elapsed Seconds} = \lfloor t_{\text{elapsed}} / 1000 \rfloor\text{s}$$
 
 2. **Progress Percentage ($P$)**:
    $$P(t) = \min\left(99, \frac{t_{\text{elapsed}}}{T_{\text{expected}}} \times 100\right)$$
    
    > **The 99% Clamping Rule**:
-   > The progress calculation is strictly capped at **99%**. In generative AI, a progress bar must **never** reach 100% until the HTTP response payload has arrived, been parsed, and verified. If a progress bar displays 100% while the network connection is still waiting for upstream tokens, the user perceives the application as crashed or frozen.
+   > The progress percentage must be strictly capped at **99%**. In generative AI, a progress bar must **never** reach 100% until the HTTP response payload has arrived, been parsed, and verified. If a progress bar displays 100% while the network connection is still waiting for upstream tokens, the user perceives the application as crashed or frozen.
 
 3. **Remaining Estimated Time ($T_{\text{remaining}}$)**:
    $$T_{\text{remaining}} = \max\left(0, \frac{T_{\text{expected}} - t_{\text{elapsed}}}{1000}\right)$$
 
 ##### Soft Overtime Transition:
-- While $t_{\text{elapsed}} < T_{\text{expected}}$: The label displays `~X.Xs left` (formatted with 1 decimal precision, e.g., `~4.2s left`).
+- While $t_{\text{elapsed}} < T_{\text{expected}}$: The label displays remaining time with single-decimal precision (e.g., `~4.2s left`).
 - When $t_{\text{elapsed}} \ge T_{\text{expected}}$: Rather than displaying `~0.0s left` or freezing, the UI gracefully transitions the remaining label to:
-  $$\text{"just a moment..."}$$
+  $$\text{"Just a moment..."}$$
   while the progress bar maintains 99% and the elapsed counter continues to increment smoothly (`21s elapsed`, `22s elapsed`, etc.).
 
-#### 2.4 User Interface Specifications (`LlmProgressIndicator.tsx`)
+#### 2.4 User Interface Component Specifications
 
-| UI Element | Styling / Behavior | Functional Purpose |
+| UI Element | Presentation / Interaction | Functional Purpose |
 | :--- | :--- | :--- |
-| **Pulsing Accent Line** | `h-[3px] bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 animate-pulse` | Top border indication that generation is actively streaming. |
-| **Pulsing Beacon** | Outer: `w-5 h-5 bg-amber-400/30 animate-ping`; Inner: `w-2.5 h-2.5 bg-amber-500` | Optical confirmation that the network worker is alive. |
-| **Provider Pill** | `text-[10.5px] font-semibold bg-stone-200/80 px-1.5 py-0.5 rounded` | Identifies whether Gemini, Cloudflare, OpenRouter, Groq, etc., is responding. |
-| **Model Label** | `text-xs font-bold font-mono text-stone-800 truncate` | Shows the active model name (e.g. `gemini-2.5-flash`, `llama-3.3-70b`). |
-| **Auto Badge** | `text-[9.5px] text-amber-800 bg-amber-100/90 border border-amber-300/60` | Appears exclusively when Auto-Routing is managing selection. |
-| **Cancel Button** | `text-[10px] bg-stone-100 hover:bg-stone-200 border rounded-lg` with `X` icon | Aborts the active `fetch` via `AbortController.abort()` and cleans state. |
-| **Dynamic Progress Bar** | Height `1.5px`, `rounded-full`, amber-to-orange gradient, CSS `transition-all duration-100 ease-out` | Proportional bar reflecting $P(t) \in [0\%, 99\%]$. |
-| **Metadata Row** | Left: Clock icon + elapsed seconds; Center: Integer percentage; Right: Remaining time or `"just a moment..."` | Scannable, typography-aligned status breakdown. |
+| **Pulsing Accent Line** | Top border with horizontal animated gradient | Visual cue that generation is actively streaming. |
+| **Activity Beacon** | Dual-layer pulsing beacon (outer ping + solid center) | Optical confirmation of background network vitality. |
+| **Provider Badge** | Subtle pill badge with provider branding | Identifies which upstream platform is processing the request. |
+| **Model Label** | Monospace typography with overflow truncation | Displays the active model identifier clearly. |
+| **Routing Mode Indicator** | Distinctive badge shown during auto-routing | Informs the user that intelligent load balancing is managing candidate selection. |
+| **Cancellation Trigger** | Direct abort button with close icon | Aborts the active fetch via `AbortController` and resets application state cleanly. |
+| **Dynamic Progress Bar** | Smooth proportional bar reflecting $P(t) \in [0\%, 99\%]$ | Visual pacing benchmark based on expected latency. |
+| **Status Breakdown** | Clock icon + elapsed seconds, integer percentage, remaining time or soft overflow | Scannable, typography-aligned progress overview. |
 
 #### 2.5 Post-Request Metric Updates
 
-When the response successfully returns:
-1. `recordModelResponse(provider, model, durationMs)` is invoked in `src/utils/autoModeManager.ts`.
-2. Any existing lock on the model is immediately cleared (`unlockModel(provider, model)`).
-3. The verified duration is appended to `recentOutcomes` and `recentResponseTimes` (sliding window up to $100$ entries).
-4. `avgResponseTimeMs` is re-averaged and persisted to `localStorage` under `vocab_learner_model_metrics`.
-5. The request is persisted to IndexedDB via `logApiRequest()`, providing permanent auditability.
+When an LLM response successfully returns:
+1. The model's circuit breaker lock is immediately cleared if one was previously pending.
+2. The verified duration is appended to the model's sliding window of recent outcomes and response times.
+3. The rolling average response time is recalculated and persisted to local client storage.
+4. The transaction is logged to permanent local storage (such as IndexedDB) with status, timestamp, prompt tokens, and duration for auditability.
 
 ---
 
 ### 3. Logic for Retrying Failed Requests
 
-The application implements a **Three-Tier Defense-in-Depth Resilience Architecture** to handle transient network blips, HTTP 429 rate limit saturation, provider downtime, and syntax incompatibilities.
+A robust LLM integration implements a **Three-Tier Defense-in-Depth Resilience Architecture** to handle transient network disruptions, HTTP 429 rate limit saturation, provider downtime, and schema incompatibilities.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ TIER 1: Low-Level Transport Retry (callWithRetry in llmClientService)   │
-│ • Wraps individual HTTP fetch calls                                     │
-│ • Exponential backoff with random jitter (1000ms -> 2000ms -> 4000ms)    │
-│ • Protocol self-healing (strips unsupported JSON/reasoning schemas)     │
-│ • Filters out fatal non-retryable errors (401, 403, 400 location)       │
+│ TIER 1: Transport-Level Retry                                           │
+│ • Wraps individual HTTP network requests                                │
+│ • Exponential backoff with random jitter (e.g., 1000ms -> 2000ms)       │
+│ • Protocol self-healing (strips unsupported JSON/reasoning parameters)  │
+│ • Filters out non-retryable errors (401, 403, invalid endpoint)         │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │ (Fails after transport retries)
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ TIER 2: Auto-Mode Failover & Circuit Breaker (autoModeManager.ts)       │
-│ • Records failure outcome with error message in metrics                 │
+│ TIER 2: Multi-Candidate Auto-Routing & Circuit Breaker                  │
+│ • Records failure outcome with error reason in telemetry                │
 │ • Calculates multi-factor adaptive lock duration (1h up to 96h)         │
-│ • Locks failed model in localStorage & memory                           │
-│ • Auto Mode excludes locked model and selects next healthy candidate     │
+│ • Locks failed model in persistent client storage                       │
+│ • Auto-router excludes locked model and selects next healthy candidate  │
 └────────────────────────────────────┬────────────────────────────────────┘
-                                     │ (Error surfaces to application)
+                                     │ (Error surfaced to application)
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ TIER 3: In-Chat Error Presentation & Automated Countdown (useChat.ts)   │
-│ • Displays ChatErrorMessageCard with error details and badges           │
-│ • Starts automatic 5-second countdown timer with pulsing red beacon     │
+│ TIER 3: User-Facing Error Presentation & Automated Countdown Retry      │
+│ • Displays error presentation banner with diagnostic details            │
+│ • Starts automated 5-second countdown timer                             │
 │ • "Try again now" button for instantaneous manual retry                 │
-│ • "Cancel" button to stop countdown and switch to manual trigger        │
-│ • On trigger: removes error card and re-executes with next candidate    │
+│ • "Cancel" button to halt countdown and switch to manual on-demand mode │
+│ • On trigger: re-executes action using next operational model           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 4. Deep-Dive: Tier 1 – Transport-Level Retry (`callWithRetry`)
+### 4. Deep-Dive: Tier 1 – Transport-Level Retry
 
-All client-side API invocations pass through `callWithRetry<T>` in `src/services/llmClientService.ts`.
+All low-level API invocations pass through a resilient network execution wrapper before returning to higher application layers.
 
 #### 4.1 Error Classification & Retryability Matrix
 
-When an exception occurs during fetch or response parsing, `parseLlmError(err, provider)` inspects HTTP status codes, GoogleGenAI SDK error JSON strings, Cloudflare worker headers, and network exceptions:
+When an exception occurs during network dispatch or payload parsing, errors are categorized into retryable and non-retryable classes:
 
-| HTTP / Code | Error Type | Classification | Retryable (`isRetryable`) | Action Taken |
+| HTTP / Code | Category | Classification | Retryable | Action Taken |
 | :--- | :--- | :--- | :--- | :--- |
-| **401** | `INVALID_KEY` | Unauthorized / Invalid API Key | **`false`** | Throw immediately. Do NOT retry. Prompt user to check LLM Settings. |
-| **403** | `PERMISSION_DENIED` | Forbidden / Geo/Project Blocked | **`false`** | Throw immediately. Do NOT retry. |
-| **400** | `LOCATION_UNSUPPORTED` | Region Restricted | **`false`** | Throw immediately. Guide user on proxy header IP stripping. |
-| **404** | `NOT_FOUND` | Model Not Found / Bad Endpoint | **`false`** | Throw immediately. Model name invalid for this provider. |
-| **429** | `RATE_LIMIT` | Quota Exceeded / Too Many Requests | **`true`** | **Retryable**. Apply exponential backoff with jitter. |
-| **500 / 502 / 503 / 504** | `SERVER_ERROR` | Provider Internal / Overloaded | **`true`** | **Retryable**. Provider temporarily unavailable. |
-| **0 / Network** | `NETWORK_ERROR` | Socket Drop, CORS, Offline | **`true`** (unless 30s timeout) | **Retryable**. Transient connection interruption. |
-| **422** | `INVALID_RESPONSE` | Empty or Unparseable JSON Payload | **`true`** | **Retryable**. Provider returned corrupted payload. |
+| **401** | `INVALID_KEY` | Unauthorized / Invalid API Key | **No** | Fail immediately. Do not retry. Guide user to verify credentials. |
+| **403** | `PERMISSION_DENIED` | Forbidden / Project/Tier Blocked | **No** | Fail immediately. Do not retry. |
+| **400** | `LOCATION_UNSUPPORTED` | Region Restricted | **No** | Fail immediately. Do not retry. Provide IP configuration instructions. |
+| **404** | `NOT_FOUND` | Model Not Found / Bad Route | **No** | Fail immediately. Model identifier does not exist on target host. |
+| **429** | `RATE_LIMIT` | Quota Exceeded / Too Many Requests | **Yes** | **Retryable**. Apply exponential backoff with jitter. |
+| **500 / 502 / 503 / 504** | `SERVER_ERROR` | Upstream Server / Gateway Outage | **Yes** | **Retryable**. Upstream service temporarily unavailable. |
+| **0 / Network** | `NETWORK_ERROR` | Socket Drop, CORS, Offline | **Yes** (unless user aborted) | **Retryable**. Transient connection interruption. |
+| **422** | `INVALID_RESPONSE` | Malformed or Unparseable JSON Payload | **Yes** | **Retryable**. Upstream service produced invalid payload. |
 
 #### 4.2 Exponential Backoff with Jitter Formulation
 
-When `parsed.isRetryable === true`, the engine pauses execution using exponential backoff with additive random jitter:
+When an error is flagged as retryable, the network wrapper delays subsequent attempts using exponential backoff with additive uniform random jitter:
 
-$$t_{\text{delay}} = \min\left(t_{\text{max}}, t_{\text{initial}} \times b^{(\text{attempt} - 1)}\right) + \operatorname{rand}(0, 200\text{ ms})$$
+$$t_{\text{delay}} = \min\left(t_{\text{max}}, t_{\text{initial}} \times b^{(\text{attempt} - 1)}\right) + \operatorname{rand}(0, \text{jitter}_{\text{max}})$$
 
-- Default Parameters:
+- Standard Recommended Parameters:
   - $t_{\text{initial}} = 1000\text{ ms}$
   - $t_{\text{max}} = 4000\text{ ms}$
   - $b (\text{backoffFactor}) = 2.0$
-  - $\text{maxRetries} = 1$ (1 immediate backoff retry at the transport layer before escalating to Tier 2 multi-candidate failover)
+  - $\text{jitter}_{\text{max}} = 200\text{ ms}$
+  - $\text{maxTransportRetries} = 1$ (1 immediate retry at the transport layer before escalating to Tier 2 multi-candidate failover)
 
 #### 4.3 Protocol Self-Healing (Parameter Stripping Retry)
 
-Certain upstream models (e.g. specialized OpenRouter models or older Ollama variants) return HTTP 400 when sent modern OpenAI-compatible parameters such as `response_format: { type: "json_object" }` or `reasoning_format: "hidden"`:
+Certain upstream models or proxy endpoints reject requests with HTTP 400 when sent modern parameters such as structured JSON schemas (`response_format: { type: "json_object" }`) or extended reasoning flags:
 
 ```typescript
-// If request failed with 400 due to response_format or reasoning, retry once without those parameters
-if (!res.ok && (reqBody.response_format || reqBody.reasoning_format || reqBody.include_reasoning !== undefined)) {
-  const errClone = res.clone();
-  const errText = await errClone.text().catch(() => "");
-  if (errText.includes("JSON mode") || errText.includes("response_format") || errText.includes("reasoning") || res.status === 400) {
-    delete reqBody.response_format;
-    delete reqBody.reasoning_format;
-    delete reqBody.include_reasoning;
-    res = await fetchWithTimeout(targetUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(reqBody),
-      signal
-    });
+// Parameter Stripping Self-Healing Pattern
+if (!response.ok && hasAdvancedParameters(requestPayload)) {
+  const errorText = await response.clone().text().catch(() => "");
+  if (isSchemaOrReasoningRejection(errorText) || response.status === 400) {
+    const sanitizedPayload = stripAdvancedParameters(requestPayload);
+    response = await executeFetch(endpointUrl, sanitizedPayload, abortSignal);
   }
 }
 ```
 
-This protocol-level self-healing ensures that format incompatibilities are resolved automatically before failing over.
+This protocol-level self-healing ensures that format incompatibilities are resolved automatically before triggering a full provider failover.
 
 ---
 
 ### 5. Deep-Dive: Tier 2 – Multi-Candidate Auto-Routing & Circuit Breaker
 
-When an error persists beyond Tier 1 transport retries, the Auto Mode Resilience Engine intervenes.
+When an error persists beyond transport-level retries, the Auto-Routing Circuit Breaker intervenes to protect system stability.
 
 #### 5.1 Failure Recording & Circuit Breaker Invocation
 
-In `callLLMClientSideWithMeta`, if a candidate model throws:
-1. `recordModelFailure(candidate.provider, candidate.model, err.message, candidateDuration)` is executed.
-2. `lockModel(candidate.provider, candidate.model, 3600000, err.message)` is triggered.
-3. Passing standard duration (`3600000` or 1 hour) automatically invokes `calculateOptimalLockDuration(provider, model, errorReason)`.
+When a candidate model fails:
+1. The failure outcome, timestamp, latency, and error message are appended to the model's metrics record.
+2. The model is placed into a temporary circuit-breaker lockout state.
+3. The lockout duration is dynamically computed using an adaptive multi-factor formulation.
 
-#### 5.2 Adaptive Lock Duration Calculation (`calculateOptimalLockDuration`)
+#### 5.2 Adaptive Lock Duration Calculation
 
-The engine calculates an optimal penalty lockout period based on four distinct metrics:
+The lockout duration is determined by evaluating five distinct factors:
 
 ##### Factor 1: Consecutive Failure Streak Base Duration
-The number of consecutive failures at the tail of recent outcomes dictates an exponential penalty base:
+The number of consecutive failures at the tail of recent outcomes establishes an exponential penalty base:
 - **1 failure**: $1\text{ hour}$ ($3{,}600{,}000\text{ ms}$)
 - **2 consecutive failures**: $4\text{ hours}$ ($14{,}400{,}000\text{ ms}$)
 - **3 consecutive failures**: $24\text{ hours}$ ($1\text{ day}$)
@@ -296,8 +274,8 @@ The number of consecutive failures at the tail of recent outcomes dictates an ex
 - **5 consecutive failures**: $78\text{ hours}$ ($3.25\text{ days}$)
 - **$\ge 6$ consecutive failures**: $96\text{ hours}$ ($4\text{ days}$)
 
-##### Factor 2: Accumulated 5-Day Failure History with Recency Decay
-The engine inspects all failure logs within the rolling 5-day window ($120\text{ hours}$), weighting older failures less than recent ones using a power decay curve:
+##### Factor 2: Accumulated Failure History with Recency Decay
+All recorded failures within a rolling 5-day window ($120\text{ hours}$) are evaluated, weighting older failures less than recent ones using a power decay curve:
 
 $$\text{Weight}_i = \max\left(0.05, \left(1 - \frac{\text{age}_i}{5\text{ days}}\right)^{1.4}\right)$$
 $$\text{Penalty}_{\text{recency}} = \sum_{i} \left(1\text{ hour} \times \text{Weight}_i\right)$$
@@ -305,56 +283,58 @@ $$\text{Penalty}_{\text{recency}} = \sum_{i} \left(1\text{ hour} \times \text{We
 $$\text{BaseDuration} = \text{Base}_{\text{consecutive}} + \text{Penalty}_{\text{recency}}$$
 
 ##### Factor 3: High Latency Multiplier ($M_{\text{latency}}$)
-Models that were already exhibiting slow response times ($> 15\text{s}$) receive prolonged lockouts:
+Models that were already exhibiting degraded response times ($> 15\text{s}$) receive prolonged lockouts:
 $$M_{\text{latency}} = \begin{cases} 
 1.0 & \text{if } \text{avgResponseTimeMs} \le 15000 \\ 
 \min\left(3.0, \frac{\text{avgResponseTimeMs}}{15000}\right) & \text{if } \text{avgResponseTimeMs} > 15000 
 \end{cases}$$
 
 ##### Factor 4: Historical Reliability Factor ($M_{\text{reliability}}$)
-For models with at least 3 historical calls:
-- $\ge 90\%$ success rate and $\le 1$ failure: $M_{\text{reliability}} = 0.5$ (50% discount for rare glitches on reliable models).
+For models with an established operational history (e.g., at least 3 historical requests):
+- $\ge 90\%$ success rate and $\le 1$ failure: $M_{\text{reliability}} = 0.5$ (50% discount for rare anomalies on reliable models).
 - $< 50\%$ success rate: $M_{\text{reliability}} = 2.0$ ($2\times$ lockout penalty).
 - $50\% - 75\%$ success rate: $M_{\text{reliability}} = 1.5$ ($1.5\times$ lockout penalty).
 
 ##### Factor 5: Boundary Clamping
 $$\text{Duration}_{\text{final}} = \operatorname{clamp}\left(1\text{ hour}, 4\text{ days}, \operatorname{round}(\text{BaseDuration} \times M_{\text{latency}} \times M_{\text{reliability}})\right)$$
-The lock duration is strictly bounded between **1 hour** and **4 days (96 hours)**, ensuring it never exceeds 5 days.
 
-#### 5.3 Candidate Exclusion & Automatic Failover
+The lockout duration is strictly bounded between **1 hour** and **4 days (96 hours)**.
 
-1. The locked model is written to `localStorage["vocab_learner_locked_models"]` with an explicit `expiresAt` epoch timestamp.
-2. When the user or system triggers a subsequent call, `getNextAutoCandidate()` filters the available candidates:
+#### 5.3 Candidate Exclusion & Transparent Failover
+
+1. The locked model is stored with an explicit expiration epoch timestamp in persistent client storage.
+2. On subsequent requests, the candidate selector filters out any locked models:
    ```typescript
-   let available = candidates.filter(cand => {
-     const key = `${cand.provider}:${cand.model}`;
-     const isLocked = Boolean(lockedMap[key] && lockedMap[key].expiresAt > Date.now());
-     return !isLocked;
+   const availableCandidates = allCandidates.filter(candidate => {
+     const lock = getModelLock(candidate.provider, candidate.model);
+     return !lock || lock.expiresAt <= Date.now();
    });
    ```
-3. Routing selects from remaining available candidates:
-   - **Tier 1 Untested Probes** $\to$ **Tier 1 Fast ($<15$s)** $\to$ **Tier 2 Medium ($15$–$25$s)** $\to$ **Tier 4 Demoted ($>25$s)**.
-4. **Anti-Deadlock Lockout Reset (`clearAllLocks`)**: If an extreme network partition causes every registered model across all providers to become locked, the engine detects that `available.length === 0`, invokes `clearAllLocks()`, logs a warning, and re-enables all models to prevent application starvation.
+3. Selection proceeds using priority tiering:
+   - **Tier 1**: Untested probes or fast models ($<15$s average latency)
+   - **Tier 2**: Medium-speed models ($15$s to $25$s average latency)
+   - **Tier 3**: Demoted slow models ($>25$s average latency)
+4. **Anti-Deadlock Lockout Reset**: If widespread network outages cause every candidate across all providers to become locked, the engine detects that `availableCandidates.length === 0`, purges all active locks, logs a diagnostic warning, and restores candidate availability to prevent permanent application starvation.
 
 ---
 
-### 6. Deep-Dive: Tier 3 – In-Chat Error Presentation & Automated Countdown Retry
+### 6. Deep-Dive: Tier 3 – Error Presentation & Automated Countdown Retry
 
-When an error bubbles up to the application layer (`src/hooks/useChat.ts`), it enters the user-facing retry lifecycle.
+When an unrecoverable error reaches the presentation layer, the user-facing retry lifecycle takes over.
 
 ```
-                  [ LLM Call Throws in useChat.ts ]
+                  [ LLM Call Fails in Application Layer ]
                                   │
                                   ▼
-             [ triggerChatErrorWithCountdown() Invoked ]
-             • setIsTypingState(false)
-             • Store retry callback in pendingRetriesRef
-             • Append ChatMessage with isError: true & errorInfo
+                [ Trigger Error Presentation State ]
+             • Dismiss active progress indicator
+             • Register retry action callback in memory
+             • Mount error notification banner
                                   │
                                   ▼
-                  [ ChatErrorMessageCard Mounted ]
-                  • Starts 5-second countdown ticker
-                  • Renders pulsing indicator & Auto Mode switch note
+                  [ Countdown Timer Initialized ]
+                  • Starts 5-second countdown ticker (1s interval)
+                  • Displays visual status & automated switch note
                                   │
                  ┌────────────────┴────────────────┐
                  │                                 │
@@ -362,119 +342,36 @@ When an error bubbles up to the application layer (`src/hooks/useChat.ts`), it e
                  │                          User clicks "Try again now")
                  ▼                                 │
       [ Countdown Cancelled ]                      ▼
-      • clearInterval()                    [ handleTriggerRetry() ]
-      • Switches to manual                 • clearInterval()
-        "Retry" button state               • setIsRetrying(true)
-                                           • Invokes onRetry() callback
+      • Clear interval timer               [ Execute Retry Dispatch ]
+      • Switch to on-demand                • Clear interval timer
+        manual trigger                     • Set retrying indicator
+                                           • Invoke registered callback
                                                    │
                                                    ▼
-                                     [ handleRetryErrorMessage() ]
-                                     • Removes error card from chat
-                                     • Invokes stored retryAction(llmConfig)
-                                     • Auto Mode selects next healthy model
+                                     [ Re-Execute with Auto-Failover ]
+                                     • Dismiss error banner
+                                     • Execute original request action
+                                     • Auto-router targets next operational model
 ```
 
-#### 6.1 Chat Error Message Registration
+#### 6.1 Automated Countdown Specifications
 
-In `useChat.ts`:
-```typescript
-const triggerChatErrorWithCountdown = (
-  err: any,
-  currentConfig: LLMConfig,
-  retryAction: (newConfig: LLMConfig) => void,
-  prefix: string = "error"
-) => {
-  setIsTypingState(false);
-  const rawMsg = err?.userMessage || err?.message || "Failed to communicate with AI provider.";
-  const isTimeout = Boolean(
-    err?.isTimeout ||
-    err?.name === "TimeoutError" ||
-    rawMsg.toLowerCase().includes("timeout") ||
-    rawMsg.toLowerCase().includes("timed out")
-  );
-  const failedProvider = err?.provider || currentConfig.provider;
-  const failedModel = err?.model || currentConfig.model;
+1. **Initial Countdown State**: The error notification mounts with an initial duration of **5 seconds** and a 1-second interval ticker.
+2. **Visual Feedback**:
+   - Displays a pulsing status beacon indicating an active countdown.
+   - Shows live remaining seconds: `"Retrying automatically in 5s..."`, decrementing every second.
+   - Displays diagnostic context indicating that auto-routing will switch to a different operational model.
+3. **User Action Options**:
+   - **"Try again now" (Immediate Manual Bypass)**: Instantly halts the countdown timer and dispatches the retry immediately.
+   - **"Cancel" (Manual Mode Override)**: Halts the countdown timer, marks the countdown as cancelled, and replaces the timer with a stationary `"Retry"` trigger for manual re-execution at the user's convenience.
 
-  if (failedProvider && failedModel && (currentConfig.provider === "auto" || currentConfig.model === "auto")) {
-    lockModel(failedProvider, failedModel, 3600000, rawMsg);
-  }
+#### 6.2 Clean Re-Execution & History Sanitization
 
-  const errorMsgId = `${prefix}-${Date.now()}`;
-  pendingRetriesRef.current.set(errorMsgId, retryAction);
-
-  const errorMsg: ChatMessage = {
-    id: errorMsgId,
-    role: "assistant",
-    content: rawMsg,
-    timestamp: new Date().toISOString(),
-    provider: failedProvider,
-    model: failedModel,
-    isError: true,
-    errorInfo: {
-      message: rawMsg,
-      provider: failedProvider,
-      model: failedModel,
-      isTimeout,
-      canRetry: true,
-    },
-  };
-
-  setChatMessages((prev) => [...prev, errorMsg]);
-};
-```
-
-#### 6.2 The 5-Second Countdown Loop (`ChatErrorMessageCard.tsx`)
-
-`ChatErrorMessageCard` mounts with `secondsLeft = 5` and runs a 1-second interval:
-
-```typescript
-useEffect(() => {
-  if (isCancelled || isRetrying) return;
-
-  timerRef.current = setInterval(() => {
-    setSecondsLeft((prev) => {
-      if (prev <= 1) {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-        handleTriggerRetry();
-        return 0;
-      }
-      return prev - 1;
-    });
-  }, 1000);
-
-  return () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-}, [isCancelled, isRetrying]);
-```
-
-#### 6.3 User Controls & State Transitions
-
-1. **Automatic Expiration**: When `secondsLeft` counts down from `5` to `0`, `handleTriggerRetry()` automatically calls `onRetry()`.
-2. **Immediate Manual Bypass ("Try again now")**:
-   - The user can click the primary rose-colored button at any time.
-   - Clears the interval timer immediately.
-   - Sets `isRetrying = true` and triggers `onRetry()` without delay.
-3. **Cancellation Override ("Cancel")**:
-   - The user clicks the white outline "Cancel" button.
-   - Clears the countdown interval.
-   - Sets `isCancelled = true`.
-   - The UI replaces the countdown with an italicized notice: `"Automatic retry cancelled"`, and reveals a neutral dark button labeled `"Retry"` for manual on-demand execution later.
-
-#### 6.4 Clean History Re-Execution
-
-When retry triggers:
-1. `handleRetryErrorMessage(messageId)` removes the error card message from `chatMessages`.
-2. Retrieves the stored closure `retryAction` from `pendingRetriesRef` and deletes the entry.
-3. Invokes `retryAction(llmConfig)`.
-4. Because the failed provider/model was already locked during step 6.1, `callLLMClientSideWithMeta` and `getNextAutoCandidate` automatically route the retry to the next best operational model in the cluster.
-5. The user experiences a clean, seamless transition: the error card disappears, the typing indicator re-appears with the new model's name and its estimated latency, and the response streams in.
+When retry triggers (either automatically when reaching 0s or manually via button press):
+1. The error message/banner is removed from the active view.
+2. The pending retry callback closure is retrieved and executed.
+3. Because the failing model was already locked in Tier 2, the auto-router automatically selects the next healthy model.
+4. The progress indicator reappears showing the new model's name and its specific expected response time, providing a seamless recovery experience.
 
 ---
 
@@ -482,24 +379,25 @@ When retry triggers:
 
 | Scenario | Risk | System Mitigation |
 | :--- | :--- | :--- |
-| **User Abort / Cancel** | Dangling network requests and orphan token generation. | Clicking "Cancel" on `LlmProgressIndicator` aborts the `AbortController`. The catch block detects `err.name === 'AbortError'` or `signal.aborted`, re-throws without locking the model, and resets typing state cleanly without error cards. |
-| **Generation Time Exceeds $T_{\text{expected}}$** | Progress bar reaches 100% or remaining time shows negative seconds. | Progress is strictly clamped to $\min(99, \dots)$. Remaining seconds clamp to $\max(0, \dots)$. When $t_{\text{elapsed}} \ge T_{\text{expected}}$, label shifts to `"just a moment..."`. |
-| **Corrupted / Truncated JSON Output** | Model outputs incomplete markdown or malformed JSON syntax. | `jsonSanitizer.ts` executes multi-stage regex repairs (`cleanJsonResponse`, `cleanAndParseJson`). If unrecoverable, an `INVALID_RESPONSE` error (422) is raised, triggering Tier 1 retry and Tier 2 circuit breaker. |
-| **OpenAI JSON Mode Rejection (HTTP 400)** | Provider rejects `response_format: { type: "json_object" }`. | Protocol self-healing intercepts 400 responses, strips `response_format` and reasoning parameters, and re-executes immediately. |
-| **Cascading Cluster Outage (All Models Locked)** | Entire provider ecosystem unreachable or rate limited. | `getNextAutoCandidate` checks `available.length`. If 0, it calls `clearAllLocks()`, clearing all locks across providers and preventing total application lockout. |
-| **Geo-Location IP Blocking (Gemini HTTP 400)** | Cloudflare worker forwards client IP from restricted country. | `parseLlmError` identifies `LOCATION_UNSUPPORTED` (400), marks `isRetryable = false`, and outputs explicit configuration guidance on proxy header IP stripping. |
+| **User Abort / Cancel** | Dangling network requests and orphan token consumption. | Clicking the abort trigger on the progress indicator signals the `AbortController`. The catch handler verifies `signal.aborted`, cancels without locking the model, and cleanly dismisses all indicators without showing error alerts. |
+| **Generation Exceeds $T_{\text{expected}}$** | Progress bar reaches 100% or remaining seconds drop below zero. | Progress percentage is strictly clamped to $\min(99, \dots)$. Remaining seconds are clamped to $\max(0, \dots)$. When elapsed time exceeds expected duration, the label shifts to `"Just a moment..."`. |
+| **Corrupted / Truncated JSON Output** | Model outputs incomplete markdown formatting or broken JSON. | Multi-stage regex sanitization parses and repairs JSON syntax. If unrecoverable, an invalid response error is raised, triggering Tier 1 retry and Tier 2 circuit breaker lock. |
+| **Upstream Schema Rejection (HTTP 400)** | Provider rejects structured output format or reasoning flags. | Protocol self-healing intercepts 400 status codes, strips advanced formatting flags, and re-executes immediately. |
+| **Cascading Multi-Provider Outage** | Every registered model across all providers becomes locked. | The candidate selector detects an empty available pool, triggers an automatic anti-deadlock reset, clears all locks, and restores the candidate roster. |
+| **Geo-Location IP Blocking (HTTP 400)** | Request rejected due to geographic IP restrictions. | Classified as non-retryable; skips retry cycles and surfaces explicit network proxy configuration instructions to the user. |
 
 ---
 
-### 8. Key Implementation Files Reference
+### 8. Architectural Checklist for Implementation
 
-| Subsystem | File Path | Primary Responsibilities |
-| :--- | :--- | :--- |
-| **Progress Indicator UI** | `src/components/chat/LlmProgressIndicator.tsx` | Visual timer, 100ms interval loop, 99% progress bar clamping, remaining seconds calculation, cancellation button. |
-| **Start Event Bus** | `src/utils/llmEvents.ts` | Decoupled event emitter (`publishLlmRequestStart`, `notifyLlmRequestStartFromConfig`, `subscribeLlmRequestStart`). |
-| **Auto Mode & Circuit Breaker** | `src/utils/autoModeManager.ts` | Multi-tier candidate routing, `getAllModelStatuses`, `calculateOptimalLockDuration`, `lockModel`, `recordModelResponse`, `recordModelFailure`. |
-| **Transport & Retry Service** | `src/services/llmClientService.ts` | `callWithRetry`, `parseLlmError`, `callLLMClientSideWithMeta`, parameter self-healing, provider endpoints. |
-| **Chat State Controller** | `src/hooks/useChat.ts` | `triggerChatErrorWithCountdown`, `handleRetryErrorMessage`, `pendingRetriesRef`, start typing notifications. |
-| **Error Countdown Card** | `src/components/chat/ChatErrorMessageCard.tsx` | 5-second countdown loop, automatic retry dispatch, "Try again now" and "Cancel" buttons. |
-| **Timeout Wrapper** | `src/utils.ts` | `fetchWithTimeout` (30-second default abort timeout, `X-Proxy-Key` injection). |
-| **Audit Log Store** | `src/services/requestHistoryService.ts` | `logApiRequest`, IndexedDB persistence of latency, status, prompts, and raw responses. |
+When integrating this architecture into an AI application or service, ensure the following core capabilities are in place:
+
+- [ ] **Decoupled Pre-Flight Event Bus**: Emit a request start event prior to network dispatch containing provider, model, and timestamp.
+- [ ] **Historical Metric Store**: Track rolling averages ($K \ge 50$) and single-run latencies for each operational model.
+- [ ] **Clamped Progress Math**: Implement $P(t) = \min(99, (t / T) \times 100)$ with a soft overtime label (`"Just a moment..."`).
+- [ ] **Cancellation Integration**: Provide an accessible abort button connected directly to an `AbortController`.
+- [ ] **Transport-Level Retry**: Implement exponential backoff with jitter for HTTP 429 and 5xx errors; strip unsupported schema parameters on HTTP 400.
+- [ ] **Adaptive Circuit Breaker**: Calculate dynamic lock durations (1h to 96h) based on consecutive failures, recency decay, and historical latency.
+- [ ] **Anti-Deadlock Fallback**: Automatically purge active locks if all available candidates become exhausted.
+- [ ] **User-Facing Countdown Banner**: Display a 5-second countdown timer with instant bypass ("Try again now") and cancel controls.
+- [ ] **Transparent Failover**: Ensure retries re-route through the model selector to pick the next healthy candidate.
