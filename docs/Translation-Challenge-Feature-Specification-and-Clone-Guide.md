@@ -4,9 +4,13 @@
 > - **Native Language**: Vietnamese (`vi` / Tiếng Việt)
 > - **Target Language**: English (`en` / Tiếng Anh)
 >
+> **Core Strategy: Mobile-First & Keep It Simple**:
+> - **Mobile-First Priority**: Language learners primarily practice on smartphones in short, focused bursts. Start by implementing a clean, vertical single-column mobile layout (360px–430px viewport) with touch-friendly controls (≥ 44px tap targets), sticky thumb-level action buttons, and soft-keyboard-resilient containers before considering desktop expansion.
+> - **Simplicity First**: Do not build complex sidebars, nested modal dialogs, or heavy multi-page routers. All interactions (prompt, hints, input, evaluation, vocab reward) fit cleanly within a single mobile card/screen stream.
+>
 > This specification is written with **Vietnamese as the native language** and **English as the target language**. Learners are presented with natural, everyday conversational Vietnamese sentences and challenged to produce accurate, idiomatic English translations that incorporate priority vocabulary from their personal collection. All prompt templates, evaluation heuristics, mock responses, and UI strings in this guide reflect this Vietnamese-to-English setup.
 
-This specification provides everything required to clone the **Translation Challenge** feature from this application into another web or mobile app. It includes architecture diagrams, TypeScript schemas, complete mock LLM responses, evaluation rubrics, prompt engineering templates, state/SRS integration logic, and a standalone mock service to enable immediate plug-and-play development without API keys.
+This specification provides everything required to clone the **Translation Challenge** feature from this application into another web or mobile app. It includes architecture diagrams, TypeScript schemas, complete mock LLM responses, evaluation rubrics, prompt engineering templates, state/SRS integration logic, a complete drop-in mobile React component, and a standalone mock service to enable immediate plug-and-play development without API keys.
 
 ---
 
@@ -713,48 +717,310 @@ OUTPUT SCHEMA (STRICT JSON ONLY):
 
 ---
 
-## 6. UI/UX Blueprint & Best Practices
+## 6. Mobile-First UI Architecture & Complete Drop-in Component
 
-The user interface consists of two synchronized view states:
+To keep development simple, **always start with mobile first**. A clean vertical stream (360px–430px wide) eliminates desktop layout bloat (sidebars, multi-column bento grids, nested dialogs) and guarantees a great experience where learners practice most: on their smartphones.
 
-### 1. Challenge Prompt View (Before Submission)
-- **Top Badge**: Displays category/topic label (e.g., `Ý chí & Vượt khó` or `Workplace Discussions`).
-- **Prompt Sentence**: Rendered in prominent font (18-20px) with quotation marks and an instant audio playback button (`Volume2`).
-- **Collapsible Clues**: A "Vocab Hints" drawer listing 3-5 `keyTargetWords`. Each item features:
-  - Pronounce audio button.
-  - In-collection indicator badge (e.g., "Saved" vs "Add +").
-- **Ask AI Button**: Directly launches an interactive assistant modal to explain vocabulary nuance without spoiling the answer.
+### 6.1 Mobile Ergonomics & Layout Wireframe
 
-### 2. Evaluation Feedback View (After Submission)
-- **Score Showcase Banner**:
-  - Distinct score block: Big bold numeric pill (`94/100`).
-  - 3 qualitative color tiers:
-    - **Good (80-100)**: Emerald palette (`bg-emerald-600`), icon `CheckCircle2` or `Trophy`.
-    - **So-so (60-79)**: Amber palette (`bg-amber-500`), icon `TrendingUp`.
-    - **Needs Work (<60)**: Rose palette (`bg-rose-600`), icon `AlertTriangle`.
-  - Continuous 3-zone color meter showing exact position.
-- **Side-by-Side Comparison**:
-  - `Your Submission` (neutral stone card).
-  - `Ideal Target Translation` (emerald card with one-click audio).
-- **Target Word Incorporation Celebration Banner**:
-  - Renders when `incorporatedTargetWord === true`.
-  - Shows `+30 Strength Points` badge, with before/after progress (e.g. `25% → 55%`).
-- **Vocab Clues Boost Banner**:
-  - Celebrates any additional vocabulary words from the user's collection used in the sentence with `+30 points` each.
-- **Review Banners**:
-  - Displays what went well & areas for improvement.
-- **Mined Suggested Vocabulary**:
-  - Grid of extracted words from the challenge. Each item has a 1-click **"Add to collection"** button so users can harvest new words.
+```
+  ┌────────────────────────────────────────┐
+  │ 390px Mobile Viewport                  │
+  │                                        │
+  │ [Ý chí & Vượt khó]       [🔊 Nghe câu] │ ◄── Category & Native Audio (min 44px)
+  │                                        │
+  │ "Dù gặp nhiều thất bại ban đầu, cô ấy   │ ◄── Large Vietnamese Prompt
+  │  vẫn giữ vững tinh thần kiên cường..." │     (18-20px font, generous line height)
+  │                                        │
+  │ ─── 💡 Gợi ý từ vựng (Chạm để xem) ─── │ ◄── Expandable Clue Chips
+  │ [resilience: sự kiên cường] [setback]  │     (Thumb-friendly chips)
+  │                                        │
+  │ ┌────────────────────────────────────┐ │
+  │ │ Nhập bản dịch tiếng Anh của bạn... │ │ ◄── Soft-Keyboard Friendly Textarea
+  │ │                                    │ │     (Auto-expands, 3-4 lines)
+  │ └────────────────────────────────────┘ │
+  │                                        │
+  │ [ 🏳️ Bỏ qua ]      [ 🚀 Gửi bản dịch ] │ ◄── Thumb-Level Sticky Action Bar
+  └────────────────────────────────────────┘     (High contrast, min 48px height)
+
+                 EVALUATION STATE (AFTER SUBMISSION)
+  ┌────────────────────────────────────────┐
+  │ [ ⭐ 94/100 ] [ Xuất sắc! 🌟 ]          │ ◄── Prominent Score Banner
+  │ [ +30 Điểm SRS: resilience (25% ➔ 55%) ]│ ◄── Memory Strength Bonus Pill
+  │                                        │
+  │ 📝 Bản dịch của bạn:                    │
+  │ "Despite facing initial setbacks..."   │ ◄── User Submission Card
+  │                                        │
+  │ 💡 Bản dịch chuẩn & tự nhiên:          │
+  │ "Despite many setbacks, she maintained │ ◄── Ideal Native Phrasing
+  │  an admirable resilience." [🔊]        │     (With 1-click audio playback)
+  │                                        │
+  │ 💬 Nhận xét: Rất tự nhiên! Dùng tốt... │ ◄── Direct AI Praise & Micro-Tips
+  │                                        │
+  │ [ 🔄 Thử thách câu tiếp theo ]         │ ◄── Primary Bottom Action (Next)
+  └────────────────────────────────────────┘
+```
+
+### 6.2 Mobile-First Implementation Rules (Keep It Simple)
+1. **Container Constraint**: Wrap the component in `max-w-md mx-auto w-full min-h-[100dvh] p-4 flex flex-col`. It looks native on mobile phones and neat/centered on desktop screens without requiring media query branching.
+2. **Touch Targets**: Buttons, clue chips, and audio icons must have a minimum dimension of 44x44px.
+3. **Keyboard Safety**: Use `min-h-[100dvh]` or `h-[100dvh]` with `overflow-y-auto` so the user can easily scroll when the phone's virtual keyboard appears.
+4. **Instant Native Speech (Web Speech API)**: Use browser-native `window.speechSynthesis` for instant zero-dependency audio pronunciation on both iOS and Android.
 
 ---
 
-## 7. Step-by-Step Clone Checklist for Any New App
+### 6.3 Complete Drop-in Mobile Component (`MobileTranslationChallenge.tsx`)
 
-| Step | Action | Files Needed |
+You can copy-paste this self-contained component directly into any React + Tailwind project. It connects seamlessly to `mockChallengeService.ts`:
+
+```tsx
+import React, { useState, useEffect } from "react";
+import { ChallengeData, ChallengeTurnResult } from "./types";
+import { mockGenerateChallenge, mockProcessChallengeTurn } from "./mockChallengeService";
+
+export function MobileTranslationChallenge() {
+  const [challenge, setChallenge] = useState<ChallengeData | null>(null);
+  const [userTranslation, setUserTranslation] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<ChallengeTurnResult | null>(null);
+  const [showClues, setShowClues] = useState(false);
+
+  // Load initial challenge
+  useEffect(() => {
+    loadNewChallenge();
+  }, []);
+
+  const loadNewChallenge = async () => {
+    setLoading(true);
+    setResult(null);
+    setUserTranslation("");
+    setShowClues(false);
+    try {
+      const data = await mockGenerateChallenge();
+      setChallenge(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (overrideText?: string) => {
+    if (!challenge) return;
+    const textToSend = overrideText !== undefined ? overrideText : userTranslation;
+    setSubmitting(true);
+    try {
+      const res = await mockProcessChallengeTurn(challenge, textToSend);
+      setResult(res);
+      if (res.intent === "incomplete" && res.suggestedActions?.[0]?.payload?.text) {
+        setUserTranslation(res.suggestedActions[0].payload.text);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const playAudio = (text: string, lang = "en-US") => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto min-h-screen flex flex-col items-center justify-center p-6 text-stone-600">
+        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-sm font-medium">Đang tạo thử thách dịch thuật...</p>
+      </div>
+    );
+  }
+
+  if (!challenge) return null;
+
+  return (
+    <main className="max-w-md mx-auto w-full min-h-[100dvh] bg-stone-50 text-stone-900 flex flex-col justify-between p-4 sm:p-6 font-sans">
+      {/* Top Bar: Topic & Audio */}
+      <header className="flex items-center justify-between gap-2 mb-3">
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          🎯 {challenge.topicContext || "Luyện dịch ngữ cảnh"}
+        </span>
+        <button
+          onClick={() => playAudio(challenge.nativeSentence, "vi-VN")}
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white border border-stone-200 text-stone-600 hover:bg-stone-100 active:scale-95 transition"
+          aria-label="Phát âm câu tiếng Việt"
+        >
+          🔊
+        </button>
+      </header>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col gap-4">
+        {/* Vietnamese Source Sentence Card */}
+        <section className="bg-white rounded-2xl p-5 border border-stone-200 shadow-sm">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">
+            Dịch câu sau sang tiếng Anh:
+          </p>
+          <p className="text-lg sm:text-xl font-bold text-stone-900 leading-snug">
+            "{challenge.nativeSentence}"
+          </p>
+        </section>
+
+        {/* Expandable Clues Accordion (Mobile Friendly) */}
+        {challenge.keyTargetWords && challenge.keyTargetWords.length > 0 && (
+          <section className="bg-white rounded-2xl border border-stone-200 p-3 shadow-sm">
+            <button
+              onClick={() => setShowClues((prev) => !prev)}
+              className="w-full min-h-[44px] flex items-center justify-between text-sm font-medium text-stone-700 px-2 active:bg-stone-50 rounded-lg"
+            >
+              <span>💡 Gợi ý từ vựng ({challenge.keyTargetWords.length} từ)</span>
+              <span className="text-stone-400">{showClues ? "▲ Thu gọn" : "▼ Xem"}</span>
+            </button>
+            {showClues && (
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-stone-100 mt-2">
+                {challenge.keyTargetWords.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 border border-stone-200 text-xs"
+                  >
+                    <span className="font-bold text-stone-900">{item.word}:</span>
+                    <span className="text-stone-600">{item.translation}</span>
+                    <button
+                      onClick={() => playAudio(item.word, "en-US")}
+                      className="ml-1 text-stone-400 hover:text-stone-700"
+                      title="Nghe phát âm"
+                    >
+                      🔊
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Evaluation Feedback View */}
+        {result?.evaluation && (
+          <section className="bg-white rounded-2xl p-5 border border-stone-200 shadow-sm flex flex-col gap-3 animate-fade-in">
+            {/* Score & Tier Banner */}
+            <div className="flex items-center justify-between">
+              <span
+                className={`px-3 py-1 rounded-xl text-sm font-bold text-white ${
+                  result.evaluation.score >= 80
+                    ? "bg-emerald-600"
+                    : result.evaluation.score >= 60
+                    ? "bg-amber-600"
+                    : "bg-rose-600"
+                }`}
+              >
+                ⭐ {result.evaluation.score}/100 - {result.evaluation.scoreLabel}
+              </span>
+              {result.evaluation.incorporatedTargetWord && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  +30 Điểm SRS 🎉
+                </span>
+              )}
+            </div>
+
+            {/* Side-by-side or stacked translations */}
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-200">
+              <p className="text-xs font-semibold text-stone-500 mb-0.5">Bản dịch của bạn:</p>
+              <p className="text-sm font-medium text-stone-800 italic">
+                "{result.evaluation.userTranslation || "(Chưa nhập câu trả lời)"}"
+              </p>
+            </div>
+
+            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200">
+              <div className="flex items-center justify-between mb-0.5">
+                <p className="text-xs font-semibold text-emerald-800">Bản dịch mẫu tự nhiên:</p>
+                <button
+                  onClick={() => playAudio(result.evaluation!.correctedSentence, "en-US")}
+                  className="text-xs text-emerald-700 font-semibold flex items-center gap-1"
+                >
+                  🔊 Nghe
+                </button>
+              </div>
+              <p className="text-sm font-bold text-emerald-950">
+                "{result.evaluation.correctedSentence}"
+              </p>
+            </div>
+
+            {/* Praise & Improvement Feedback */}
+            <div className="text-xs text-stone-600 space-y-1 pt-1">
+              <p><strong className="text-emerald-700">Điểm tốt:</strong> {result.evaluation.whatWentWell}</p>
+              <p><strong className="text-amber-700">Góp ý:</strong> {result.evaluation.areasForImprovement}</p>
+            </div>
+          </section>
+        )}
+
+        {/* Incomplete Warning View */}
+        {result?.intent === "incomplete" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-900 flex flex-col gap-2">
+            <p className="font-bold">⚠️ Có vẻ như bạn đã gửi câu khi chưa gõ xong!</p>
+            <p>Hệ thống đã giữ lại bản nháp trong ô bên dưới để bạn tiếp tục hoàn thành.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Sticky Interactive Controls */}
+      <footer className="mt-4 pt-2 flex flex-col gap-3">
+        {!result?.evaluation ? (
+          <>
+            <textarea
+              value={userTranslation}
+              onChange={(e) => setUserTranslation(e.target.value)}
+              placeholder="Gõ bản dịch tiếng Anh của bạn tại đây..."
+              rows={3}
+              className="w-full p-3.5 rounded-2xl bg-white border border-stone-300 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none shadow-sm"
+              disabled={submitting}
+            />
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleSubmit("skip")}
+                disabled={submitting}
+                className="min-h-[48px] px-4 rounded-xl border border-stone-300 bg-white text-stone-600 font-medium text-sm hover:bg-stone-100 active:scale-95 transition disabled:opacity-50"
+              >
+                🏳️ Bỏ qua
+              </button>
+
+              <button
+                onClick={() => handleSubmit()}
+                disabled={submitting || !userTranslation.trim()}
+                className="flex-1 min-h-[48px] rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <>🚀 Gửi bản dịch</>
+                )}
+              </button>
+            </div>
+          </>
+        ) : (
+          <button
+            onClick={loadNewChallenge}
+            className="w-full min-h-[50px] rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-base shadow-sm transition flex items-center justify-center gap-2"
+          >
+            🔄 Thử thách câu tiếp theo
+          </button>
+        )}
+      </footer>
+    </main>
+  );
+}
+```
+
+---
+
+## 7. Step-by-Step Mobile-First Clone Checklist
+
+| Step | Action | Output / Files |
 | :--- | :--- | :--- |
-| **Step 1** | Copy TypeScript interfaces into your types system. | `types.ts` |
-| **Step 2** | Add `mockChallengeService.ts` to provide immediate offline and local preview testing. | `services/mockChallengeService.ts` |
-| **Step 3** | Implement UI components for **Prompt Card** and **Evaluation Feedback**. | `components/TranslationChallengeCard.tsx` |
-| **Step 4** | Hook submission handler into your chat or quiz screen, updating state on `"incomplete"` or `"submission"`. | `hooks/useChallenge.ts` |
-| **Step 5** | Wire Spaced Repetition (SRS) DB updates: Add `+30` strength when `incorporatedTargetWord` is true, and save to LocalStorage or DB. | Storage / State Layer |
-| **Step 6** | Connect real LLM endpoint (Gemini / OpenAI / Anthropic) by swapping the mock service for the server prompt handler. | `server.ts` or API route |
+| **Step 1: Setup Types** | Copy TypeScript interfaces into your types system. | `types.ts` |
+| **Step 2: Add Mock Service** | Add `mockChallengeService.ts` to simulate generation & evaluation offline without API keys. | `services/mockChallengeService.ts` |
+| **Step 3: Drop in Mobile UI** | Copy `MobileTranslationChallenge.tsx` directly into your views or components. | `components/MobileTranslationChallenge.tsx` |
+| **Step 4: Verify Mobile Ergonomics** | Test on mobile viewport (360px–430px): check touch targets (≥ 44px), virtual keyboard typing, and audio buttons. | In-browser DevTools Device Mode |
+| **Step 5: Wire SRS Persistence** | Connect `evaluation.augmentedWords` (+30/+10 points) to your local SQLite/IndexedDB or LocalStorage. | Storage Layer |
+| **Step 6: Connect Real LLM** | When ready, replace the mock service calls with your real backend API route (Gemini / Claude / OpenAI). | `server.ts` or API endpoint |
+
