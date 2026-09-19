@@ -3,7 +3,7 @@ import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils"
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { logApiRequest } from "./requestHistoryService";
 import { getTranslationChallengeCandidateWords, isWordPracticedToday } from "../utils/spacedRepetition";
-import { findWordInCollection, hasUserIncorporatedWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
+import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 import { getPreferredModelsForLanguage } from "../config/llmProviders";
 
 export interface GenerateChallengeParams {
@@ -763,6 +763,8 @@ async function processChallengeTurnClientSide(params: ChallengeTurnParams): Prom
 
   const nativeSentence = challenge.nativeSentence;
   const idealTranslation = challenge.idealTranslation;
+  const rawClues = (challenge.keyTargetWords || []).map((kw: any) => kw.word?.trim()).filter(Boolean);
+  const formattedClues = rawClues.length > 0 ? rawClues.map((w: string) => `"${w}"`).join(", ") : "(None)";
   const keyTargetWords = JSON.stringify(challenge.keyTargetWords || []);
   const targetWord = challenge.targetWordFromCollection?.word || "";
 
@@ -779,7 +781,8 @@ THÔNG TIN THỬ THÁCH:
 - Câu tiếng Việt gốc: "${nativeSentence}"
 - Từ vựng mục tiêu từ bộ sưu tập: "${targetWord}"
 ${idealTranslation ? `- Bản dịch tham khảo trước đó: "${idealTranslation}"` : `- Chưa có bản dịch mẫu (BẠN BẮT BUỘC TẠO CÂU DỊCH CHUẨN TỰ NHIÊN NHẤT TRONG "correctedSentence")`}
-- Gợi ý từ vựng hữu ích: ${keyTargetWords}
+- Danh sách từ gợi ý (Vocabulary Clues): [${formattedClues}]
+- Chi tiết từ gợi ý: ${keyTargetWords}
 - Ngôn ngữ đích: ${targetLanguage}
 - Tiếng mẹ đẻ: Tiếng Việt
 
@@ -800,15 +803,26 @@ NHIỆM VỤ ĐÁNH GIÁ:
    - ĐÁNH GIÁ LINH HOẠT VỚI NHIỀU CÁCH DIỄN ĐẠT & TỪ ĐỒNG NGHĨA: Real-life language có nhiều cách nói tương đương. Hãy công nhận và cho điểm cao nếu học viên dùng từ đồng nghĩa tự nhiên hoặc cấu trúc khác mà truyền tải trọn vẹn, tự nhiên ý nghĩa câu tiếng Việt.
    - Chấm điểm độ chính xác (0 đến 100).
    - Gán scoreLabel: "Xuất sắc! 🌟" (90-100), "Làm tốt lắm! 👏" (75-89), "Khá tốt! 👍" (60-74), "Cần luyện tập thêm! 💪" (<60).
-   - Kiểm tra xem học viên có sử dụng từ vựng mục tiêu "${targetWord}" không:
-     + CHỈ gán "incorporatedTargetWord": true NẾU VÀ CHỈ NẾU câu của học viên thực sự chứa từ/cụm từ "${targetWord}" (hoặc các biến thể chia thì/ngữ pháp như ${targetWord}s, ${targetWord}ed, ${targetWord}ing).
-     + NẾU HỌC VIÊN DÙNG TỪ ĐỒNG NGHĨA KHÁC (ví dụ dùng 'come over', 'visit' thay vì '${targetWord}'): BẮT BUỘC gán "incorporatedTargetWord": false. TUYỆT ĐỐI KHÔNG khen là học viên đã dùng '${targetWord}' trong "whatWentWell". Thay vào đó, hãy khen ngợi cách diễn đạt tự nhiên bằng từ đồng nghĩa của họ trong "whatWentWell", và trong "areasForImprovement" hãy gợi ý cách áp dụng từ vựng mục tiêu "${targetWord}".
+   
+   - QUY TẮC CHÍNH XÁC CHO "incorporatedTargetWord" (TỪ VỰNG MỤC TIÊU):
+     + Gán "incorporatedTargetWord": true NẾU VÀ CHỈ NẾU câu của học viên thực sự sử dụng từ vựng mục tiêu "${targetWord}" (chấp nhận cả các dạng chia thì, số nhiều/số ít, tiền tố/hậu tố, trạng từ -ly, phrasal verb tách rời, hoặc biến thể dấu gạch nối / khoảng trắng như "cost-effective" / "cost effective").
+     + BẮT BUỘC gán "incorporatedTargetWord": false NẾU học viên KHÔNG dùng từ "${targetWord}" (ví dụ: dùng từ đồng nghĩa khác như 'affordable' hay 'come over', hoặc không nhắc đến, hoặc bỏ trống/bỏ qua).
+     + Khi "incorporatedTargetWord" là false: TUYỆT ĐỐI KHÔNG khen trong "whatWentWell" rằng học viên đã dùng "${targetWord}". Thay vào đó, hãy khen ngợi từ đồng nghĩa/cấu trúc tự nhiên họ đã dùng trong "whatWentWell", và trong "areasForImprovement" hãy gợi ý cách lồng ghép từ mục tiêu "${targetWord}".
+     + Khi "incorporatedTargetWord" là true: Hãy ghi nhận và khen ngợi cách dùng chuẩn xác của từ mục tiêu "${targetWord}" trong "whatWentWell".
+
+   - QUY TẮC CHÍNH XÁC CHO "incorporatedVocabClues" (CÁC TỪ GỢI Ý ĐÃ DÙNG):
+     + Danh sách các từ gợi ý trong thử thách này: [${formattedClues}].
+     + Rà soát kỹ lưỡng câu dịch của học viên xem học viên có sử dụng bất kỳ từ nào trong danh sách gợi ý trên không (chấp nhận các dạng chia thì/ngữ pháp/dấu nối tương đương).
+     + Trả về mảng "incorporatedVocabClues" chứa chính xác tên các từ gợi ý mà học viên ĐÃ THỰC SỰ SỬ DỤNG (ví dụ: ["service", "print"]).
+     + Nếu học viên KHÔNG sử dụng từ gợi ý nào trong danh sách trên (hoặc bỏ qua/xem đáp án), BẮT BUỘC trả về mảng rỗng: [].
+     + TUYỆT ĐỐI KHÔNG đưa từ vào "incorporatedVocabClues" nếu học viên không hề viết từ đó trong bản dịch của họ.
+
    - "whatWentWell": Lời khen ngợi chi tiết, thân thiện bằng TIẾNG VIỆT (chỉ ra cụm từ dùng hay, ngữ pháp chuẩn).
    - "areasForImprovement": Góp ý xây dựng bằng TIẾNG VIỆT giải thích rõ ràng về giới từ, thì, sắc thái tự nhiên hoặc lưu ý để câu mượt mà hơn.
    - "suggestedVocabulary": Danh sách 3-5 từ vựng/cụm từ hay trong câu kèm nghĩa tiếng Việt.
 
 3. NẾU HỌC VIÊN BỎ QUA / XEM ĐÁP ÁN:
-   - score: 0, scoreLabel: "Xem đáp án & Học tập! 💡", userTranslation: "(No answer provided)", incorporatedTargetWord: false.
+   - score: 0, scoreLabel: "Xem đáp án & Học tập! 💡", userTranslation: "(No answer provided)", incorporatedTargetWord: false, incorporatedVocabClues: [].
    - "whatWentWell": Lời động viên bằng tiếng Việt.
    - "areasForImprovement": Giải thích ngắn gọn bằng tiếng Việt về cách dùng từ "${targetWord}" trong câu dịch mẫu "${targetLanguage}".
 
@@ -838,17 +852,18 @@ TRẢ VỀ JSON THUẦN:
       }
     ]
   }
-}`;
+} `;
 
-    systemInstruction = `Bạn là chuyên gia đánh giá thử thách dịch thuật tiếng Việt sang ${targetLanguage}. Tạo câu dịch mẫu tự nhiên nhất ("correctedSentence") có chứa từ vựng mục tiêu "${targetWord}", đánh giá linh hoạt bản dịch của học viên, và đưa ra nhận xét bằng tiếng Việt chi tiết, dễ hiểu. Trả về JSON thuần.`;
-    schemaDescription = `JSON object with intent: "submission" and evaluation object containing correctedSentence, score, scoreLabel, whatWentWell, areasForImprovement, incorporatedTargetWord, and suggestedVocabulary.`;
+    systemInstruction = `Bạn là chuyên gia đánh giá thử thách dịch thuật tiếng Việt sang ${targetLanguage}. Tạo câu dịch mẫu tự nhiên nhất ("correctedSentence") có chứa từ vựng mục tiêu "${targetWord}", đánh giá linh hoạt bản dịch của học viên, và đưa ra nhận xét bằng tiếng Việt chi tiết, dễ hiểu. Đánh giá chính xác "incorporatedTargetWord" (true nếu học viên thực sự dùng từ mục tiêu) và "incorporatedVocabClues" (danh sách các từ gợi ý mà học viên đã dùng). Trả về JSON thuần.`;
+    schemaDescription = `JSON object with intent: "submission" and evaluation object containing correctedSentence, score, scoreLabel, whatWentWell, areasForImprovement, incorporatedTargetWord (boolean), targetWordUsed (string), incorporatedVocabClues (string array of used clues), and suggestedVocabulary.`;
   } else {
     prompt = `Evaluate a language learner's translation attempt during a Translation Challenge.
 
 CHALLENGE DETAILS:
 - Native Sentence (${nativeLanguage}): "${nativeSentence}"
 - Ideal Target Translation (${targetLanguage}): "${idealTranslation || "(Not pre-computed - please generate the optimal natural translation)"}"
-- Key Target Words: ${keyTargetWords}
+- Designated Vocabulary Clues: [${formattedClues}]
+- Key Target Words Details: ${keyTargetWords}
 - Featured Target Word from Collection: "${targetWord}"
 - Target Language: ${targetLanguage}
 - Native Language: ${nativeLanguage}
@@ -872,11 +887,25 @@ TASK:
    - FLEXIBILITY FOR MULTIPLE CORRECT TRANSLATIONS & SYNONYMS:
      Real-world language has multiple valid ways to express the same thought. Acknowledge and credit valid alternative vocabulary, natural synonyms, and different correct grammatical structures.
    - Calculate an overall accuracy score from 0 to 100. If skipped/empty: score 0, scoreLabel: "Review & Learn! 💡".
-   - SPECIFIC TARGET WORD INCORPORATION CHECK:
-     Check whether the learner actually typed the featured target word "${targetWord}" or its valid grammatical inflections.
-     If the user used a natural synonym (e.g. "come over" instead of "${targetWord}"): praise the natural phrasing in "whatWentWell", but set "incorporatedTargetWord": false. Never claim in "whatWentWell" that the user used "${targetWord}" if they didn't write it.
+   
+   - STRICT CHECK FOR "incorporatedTargetWord" (FEATURED TARGET WORD):
+     + Set "incorporatedTargetWord": true IF AND ONLY IF the learner actually included the featured target word "${targetWord}" or its valid grammatical inflections / forms (e.g. past tense, gerund, plural, adverbial forms like -ly, separable phrasal verb particles, or hyphen/space compound variants like "cost-effective" / "cost effective").
+     + Set "incorporatedTargetWord": false IF the learner used an alternative synonym (e.g. "affordable" instead of "${targetWord}"), omitted it, or skipped.
+     + When "incorporatedTargetWord" is false: Never claim in "whatWentWell" that the user used "${targetWord}". Instead, praise their natural synonym/phrasing in "whatWentWell" and suggest how to apply "${targetWord}" in "areasForImprovement".
+     + When "incorporatedTargetWord" is true: Acknowledge and praise their correct use of "${targetWord}" in "whatWentWell".
+
+   - STRICT CHECK FOR "incorporatedVocabClues" (CLUE WORDS ACTUALLY USED):
+     + Designated Vocabulary Clues for this challenge: [${formattedClues}].
+     + Inspect the learner's submitted translation carefully. Identify any words from the designated clues list above that the learner actually wrote or incorporated (including their inflectional or hyphen/space forms).
+     + Return an array of the exact clue word strings that the learner incorporated, e.g. ["service", "print"].
+     + If the learner did NOT incorporate any of the designated clues, return an empty array: [].
+     + Do NOT hallucinate or include any clue words in "incorporatedVocabClues" that do not appear in the learner's text.
+
    - List "whatWentWell" and "areasForImprovement".
    - Provide "suggestedVocabulary": an array of 3-5 vocabulary items containing key terms from the challenge.
+
+3. IF LEARNER SKIPS / REVEALS ANSWER:
+   - score: 0, scoreLabel: "Review & Learn! 💡", userTranslation: "(No answer provided)", incorporatedTargetWord: false, incorporatedVocabClues: [].
 
 Return STRICTLY raw JSON matching:
 {
@@ -907,8 +936,8 @@ Return STRICTLY raw JSON matching:
   }
 }`;
 
-    systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.`;
-    schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object (including userTranslation, incorporatedTargetWord) if submission.`;
+    systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Strictly determine whether the learner incorporated the designated target word ("incorporatedTargetWord") and which clue words they incorporated ("incorporatedVocabClues").`;
+    schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object containing score, scoreLabel, userTranslation, incorporatedTargetWord (boolean), targetWordUsed (string), incorporatedVocabClues (string array), whatWentWell, areasForImprovement, correctedSentence, and suggestedVocabulary.`;
   }
 
   const startTime = performance.now();
@@ -937,31 +966,24 @@ Return STRICTLY raw JSON matching:
   if (parsed.evaluation) {
     parsed.evaluation.userTranslation = parsed.evaluation.userTranslation?.trim() || userMessage.trim();
     if (targetWord) {
-      // Programmatic gate: Target word must actually be present in the user text or translation
-      const textHasTargetWord = !isEmptySub && (
-        hasUserIncorporatedWord(parsed.evaluation.userTranslation, targetWord) ||
-        hasUserIncorporatedWord(userMessage, targetWord)
-      );
-      parsed.evaluation.incorporatedTargetWord = textHasTargetWord;
-      parsed.evaluation.targetWordUsed = targetWord;
-
-      // Sanitize whatWentWell in case the model falsely claimed the user incorporated the word
-      if (parsed.evaluation.whatWentWell) {
-        parsed.evaluation.whatWentWell = sanitizeEvaluationWhatWentWell(
-          parsed.evaluation.whatWentWell,
-          targetWord,
-          textHasTargetWord
-        );
+      if (isEmptySub) {
+        parsed.evaluation.incorporatedTargetWord = false;
+      } else {
+        // Rely directly on LLM evaluation (no validation gate)
+        parsed.evaluation.incorporatedTargetWord = Boolean(parsed.evaluation.incorporatedTargetWord);
       }
+      parsed.evaluation.targetWordUsed = parsed.evaluation.targetWordUsed || targetWord;
     }
-    if (Array.isArray(challenge.keyTargetWords)) {
-      const incClues: string[] = [];
-      for (const kw of challenge.keyTargetWords) {
-        if (kw?.word && !isEmptySub && (hasUserIncorporatedWord(parsed.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(userMessage, kw.word))) {
-          incClues.push(kw.word);
-        }
-      }
-      parsed.evaluation.incorporatedVocabClues = incClues;
+
+    if (isEmptySub) {
+      parsed.evaluation.incorporatedVocabClues = [];
+    } else if (Array.isArray(parsed.evaluation.incorporatedVocabClues)) {
+      // Rely directly on LLM evaluation for mentioned clues
+      parsed.evaluation.incorporatedVocabClues = parsed.evaluation.incorporatedVocabClues
+        .filter((w: any) => typeof w === "string" && w.trim().length > 0)
+        .map((w: string) => w.trim());
+    } else {
+      parsed.evaluation.incorporatedVocabClues = [];
     }
   }
 
@@ -1000,31 +1022,24 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
         data.evaluation.userTranslation = data.evaluation.userTranslation?.trim() || params.userMessage.trim();
         const targetWord = params.challenge.targetWordFromCollection?.word;
         if (targetWord) {
-          // Programmatic gate: Target word must actually be present in the user text or translation
-          const textHasTargetWord = !isEmptySub && (
-            hasUserIncorporatedWord(data.evaluation.userTranslation, targetWord) ||
-            hasUserIncorporatedWord(params.userMessage, targetWord)
-          );
-          data.evaluation.incorporatedTargetWord = textHasTargetWord;
-          data.evaluation.targetWordUsed = targetWord;
-
-          // Sanitize whatWentWell in case the model falsely claimed the user incorporated the word
-          if (data.evaluation.whatWentWell) {
-            data.evaluation.whatWentWell = sanitizeEvaluationWhatWentWell(
-              data.evaluation.whatWentWell,
-              targetWord,
-              textHasTargetWord
-            );
+          if (isEmptySub) {
+            data.evaluation.incorporatedTargetWord = false;
+          } else {
+            // Rely directly on LLM evaluation (no validation gate)
+            data.evaluation.incorporatedTargetWord = Boolean(data.evaluation.incorporatedTargetWord);
           }
+          data.evaluation.targetWordUsed = data.evaluation.targetWordUsed || targetWord;
         }
-        if (Array.isArray(params.challenge.keyTargetWords)) {
-          const incClues: string[] = [];
-          for (const kw of params.challenge.keyTargetWords) {
-            if (kw?.word && !isEmptySub && (hasUserIncorporatedWord(data.evaluation.userTranslation, kw.word) || hasUserIncorporatedWord(params.userMessage, kw.word))) {
-              incClues.push(kw.word);
-            }
-          }
-          data.evaluation.incorporatedVocabClues = incClues;
+
+        if (isEmptySub) {
+          data.evaluation.incorporatedVocabClues = [];
+        } else if (Array.isArray(data.evaluation.incorporatedVocabClues)) {
+          // Rely directly on LLM evaluation for mentioned clues
+          data.evaluation.incorporatedVocabClues = data.evaluation.incorporatedVocabClues
+            .filter((w: any) => typeof w === "string" && w.trim().length > 0)
+            .map((w: string) => w.trim());
+        } else {
+          data.evaluation.incorporatedVocabClues = [];
         }
       }
 

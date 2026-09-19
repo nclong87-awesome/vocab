@@ -62,16 +62,33 @@ export function areWordsEquivalent(word1?: string | null, word2?: string | null)
   if (cached !== undefined) return cached;
 
   let result = false;
-  // 2. Normalized singular comparison
-  const s1 = normalizeWordForComparison(w1);
-  const s2 = normalizeWordForComparison(w2);
+
+  // 2. Hyphen, dash, and space normalization (e.g. "cost-effective" vs "cost effective", "ice-cream" vs "ice cream")
+  const norm1 = w1.replace(/[-_–—\s]+/g, " ").trim();
+  const norm2 = w2.replace(/[-_–—\s]+/g, " ").trim();
+  if (norm1 && norm2 && norm1 === norm2) {
+    equivalentCache.set(cacheKey, true);
+    return true;
+  }
+
+  // 3. Flat alphanumeric compound comparison (e.g. "workout" vs "work-out" vs "work out")
+  const flat1 = w1.replace(/[^a-z0-9]/g, "");
+  const flat2 = w2.replace(/[^a-z0-9]/g, "");
+  if (flat1.length >= 4 && flat1 === flat2) {
+    equivalentCache.set(cacheKey, true);
+    return true;
+  }
+
+  // 4. Normalized singular comparison
+  const s1 = normalizeWordForComparison(norm1 || w1);
+  const s2 = normalizeWordForComparison(norm2 || w2);
   if (s1 && s2 && s1 === s2) {
     result = true;
   } else {
-    // 3. Plural check
+    // 5. Plural check
     try {
-      const p1 = getPluralForComparison(w1);
-      const p2 = getPluralForComparison(w2);
+      const p1 = getPluralForComparison(norm1 || w1);
+      const p2 = getPluralForComparison(norm2 || w2);
       if (p1 && p2 && p1 === p2) result = true;
       else if (p1 === w2 || p2 === w1 || s1 === w2 || s2 === w1) result = true;
     } catch {
@@ -452,8 +469,24 @@ function extractTargetWordCandidates(targetWord: string): string[] {
     cleaned = cleaned.replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ").trim();
     // Collapse extra whitespace
     cleaned = cleaned.replace(/\s+/g, " ");
-    if (cleaned) {
-      candidates.add(cleaned);
+    if (!cleaned) continue;
+
+    candidates.add(cleaned);
+
+    // If it contains hyphens or dashes (e.g. "cost-effective", "long-term", "check-in")
+    if (/[-_–—]/.test(cleaned)) {
+      const spaceVersion = cleaned.replace(/[-_–—\s]+/g, " ").trim();
+      const flatVersion = cleaned.replace(/[-_–—\s]+/g, "").trim();
+      if (spaceVersion) candidates.add(spaceVersion);
+      if (flatVersion && flatVersion.length >= 4) candidates.add(flatVersion);
+    }
+
+    // If it contains spaces (e.g. "cost effective", "ice cream", "work out")
+    if (/\s/.test(cleaned)) {
+      const hyphenVersion = cleaned.replace(/[-_–—\s]+/g, "-").trim();
+      const flatVersion = cleaned.replace(/[-_–—\s]+/g, "").trim();
+      if (hyphenVersion) candidates.add(hyphenVersion);
+      if (flatVersion && flatVersion.length >= 4) candidates.add(flatVersion);
     }
   }
 
@@ -463,8 +496,8 @@ function extractTargetWordCandidates(targetWord: string): string[] {
 /**
  * Checks if a user's response text incorporates a specific target word,
  * handling case insensitivity, punctuation, word boundaries, plural/singular forms,
- * and common verb inflections (e.g. "dropped", "dropping", "drops", "streamlined", "streamlining").
- * Also accurately handles phrasal verbs, irregular verbs, and separable particles (e.g. "pick the documents up").
+ * hyphens vs spaces (e.g. "cost-effective" vs "cost effective"), compound words,
+ * common verb inflections, and phrasal verbs.
  */
 export function hasUserIncorporatedWord(text?: string | null, targetWord?: string | null): boolean {
   if (!text || !targetWord) return false;
@@ -475,52 +508,85 @@ export function hasUserIncorporatedWord(text?: string | null, targetWord?: strin
   if (candidates.length === 0) return false;
 
   for (const cand of candidates) {
-    // 1. Direct whole-word regex check with non-word boundary matching
-    const escaped = cand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const boundaryRegex = new RegExp(`(?:^|[^a-zA-Z0-9_-])${escaped}(?:$|[^a-zA-Z0-9_-])`, "i");
-    if (boundaryRegex.test(t)) return true;
+    const parts = cand.split(/[-_–—\s]+/).filter(Boolean);
 
-    // 2. Multi-word phrase or phrasal verb check (e.g. "drop by", "look into", "pick up")
-    if (cand.includes(" ")) {
-      const parts = cand.split(/\s+/).filter(Boolean);
-      if (parts.length >= 2) {
-        const headWord = parts[0];
-        const tailWords = parts.slice(1);
-        const headForms = getWordInflections(headWord);
+    // 1. Multi-word phrase or hyphenated compound (e.g. "cost-effective", "look into", "drop by")
+    if (parts.length >= 2) {
+      const headWord = parts[0];
+      const tailWords = parts.slice(1);
+      const headForms = new Set<string>([headWord, ...getWordInflections(headWord)]);
+      const sHead = normalizeWordForComparison(headWord);
+      const pHead = getPluralForComparison(headWord);
+      if (sHead) headForms.add(sHead);
+      if (pHead) headForms.add(pHead);
 
-        const tailEscaped = tailWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
-        const headEscapedPattern = headForms.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+      const headPattern = Array.from(headForms)
+        .map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|");
 
-        // 2a. Contiguous match (e.g. "dropped by", "dropping by", "drops by", "looking into")
-        const contiguousRegex = new RegExp(
-          `(?:^|[^a-zA-Z0-9_-])(?:${headEscapedPattern})\\s+${tailEscaped}(?:$|[^a-zA-Z0-9_-])`,
+      const tailPattern = tailWords
+        .map((tailWord) => {
+          const tailForms = new Set<string>([tailWord, ...getWordInflections(tailWord)]);
+          const s = normalizeWordForComparison(tailWord);
+          const p = getPluralForComparison(tailWord);
+          if (s) tailForms.add(s);
+          if (p) tailForms.add(p);
+          if (tailWord.endsWith("ive") || tailWord.endsWith("able") || tailWord.endsWith("ible") || tailWord.endsWith("ful")) {
+            tailForms.add(tailWord + "ly");
+          }
+          return `(?:${Array.from(tailForms).map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`;
+        })
+        .join("[-_–—\\s]+");
+
+      // 1a. Contiguous match with flexible separator (space, hyphen, dash)
+      const contiguousRegex = new RegExp(
+        `(?:^|[^a-zA-Z0-9])(?:${headPattern})[-_–—\\s]+${tailPattern}(?:$|[^a-zA-Z0-9])`,
+        "i"
+      );
+      if (contiguousRegex.test(t)) return true;
+
+      // 1b. Separable phrasal verb match with up to 4 words in between (e.g. "picked the documents up")
+      if (tailWords.length === 1) {
+        const singleParticle = tailWords[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const separableRegex = new RegExp(
+          `\\b(?:${headPattern})\\b(?:\\s+[^\\s.,!?;:()]+){1,4}\\s+\\b${singleParticle}\\b`,
           "i"
         );
-        if (contiguousRegex.test(t)) return true;
-
-        // 2b. Separable phrasal verb match with up to 4 words in between (e.g. "picked the documents up")
-        if (tailWords.length === 1) {
-          const singleParticle = tailWords[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          const separableRegex = new RegExp(
-            `\\b(?:${headEscapedPattern})\\b(?:\\s+[^\\s.,!?;:()]+){1,4}\\s+\\b${singleParticle}\\b`,
-            "i"
-          );
-          if (separableRegex.test(t)) return true;
-        }
+        if (separableRegex.test(t)) return true;
       }
-      continue;
+
+      // 1c. Token sequence check
+      const cleanTokens = t.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter(Boolean);
+      for (let i = 0; i <= cleanTokens.length - parts.length; i++) {
+        let allMatch = true;
+        for (let j = 0; j < parts.length; j++) {
+          if (!areWordsEquivalent(cleanTokens[i + j], parts[j]) && cleanTokens[i + j] !== parts[j]) {
+            allMatch = false;
+            break;
+          }
+        }
+        if (allMatch) return true;
+      }
     }
 
+    // 2. Direct whole-word regex check with alphanumeric boundary matching
+    const escaped = cand.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const boundaryRegex = new RegExp(`(?:^|[^a-zA-Z0-9])${escaped}(?:$|[^a-zA-Z0-9])`, "i");
+    if (boundaryRegex.test(t)) return true;
+
     // 3. Single-word inflections (regular and irregular)
-    const allForms = getWordInflections(cand);
+    const allForms = new Set<string>(getWordInflections(cand));
     const singular = normalizeWordForComparison(cand);
     const plural = getPluralForComparison(cand);
-    if (singular) allForms.push(singular);
-    if (plural) allForms.push(plural);
+    if (singular) allForms.add(singular);
+    if (plural) allForms.add(plural);
+    if (cand.endsWith("ive") || cand.endsWith("able") || cand.endsWith("ible") || cand.endsWith("ful")) {
+      allForms.add(cand + "ly");
+    }
 
     for (const form of allForms) {
       const escForm = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`(?:^|[^a-zA-Z0-9_-])${escForm}(?:$|[^a-zA-Z0-9_-])`, "i").test(t)) {
+      if (new RegExp(`(?:^|[^a-zA-Z0-9])${escForm}(?:$|[^a-zA-Z0-9])`, "i").test(t)) {
         return true;
       }
     }
@@ -530,11 +596,53 @@ export function hasUserIncorporatedWord(text?: string | null, targetWord?: strin
     for (const token of tokens) {
       if (areWordsEquivalent(token, cand)) return true;
       if (singular && normalizeWordForComparison(token) === singular) return true;
-      if (allForms.includes(token)) return true;
+      if (allForms.has(token)) return true;
+    }
+
+    // 5. Flat compound check (e.g. "workout" vs "work out")
+    const candFlat = cand.replace(/[^a-z0-9]/g, "");
+    if (candFlat.length >= 4) {
+      const cleanTokens = t.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter(Boolean);
+      for (let i = 0; i < cleanTokens.length; i++) {
+        if (cleanTokens[i] === candFlat) return true;
+        if (i < cleanTokens.length - 1 && cleanTokens[i] + cleanTokens[i + 1] === candFlat) return true;
+      }
     }
   }
 
   return false;
+}
+
+/**
+ * Checks if the key content parts of targetWord (words of length >= 3)
+ * are loosely present in the user text or translation.
+ * Used as an additional confirmation check when the LLM explicitly evaluates incorporatedTargetWord as true.
+ */
+export function hasLooseWordPresence(text?: string | null, targetWord?: string | null): boolean {
+  if (!text || !targetWord) return false;
+  const t = text.trim().toLowerCase();
+  const tw = targetWord.trim().toLowerCase();
+  if (!t || !tw) return false;
+
+  if (hasUserIncorporatedWord(t, tw)) return true;
+
+  const cleanTextTokens = new Set(t.replace(/[^a-z0-9]/g, " ").split(/\s+/).filter(Boolean));
+  const parts = extractTargetWordCandidates(tw).flatMap((c) =>
+    c.split(/[-_–—\s]+/).filter((p) => p.length >= 3)
+  );
+
+  if (parts.length === 0) return false;
+
+  const matchingParts = parts.filter((p) => {
+    if (cleanTextTokens.has(p)) return true;
+    for (const tok of cleanTextTokens) {
+      if (areWordsEquivalent(tok, p)) return true;
+      if (tok.startsWith(p) || p.startsWith(tok)) return true;
+    }
+    return false;
+  });
+
+  return matchingParts.length >= Math.ceil(parts.length / 2);
 }
 
 /**

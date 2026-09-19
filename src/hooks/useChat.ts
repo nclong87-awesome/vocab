@@ -30,7 +30,7 @@ import { lockModel } from "../utils/autoModeManager";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
-import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, hasUserIncorporatedWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
+import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
 import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 import { ChallengeData } from "../types";
@@ -1720,12 +1720,9 @@ export function useChat({
           const primaryTargetWordText = primaryTargetWord?.word || targetColWord?.word || evalRes.targetWordUsed;
 
           const isUserEmpty = userText.trim() === "" || userText.trim() === "🔍" || (evalRes.score === 0 && evalRes.userTranslation === "(No answer provided)");
-          const textHasPrimaryWord = primaryTargetWordText && !isUserEmpty ? (
-            hasUserIncorporatedWord(userText, primaryTargetWordText) ||
-            hasUserIncorporatedWord(evalRes.userTranslation, primaryTargetWordText)
-          ) : false;
 
-          const didIncorporatePrimary = Boolean(textHasPrimaryWord);
+          // Rely directly on LLM response (no validation gate)
+          const didIncorporatePrimary = isUserEmpty ? false : Boolean(evalRes.incorporatedTargetWord);
 
           evalRes.incorporatedTargetWord = didIncorporatePrimary;
           if (primaryTargetWordText) {
@@ -1785,11 +1782,9 @@ export function useChat({
               continue;
             }
 
-            // Check if user mentioned this vocab clue in their answer
-            const didMentionClue = (
-              evalRes.incorporatedVocabClues?.some((w) => areWordsEquivalent(w, clueWordText)) ||
-              hasUserIncorporatedWord(userText, clueWordText) ||
-              hasUserIncorporatedWord(evalRes.userTranslation, clueWordText)
+            // Check if user mentioned this vocab clue in their answer - rely directly on LLM response
+            const didMentionClue = !isUserEmpty && Boolean(
+              evalRes.incorporatedVocabClues?.some((w) => areWordsEquivalent(w, clueWordText))
             );
 
             if (didMentionClue) {
@@ -1852,7 +1847,9 @@ export function useChat({
           }
 
           evalRes.augmentedWords = augmentedWordsList;
-          evalRes.incorporatedVocabClues = incorporatedClueWords;
+          if (!Array.isArray(evalRes.incorporatedVocabClues)) {
+            evalRes.incorporatedVocabClues = incorporatedClueWords;
+          }
 
           const currentChallenge = activeChallenge;
           setActiveChallenge(null); // Challenge completed
