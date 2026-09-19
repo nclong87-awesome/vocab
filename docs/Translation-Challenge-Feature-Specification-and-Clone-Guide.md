@@ -7,6 +7,8 @@
 > **Core Strategy: Mobile-First & Keep It Simple**:
 > - **Mobile-First Priority**: Language learners primarily practice on smartphones in short, focused bursts. Start by implementing a clean, vertical single-column mobile layout (360px–430px viewport) with touch-friendly controls (≥ 44px tap targets), sticky thumb-level action buttons, and soft-keyboard-resilient containers before considering desktop expansion.
 > - **Simplicity First**: Do not build complex sidebars, nested modal dialogs, or heavy multi-page routers. All interactions (prompt, hints, input, evaluation, vocab reward) fit cleanly within a single mobile card/screen stream.
+> - **Vocabulary Collection & 24-Hour Recency Rule**: Users can add individual words or phrases to their personal collection. When generating a challenge, the system prioritizes words/phrases whose last appearance was **more than 1 day ago** (>24 hours). If no collection words satisfy this condition (or if the collection is empty), the system seamlessly falls back to common words and phrases used in daily English conversation.
+> - **No Hardcoded Topics or Contexts (100% Free Context Selection)**: There are **NO hardcoded topics, predefined category dropdowns, or static contextual taxonomies**. The LLM model has **100% complete freedom to pick any realistic context** (e.g., borrowing a charger, negotiating deadlines, running into an old classmate, ordering coffee, commuting delays, grocery shopping, household chores). Within that freely chosen context, the LLM must choose **common, natural conversational sentences** that native speakers actually say in everyday life.
 >
 > This specification is written with **Vietnamese as the native language** and **English as the target language**. Learners are presented with natural, everyday conversational Vietnamese sentences and challenged to produce accurate, idiomatic English translations that incorporate priority vocabulary from their personal collection. All prompt templates, evaluation heuristics, mock responses, and UI strings in this guide reflect this Vietnamese-to-English setup.
 
@@ -17,34 +19,44 @@ This specification provides everything required to clone the **Translation Chall
 ## 1. Feature Overview & Architecture
 
 ### What is the Translation Challenge?
-The **Translation Challenge** is an AI-powered interactive language acquisition feature that prompts learners to translate natural, conversational sentences from their native language into a target language, specifically engineered to reinforce vocabulary items from their personal collection.
+The **Translation Challenge** is an AI-powered interactive language acquisition feature that prompts learners to translate natural, conversational sentences from their native language into a target language, specifically engineered to reinforce vocabulary and phrases from their personal collection.
 
 Unlike generic quiz engines:
-1. **Vocabulary-Anchored Generation**: Challenges prioritize words in the user's collection that have low memory strength or are due for review based on Spaced Repetition (SRS).
-2. **Native-First Conversational Naturalness**: Prompts are generated directly in natural native prose (not translated backward from textbook English), preventing "machine-translation flavor".
-3. **Multi-Turn Resilience**:
+1. **Curated Words & Phrases with 24-Hour Recency**: Users can save single words (e.g., `resilience`, `setback`) or multi-word phrases/idioms (e.g., `adapt to`, `keep an eye on`) to their collection. The candidate picker prioritizes items that haven't appeared for **more than 1 day** (>24 hours).
+2. **Daily Conversation Fallback**: If no saved words/phrases meet the >24-hour threshold (or if the user's collection is brand new/empty), the system does not fail or block practice—it automatically generates challenges centered on natural, high-frequency words and idioms used in daily conversation.
+3. **Zero Hardcoded Topics & 100% Free Context Selection**: The system has **no predefined topic lists, category dropdowns, or static themes**. The LLM model is **100% free to imagine any authentic daily life context** (e.g., catching up with a coworker, asking for directions, negotiating rent, scheduling a haircut, chatting at dinner). Within that context, the model selects **common, realistic sentences** that native speakers frequently utter in everyday life.
+4. **Native-First Conversational Naturalness**: Prompts are generated directly in natural native Vietnamese prose (not translated backward from textbook English), avoiding robotic machine-translation phrasing.
+5. **Multi-Turn Resilience**:
    - Detects accidental/incomplete submissions (e.g., pressed Enter prematurely).
    - Handles empty submissions / "Reveal Answer & Skip" gracefully.
-   - Accepts diverse valid phrasings and synonyms while strictly tracking whether the designated target word was incorporated.
-4. **Memory Strength Augmentation**: Awards SRS point bonuses (+30 points for incorporating target word, +10 for exposure, +30 for using vocabulary clues) and atomically updates the user's database.
-5. **Interactive Tutoring**: Includes an "Ask AI about this question" modal for contextual follow-up questions.
+   - Accepts diverse valid phrasings and synonyms while strictly tracking whether the designated target word or phrase was incorporated.
+6. **Memory Strength Augmentation**: Awards SRS point bonuses (+30 points for incorporating target word, +10 for exposure, +30 for using vocabulary clues), stamps `lastAppearedAt = new Date().toISOString()`, and atomically updates the collection.
+7. **Interactive Tutoring**: Includes an "Ask AI about this question" modal for contextual follow-up questions.
 
 ### Architecture Flowchart
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│ 1. GENERATION PHASE                                                    │
+│ 1. CANDIDATE SELECTION & DYNAMIC CONTEXT GENERATION                    │
 │                                                                        │
-│   User Collection (SRS) ──────► Candidate Picker (Low Strength/Due)    │
+│   User Collection (Words & Phrases)                                    │
+│                 │                                                      │
+│                 ▼                                                      │
+│   Check: Last appeared > 1 day ago?                                    │
+│         ├── YES ──► Pick oldest & lowest-strength collection items     │
+│         └── NO / EMPTY ──► Fallback: High-Frequency Daily Vocab/Phrases│
 │                                           │                            │
 │                                           ▼                            │
-│   LLM Prompt Builder ◄────── User Profile (Archetype/Interests)        │
+│   LLM Prompt Builder (Zero Hardcoded Topics / 100% Free Context)       │
 │          │                                                             │
 │          ▼                                                             │
-│   LLM Generation (or Mock) ──► JSON Sanitizer & Loanword Cleaner       │
-│                                           │                            │
-│                                           ▼                            │
-│   Active Challenge State ◄──── Challenge Card (Prompt UI)              │
+│   LLM Generates: Free Context + Common Everyday Native Sentence        │
+│          │                                                             │
+│          ▼                                                             │
+│   JSON Sanitizer & Loanword Cleaner                                    │
+│          │                                                             │
+│          ▼                                                             │
+│   Active Challenge State ◄──── Mobile Challenge Card (Prompt UI)       │
 └────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼ User Types Translation
@@ -57,14 +69,119 @@ Unlike generic quiz engines:
 │   LLM Evaluation (or Mock) ──► Score (0-100), Verdict, Praise, Tips   │
 │          │                                                             │
 │          ▼                                                             │
-│   Target Word & Clue Matcher ──► Programmatic Word Presence Gate       │
+│   Target Word/Phrase Matcher ──► Programmatic Word Presence Gate       │
 │          │                                                             │
 │          ▼                                                             │
-│   SRS Augmentation (+30/+10) ──► Atomically Update Collection DB       │
+│   SRS Augmentation (+30/+10) ──► Update strength & lastAppearedAt      │
 │          │                                                             │
 │          ▼                                                             │
 │   Evaluation Card (Feedback UI) ──► Audio TTS / Add New Vocab / Ask AI │
 └────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.1 Candidate Selection Logic (1-Day Threshold & Daily Conversation Fallback)
+
+Learners can freely add individual words (e.g., `"resilience"`) or multi-word phrases (e.g., `"take into account"`, `"keep in touch"`) to their personal vocabulary collection.
+
+> **Zero Topic/Context Pre-filtering**: Candidate selection only filters by the **1-day recency threshold** and sorts by appearance/strength. It **never filters or restricts candidates by topic or theme**. The LLM model is given 100% autonomy to decide which context best suits the chosen candidate, picking common conversational sentences that naturally fit that context.
+
+When a new challenge is triggered, the system selects candidate words/phrases using a 2-tier priority rule:
+
+```
+                  ┌─────────────────────────────────────────┐
+                  │ Learner's Vocabulary & Phrase Collection │
+                  └────────────────────┬────────────────────┘
+                                       │
+                                       ▼
+                  ┌─────────────────────────────────────────┐
+                  │ Filter: (Now - lastAppearedAt) > 1 Day? │
+                  └────────────────────┬────────────────────┘
+                                       │
+                    ┌──────────────────┴──────────────────┐
+                 YES (≥ 1 Candidate)                   NO (0 Candidates)
+                    │                                     │
+                    ▼                                     ▼
+        ┌───────────────────────┐            ┌───────────────────────────┐
+        │ Priority Collection   │            │ Daily Conversation        │
+        │ Candidates            │            │ Fallback Candidates       │
+        │ - Sort: Oldest        │            │ - High-frequency everyday │
+        │   appearance first    │            │   English words & phrases │
+        │ - Secondary: Lowest   │            │   (e.g., ordering food,   │
+        │   strength first      │            │   small talk, directions) │
+        └───────────────────────┘            └───────────────────────────┘
+```
+
+#### TypeScript Implementation: Candidate Selector Function
+```typescript
+export interface UserVocabItem {
+  id: string;
+  word: string; // Word or phrase (e.g., "resilience", "adapt to", "break the ice")
+  translation: string;
+  definition?: string;
+  partOfSpeech?: string;
+  strength: number; // 0 - 100
+  lastAppearedAt?: string; // ISO 8601 string of last quiz/challenge exposure
+  addedAt: string;
+}
+
+// Fallback pool of common daily conversational words and phrases
+export const DAILY_CONVERSATION_FALLBACK_POOL: Array<Omit<UserVocabItem, "id" | "addedAt">> = [
+  { word: "catch up with", translation: "gặp gỡ trò chuyện sau thời gian dài", partOfSpeech: "phrase", strength: 0 },
+  { word: "run out of", translation: "hết, cạn kiệt (tiền, pin, thời gian)", partOfSpeech: "phrase", strength: 0 },
+  { word: "make an appointment", translation: "hẹn lịch, đặt hẹn", partOfSpeech: "phrase", strength: 0 },
+  { word: "grab a bite", translation: "đi ăn nhanh một bữa", partOfSpeech: "phrase", strength: 0 },
+  { word: "keep an eye on", translation: "để mắt tới, trông coi giúp", partOfSpeech: "phrase", strength: 0 },
+  { word: "convenient", translation: "tiện lợi, thuận tiện", partOfSpeech: "adjective", strength: 0 },
+  { word: "postpone", translation: "trì hoãn, dời lịch", partOfSpeech: "verb", strength: 0 },
+  { word: "recommendation", translation: "sự giới thiệu, lời khuyên nên thử", partOfSpeech: "noun", strength: 0 },
+];
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 86,400,000 ms (1 day)
+
+export function selectChallengeCandidates(
+  collection: UserVocabItem[],
+  maxCandidates = 6,
+  nowMs = Date.now()
+): {
+  candidates: UserVocabItem[];
+  isDailyConversationFallback: boolean;
+} {
+  // 1. Filter: Words/phrases never appeared OR last appeared more than 1 day ago
+  const eligibleFromCollection = collection.filter((item) => {
+    if (!item.lastAppearedAt) return true; // Never tested before -> instantly eligible
+    const timeSinceLastAppearance = nowMs - new Date(item.lastAppearedAt).getTime();
+    return timeSinceLastAppearance > ONE_DAY_MS;
+  });
+
+  // 2. If eligible collection items exist, sort by oldest appearance first, then lowest strength
+  if (eligibleFromCollection.length > 0) {
+    const sorted = [...eligibleFromCollection].sort((a, b) => {
+      const aTime = a.lastAppearedAt ? new Date(a.lastAppearedAt).getTime() : 0;
+      const bTime = b.lastAppearedAt ? new Date(b.lastAppearedAt).getTime() : 0;
+      if (aTime !== bTime) return aTime - bTime; // Oldest first
+      return a.strength - b.strength; // Lowest strength first
+    });
+
+    return {
+      candidates: sorted.slice(0, maxCandidates),
+      isDailyConversationFallback: false,
+    };
+  }
+
+  // 3. Fallback: Use common daily conversational words/phrases
+  const fallbackCandidates: UserVocabItem[] = DAILY_CONVERSATION_FALLBACK_POOL.slice(0, maxCandidates).map(
+    (item, index) => ({
+      ...item,
+      id: `fallback-${index}-${Date.now()}`,
+      addedAt: new Date().toISOString(),
+    })
+  );
+
+  return {
+    candidates: fallbackCandidates,
+    isDailyConversationFallback: true,
+  };
+}
 ```
 
 ---
@@ -74,6 +191,17 @@ Unlike generic quiz engines:
 Save these interfaces into your new app's `types.ts`:
 
 ```typescript
+export interface UserVocabItem {
+  id: string;
+  word: string; // Supports single word or multi-word phrase
+  translation: string;
+  definition?: string;
+  partOfSpeech?: string;
+  strength: number; // 0 to 100
+  lastAppearedAt?: string; // ISO timestamp of last appearance
+  addedAt: string;
+}
+
 export interface ChallengeKeyWord {
   word: string;
   translation: string;
@@ -86,18 +214,20 @@ export interface ChallengeData {
   nativeSentence: string;
   targetLanguage: string;
   nativeLanguage: string;
-  topicContext?: string;
+  topicContext?: string; // Descriptive 2-4 word label freely chosen by the LLM (e.g., "Kẹt xe giờ tan tầm", "Mượn đồ đồng nghiệp"). STRICT RULE: Never restrict to a hardcoded enum or static taxonomy!
   idealTranslation?: string;
   keyTargetWords?: ChallengeKeyWord[];
   targetWordFromCollection?: {
     id?: string;
-    word: string;
+    word: string; // Supports words and phrases
     translation?: string;
     definition?: string;
     hint?: string;
     strength?: number;
     partOfSpeech?: string;
+    lastAppearedAt?: string;
   };
+  isDailyConversationFallback?: boolean; // True when generated from common daily vocab
   personalityNote?: string;
   createdAt: string;
   provider?: string;
@@ -456,15 +586,21 @@ To clone this feature without configuring API keys or backend servers right away
 
 ## 4. Complete Mock Service (`mockChallengeService.ts`)
 
-You can directly add this file to your new project to simulate the full backend without an LLM API:
+You can directly add this file to your new project to simulate the full backend without an LLM API, including candidate selection with the 1-day threshold and daily conversation fallback:
+
+> **Important Note on Topics & Contexts**:
+> In this mock file, static scenarios are used purely for local offline testing.
+> In production with a live LLM, **there are ZERO hardcoded topics or contexts**. The LLM model has **100% complete freedom to invent any realistic communication context** and select **common everyday sentences** that native speakers actually say in that context.
 
 ```typescript
 // mockChallengeService.ts
-import { ChallengeData, ChallengeTurnResult } from "./types";
+import { ChallengeData, ChallengeTurnResult, UserVocabItem } from "./types";
+import { selectChallengeCandidates } from "./candidateSelector"; // see Section 1.1
 
-const MOCK_CHALLENGES: ChallengeData[] = [
+// 1. Challenges anchored to user collection words/phrases (> 1 day old)
+const COLLECTION_CHALLENGES: ChallengeData[] = [
   {
-    id: "challenge-mock-001",
+    id: "challenge-collection-001",
     nativeSentence: "Dù gặp nhiều thất bại ban đầu, cô ấy vẫn giữ vững tinh thần kiên cường đáng khâm phục.",
     targetLanguage: "English",
     nativeLanguage: "Vietnamese",
@@ -475,6 +611,7 @@ const MOCK_CHALLENGES: ChallengeData[] = [
       translation: "sự kiên cường, khả năng phục hồi",
       definition: "The capacity to recover quickly from difficulties.",
       strength: 25,
+      lastAppearedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
     },
     keyTargetWords: [
       { word: "resilience", translation: "sự kiên cường" },
@@ -482,6 +619,7 @@ const MOCK_CHALLENGES: ChallengeData[] = [
       { word: "admirable", translation: "đáng khâm phục" },
       { word: "maintain", translation: "duy trì" },
     ],
+    isDailyConversationFallback: false,
     personalityNote: "Tình huống rèn luyện từ vựng miêu tả phẩm chất ý chí trong đời thực.",
     createdAt: new Date().toISOString(),
     provider: "mock",
@@ -489,7 +627,7 @@ const MOCK_CHALLENGES: ChallengeData[] = [
     responseTimeMs: 300,
   },
   {
-    id: "challenge-mock-002",
+    id: "challenge-collection-002",
     nativeSentence: "Chúng ta cần tinh chỉnh kế hoạch này một chút để thích nghi với tình hình mới.",
     targetLanguage: "English",
     nativeLanguage: "Vietnamese",
@@ -500,6 +638,7 @@ const MOCK_CHALLENGES: ChallengeData[] = [
       translation: "tinh chỉnh, điều chỉnh nhỏ",
       definition: "To make fine adjustments.",
       strength: 40,
+      lastAppearedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
     },
     keyTargetWords: [
       { word: "tweak", translation: "tinh chỉnh" },
@@ -507,6 +646,7 @@ const MOCK_CHALLENGES: ChallengeData[] = [
       { word: "adapt to", translation: "thích nghi với" },
       { word: "circumstances", translation: "hoàn cảnh, tình thế" },
     ],
+    isDailyConversationFallback: false,
     personalityNote: "Học cách diễn đạt linh hoạt trong các buổi thảo luận công việc thường ngày.",
     createdAt: new Date().toISOString(),
     provider: "mock",
@@ -515,13 +655,76 @@ const MOCK_CHALLENGES: ChallengeData[] = [
   }
 ];
 
-export async function mockGenerateChallenge(): Promise<ChallengeData> {
+// 2. Fallback challenges using common daily conversational words and phrases
+const DAILY_CONVERSATION_FALLBACK_CHALLENGES: ChallengeData[] = [
+  {
+    id: "challenge-daily-001",
+    nativeSentence: "Cuối tuần này rảnh không? Tụi mình đi ăn nhanh một bữa rồi trò chuyện nhé!",
+    targetLanguage: "English",
+    nativeLanguage: "Vietnamese",
+    topicContext: "Hẹn gặp & Bạn bè",
+    idealTranslation: "Are you free this weekend? Let's grab a bite and catch up!",
+    targetWordFromCollection: {
+      word: "grab a bite",
+      translation: "đi ăn nhanh một bữa",
+      definition: "To get something to eat quickly.",
+      strength: 0,
+    },
+    keyTargetWords: [
+      { word: "grab a bite", translation: "đi ăn nhanh một bữa" },
+      { word: "catch up", translation: "trò chuyện hàn huyên" },
+      { word: "free", translation: "rảnh rỗi" },
+    ],
+    isDailyConversationFallback: true,
+    personalityNote: "Cụm từ giao tiếp cực kỳ thông dụng khi rủ bạn bè hoặc đồng nghiệp đi ăn trưa.",
+    createdAt: new Date().toISOString(),
+    provider: "mock",
+    model: "mock-llm-v1",
+    responseTimeMs: 260,
+  },
+  {
+    id: "challenge-daily-002",
+    nativeSentence: "Bạn có thể để mắt tới hành lý của tôi một lát trong khi tôi đi mua nước được không?",
+    targetLanguage: "English",
+    nativeLanguage: "Vietnamese",
+    topicContext: "Giao tiếp nơi công cộng",
+    idealTranslation: "Could you keep an eye on my luggage for a moment while I go buy some water?",
+    targetWordFromCollection: {
+      word: "keep an eye on",
+      translation: "để mắt tới, trông coi giúp",
+      definition: "To watch or take care of something carefully.",
+      strength: 0,
+    },
+    keyTargetWords: [
+      { word: "keep an eye on", translation: "để mắt tới, trông coi" },
+      { word: "luggage", translation: "hành lý" },
+      { word: "for a moment", translation: "một lát" },
+    ],
+    isDailyConversationFallback: true,
+    personalityNote: "Cụm động từ tự nhiên và lịch sự dùng trong sân bay, quán cà phê hoặc nhà ga.",
+    createdAt: new Date().toISOString(),
+    provider: "mock",
+    model: "mock-llm-v1",
+    responseTimeMs: 270,
+  }
+];
+
+export async function mockGenerateChallenge(userCollection: UserVocabItem[] = []): Promise<ChallengeData> {
   // Simulate network latency
-  await new Promise((res) => setTimeout(res, 400));
-  const randomIndex = Math.floor(Math.random() * MOCK_CHALLENGES.length);
+  await new Promise((res) => setTimeout(res, 350));
+
+  // Determine candidates via the 1-day threshold rule
+  const { isDailyConversationFallback } = selectChallengeCandidates(userCollection);
+
+  const pool = isDailyConversationFallback
+    ? DAILY_CONVERSATION_FALLBACK_CHALLENGES
+    : COLLECTION_CHALLENGES;
+
+  const randomIndex = Math.floor(Math.random() * pool.length);
   return {
-    ...MOCK_CHALLENGES[randomIndex],
+    ...pool[randomIndex],
     id: `challenge-${Date.now()}`,
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -629,32 +832,48 @@ export async function mockProcessChallengeTurn(
 When connecting a real LLM (Gemini 2.5/Flash, GPT-4o, Claude, etc.), use the following production-tested prompt templates:
 
 ### 5.1 Challenge Generation Prompt
+
+The generator dynamically adapts based on whether eligible candidates were retrieved from the user's collection (> 1 day old) or if the system fell back to common daily conversational words.
+
+> **Zero Hardcoded Topics Rule**: The LLM model is **never constrained by a predefined list of topics or categories**. It has **100% complete autonomy to invent any realistic daily life situation** (e.g., catching a bus, dining out, borrowing a phone charger, asking a colleague for a hand, discussing grocery prices, rescheduling a dentist visit, talking about pets or weather) and choose **common sentences** that native speakers actually say in that situation.
+
 ```text
 System Instruction:
 You are an expert bilingual translation coach. Create a concise, authentic, and culturally natural conversational challenge for a language learner. 
+
 Strict Mandates:
-1. 'nativeSentence' MUST be 100% natural, everyday spoken native language (6-14 words).
-2. ZERO loanwords or untranslated target-language terms inside 'nativeSentence'.
-3. Do NOT provide 'idealTranslation' during generation if target is English; allow native-first thinking.
-4. MUST choose one exact word from the provided candidates list as 'targetWordFromCollection'.
+1. ZERO HARDCODED TOPICS OR CONTEXTS: You have 100% creative freedom to choose ANY realistic communication context (e.g., home, office, public transit, social banter, shopping, doctor's office, travel, neighborhood). Do not rely on textbook cliches or rigid categories.
+2. COMMON SENTENCE SELECTION: Within your chosen context, select a COMMON, natural everyday sentence that native speakers frequently say in real life (6-14 words).
+3. ZERO loanwords or untranslated target-language terms inside 'nativeSentence'.
+4. Do NOT provide 'idealTranslation' during generation if target is English; allow native-first thinking.
+5. Mode Handling:
+   - MODE A (Collection Candidates Provided): Freely pick any realistic context that naturally incorporates one chosen candidate word or phrase as 'targetWordFromCollection'.
+   - MODE B (Daily Conversation Fallback): Freely pick any everyday context, and anchor the challenge on common words or phrases frequently used in daily conversation.
+6. 'topicContext': Summarize your freely chosen context in a concise, natural 2-4 word native label (e.g. 'Mượn đồ đồng nghiệp', 'Kẹt xe giờ tan tầm', 'Ghé tiệm cà phê', 'Hẹn giờ đón con'). NEVER select from a static list!
 
-Prompt Template:
+Prompt Template (Mode A - Collection Anchor):
 Generate a translation challenge for a learner whose native language is {{nativeLanguage}} learning {{targetLanguage}}.
+Choose any realistic context that naturally fits one of the candidate words/phrases, and select a COMMON sentence people frequently say in that situation.
 
-LEARNER CANDIDATE VOCABULARY (FROM DATABASE):
+LEARNER CANDIDATE VOCABULARY & PHRASES (Collection items last tested > 1 day ago):
 {{#each candidates}}
-- "{{this.word}}" (meaning: {{this.translation}}) [Strength: {{this.strength}}%]
+- "{{this.word}}" (meaning: {{this.translation}}) [Strength: {{this.strength}}%] [Last appeared: {{this.lastAppearedAt}}]
 {{/each}}
+
+Prompt Template (Mode B - Daily Conversation Fallback):
+The learner currently has no collection items due for review (or all items were reviewed in the past 24 hours).
+Freely pick ANY everyday situation (e.g., dining, commuting, running errands, casual workplace interactions, making plans), and generate a translation challenge for {{nativeLanguage}} ➔ {{targetLanguage}} using a COMMON sentence people actually say in that context.
 
 OUTPUT SCHEMA (STRICT JSON ONLY):
 {
-  "nativeSentence": "Natural spoken native sentence (6-14 words)",
-  "topicContext": "2-4 word topic label (e.g. 'Coffee Shop Encounter')",
+  "nativeSentence": "Common, natural spoken native sentence (6-14 words)",
+  "topicContext": "Freely chosen 2-4 word context label in native language (e.g., 'Kẹt xe giờ cao điểm')",
   "targetWordFromCollection": {
-    "word": "Verbatim word from candidate list",
+    "word": "Verbatim target word or phrase",
     "translation": "Native meaning in context",
     "hint": "Brief usage hint"
   },
+  "isDailyConversationFallback": false, // Set to true if generated via Mode B
   "keyTargetWords": [
     { "word": "target_term", "translation": "native_meaning", "hint": "part_of_speech" }
   ],
@@ -840,11 +1059,22 @@ export function MobileTranslationChallenge() {
 
   return (
     <main className="max-w-md mx-auto w-full min-h-[100dvh] bg-stone-50 text-stone-900 flex flex-col justify-between p-4 sm:p-6 font-sans">
-      {/* Top Bar: Topic & Audio */}
+      {/* Top Bar: Topic & Collection Source Indicator */}
       <header className="flex items-center justify-between gap-2 mb-3">
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-          🎯 {challenge.topicContext || "Luyện dịch ngữ cảnh"}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            🎯 {challenge.topicContext || "Luyện dịch"}
+          </span>
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+              challenge.isDailyConversationFallback
+                ? "bg-amber-50 text-amber-700 border-amber-200"
+                : "bg-blue-50 text-blue-700 border-blue-200"
+            }`}
+          >
+            {challenge.isDailyConversationFallback ? "💬 Hội thoại thường ngày" : "📚 Bộ sưu tập của bạn (>1 ngày)"}
+          </span>
+        </div>
         <button
           onClick={() => playAudio(challenge.nativeSentence, "vi-VN")}
           className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl bg-white border border-stone-200 text-stone-600 hover:bg-stone-100 active:scale-95 transition"
@@ -873,7 +1103,7 @@ export function MobileTranslationChallenge() {
               onClick={() => setShowClues((prev) => !prev)}
               className="w-full min-h-[44px] flex items-center justify-between text-sm font-medium text-stone-700 px-2 active:bg-stone-50 rounded-lg"
             >
-              <span>💡 Gợi ý từ vựng ({challenge.keyTargetWords.length} từ)</span>
+              <span>💡 Gợi ý từ/cụm từ ({challenge.keyTargetWords.length})</span>
               <span className="text-stone-400">{showClues ? "▲ Thu gọn" : "▼ Xem"}</span>
             </button>
             {showClues && (
@@ -944,6 +1174,29 @@ export function MobileTranslationChallenge() {
                 "{result.evaluation.correctedSentence}"
               </p>
             </div>
+
+            {/* Suggested Vocab / Add to collection */}
+            {result.evaluation.suggestedVocabulary && result.evaluation.suggestedVocabulary.length > 0 && (
+              <div className="border-t border-stone-100 pt-2.5">
+                <p className="text-xs font-semibold text-stone-600 mb-2">Từ & cụm từ hay trong câu:</p>
+                <div className="flex flex-col gap-1.5">
+                  {result.evaluation.suggestedVocabulary.map((v, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-stone-50 border border-stone-200 text-xs">
+                      <div>
+                        <span className="font-bold text-stone-800">{v.word}</span>
+                        <span className="text-stone-500 ml-1.5">— {v.translation}</span>
+                      </div>
+                      <button
+                        onClick={() => alert(`Đã thêm "${v.word}" vào bộ sưu tập cá nhân!`)}
+                        className="px-2 py-1 rounded bg-white border border-stone-300 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 active:scale-95 transition"
+                      >
+                        + Lưu từ
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Praise & Improvement Feedback */}
             <div className="text-xs text-stone-600 space-y-1 pt-1">
@@ -1017,10 +1270,11 @@ export function MobileTranslationChallenge() {
 
 | Step | Action | Output / Files |
 | :--- | :--- | :--- |
-| **Step 1: Setup Types** | Copy TypeScript interfaces into your types system. | `types.ts` |
-| **Step 2: Add Mock Service** | Add `mockChallengeService.ts` to simulate generation & evaluation offline without API keys. | `services/mockChallengeService.ts` |
-| **Step 3: Drop in Mobile UI** | Copy `MobileTranslationChallenge.tsx` directly into your views or components. | `components/MobileTranslationChallenge.tsx` |
-| **Step 4: Verify Mobile Ergonomics** | Test on mobile viewport (360px–430px): check touch targets (≥ 44px), virtual keyboard typing, and audio buttons. | In-browser DevTools Device Mode |
-| **Step 5: Wire SRS Persistence** | Connect `evaluation.augmentedWords` (+30/+10 points) to your local SQLite/IndexedDB or LocalStorage. | Storage Layer |
-| **Step 6: Connect Real LLM** | When ready, replace the mock service calls with your real backend API route (Gemini / Claude / OpenAI). | `server.ts` or API endpoint |
+| **Step 1: Setup Types** | Copy TypeScript interfaces into your types system (including `UserVocabItem` with phrases & `lastAppearedAt`). | `types.ts` |
+| **Step 2: Candidate Selector** | Implement `selectChallengeCandidates()`: filter for items last tested > 1 day ago; fallback to daily conversational vocabulary. | `services/candidateSelector.ts` |
+| **Step 3: Add Mock Service** | Add `mockChallengeService.ts` to simulate generation & evaluation offline without API keys. | `services/mockChallengeService.ts` |
+| **Step 4: Drop in Mobile UI** | Copy `MobileTranslationChallenge.tsx` directly into your views or components. | `components/MobileTranslationChallenge.tsx` |
+| **Step 5: Verify Mobile Ergonomics** | Test on mobile viewport (360px–430px): check touch targets (≥ 44px), virtual keyboard typing, and audio buttons. | In-browser DevTools Device Mode |
+| **Step 6: Wire SRS Persistence** | Connect `evaluation.augmentedWords` (+30/+10 points) and update `lastAppearedAt = new Date().toISOString()` in your DB. | Storage Layer |
+| **Step 7: Connect Real LLM** | Replace mock generation with the Mode A / Mode B prompt, giving the LLM 100% freedom to invent any realistic context and select common everyday sentences (zero hardcoded topics). | `server.ts` or API endpoint |
 
