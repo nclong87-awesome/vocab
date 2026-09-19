@@ -26,10 +26,11 @@ Unlike generic quiz engines:
 2. **Daily Conversation Fallback**: If no saved words/phrases meet the >24-hour threshold (or if the user's collection is brand new/empty), the system does not fail or block practice—it automatically generates challenges centered on natural, high-frequency words and idioms used in daily conversation.
 3. **Zero Hardcoded Topics & 100% Free Context Selection**: The system has **no predefined topic lists, category dropdowns, or static themes**. The LLM model is **100% free to imagine any authentic daily life context** (e.g., catching up with a coworker, asking for directions, negotiating rent, scheduling a haircut, chatting at dinner). Within that context, the model selects **common, realistic sentences** that native speakers frequently utter in everyday life.
 4. **Native-First Conversational Naturalness**: Prompts are generated directly in natural native Vietnamese prose (not translated backward from textbook English), avoiding robotic machine-translation phrasing.
-5. **Multi-Turn Resilience**:
+5. **Multi-Turn Resilience & Direct LLM Evaluation**:
    - Detects accidental/incomplete submissions (e.g., pressed Enter prematurely).
    - Handles empty submissions / "Reveal Answer & Skip" gracefully.
-   - Accepts diverse valid phrasings and synonyms while strictly tracking whether the designated target word or phrase was incorporated.
+   - **Direct LLM Evaluation (No Programmatic Validation Gates)**: Relies directly on the LLM's authoritative assessment for `incorporatedTargetWord` and `incorporatedVocabClues`. Programmatic regex gates (`hasUserIncorporatedWord`) are avoided because rigid string matching creates false negatives on valid inflections (past tense, gerunds, plurals), adverbs (e.g. `-ly`), phrasal verb separations, and hyphen/space compound variations (e.g. `cost-effective` vs `cost effective`).
+   - Pairs direct LLM evaluation with strict, comprehensive prompt engineering to ensure reliable, hallucination-free evaluation.
 6. **Memory Strength Augmentation**: Awards SRS point bonuses (+30 points for incorporating target word, +10 for exposure, +30 for using vocabulary clues), stamps `lastAppearedAt = new Date().toISOString()`, and atomically updates the collection.
 7. **Interactive Tutoring**: Includes an "Ask AI about this question" modal for contextual follow-up questions.
 
@@ -69,7 +70,8 @@ Unlike generic quiz engines:
 │   LLM Evaluation (or Mock) ──► Score (0-100), Verdict, Praise, Tips   │
 │          │                                                             │
 │          ▼                                                             │
-│   Target Word/Phrase Matcher ──► Programmatic Word Presence Gate       │
+│   Direct LLM Evaluation ──► incorporatedTargetWord & Vocab Clues       │
+│                             (No Programmatic Regex Validation Gates)   │
 │          │                                                             │
 │          ▼                                                             │
 │   SRS Augmentation (+30/+10) ──► Update strength & lastAppearedAt      │
@@ -183,6 +185,25 @@ export function selectChallengeCandidates(
   };
 }
 ```
+
+### 1.2 Evaluation Strategy: Direct LLM Authority (Zero Programmatic Validation Gates)
+
+A critical architectural decision in this system is **relying directly on the LLM's evaluation without secondary programmatic regex gates**:
+
+#### The Problem with Programmatic Regex Gates
+Earlier iterations utilized programmatic regex gates (`hasUserIncorporatedWord`) that ran over the user's submission to double-check the LLM's verdict. In practice, rigid string/regex checking produced false negatives:
+- **Grammatical Inflections & Tenses**: If the target word was `challenge`, rigid regex often failed on valid inflections (`challenged`, `challenging`, `challenges`).
+- **Compound Word Variations**: Target words like `cost-effective` resulted in false negatives if the learner wrote `cost effective` (spaced) or used adverbial derivations like `cost-effectively`.
+- **Separable Phrasal Verbs**: For phrases like `turn down`, natural native sentences often split particles (e.g., `turned the job offer down`), failing simplistic substring checks.
+- **Feedback Discrepancies**: The LLM praised the student for using the target word in `whatWentWell`, but the downstream programmatic gate overwrote `incorporatedTargetWord: false`. This triggered confusing UI banners claiming the word was omitted.
+
+#### The Direct LLM Solution
+1. **Direct Trust**: The system consumes `incorporatedTargetWord` (boolean) and `incorporatedVocabClues` (string array) directly from the LLM's JSON evaluation without modifying them via regex.
+2. **Strict Prompt Contracts**: Strict system instructions define boundary conditions for the LLM:
+   - Accept inflections, conjugations, adverbs, separable phrasal particles, and hyphen/space compound variants.
+   - Strictly mark `false` if the user substituted a synonym or omitted the target word.
+   - Align `whatWentWell` with `incorporatedTargetWord`—never praise the target word if `incorporatedTargetWord` is `false`.
+   - Populate `incorporatedVocabClues` strictly with the designated clues the learner actually incorporated.
 
 ---
 
@@ -768,6 +789,7 @@ export async function mockProcessChallengeTurn(
         userTranslation: "(No answer provided)",
         incorporatedTargetWord: false,
         targetWordUsed: targetWord,
+        incorporatedVocabClues: [],
         whatWentWell: "Bạn đã chủ động xem đáp án mẫu để củng cố ngữ pháp và từ vựng mục tiêu.",
         areasForImprovement: `Ghi nhớ câu chuẩn: "${challenge.idealTranslation}"`,
         correctedSentence: challenge.idealTranslation || "Optimal translation here.",
@@ -783,9 +805,15 @@ export async function mockProcessChallengeTurn(
   }
 
   // 3. Normal submission evaluation
+  // NOTE: In production with real LLMs, we rely directly on the LLM's evaluation flags
+  // (incorporatedTargetWord and incorporatedVocabClues) without programmatic regex validation gates.
   const targetWord = challenge.targetWordFromCollection?.word?.toLowerCase() || "";
   const didIncorporate = targetWord ? lower.includes(targetWord) : false;
   const score = didIncorporate ? 92 : 75;
+
+  const usedClues = (challenge.keyTargetWords || [])
+    .filter((k) => k.word && lower.includes(k.word.toLowerCase()))
+    .map((k) => k.word);
 
   return {
     intent: "submission",
@@ -795,6 +823,7 @@ export async function mockProcessChallengeTurn(
       userTranslation: trimmed,
       incorporatedTargetWord: didIncorporate,
       targetWordUsed: challenge.targetWordFromCollection?.word,
+      incorporatedVocabClues: usedClues,
       whatWentWell: didIncorporate
         ? `Tuyệt vời! Bạn đã sử dụng chính xác từ mục tiêu "${challenge.targetWordFromCollection?.word}" và diễn đạt tự nhiên.`
         : `Bạn đã truyền tải tốt ý nghĩa câu gốc bằng từ ngữ mạch lạc.`,
@@ -882,56 +911,107 @@ OUTPUT SCHEMA (STRICT JSON ONLY):
 ```
 
 ### 5.2 Challenge Evaluation Prompt
+
+#### Production Vietnamese System Instruction & Evaluation Prompt
 ```text
 System Instruction:
-You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Check whether the learner incorporated the designated target word or if the answer is incomplete.
+Bạn là chuyên gia đánh giá thử thách dịch thuật tiếng Việt sang English. Tạo câu dịch mẫu tự nhiên nhất ("correctedSentence") có chứa từ vựng mục tiêu "{{targetWord}}", đánh giá linh hoạt bản dịch của học viên, và đưa ra nhận xét bằng tiếng Việt chi tiết, dễ hiểu. Đánh giá chính xác "incorporatedTargetWord" (true nếu học viên thực sự dùng từ mục tiêu) và "incorporatedVocabClues" (danh sách các từ gợi ý mà học viên đã dùng). Trả về JSON thuần.
 
 Prompt Template:
-Evaluate the user's translation attempt.
+Bạn là chuyên gia thẩm định và chấm điểm bản dịch từ tiếng Việt sang English cho học viên.
+Nhiệm vụ của bạn là đánh giá toàn diện câu trả lời của học viên và trả về kết quả bằng JSON thuần.
 
-CHALLENGE DETAILS:
-- Native Sentence: "{{challenge.nativeSentence}}"
-- Designated Target Word: "{{challenge.targetWordFromCollection.word}}"
-- Key Target Words: {{json challenge.keyTargetWords}}
-- Target Language: {{targetLanguage}}
-- Native Language: {{nativeLanguage}}
+THÔNG TIN THỬ THÁCH:
+- Câu tiếng Việt gốc: "{{challenge.nativeSentence}}"
+- Ngữ cảnh thực tế: "{{challenge.topicContext}}"
+- Từ vựng mục tiêu trọng tâm cần học viên vận dụng: "{{challenge.targetWordFromCollection.word}}"
+- Danh sách từ vựng gợi ý của thử thách: {{json clueWordsList}}
 
-USER SUBMISSION:
+CÂU TRẢ LỜI CỦA HỌC VIÊN:
 "{{userSubmission}}"
 
-EVALUATION RULES:
-1. If the submission is an incomplete sentence fragment (premature submission), return intent: "incomplete".
-2. If submitted normally, return intent: "submission" and evaluate:
-   - Provide optimal native phrasing in "correctedSentence" incorporating the target word.
-   - Calculate accuracy score (0-100).
-   - Check if the learner typed the designated target word. If they used an alternative valid synonym, award a high score and praise their natural choice in "whatWentWell", but set "incorporatedTargetWord": false.
-   - Extract 3-5 vocabulary items with definitions and examples in "suggestedVocabulary".
+QUY TẮC PHÂN LOẠI & ĐÁNH GIÁ (TUÂN THỦ TUYỆT ĐỐI):
+1. KIỂM TRA TÍNH HOÀN CHỈNH CỦA CÂU:
+   - Nếu học viên chỉ mới gõ dở dang (ví dụ bấm nhầm phím gửi khi câu chỉ mới có 1-2 từ, kết thúc lửng lơ ở từ nối như 'and', 'the', 'to', 'because'...):
+     Trả về {"intent": "incomplete", "agentReply": "Nhắc nhở học viên nhẹ nhàng..."}
 
-OUTPUT SCHEMA (STRICT JSON ONLY):
+2. QUY TẮC ĐÁNH GIÁ KHI NỘP BẢN DỊCH HOÀN CHỈNH (intent: "submission"):
+   - "correctedSentence": Đưa ra câu dịch tiếng Anh chuẩn mực, tự nhiên, tự nhiên như người bản xứ trong giao tiếp hàng ngày, và BẮT BUỘC lồng ghép chuẩn xác từ vựng mục tiêu "{{targetWord}}".
+   - "score": Điểm số từ 0 đến 100 phản ánh độ chính xác, tự nhiên và ngữ pháp.
+   - "scoreLabel": Nhãn khen ngợi (ví dụ "Xuất sắc! 🌟", "Tuyệt vời! 🎉", "Làm tốt lắm! 👏", "Cần cố gắng! 💪").
+
+   - QUY TẮC CHÍNH XÁC CHO "incorporatedTargetWord" (TỪ VỰNG MỤC TIÊU):
+     + Gán "incorporatedTargetWord": true NẾU VÀ CHỈ NẾU câu của học viên thực sự sử dụng từ vựng mục tiêu "{{targetWord}}" (chấp nhận cả các dạng chia thì, số nhiều/số ít, tiền tố/hậu tố, trạng từ -ly, phrasal verb tách rời, hoặc biến thể dấu gạch nối / khoảng trắng như "cost-effective" / "cost effective").
+     + BẮT BUỘC gán "incorporatedTargetWord": false NẾU học viên KHÔNG dùng từ "{{targetWord}}" (ví dụ: dùng từ đồng nghĩa khác như 'affordable' hay 'come over', hoặc không nhắc đến, hoặc bỏ trống/bỏ qua).
+     + Khi "incorporatedTargetWord" là false: TUYỆT ĐỐI KHÔNG khen trong "whatWentWell" rằng học viên đã dùng "{{targetWord}}". Thay vào đó, hãy khen ngợi từ đồng nghĩa/cấu trúc tự nhiên họ đã dùng trong "whatWentWell", và trong "areasForImprovement" hãy gợi ý cách lồng ghép từ mục tiêu "{{targetWord}}".
+     + Khi "incorporatedTargetWord" là true: Hãy ghi nhận và khen ngợi cách dùng chuẩn xác của từ mục tiêu "{{targetWord}}" trong "whatWentWell".
+
+   - QUY TẮC CHÍNH XÁC CHO "incorporatedVocabClues" (CÁC TỪ GỢI Ý ĐÃ DÙNG):
+     + Đối chiếu câu dịch của học viên với danh sách từ gợi ý: {{json clueWordsList}}.
+     + Trả về mảng "incorporatedVocabClues" chứa chính xác tên các từ gợi ý mà học viên ĐÃ THỰC SỰ SỬ DỤNG (ví dụ: ["service", "print"]).
+     + Nếu học viên không dùng từ gợi ý nào, trả về mảng rỗng [].
+     + TUYỆT ĐỐI KHÔNG đưa từ vào "incorporatedVocabClues" nếu học viên không hề viết từ đó trong bản dịch của họ.
+
+3. TRƯỜNG HỢP HỌC VIÊN BỎ QUA / XEM ĐÁP ÁN:
+   - score: 0, scoreLabel: "Xem đáp án & Học tập! 💡", userTranslation: "(No answer provided)", incorporatedTargetWord: false, incorporatedVocabClues: [].
+
+CẤU TRÚC JSON ĐẦU RA BẮT BUỘC:
 {
-  "intent": "submission" | "incomplete",
-  "agentReply": "String explanation if incomplete",
+  "intent": "submission",
   "evaluation": {
-    "score": 85,
-    "scoreLabel": "Great Job! 👏",
+    "score": 90,
+    "scoreLabel": "Xuất sắc! 🌟",
     "userTranslation": "{{userSubmission}}",
     "incorporatedTargetWord": true,
     "targetWordUsed": "{{targetWord}}",
-    "whatWentWell": "Detailed positive feedback in native language...",
-    "areasForImprovement": "Constructive tips on grammar, nuance, or prepositions...",
-    "correctedSentence": "Optimal target translation...",
+    "incorporatedVocabClues": ["clue1", "clue2"],
+    "whatWentWell": "Nhận xét chi tiết bằng tiếng Việt...",
+    "areasForImprovement": "Gợi ý cải thiện cấu trúc, từ vựng...",
+    "correctedSentence": "Optimal English translation containing {{targetWord}}...",
     "suggestedVocabulary": [
       {
-        "word": "term",
-        "translation": "native meaning",
-        "definition": "definition",
-        "partOfSpeech": "noun/verb",
-        "example": "example sentence",
-        "exampleTranslation": "translation of example"
+        "word": "vocabulary item",
+        "translation": "nghĩa tiếng Việt",
+        "definition": "English definition",
+        "partOfSpeech": "noun / verb / adjective / phrase",
+        "example": "Example sentence using the word",
+        "exampleTranslation": "Bản dịch của câu ví dụ"
       }
     ]
   }
 }
+```
+
+#### Production English / Multilingual System Instruction & Evaluation Prompt
+```text
+System Instruction:
+You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Strictly determine whether the learner incorporated the designated target word ("incorporatedTargetWord") and which clue words they incorporated ("incorporatedVocabClues").
+
+Prompt Template:
+Evaluate the user's translation attempt from {{nativeLanguage}} to {{targetLanguage}}.
+
+CHALLENGE DETAILS:
+- Native Sentence: "{{challenge.nativeSentence}}"
+- Context: "{{challenge.topicContext}}"
+- Designated Target Word: "{{challenge.targetWordFromCollection.word}}"
+- Available Clue Words: {{json clueWordsList}}
+
+USER SUBMISSION:
+"{{userSubmission}}"
+
+STRICT EVALUATION INSTRUCTIONS:
+1. Incomplete submission check: If premature fragment, return intent: "incomplete".
+2. Normal submission: Provide correctedSentence, score (0-100), and scoreLabel.
+3. STRICT CHECK FOR "incorporatedTargetWord":
+   - Set "incorporatedTargetWord": true IF AND ONLY IF the learner actually included the featured target word "{{targetWord}}" or its valid grammatical inflections / forms (e.g. past tense, gerund, plural, adverbial forms like -ly, separable phrasal verb particles, or hyphen/space compound variants like "cost-effective" / "cost effective").
+   - Set "incorporatedTargetWord": false IF the learner used an alternative synonym (e.g. "affordable" instead of "{{targetWord}}"), omitted it, or skipped.
+   - When "incorporatedTargetWord" is false: Never claim in "whatWentWell" that the user used "{{targetWord}}". Instead, praise their natural synonym/phrasing in "whatWentWell" and suggest how to apply "{{targetWord}}" in "areasForImprovement".
+   - When "incorporatedTargetWord" is true: Acknowledge and praise their correct use of "{{targetWord}}" in "whatWentWell".
+4. STRICT CHECK FOR "incorporatedVocabClues":
+   - Check the learner's text against available clues: {{json clueWordsList}}.
+   - Return an array of strings in "incorporatedVocabClues" containing the exact clue words the learner actually used.
+   - Return an empty array [] if none were used.
+   - Do NOT hallucinate or include any clue words that do not appear in the learner's text.
 ```
 
 ---
@@ -1277,4 +1357,5 @@ export function MobileTranslationChallenge() {
 | **Step 5: Verify Mobile Ergonomics** | Test on mobile viewport (360px–430px): check touch targets (≥ 44px), virtual keyboard typing, and audio buttons. | In-browser DevTools Device Mode |
 | **Step 6: Wire SRS Persistence** | Connect `evaluation.augmentedWords` (+30/+10 points) and update `lastAppearedAt = new Date().toISOString()` in your DB. | Storage Layer |
 | **Step 7: Connect Real LLM** | Replace mock generation with the Mode A / Mode B prompt, giving the LLM 100% freedom to invent any realistic context and select common everyday sentences (zero hardcoded topics). | `server.ts` or API endpoint |
+| **Step 8: Direct LLM Evaluation** | In evaluation pipeline, consume `incorporatedTargetWord` and `incorporatedVocabClues` directly from the LLM response without adding secondary programmatic regex validation gates that cause false negatives. | `challengeService.ts` / `server.ts` |
 
