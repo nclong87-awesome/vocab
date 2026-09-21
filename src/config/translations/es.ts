@@ -322,5 +322,21 @@ export const esTranslations: LanguageTranslations = {
     settings_test_voice_sample: "¡Hola! Bienvenido al Aprendiz de Vocabulario. La pronunciación en audio acelera la retención de la memoria.",
     chat_with_context_hint: " con contexto *\"{hint}\"*",
     label_suggested_vocabulary: "Vocabulario sugerido",
-    label_candidate_vocabulary: "Vocabulario candidato"
+    label_candidate_vocabulary: "Vocabulario candidato",
+    api_progress_cancel: "Cancelar",
+    api_progress_elapsed: "{seconds}s transcurridos",
+    api_progress_remaining: "Restante ~{remaining}s (est. {expected}s)",
+    api_progress_finalizing: "Finalizando... (est. {expected}s)",
+    api_progress_smart_routing: "Enrutamiento Inteligente",
+    api_error_modal_title: "Error de Conexión del Modelo de IA",
+    api_error_model_failed_prefix: "No se pudo conectar con el tutor de IA: Error del modelo ({model})",
+    api_error_circuit_breaker: "Disyuntor",
+    api_error_circuit_breaker_desc: "Modelo defectuoso aislado y redirigido automáticamente al siguiente candidato sano.",
+    api_error_auto_retry: "Reintentando automáticamente (intento {attempt}/{max}):",
+    api_error_pause_countdown: "Pausar Cuenta Regresiva",
+    api_error_resume_countdown: "Reanudar Cuenta Regresiva",
+    api_error_retry_now: "Reintentar Ahora",
+    api_error_close: "Cerrar",
+    api_error_timeout_desc: "No se pudo conectar con el tutor de IA: Se agotó el tiempo de espera del modelo {model} (30s). El modelo no respondió. Inténtalo de nuevo.",
+    api_error_fallback: "No se pudo conectar con el tutor de IA. Inténtalo de nuevo."
   };

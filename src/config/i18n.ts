@@ -477,7 +477,23 @@ export type TranslationKey =
   | "gallery_empty_title"
   | "gallery_empty_desc"
   | "gallery_enriched_by_model"
-  | "gallery_model_label";
+  | "gallery_model_label"
+  | "api_progress_cancel"
+  | "api_progress_elapsed"
+  | "api_progress_remaining"
+  | "api_progress_finalizing"
+  | "api_progress_smart_routing"
+  | "api_error_modal_title"
+  | "api_error_model_failed_prefix"
+  | "api_error_circuit_breaker"
+  | "api_error_circuit_breaker_desc"
+  | "api_error_auto_retry"
+  | "api_error_pause_countdown"
+  | "api_error_resume_countdown"
+  | "api_error_retry_now"
+  | "api_error_close"
+  | "api_error_timeout_desc"
+  | "api_error_fallback";
 
 export type LanguageTranslations = Partial<Record<TranslationKey, string>>;
 

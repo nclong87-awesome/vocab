@@ -99,8 +99,10 @@ export async function fetchWithTimeout(
     return fetch(input, fetchInit);
   }
 
+  let isTimeoutAborted = false;
   const controller = new AbortController();
   const id = setTimeout(() => {
+    isTimeoutAborted = true;
     controller.abort();
   }, timeoutMs);
 
@@ -124,11 +126,17 @@ export async function fetchWithTimeout(
       try {
         const textPromise = originalText();
         const timeoutPromise = new Promise<never>((_, reject) => {
-          if (controller.signal.aborted) {
-            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+          const makeTimeoutErr = () => {
+            const err: any = new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+            err.isTimeout = true;
+            err.name = "TimeoutError";
+            return err;
+          };
+          if (isTimeoutAborted || controller.signal.aborted) {
+            reject(makeTimeoutErr());
           }
           controller.signal.addEventListener("abort", () => {
-            reject(new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`));
+            reject(makeTimeoutErr());
           });
         });
         return await Promise.race([textPromise, timeoutPromise]);
@@ -169,8 +177,11 @@ export async function fetchWithTimeout(
     return response;
   } catch (error: any) {
     clearTimeout(id);
-    if (error.name === "AbortError" || controller.signal.aborted) {
-      throw new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+    if (isTimeoutAborted || (controller.signal.aborted && !fetchInit.signal?.aborted)) {
+      const timeoutErr: any = new Error(`API call timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+      timeoutErr.isTimeout = true;
+      timeoutErr.name = "TimeoutError";
+      throw timeoutErr;
     }
     throw error;
   }

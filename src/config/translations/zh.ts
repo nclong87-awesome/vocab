@@ -322,5 +322,21 @@ export const zhTranslations: LanguageTranslations = {
     settings_test_voice_sample: "你好！欢迎来到词汇学习助手。语音发音可以加速记忆保持。",
     chat_with_context_hint: "（语境：*\"{hint}\"*）",
     label_suggested_vocabulary: "推荐词汇",
-    label_candidate_vocabulary: "候选词汇"
+    label_candidate_vocabulary: "候选词汇",
+    api_progress_cancel: "取消",
+    api_progress_elapsed: "已用时 {seconds} 秒",
+    api_progress_remaining: "预计剩余 ~{remaining} 秒 (预估 {expected} 秒)",
+    api_progress_finalizing: "正在完成... (预估 {expected} 秒)",
+    api_progress_smart_routing: "智能路由",
+    api_error_modal_title: "AI 模型连接错误",
+    api_error_model_failed_prefix: "无法连接到 AI 导师：模型错误 ({model})",
+    api_error_circuit_breaker: "熔断器",
+    api_error_circuit_breaker_desc: "已隔离故障模型，并自动切换至下一个可用备用模型。",
+    api_error_auto_retry: "自动重试 (第 {attempt}/{max} 次):",
+    api_error_pause_countdown: "暂停倒计时",
+    api_error_resume_countdown: "继续倒计时",
+    api_error_retry_now: "立即重试",
+    api_error_close: "关闭",
+    api_error_timeout_desc: "无法连接到 AI 导师：模型 {model} 连接超时 (30秒)。模型未响应，请重试。",
+    api_error_fallback: "无法连接到 AI 导师，请重试。"
   };

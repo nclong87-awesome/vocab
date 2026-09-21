@@ -13,7 +13,7 @@ import {
   getAllModelStatuses
 } from "../utils/autoModeManager";
 import { logApiRequest } from "./requestHistoryService";
-import { publishLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
+import { publishLlmRequestStart, publishLlmRequestEnd, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
 
 import { cleanJsonResponse, cleanAndParseJson, extractWordsFromPayload, formatLlmResponseText, unescapeStringContent } from "../utils/jsonSanitizer";
 import { getRotatedDefaultModel } from "../components/chat/quickActionsConfig";
@@ -719,6 +719,20 @@ export async function callLLMClientSideWithMeta(
   options?: LLMCallOptions
 ): Promise<LLMResponseWithMeta> {
   const provider = llmConfig?.provider || "auto";
+  const actionName = options?.action || "generateChallenge";
+
+  const internalAbortController = (!signal && typeof AbortController !== "undefined") ? new AbortController() : null;
+  const effectiveSignal = signal || internalAbortController?.signal;
+
+  const cancelFn = () => {
+    if (internalAbortController) {
+      try {
+        internalAbortController.abort();
+      } catch (e) {
+        // ignore
+      }
+    }
+  };
 
   // AUTO MODE: Automatically select candidate model & lock failing model dynamically
   if (provider === "auto" || llmConfig?.model === "auto") {
@@ -726,7 +740,14 @@ export async function callLLMClientSideWithMeta(
     const candidateKey = `${candidate.provider}:${candidate.model}`;
 
     // Publish event BEFORE calling AI worker
-    publishLlmRequestStart({ provider: candidate.provider, model: candidate.model, timestamp: Date.now() });
+    publishLlmRequestStart({
+      provider: candidate.provider,
+      model: candidate.model,
+      action: actionName,
+      isAutoMode: true,
+      timestamp: Date.now(),
+      onCancel: cancelFn,
+    });
 
     const candidateSavedProfile = llmConfig?.savedProviders?.[candidate.provider];
     const effectiveCandidateConfig: LLMConfig = {
@@ -740,9 +761,27 @@ export async function callLLMClientSideWithMeta(
     };
 
     const candidateStartTime = Date.now();
+    let candidateTimeoutId: any = null;
+    const candidateTimeoutPromise = new Promise<never>((_, reject) => {
+      candidateTimeoutId = setTimeout(() => {
+        const timeoutErr: any = new Error(`API Request Timed Out (30s): Model ${candidate.model} on ${candidate.provider} did not respond within 30 seconds.`);
+        timeoutErr.isTimeout = true;
+        timeoutErr.name = "TimeoutError";
+        timeoutErr.provider = candidate.provider;
+        timeoutErr.model = candidate.model;
+        if (internalAbortController) {
+          try { internalAbortController.abort(); } catch {}
+        }
+        reject(timeoutErr);
+      }, 30000);
+    });
+
     try {
       console.log(`[Auto Mode - ${tierMeta.badgeLabel}] Routing request to ${candidateKey}`);
-      let text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig, signal);
+      let text = await Promise.race([
+        callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, effectiveCandidateConfig, effectiveSignal),
+        candidateTimeoutPromise
+      ]);
       const candidateDuration = Date.now() - candidateStartTime;
 
       if (schemaDescription) {
@@ -780,6 +819,14 @@ export async function callLLMClientSideWithMeta(
         }).catch(() => undefined);
       }
 
+      publishLlmRequestEnd({
+        provider: candidate.provider,
+        model: candidate.model,
+        action: actionName,
+        success: true,
+        timestamp: Date.now()
+      });
+
       return {
         text,
         provider: candidate.provider,
@@ -787,10 +834,27 @@ export async function callLLMClientSideWithMeta(
         responseTimeMs: candidateDuration
       };
     } catch (err: any) {
-      if (signal?.aborted || err?.name === "AbortError" || String(err?.message || "").includes("aborted") || String(err).includes("aborted")) {
+      const candidateDuration = Date.now() - candidateStartTime;
+      publishLlmRequestEnd({
+        provider: candidate.provider,
+        model: candidate.model,
+        action: actionName,
+        success: false,
+        error: err,
+        timestamp: Date.now()
+      });
+
+      const isTimeout = Boolean(
+        err?.isTimeout ||
+        err?.name === "TimeoutError" ||
+        String(err?.message || "").toLowerCase().includes("timed out") ||
+        String(err?.message || "").toLowerCase().includes("timeout")
+      );
+
+      // Only bail out early if user intentionally cancelled (caller signal was aborted) and NOT a timeout
+      if (!isTimeout && (signal?.aborted || (effectiveSignal?.aborted && !err?.isTimeout && err?.name === "AbortError" && !String(err?.message || "").includes("timed out")))) {
         throw err;
       }
-      const candidateDuration = Date.now() - candidateStartTime;
       console.warn(`[Auto Mode] Model ${candidateKey} failed: ${err?.message || err}. Locking dynamically.`);
       if (!options?.skipMetrics) {
         recordModelFailure(candidate.provider, candidate.model, err?.message || String(err), candidateDuration);
@@ -811,7 +875,7 @@ export async function callLLMClientSideWithMeta(
           rawResponse: rawResp || undefined,
           responseTimeMs: candidateDuration,
           status: "error",
-          statusCode: err?.statusCode || 500,
+          statusCode: err?.statusCode || (isTimeout ? 504 : 500),
           errorMessage: err?.userMessage || err?.message || String(err),
           action: options?.action
         }).catch(() => undefined);
@@ -820,7 +884,13 @@ export async function callLLMClientSideWithMeta(
       err.provider = candidate.provider;
       err.model = candidate.model;
       err.isAutoMode = true;
+      if (isTimeout) {
+        err.isTimeout = true;
+        err.userMessage = `API Request Timed Out (30s): Model ${candidate.model} did not respond within 30 seconds.`;
+      }
       throw err;
+    } finally {
+      clearTimeout(candidateTimeoutId);
     }
   }
 
@@ -828,11 +898,36 @@ export async function callLLMClientSideWithMeta(
   const activeModel = sanitizeModel(activeProvider, llmConfig?.model);
 
   // Publish event BEFORE calling AI worker
-  publishLlmRequestStart({ provider: activeProvider, model: activeModel, timestamp: Date.now() });
+  publishLlmRequestStart({
+    provider: activeProvider,
+    model: activeModel,
+    action: actionName,
+    isAutoMode: false,
+    timestamp: Date.now(),
+    onCancel: cancelFn,
+  });
 
   const singleStartTime = Date.now();
+  let singleTimeoutId: any = null;
+  const singleTimeoutPromise = new Promise<never>((_, reject) => {
+    singleTimeoutId = setTimeout(() => {
+      const timeoutErr: any = new Error(`API Request Timed Out (30s): Model ${activeModel} on ${activeProvider} did not respond within 30 seconds.`);
+      timeoutErr.isTimeout = true;
+      timeoutErr.name = "TimeoutError";
+      timeoutErr.provider = activeProvider;
+      timeoutErr.model = activeModel;
+      if (internalAbortController) {
+        try { internalAbortController.abort(); } catch {}
+      }
+      reject(timeoutErr);
+    }, 30000);
+  });
+
   try {
-    const text = await callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig, signal);
+    const text = await Promise.race([
+      callLLMClientSideSingleCandidate(prompt, systemInstruction, schemaDescription, llmConfig, effectiveSignal),
+      singleTimeoutPromise
+    ]);
     const singleDuration = Date.now() - singleStartTime;
     if (!options?.skipMetrics) {
       recordModelResponse(activeProvider, activeModel, singleDuration);
@@ -855,6 +950,14 @@ export async function callLLMClientSideWithMeta(
       }).catch(() => undefined);
     }
 
+    publishLlmRequestEnd({
+      provider: activeProvider,
+      model: activeModel,
+      action: actionName,
+      success: true,
+      timestamp: Date.now()
+    });
+
     return {
       text,
       provider: activeProvider,
@@ -863,6 +966,15 @@ export async function callLLMClientSideWithMeta(
     };
   } catch (err: any) {
     const singleDuration = Date.now() - singleStartTime;
+    publishLlmRequestEnd({
+      provider: activeProvider,
+      model: activeModel,
+      action: actionName,
+      success: false,
+      error: err,
+      timestamp: Date.now()
+    });
+
     if (!options?.skipMetrics) {
       recordModelFailure(activeProvider, activeModel, err?.message || String(err), singleDuration);
     }
@@ -887,7 +999,22 @@ export async function callLLMClientSideWithMeta(
       }).catch(() => undefined);
     }
 
+    const isTimeout = Boolean(
+      err?.isTimeout ||
+      err?.name === "TimeoutError" ||
+      String(err?.message || "").toLowerCase().includes("timed out") ||
+      String(err?.message || "").toLowerCase().includes("timeout")
+    );
+
+    err.provider = activeProvider;
+    err.model = activeModel;
+    if (isTimeout) {
+      err.isTimeout = true;
+      err.userMessage = `API Request Timed Out (30s): Model ${activeModel} did not respond within 30 seconds.`;
+    }
     throw err;
+  } finally {
+    clearTimeout(singleTimeoutId);
   }
 }
 

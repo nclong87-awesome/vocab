@@ -456,5 +456,21 @@ export const viTranslations: LanguageTranslations = {
     gallery_empty_title: "Chưa Có Từ Đã Làm Giàu Nào",
     gallery_empty_desc: "Hiện chưa có từ vựng nào vừa hoàn thành làm giàu. Hãy thử chạy làm giàu tự động các từ nháp!",
     gallery_enriched_by_model: "Làm giàu bằng {model}",
-    gallery_model_label: "Mô hình"
+    gallery_model_label: "Mô hình",
+    api_progress_cancel: "Hủy",
+    api_progress_elapsed: "{seconds}s đã qua",
+    api_progress_remaining: "Còn ~{remaining}s (dự tính {expected}s)",
+    api_progress_finalizing: "Đang hoàn tất... (dự tính {expected}s)",
+    api_progress_smart_routing: "Định tuyến thông minh",
+    api_error_modal_title: "Lỗi kết nối mô hình AI",
+    api_error_model_failed_prefix: "Không thể kết nối với gia sư AI: Lỗi kết nối mô hình ({model})",
+    api_error_circuit_breaker: "Circuit Breaker",
+    api_error_circuit_breaker_desc: "Đã cách ly mô hình gặp lỗi và tự động định tuyến sang ứng viên khỏe mạnh tiếp theo.",
+    api_error_auto_retry: "Tự động thử lại (lần {attempt}/{max}):",
+    api_error_pause_countdown: "Dừng đếm ngược",
+    api_error_resume_countdown: "Tiếp tục đếm ngược",
+    api_error_retry_now: "Thử lại ngay",
+    api_error_close: "Đóng",
+    api_error_timeout_desc: "Không thể kết nối với gia sư AI: Lỗi kết nối mô hình {model}: Hết thời gian chờ (Timeout 30s). Mô hình không phản hồi trong 30 giây. Vui lòng thử lại.",
+    api_error_fallback: "Không thể kết nối với gia sư AI. Vui lòng thử lại."
   };

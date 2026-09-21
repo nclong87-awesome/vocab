@@ -470,5 +470,21 @@ export const enTranslations: LanguageTranslations = {
     gallery_empty_title: "No Enriched Words Found",
     gallery_empty_desc: "No auto-completed words are available to display right now. Try enriching some draft words!",
     gallery_enriched_by_model: "Enriched with {model}",
-    gallery_model_label: "Model"
+    gallery_model_label: "Model",
+    api_progress_cancel: "Cancel",
+    api_progress_elapsed: "{seconds}s elapsed",
+    api_progress_remaining: "Remaining ~{remaining}s (est. {expected}s)",
+    api_progress_finalizing: "Finalizing... (est. {expected}s)",
+    api_progress_smart_routing: "Smart Routing",
+    api_error_modal_title: "AI Model Connection Error",
+    api_error_model_failed_prefix: "Unable to connect to AI tutor: Model error ({model})",
+    api_error_circuit_breaker: "Circuit Breaker",
+    api_error_circuit_breaker_desc: "Isolated faulty model and automatically routing to the next healthy candidate.",
+    api_error_auto_retry: "Auto-retrying (attempt {attempt}/{max}):",
+    api_error_pause_countdown: "Pause Countdown",
+    api_error_resume_countdown: "Resume Countdown",
+    api_error_retry_now: "Retry Now",
+    api_error_close: "Close",
+    api_error_timeout_desc: "Unable to connect to AI tutor: Connection to model {model} timed out (30s limit reached). The model did not respond within 30 seconds. Please try again.",
+    api_error_fallback: "Unable to connect to AI tutor. Please try again."
   };

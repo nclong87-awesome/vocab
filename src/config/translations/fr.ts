@@ -322,5 +322,21 @@ export const frTranslations: LanguageTranslations = {
     settings_test_voice_sample: "Bonjour! Bienvenue dans l'Apprenti de Vocabulaire. La prononciation audio accélère la mémorisation.",
     chat_with_context_hint: " avec contexte *\"{hint}\"*",
     label_suggested_vocabulary: "Vocabulaire suggéré",
-    label_candidate_vocabulary: "Vocabulaire candidat"
+    label_candidate_vocabulary: "Vocabulaire candidat",
+    api_progress_cancel: "Annuler",
+    api_progress_elapsed: "{seconds}s écoulées",
+    api_progress_remaining: "Restant ~{remaining}s (est. {expected}s)",
+    api_progress_finalizing: "Finalisation... (est. {expected}s)",
+    api_progress_smart_routing: "Routage Intelligent",
+    api_error_modal_title: "Erreur de Connexion du Modèle IA",
+    api_error_model_failed_prefix: "Impossible de se connecter au tuteur IA : Erreur du modèle ({model})",
+    api_error_circuit_breaker: "Coupe-circuit",
+    api_error_circuit_breaker_desc: "Modèle défaillant isolé et routage automatique vers le prochain candidat sain.",
+    api_error_auto_retry: "Nouvelle tentative automatique (tentative {attempt}/{max}) :",
+    api_error_pause_countdown: "Suspendre le compte à rebours",
+    api_error_resume_countdown: "Reprendre le compte à rebours",
+    api_error_retry_now: "Réessayer maintenant",
+    api_error_close: "Fermer",
+    api_error_timeout_desc: "Impossible de se connecter au tuteur IA : Délai d'attente dépassé pour le modèle {model} (30s). Le modèle n'a pas répondu. Veuillez réessayer.",
+    api_error_fallback: "Impossible de se connecter au tuteur IA. Veuillez réessayer."
   };

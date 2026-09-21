@@ -322,5 +322,21 @@ export const koTranslations: LanguageTranslations = {
     settings_test_voice_sample: "안녕하세요! 어휘 학습기에 오신 것을 환영합니다. 오디오 발음은 기억력을 빠르게 향상시킵니다.",
     chat_with_context_hint: " (문맥: *\"{hint}\"*)",
     label_suggested_vocabulary: "추천 어휘",
-    label_candidate_vocabulary: "후보 어휘"
+    label_candidate_vocabulary: "후보 어휘",
+    api_progress_cancel: "취소",
+    api_progress_elapsed: "{seconds}초 경과",
+    api_progress_remaining: "약 ~{remaining}초 남음 (예상 {expected}초)",
+    api_progress_finalizing: "완료 처리 중... (예상 {expected}초)",
+    api_progress_smart_routing: "스마트 라우팅",
+    api_error_modal_title: "AI 모델 연결 오류",
+    api_error_model_failed_prefix: "AI 튜터에 연결할 수 없습니다: 모델 오류 ({model})",
+    api_error_circuit_breaker: "서킷 브레이커",
+    api_error_circuit_breaker_desc: "오류가 발생한 모델을 격리하고 정상 모델로 자동 라우팅했습니다.",
+    api_error_auto_retry: "자동 재시도 ({attempt}/{max}회):",
+    api_error_pause_countdown: "카운트다운 일시정지",
+    api_error_resume_countdown: "카운트다운 재개",
+    api_error_retry_now: "지금 재시도",
+    api_error_close: "닫기",
+    api_error_timeout_desc: "AI 튜터에 연결할 수 없습니다: 모델 {model} 연결 시간 초과 (30초). 모델이 응답하지 않았습니다. 다시 시도해 주세요.",
+    api_error_fallback: "AI 튜터에 연결할 수 없습니다. 다시 시도해 주세요."
   };

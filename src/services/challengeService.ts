@@ -469,7 +469,7 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
     schemaDescription,
     effectiveConfig,
     undefined,
-    { action: "Translation Challenge" }
+    { action: "generateChallenge" }
   );
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);
@@ -954,7 +954,7 @@ Return STRICTLY raw JSON matching:
     schemaDescription,
     effectiveConfig,
     undefined,
-    { action: "Challenge Evaluation" }
+    { action: "processChallengeTurn" }
   );
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);

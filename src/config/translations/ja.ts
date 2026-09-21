@@ -322,5 +322,21 @@ export const jaTranslations: LanguageTranslations = {
     settings_test_voice_sample: "こんにちは！ボキャブラリーラーナーへようこそ。音声発音は記憶の定着をスピードアップします。",
     chat_with_context_hint: "（文脈: *\"{hint}\"*）",
     label_suggested_vocabulary: "推奨語彙",
-    label_candidate_vocabulary: "候補の語彙"
+    label_candidate_vocabulary: "候補の語彙",
+    api_progress_cancel: "キャンセル",
+    api_progress_elapsed: "{seconds}秒 経過",
+    api_progress_remaining: "残り約{remaining}秒 (予定 {expected}秒)",
+    api_progress_finalizing: "完了処理中... (予定 {expected}秒)",
+    api_progress_smart_routing: "スマートルーティング",
+    api_error_modal_title: "AIモデル接続エラー",
+    api_error_model_failed_prefix: "AIチューターに接続できません: モデルエラー ({model})",
+    api_error_circuit_breaker: "サーキットブレーカー",
+    api_error_circuit_breaker_desc: "障害モデルを隔離し、次の正常なモデルに自動ルーティングしました。",
+    api_error_auto_retry: "自動再試行 ({attempt}/{max}回目):",
+    api_error_pause_countdown: "カウントダウン一時停止",
+    api_error_resume_countdown: "カウントダウン再開",
+    api_error_retry_now: "今すぐ再試行",
+    api_error_close: "閉じる",
+    api_error_timeout_desc: "AIチューターに接続できません: モデル {model} への接続がタイムアウトしました (30秒)。再試行してください。",
+    api_error_fallback: "AIチューターに接続できません。もう一度お試しください。"
   };

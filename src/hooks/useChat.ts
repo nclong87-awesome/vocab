@@ -27,7 +27,7 @@ import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
@@ -180,6 +180,7 @@ export function useChat({
   }, [chatMessages, targetLanguage, nativeLanguage]);
 
   const pendingRetriesRef = useRef<Map<string, (newConfig: LLMConfig) => void>>(new Map());
+  const retryAttemptsMapRef = useRef<Map<string, number>>(new Map());
 
   const triggerChatErrorWithCountdown = (
     err: any,
@@ -195,12 +196,53 @@ export function useChat({
       rawMsg.toLowerCase().includes("timeout") ||
       rawMsg.toLowerCase().includes("timed out")
     );
+
+    if (
+      !isTimeout && (
+        err?.name === "AbortError" ||
+        String(err?.message || "").includes("aborted") ||
+        String(err).includes("aborted")
+      )
+    ) {
+      return;
+    }
+
     const failedProvider = err?.provider || currentConfig.provider;
     const failedModel = err?.model || currentConfig.model;
 
+    const currentAppLang =
+      appLanguage ||
+      (typeof window !== "undefined" ? localStorage.getItem("vocab_learner_app_lang") : null) ||
+      "en";
+
+    const displayErrorMsg = isTimeout
+      ? t("api_error_timeout_desc", currentAppLang, { model: failedModel || "" })
+      : rawMsg;
+
     if (failedProvider && failedModel && (currentConfig.provider === "auto" || currentConfig.model === "auto")) {
-      lockModel(failedProvider, failedModel, 3600000, rawMsg);
+      lockModel(failedProvider, failedModel, 3600000, displayErrorMsg);
     }
+
+    // Determine retry attempt count
+    const prevAttempts = retryAttemptsMapRef.current.get(prefix) || 1;
+    const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
+    retryAttemptsMapRef.current.set(prefix, currentAttempt);
+
+    // Trigger the Error & Retry Countdown Modal (Screenshot 2)
+    publishLlmApiError({
+      errorMessage: displayErrorMsg,
+      provider: failedProvider || "auto",
+      model: failedModel || "9flare/pro/gpt-5.6-luna",
+      action: prefix.includes("challenge-turn") ? "processChallengeTurn" : (prefix.includes("challenge") ? "generateChallenge" : "chat"),
+      retryAttempt: Math.min(3, Math.max(1, currentAttempt)),
+      maxRetries: 3,
+      onRetry: (newConfig) => {
+        retryAction(newConfig || currentConfig);
+      },
+      onCancel: () => {
+        retryAttemptsMapRef.current.delete(prefix);
+      }
+    });
 
     const errorMsgId = `${prefix}-${Date.now()}`;
     pendingRetriesRef.current.set(errorMsgId, retryAction);

@@ -4,6 +4,7 @@ import { getDefaultLLMConfig } from "../config/llmProviders";
 import { DEFAULT_TTS_CONFIG } from "../utils/ttsService";
 import { switchActiveProvider, sanitizeLlmConfig } from "../utils/llmHelpers";
 import { lockModel } from "../utils/autoModeManager";
+import { publishLlmApiError } from "../utils/llmEvents";
 import {
   getLLMConfigFromLocalStorage,
   saveLLMConfigToLocalStorage,
@@ -40,43 +41,28 @@ export function useLlmAndTtsConfig() {
     retryAction: (newConfig: LLMConfig) => void
   ) => {
     const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to communicate with AI provider.");
-    const provider = currentConfig.provider || "groq";
+    const provider = err?.provider || currentConfig.provider || "groq";
+    const model = err?.model || currentConfig.model || "9flare/pro/gpt-5.6-luna";
 
-    if (provider === "auto" || currentConfig.model === "auto") {
-      console.warn("[Auto Mode] Suppressing dialog modal in Auto Mode. Automatically selecting another model candidate...", rawMsg);
-      
-      if (err?.provider && err?.model) {
-        lockModel(err.provider, err.model, 3600000, rawMsg);
-      }
-
-      if (rawMsg.includes("All AI models in Auto Mode failed") || rawMsg.includes("locked out")) {
-        setAiErrorModal({
-          isOpen: true,
-          errorMessage: "All AI models in Auto Mode are currently unavailable. Please check your network connection or API settings.",
-          failedProvider: "auto",
-          retryAction
-        });
-        return;
-      }
-
-      const updatedConfig: LLMConfig = sanitizeLlmConfig({
-        ...currentConfig,
-        provider: "auto",
-        model: "auto"
-      });
-
-      if (retryAction) {
-        setTimeout(() => {
-          retryAction(updatedConfig);
-        }, 1000);
-      }
-      return;
+    if (provider && model) {
+      lockModel(provider, model, 3600000, rawMsg);
     }
 
-    setAiErrorModal({
-      isOpen: true,
+    publishLlmApiError({
       errorMessage: rawMsg,
-      failedProvider: provider,
+      provider,
+      model,
+      retryAttempt: 2,
+      maxRetries: 3,
+      onRetry: (newConfig) => {
+        retryAction(newConfig || currentConfig);
+      }
+    });
+
+    setAiErrorModal({
+      isOpen: false,
+      errorMessage: rawMsg,
+      failedProvider: provider as LLMProvider,
       retryAction
     });
   }, []);

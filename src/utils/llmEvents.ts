@@ -15,22 +15,92 @@ export interface LlmRequestStartEvent {
   provider: string;
   model: string;
   timestamp?: number;
+  action?: string;
+  isAutoMode?: boolean;
+  onCancel?: () => void;
 }
 
-type LlmEventListener = (data: LlmRequestStartEvent) => void;
+export interface LlmRequestEndEvent {
+  provider: string;
+  model: string;
+  action?: string;
+  success: boolean;
+  error?: any;
+  timestamp?: number;
+}
 
-const listeners = new Set<LlmEventListener>();
+export interface LlmApiErrorEvent {
+  errorMessage: string;
+  provider: string;
+  model: string;
+  action?: string;
+  retryAttempt?: number;
+  maxRetries?: number;
+  onRetry?: (newConfig?: LLMConfig) => void;
+  onCancel?: () => void;
+}
+
+type LlmStartEventListener = (data: LlmRequestStartEvent) => void;
+type LlmEndEventListener = (data: LlmRequestEndEvent) => void;
+type LlmErrorEventListener = (data: LlmApiErrorEvent) => void;
+type LlmCloseEventListener = () => void;
+
+const startListeners = new Set<LlmStartEventListener>();
+const endListeners = new Set<LlmEndEventListener>();
+const errorListeners = new Set<LlmErrorEventListener>();
+const closeListeners = new Set<LlmCloseEventListener>();
 
 /**
  * Publish an event when an LLM request is about to be sent to the AI worker.
  */
 export function publishLlmRequestStart(data: LlmRequestStartEvent): void {
   if (!data || !data.provider || !data.model) return;
-  listeners.forEach((listener) => {
+  startListeners.forEach((listener) => {
     try {
       listener(data);
     } catch (e) {
-      console.error("[llmEvents] Listener error:", e);
+      console.error("[llmEvents] Start listener error:", e);
+    }
+  });
+}
+
+/**
+ * Publish an event when an LLM request completes (success or failure).
+ */
+export function publishLlmRequestEnd(data: LlmRequestEndEvent): void {
+  if (!data) return;
+  endListeners.forEach((listener) => {
+    try {
+      listener(data);
+    } catch (e) {
+      console.error("[llmEvents] End listener error:", e);
+    }
+  });
+}
+
+/**
+ * Publish an event when an LLM API error occurs that can be retried with circuit breaker.
+ */
+export function publishLlmApiError(data: LlmApiErrorEvent): void {
+  if (!data) return;
+  errorListeners.forEach((listener) => {
+    try {
+      listener(data);
+    } catch (e) {
+      console.error("[llmEvents] Error listener error:", e);
+    }
+  });
+}
+
+/**
+ * Close all active LLM modal dialogs.
+ */
+export function publishCloseLlmModals(): void {
+  closeListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (e) {
+      console.error("[llmEvents] Close listener error:", e);
     }
   });
 }
@@ -38,11 +108,12 @@ export function publishLlmRequestStart(data: LlmRequestStartEvent): void {
 /**
  * Helper to resolve candidate/model from config and publish start event.
  */
-export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig): { provider: string; model: string } {
+export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig, action?: string, onCancel?: () => void): { provider: string; model: string } {
   let provider = llmConfig?.provider || "auto";
   let model = llmConfig?.model || "auto";
+  const isAutoMode = provider === "auto" || model === "auto";
 
-  if (provider === "auto" || model === "auto") {
+  if (isAutoMode) {
     try {
       const cand = getNextAutoCandidate(llmConfig, undefined, false);
       provider = cand.provider;
@@ -55,7 +126,7 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig): { provid
     model = sanitizeModelName(provider, model);
   }
 
-  const payload = { provider, model, timestamp: Date.now() };
+  const payload: LlmRequestStartEvent = { provider, model, timestamp: Date.now(), action, isAutoMode, onCancel };
   publishLlmRequestStart(payload);
   return { provider, model };
 }
@@ -63,9 +134,39 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig): { provid
 /**
  * Subscribe to LLM request start events. Returns an unsubscribe function.
  */
-export function subscribeLlmRequestStart(listener: LlmEventListener): () => void {
-  listeners.add(listener);
+export function subscribeLlmRequestStart(listener: LlmStartEventListener): () => void {
+  startListeners.add(listener);
   return () => {
-    listeners.delete(listener);
+    startListeners.delete(listener);
+  };
+}
+
+/**
+ * Subscribe to LLM request end events. Returns an unsubscribe function.
+ */
+export function subscribeLlmRequestEnd(listener: LlmEndEventListener): () => void {
+  endListeners.add(listener);
+  return () => {
+    endListeners.delete(listener);
+  };
+}
+
+/**
+ * Subscribe to LLM API error events. Returns an unsubscribe function.
+ */
+export function subscribeLlmApiError(listener: LlmErrorEventListener): () => void {
+  errorListeners.add(listener);
+  return () => {
+    errorListeners.delete(listener);
+  };
+}
+
+/**
+ * Subscribe to close all LLM modals events. Returns an unsubscribe function.
+ */
+export function subscribeCloseLlmModals(listener: LlmCloseEventListener): () => void {
+  closeListeners.add(listener);
+  return () => {
+    closeListeners.delete(listener);
   };
 }

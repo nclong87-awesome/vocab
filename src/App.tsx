@@ -34,6 +34,7 @@ import EnrichedWordsGalleryModal from "./components/deckManager/EnrichedWordsGal
 import AppHeader from "./components/layout/AppHeader";
 import MobileSideDrawer from "./components/layout/MobileSideDrawer";
 import AiErrorFallbackModal from "./components/layout/AiErrorFallbackModal";
+import ApiModalManager from "./components/layout/ApiModalManager";
 import { ToastNotification, ToastItem } from "./components/layout/ToastNotification";
 
 import { getUserPersonalityProfile } from "./services/userPersonalityProfileService";
@@ -783,6 +784,9 @@ export default function App() {
         onConfirmSwitchAndRetry={handleConfirmSwitchAndRetry}
         onClose={() => setAiErrorModal((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Global API Call Progress & Error/Retry Countdown Modals */}
+      <ApiModalManager llmConfig={llmConfig} appLanguage={appLanguage} />
 
       {/* Word Add Modal Dialog */}
       <WordAddModal

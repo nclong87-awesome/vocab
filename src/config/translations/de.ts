@@ -322,5 +322,21 @@ export const deTranslations: LanguageTranslations = {
     settings_test_voice_sample: "Hallo! Willkommen beim Vokabellernen. Die Audio-Aussprache beschleunigt das Behalten im Gedächtnis.",
     chat_with_context_hint: " mit Kontext *\"{hint}\"*",
     label_suggested_vocabulary: "Vorgeschlagener Wortschatz",
-    label_candidate_vocabulary: "Kandidaten-Wortschatz"
+    label_candidate_vocabulary: "Kandidaten-Wortschatz",
+    api_progress_cancel: "Abbrechen",
+    api_progress_elapsed: "{seconds}s vergangen",
+    api_progress_remaining: "Verbleibend ~{remaining}s (geschätzt {expected}s)",
+    api_progress_finalizing: "Wird abgeschlossen... (geschätzt {expected}s)",
+    api_progress_smart_routing: "Intelligentes Routing",
+    api_error_modal_title: "KI-Modell Verbindungsfehler",
+    api_error_model_failed_prefix: "Verbindung zum KI-Tutor fehlgeschlagen: Modellfehler ({model})",
+    api_error_circuit_breaker: "Circuit Breaker",
+    api_error_circuit_breaker_desc: "Fehlerhaftes Modell isoliert und automatisch zum nächsten gesunden Kandidaten weitergeleitet.",
+    api_error_auto_retry: "Automatische Wiederholung (Versuch {attempt}/{max}):",
+    api_error_pause_countdown: "Countdown pausieren",
+    api_error_resume_countdown: "Countdown fortsetzen",
+    api_error_retry_now: "Jetzt wiederholen",
+    api_error_close: "Schließen",
+    api_error_timeout_desc: "Verbindung zum KI-Tutor fehlgeschlagen: Zeitüberschreitung bei Modell {model} (30s). Das Modell hat nicht geantwortet. Bitte versuchen Sie es erneut.",
+    api_error_fallback: "Verbindung zum KI-Tutor fehlgeschlagen. Bitte versuchen Sie es erneut."
   };
