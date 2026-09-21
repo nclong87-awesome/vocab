@@ -18,6 +18,32 @@ export interface ApiModalManagerProps {
   appLanguage?: string;
 }
 
+/**
+ * Determines whether an action is part of the interactive chat experience
+ * (where the chat interface already has its own inline typing/progress indicator).
+ */
+export function isChatAction(action?: string): boolean {
+  if (!action) return false;
+  const act = action.toLowerCase().trim();
+  return (
+    act === "chat" ||
+    act === "send_message" ||
+    act === "chat_message" ||
+    act === "ask_ai" ||
+    act === "word_chat" ||
+    act === "challenge_ask_ai" ||
+    act === "challenge ask ai" ||
+    act === "suggest_casual_reply" ||
+    act === "fix_grammar" ||
+    act === "chat_quiz" ||
+    act === "quick_chat" ||
+    act.startsWith("chat") ||
+    act.includes("chat") ||
+    act.includes("ask ai") ||
+    act.includes("ask_ai")
+  );
+}
+
 export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalManagerProps) {
   // Progress modal state
   const [progressState, setProgressState] = useState<{
@@ -130,13 +156,22 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       // Close error modal if one was open
       setErrorState((prev) => ({ ...prev, isOpen: false }));
 
-      setProgressState({
-        isOpen: true,
-        action: data.action || "generateChallenge",
-        provider: data.provider,
-        model: data.model,
-        onCancel: data.onCancel,
-      });
+      const isChat = isChatAction(data.action);
+
+      // ONLY show the central progress modal for non-chat actions.
+      // Chat actions rely solely on their own inline progress indicator in the message stream.
+      if (!isChat) {
+        setProgressState({
+          isOpen: true,
+          action: data.action || "generateChallenge",
+          provider: data.provider,
+          model: data.model,
+          onCancel: data.onCancel,
+        });
+      } else {
+        // If a chat action starts, ensure the central progress modal is not shown
+        setProgressState((prev) => (prev.isOpen ? { ...prev, isOpen: false } : prev));
+      }
 
       // Start strict 30-second watchdog timer
       timeoutWatchdogRef.current = setTimeout(() => {

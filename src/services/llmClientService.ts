@@ -2019,7 +2019,7 @@ export interface ChatMessageResult {
 
 export async function sendChatMessageService(params: ChatMessageRequest): Promise<ChatMessageResult> {
   const { messages, targetLanguage, nativeLanguage, llmConfig, wordContext, userInquiries, userProfile, signal } = params;
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "chat");
   const startTime = performance.now();
 
   const chatHistoryStr = messages
@@ -2159,7 +2159,14 @@ CRITICAL INTERACTIVE CONVERSATION GUIDELINES:
 }`;
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig);
+    const resWithMeta = await callLLMClientSideWithMeta(
+      prompt,
+      systemInstruction,
+      schemaDesc,
+      llmConfig,
+      signal,
+      { action: "chat" }
+    );
     const parsed = JSON.parse(resWithMeta.text);
     const endTime = performance.now();
     const duration = resWithMeta.responseTimeMs || Math.round(endTime - startTime);

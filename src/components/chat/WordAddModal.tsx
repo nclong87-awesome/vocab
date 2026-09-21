@@ -194,7 +194,7 @@ export default function WordAddModal({
 
       setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
-      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig);
+      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig, "chat");
       setActiveModelInfo(activeInfo);
       scrollToBottom();
 
@@ -336,7 +336,7 @@ export default function WordAddModal({
 
       setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
-      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig);
+      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig, "chat");
       setActiveModelInfo(activeInfo);
       scrollToBottom();
 

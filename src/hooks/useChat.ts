@@ -89,7 +89,12 @@ export function useChat({
 
   const startTypingWithConfig = (overrideConfig?: LLMConfig): LLMConfig => {
     const cfgToUse = overrideConfig || llmConfig;
-    const activeInfo = notifyLlmRequestStartFromConfig(cfgToUse);
+    const activeInfo = notifyLlmRequestStartFromConfig(cfgToUse, "chat", () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    });
     setActiveModelInfo(activeInfo);
     setIsTypingState(true);
     return {
