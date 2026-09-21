@@ -3,7 +3,7 @@ import { Clock, X } from "lucide-react";
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses, getNextAutoCandidate } from "../../utils/autoModeManager";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
-import { subscribeLlmRequestStart } from "../../utils/llmEvents";
+import { subscribeLlmRequestStart, useCentralModalOpen } from "../../utils/llmEvents";
 
 interface LlmProgressIndicatorProps {
   llmConfig: LLMConfig;
@@ -12,6 +12,13 @@ interface LlmProgressIndicatorProps {
 }
 
 export default function LlmProgressIndicator({ llmConfig, onCancel, activeModelInfo }: LlmProgressIndicatorProps) {
+  const isCentralModalOpen = useCentralModalOpen();
+
+  // Hide the inline progress card while the central modal is open so only one progress indicator is visible
+  if (isCentralModalOpen) {
+    return null;
+  }
+
   const [liveModelInfo, setLiveModelInfo] = useState<{ provider: string; model: string } | null>(
     activeModelInfo || null
   );

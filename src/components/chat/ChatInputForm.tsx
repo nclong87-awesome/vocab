@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Camera, Mic, MicOff, Send, X } from "lucide-react";
 import { useSpeechToText } from "../../hooks/useSpeechToText";
+import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
 import { getLanguageCode } from "../../utils/ttsService";
 import { ChallengeData, TTSConfig, LLMConfig } from "../../types";
 
@@ -45,6 +47,8 @@ function ChatInputForm({
   inputRef,
 }: ChatInputFormProps) {
   const baseTextRef = useRef("");
+  // Virtual keyboard detection: only show active challenge sentence sticky banner when virtual keyboard is open
+  const isKeyboardOpen = useVirtualKeyboard({ inputRef });
   // Default to native language as requested
   const [speechLangMode, setSpeechLangMode] = useState<"native" | "target">("native");
 
@@ -99,17 +103,27 @@ function ChatInputForm({
 
   return (
     <form onSubmit={onFormSubmit} className="p-2.5 sm:p-3 bg-white border-t border-stone-200 shrink-0">
-      {/* Active Translation Challenge Sticky Banner (Always visible on mobile above keyboard) */}
-      {activeChallenge && activeChallenge.nativeSentence && (
-        <div 
-          className="mb-2 p-2.5 sm:p-3 bg-gradient-to-r from-amber-50/95 via-orange-50/70 to-amber-50/90 border border-amber-300/90 rounded-xl shadow-2xs"
-          id="active-challenge-sticky-banner"
-        >
-          <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug tracking-tight select-text">
-            "{activeChallenge.nativeSentence}"
-          </p>
-        </div>
-      )}
+      {/* Active Translation Challenge Sticky Banner (Only visible when virtual keyboard is open) */}
+      <AnimatePresence>
+        {isKeyboardOpen && activeChallenge && activeChallenge.nativeSentence && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 8 }}
+            exit={{ opacity: 0, y: 4, height: 0, marginBottom: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div 
+              className="p-2.5 sm:p-3 bg-gradient-to-r from-amber-50/95 via-orange-50/70 to-amber-50/90 border border-amber-300/90 rounded-xl shadow-2xs"
+              id="active-challenge-sticky-banner"
+            >
+              <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug tracking-tight select-text">
+                "{activeChallenge.nativeSentence}"
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Live Voice Recording Status Bar */}
       {isListening && (
         <div className="mb-2.5 p-2 px-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs animate-fadeIn">

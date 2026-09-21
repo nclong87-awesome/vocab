@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { LLMConfig } from "../types";
 import { getNextAutoCandidate } from "./autoModeManager";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
@@ -170,3 +171,61 @@ export function subscribeCloseLlmModals(listener: LlmCloseEventListener): () => 
     closeListeners.delete(listener);
   };
 }
+
+let centralProgressModalOpen = false;
+type CentralModalVisibilityListener = (isOpen: boolean) => void;
+const centralModalVisibilityListeners = new Set<CentralModalVisibilityListener>();
+
+/**
+ * Check if the central API call progress modal is currently open.
+ */
+export function isCentralModalOpen(): boolean {
+  return centralProgressModalOpen;
+}
+
+/**
+ * Broadcast when the central API call progress modal opens or closes.
+ */
+export function publishCentralModalVisibility(isOpen: boolean): void {
+  if (centralProgressModalOpen === isOpen) return;
+  centralProgressModalOpen = isOpen;
+  centralModalVisibilityListeners.forEach((listener) => {
+    try {
+      listener(isOpen);
+    } catch (e) {
+      console.error("[llmEvents] Central modal visibility listener error:", e);
+    }
+  });
+}
+
+/**
+ * Subscribe to central modal visibility changes.
+ */
+export function subscribeCentralModalVisibility(listener: CentralModalVisibilityListener): () => void {
+  centralModalVisibilityListeners.add(listener);
+  // Immediately call with current status
+  try {
+    listener(centralProgressModalOpen);
+  } catch (e) {
+    console.error("[llmEvents] Central modal visibility initial call error:", e);
+  }
+  return () => {
+    centralModalVisibilityListeners.delete(listener);
+  };
+}
+
+/**
+ * React hook to reactively track whether the central API progress modal is open.
+ */
+export function useCentralModalOpen(): boolean {
+  const [isOpen, setIsOpen] = useState<boolean>(centralProgressModalOpen);
+
+  useEffect(() => {
+    return subscribeCentralModalVisibility((open) => {
+      setIsOpen(open);
+    });
+  }, []);
+
+  return isOpen;
+}
+

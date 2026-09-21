@@ -2,6 +2,7 @@ import React, { Fragment } from "react";
 import { ChatMessage, LLMConfig, TTSConfig, Word } from "../../types";
 import ChatMessageItem from "./ChatMessageItem";
 import LlmProgressIndicator from "./LlmProgressIndicator";
+import { useCentralModalOpen } from "../../utils/llmEvents";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -77,6 +78,7 @@ function MessageList({
   onCancelErrorMessage,
   onRepopulateInput,
 }: MessageListProps) {
+  const isCentralModalOpen = useCentralModalOpen();
   const targetScrollIndex = React.useMemo(() => {
     if (messages.length === 0) return -1;
     return messages.length - 1;
@@ -130,8 +132,8 @@ function MessageList({
         );
       })}
 
-      {/* Progress Indicator */}
-      {isTyping && (
+      {/* Progress Indicator - only visible when central modal is NOT open */}
+      {isTyping && !isCentralModalOpen && (
         <LlmProgressIndicator llmConfig={llmConfig} activeModelInfo={activeModelInfo} onCancel={onCancelTyping} />
       )}
       <div ref={messagesEndRef} />

@@ -9,6 +9,7 @@ import {
   subscribeLlmRequestEnd,
   subscribeLlmApiError,
   subscribeCloseLlmModals,
+  publishCentralModalVisibility,
   LlmRequestStartEvent,
   LlmApiErrorEvent
 } from "../../utils/llmEvents";
@@ -78,6 +79,18 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
 
   const onCancelRef = useRef<(() => void) | undefined>(undefined);
   onCancelRef.current = progressState.onCancel;
+
+  // Synchronize central progress modal visibility with global state
+  // so inline progress indicators in chat can hide while this modal is open
+  useEffect(() => {
+    publishCentralModalVisibility(progressState.isOpen);
+  }, [progressState.isOpen]);
+
+  useEffect(() => {
+    return () => {
+      publishCentralModalVisibility(false);
+    };
+  }, []);
 
   const timeoutWatchdogRef = useRef<NodeJS.Timeout | null>(null);
   const activeRequestRef = useRef<LlmRequestStartEvent | null>(null);
@@ -156,22 +169,14 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       // Close error modal if one was open
       setErrorState((prev) => ({ ...prev, isOpen: false }));
 
-      const isChat = isChatAction(data.action);
-
-      // ONLY show the central progress modal for non-chat actions.
-      // Chat actions rely solely on their own inline progress indicator in the message stream.
-      if (!isChat) {
-        setProgressState({
-          isOpen: true,
-          action: data.action || "generateChallenge",
-          provider: data.provider,
-          model: data.model,
-          onCancel: data.onCancel,
-        });
-      } else {
-        // If a chat action starts, ensure the central progress modal is not shown
-        setProgressState((prev) => (prev.isOpen ? { ...prev, isOpen: false } : prev));
-      }
+      // Open central progress modal for active request
+      setProgressState({
+        isOpen: true,
+        action: data.action || "chat",
+        provider: data.provider,
+        model: data.model,
+        onCancel: data.onCancel,
+      });
 
       // Start strict 30-second watchdog timer
       timeoutWatchdogRef.current = setTimeout(() => {

@@ -26,7 +26,7 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { findWordInCollection, isCompletedWord, isIncompleteWord, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig } from "../../utils/llmEvents";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen } from "../../utils/llmEvents";
 import ChatMessageItem from "./ChatMessageItem";
 import LlmProgressIndicator from "./LlmProgressIndicator";
 
@@ -123,6 +123,7 @@ export default function WordAddModal({
   const [activeModelInfo, setActiveModelInfo] = useState<{ provider: string; model: string } | null>(null);
   const [isGeneratingAiActions, setIsGeneratingAiActions] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const isCentralModalOpen = useCentralModalOpen();
 
   const pendingWordSensesRef = useRef<{ word: string; senses: any[]; suggestedWords?: any[] } | null>(null);
   const pendingRetryRef = useRef<{ word: string; hint?: string } | null>(null);
@@ -1263,8 +1264,8 @@ export default function WordAddModal({
           />
         ))}
 
-        {/* Typing / Progress Indicator */}
-        {isTyping && (
+        {/* Typing / Progress Indicator - hidden while central modal is open */}
+        {isTyping && !isCentralModalOpen && (
           <div className="pt-2">
             <LlmProgressIndicator
               llmConfig={llmConfig}
