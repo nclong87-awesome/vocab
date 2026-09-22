@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { LLMConfig, TTSConfig, LLMProvider } from "../types";
 import { getDefaultLLMConfig } from "../config/llmProviders";
 import { DEFAULT_TTS_CONFIG } from "../utils/ttsService";
@@ -35,6 +35,8 @@ export function useLlmAndTtsConfig() {
     retryAction: null
   });
 
+  const retryAttemptsRef = useRef<number>(0);
+
   const handleAiApiError = useCallback((
     err: any, 
     currentConfig: LLMConfig, 
@@ -48,14 +50,24 @@ export function useLlmAndTtsConfig() {
       lockModel(provider, model, 3600000, rawMsg);
     }
 
+    const prevAttempts = retryAttemptsRef.current;
+    const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
+    retryAttemptsRef.current = currentAttempt;
+
     publishLlmApiError({
       errorMessage: rawMsg,
       provider,
       model,
-      retryAttempt: 2,
+      retryAttempt: currentAttempt,
       maxRetries: 3,
       onRetry: (newConfig) => {
+        if (currentAttempt >= 3) {
+          retryAttemptsRef.current = 0;
+        }
         retryAction(newConfig || currentConfig);
+      },
+      onCancel: () => {
+        retryAttemptsRef.current = 0;
       }
     });
 

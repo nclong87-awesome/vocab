@@ -232,7 +232,8 @@ export function useChat({
 
     // Determine retry attempt count
     const prevAttempts = retryAttemptsMapRef.current.get(prefix) || 0;
-    const currentAttempt = prevAttempts + 1;
+    // If previous attempts hit or exceeded max retries (3), reset to 1 for this new cycle
+    const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
     retryAttemptsMapRef.current.set(prefix, currentAttempt);
 
     // Trigger the Error & Retry Countdown Modal (Screenshot 2)
@@ -244,10 +245,14 @@ export function useChat({
       retryAttempt: currentAttempt,
       maxRetries: 3,
       onRetry: (newConfig) => {
+        // If max attempts were reached (or user explicitly clicked Retry Now), reset counter so next cycle starts fresh at 1
+        if (currentAttempt >= 3) {
+          retryAttemptsMapRef.current.delete(prefix);
+        }
         retryAction(newConfig || currentConfig);
       },
       onCancel: () => {
-        retryAttemptsMapRef.current.delete(prefix);
+        retryAttemptsMapRef.current.clear();
       }
     });
 
@@ -277,6 +282,7 @@ export function useChat({
   };
 
   const handleRetryErrorMessage = (messageId: string) => {
+    retryAttemptsMapRef.current.clear();
     const retryFn = pendingRetriesRef.current.get(messageId);
     pendingRetriesRef.current.delete(messageId);
     // Mark message as retrying so the card displays the retrying spinner instead of vanishing
@@ -309,6 +315,7 @@ export function useChat({
   };
 
   const handleCancelErrorMessage = (messageId: string) => {
+    retryAttemptsMapRef.current.clear();
     pendingRetriesRef.current.delete(messageId);
     publishCloseLlmModals();
     setChatMessages((prev) =>
@@ -333,6 +340,7 @@ export function useChat({
     practiceMode: "auto" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
     options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
   ) => {
+    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
     if (practiceMode !== "translation_challenge") {
@@ -1365,6 +1373,7 @@ export function useChat({
 
   // Add individual word directly from chat suggestions (or conversational input)
   const handleConversationalAddWord = async (wordText: string, hint?: string, overrideConfig?: LLMConfig) => {
+    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
@@ -1678,6 +1687,7 @@ export function useChat({
   const handleSendChatMessage = async (text: string, overrideConfig?: LLMConfig) => {
     if (!text.trim() && !activeChallenge) return;
 
+    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const effectiveText = text.trim() || "(No answer provided)";
 
@@ -2672,6 +2682,7 @@ export function useChat({
   };
 
   const handleConversationalGenerateWords = async (topic: string, count: number, overrideConfig?: LLMConfig) => {
+    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `gen-words-status-${Date.now()}`;
@@ -2884,6 +2895,7 @@ export function useChat({
   };
 
   const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string) => {
+    retryAttemptsMapRef.current.clear();
     setConversationalState("none");
     const overrideConfig = imageDataUrl ? getVisionModelConfig() : undefined;
     const configToUse = overrideConfig || llmConfig;
@@ -3016,6 +3028,7 @@ export function useChat({
   };
 
   const handleConversationalFixGrammar = async (userText: string, overrideConfig?: LLMConfig) => {
+    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
