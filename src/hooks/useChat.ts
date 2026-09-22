@@ -236,7 +236,28 @@ export function useChat({
     const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
     retryAttemptsMapRef.current.set(prefix, currentAttempt);
 
-    // Trigger the Error & Retry Countdown Modal (Screenshot 2)
+    const errorMsgId = `${prefix}-${Date.now()}`;
+    let isDispatched = false;
+
+    // Single-dispatch lock to guarantee only ONE retry request can ever be fired per error cycle
+    const safeRetry = (newConfig?: LLMConfig) => {
+      if (isDispatched) {
+        console.warn(`[useChat] Duplicate retry prevented for ${errorMsgId}`);
+        return;
+      }
+      isDispatched = true;
+      pendingRetriesRef.current.delete(errorMsgId);
+
+      // If max attempts were reached (or user explicitly clicked Retry Now), reset counter so next cycle starts fresh at 1
+      if (currentAttempt >= 3) {
+        retryAttemptsMapRef.current.delete(prefix);
+      }
+      retryAction(newConfig || currentConfig);
+    };
+
+    pendingRetriesRef.current.set(errorMsgId, safeRetry);
+
+    // Trigger the Error & Retry Countdown Modal
     publishLlmApiError({
       errorMessage: displayErrorMsg,
       provider: failedProvider || "auto",
@@ -245,19 +266,14 @@ export function useChat({
       retryAttempt: currentAttempt,
       maxRetries: 3,
       onRetry: (newConfig) => {
-        // If max attempts were reached (or user explicitly clicked Retry Now), reset counter so next cycle starts fresh at 1
-        if (currentAttempt >= 3) {
-          retryAttemptsMapRef.current.delete(prefix);
-        }
-        retryAction(newConfig || currentConfig);
+        safeRetry(newConfig);
       },
       onCancel: () => {
+        isDispatched = true;
+        pendingRetriesRef.current.delete(errorMsgId);
         retryAttemptsMapRef.current.clear();
       }
     });
-
-    const errorMsgId = `${prefix}-${Date.now()}`;
-    pendingRetriesRef.current.set(errorMsgId, retryAction);
 
     const errorMsg: ChatMessage = {
       id: errorMsgId,
@@ -282,9 +298,12 @@ export function useChat({
   };
 
   const handleRetryErrorMessage = (messageId: string) => {
-    retryAttemptsMapRef.current.clear();
     const retryFn = pendingRetriesRef.current.get(messageId);
+    if (!retryFn) {
+      return;
+    }
     pendingRetriesRef.current.delete(messageId);
+    retryAttemptsMapRef.current.clear();
     // Mark message as retrying so the card displays the retrying spinner instead of vanishing
     setChatMessages((prev) =>
       prev.map((m) => {
@@ -886,6 +905,10 @@ export function useChat({
 
     // --- TRANSLATION CHALLENGE MODE ---
     if (practiceMode === "translation_challenge") {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const configForServer = startTypingWithConfig(configToUse);

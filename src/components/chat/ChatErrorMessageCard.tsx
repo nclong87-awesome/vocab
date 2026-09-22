@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { Clock, RefreshCw, X, AlertTriangle } from "lucide-react";
 import { ChatMessage, LLMConfig } from "../../types";
 import { t } from "../../config/i18n";
@@ -35,82 +35,26 @@ export default function ChatErrorMessageCard({
     msg.errorInfo.retryAttempt >= msg.errorInfo.maxRetries
   );
 
-  const [secondsLeft, setSecondsLeft] = useState(5);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const timerRef = useRef<any>(null);
 
   const onRetryRef = useRef(onRetry);
   onRetryRef.current = onRetry;
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
-  // Trigger retry when button clicked or countdown reaches 0
+  // Trigger retry when button manually clicked
   const handleTriggerRetry = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
     setIsRetrying(true);
     onRetryRef.current();
   };
 
   const handleCancelCountdown = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
     setIsCancelled(true);
     if (onCancelRef.current) {
       onCancelRef.current();
     }
   };
-
-  // Interval timer effect - purely decrements secondsLeft
-  useEffect(() => {
-    if (isCancelled || isRetrying || isExternallyDisabled || isExternallyRetrying || isMaxReached) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [isCancelled, isRetrying, isExternallyDisabled, isExternallyRetrying]);
-
-  // Cleanly dispatch retry action when countdown reaches 0s
-  useEffect(() => {
-    if (
-      secondsLeft === 0 &&
-      !isCancelled &&
-      !isRetrying &&
-      !isExternallyDisabled &&
-      !isExternallyRetrying &&
-      !isMaxReached
-    ) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setIsRetrying(true);
-      onRetryRef.current();
-    }
-  }, [secondsLeft, isCancelled, isRetrying, isExternallyDisabled, isExternallyRetrying, isMaxReached]);
 
   const activeRetrying = isRetrying || isExternallyRetrying;
   const activeCancelled = isCancelled || isExternallyDisabled;
@@ -168,26 +112,9 @@ export default function ChatErrorMessageCard({
 
       {/* Countdown & Action Bar */}
       <div className="pt-2 border-t border-rose-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Left status / countdown */}
+        {/* Left status */}
         <div className="flex flex-col">
-          {!activeCancelled && !activeRetrying && !isMaxReached && secondsLeft > 0 ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-                </span>
-                <span className="text-xs sm:text-sm font-semibold text-rose-900">
-                  {t("chat_error_auto_retry_countdown", currentAppLang, { seconds: String(secondsLeft) })}
-                </span>
-              </div>
-              {isAutoMode && (
-                <span className="text-[11px] text-stone-500 mt-0.5 ml-4.5">
-                  {t("chat_error_auto_mode_switch_note", currentAppLang)}
-                </span>
-              )}
-            </>
-          ) : activeRetrying ? (
+          {activeRetrying ? (
             <div className="flex items-center gap-2 text-rose-700 text-xs sm:text-sm font-medium">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               <span>{t("chat_error_retrying_now", currentAppLang)}</span>
@@ -196,47 +123,44 @@ export default function ChatErrorMessageCard({
             <span className="text-xs sm:text-sm font-medium text-rose-900">
               {t("chat_error_max_reached", currentAppLang, { max: String(msg.errorInfo?.maxRetries || 3) })}
             </span>
-          ) : (
+          ) : activeCancelled ? (
             <span className="text-xs text-stone-500 italic">
               {t("chat_error_retry_cancelled", currentAppLang)}
             </span>
-          )}
+          ) : isAutoMode ? (
+            <span className="text-[11px] sm:text-xs text-stone-600">
+              {t("chat_error_auto_mode_switch_note", currentAppLang)}
+            </span>
+          ) : null}
         </div>
 
         {/* Right buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          {!activeCancelled && !activeRetrying && !isMaxReached && secondsLeft > 0 ? (
+          {!activeRetrying && (
             <>
               <button
                 type="button"
                 onClick={handleTriggerRetry}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs sm:text-sm font-medium shadow-sm transition-all cursor-pointer"
-                title="Retry right now without waiting"
+                title="Retry now"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>{t("chat_error_try_again_now", currentAppLang)}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleCancelCountdown}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-600 text-xs sm:text-sm font-medium transition-all cursor-pointer"
-                title="Cancel automatic retry"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>{t("chat_error_cancel_retry", currentAppLang)}</span>
-              </button>
+              {!activeCancelled && !isMaxReached && (
+                <button
+                  type="button"
+                  onClick={handleCancelCountdown}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-200 text-stone-600 text-xs sm:text-sm font-medium transition-all cursor-pointer"
+                  title="Dismiss error"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>{t("chat_error_cancel_retry", currentAppLang)}</span>
+                </button>
+              )}
             </>
-          ) : !activeRetrying ? (
-            <button
-              type="button"
-              onClick={handleTriggerRetry}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-900 active:scale-95 text-white text-xs sm:text-sm font-medium shadow-sm transition-all cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{t("chat_error_retry_btn", currentAppLang)}</span>
-            </button>
-          ) : null}
+          )}
         </div>
       </div>
     </div>
