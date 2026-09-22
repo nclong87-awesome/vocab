@@ -26,7 +26,7 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { findWordInCollection, isCompletedWord, isIncompleteWord, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen } from "../../utils/llmEvents";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen, publishLlmRequestEnd, publishCloseLlmModals } from "../../utils/llmEvents";
 import ChatMessageItem from "./ChatMessageItem";
 import LlmProgressIndicator from "./LlmProgressIndicator";
 
@@ -260,7 +260,9 @@ export default function WordAddModal({
           suggestedActions: filteredActions.length > 0 ? filteredActions : undefined,
         };
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        publishLlmRequestEnd({ success: true, provider: res.provider, model: res.model });
+        publishCloseLlmModals();
+        setMessages((prev) => [...prev.filter((m) => !m.isError), assistantMsg]);
         scrollToBottom();
       } catch (err: any) {
         if (controller.signal.aborted || err?.name === "AbortError") {
@@ -690,7 +692,10 @@ export default function WordAddModal({
           responseTimeMs: data.responseTimeMs,
         };
 
-        setMessages((prev) => [...prev, confirmMsg]);
+        pendingRetryRef.current = null;
+        publishLlmRequestEnd({ success: true, provider: data.provider, model: data.model });
+        publishCloseLlmModals();
+        setMessages((prev) => [...prev.filter((m) => !m.isError), confirmMsg]);
         scrollToBottom();
       } catch (err: any) {
         if (controller.signal.aborted || err?.name === "AbortError") {

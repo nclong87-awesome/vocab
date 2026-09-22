@@ -27,7 +27,7 @@ import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError, publishCloseLlmModals } from "../utils/llmEvents";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError, publishCloseLlmModals, publishLlmRequestEnd } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
@@ -113,6 +113,8 @@ export function useChat({
           abortControllerRef.current = null;
         }
         setActiveModelInfo(null);
+        publishLlmRequestEnd({ success: true });
+        publishCloseLlmModals();
       } else if (next) {
         startTypingWithConfig(overrideConfig);
       }
@@ -2213,7 +2215,14 @@ export function useChat({
         responseTimeMs: result.responseTimeMs,
       };
 
-      setChatMessages((prev) => [...prev, newAssistantMessage]);
+      // Clear retry attempts and pending retries since request succeeded
+      retryAttemptsMapRef.current.clear();
+      pendingRetriesRef.current.clear();
+      publishLlmRequestEnd({ success: true, provider: result.provider, model: result.model });
+      publishCloseLlmModals();
+
+      // Remove any lingering error cards from the chat so they can never trigger again
+      setChatMessages((prev) => [...prev.filter((m) => !m.isError), newAssistantMessage]);
     } catch (err: any) {
       if (controller.signal.aborted || err.name === "AbortError" || String(err).includes("aborted")) {
         console.log("Chat generation was aborted by the user.");
@@ -2227,7 +2236,7 @@ export function useChat({
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
       }
-      setIsTypingState(false);
+      setIsTyping(false);
     }
   };
 

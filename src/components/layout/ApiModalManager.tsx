@@ -191,7 +191,9 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       }
 
       if (data.success) {
+        lastRetryFnRef.current = null;
         setProgressState((prev) => ({ ...prev, isOpen: false }));
+        setErrorState((prev) => ({ ...prev, isOpen: false }));
       }
     });
 
@@ -223,6 +225,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         clearTimeout(timeoutWatchdogRef.current);
         timeoutWatchdogRef.current = null;
       }
+      lastRetryFnRef.current = null;
       setProgressState((prev) => ({ ...prev, isOpen: false }));
       setErrorState((prev) => ({ ...prev, isOpen: false }));
     });
@@ -243,6 +246,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       clearTimeout(timeoutWatchdogRef.current);
       timeoutWatchdogRef.current = null;
     }
+    lastRetryFnRef.current = null;
     if (onCancelRef.current) {
       try {
         onCancelRef.current();
@@ -251,10 +255,12 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       }
     }
     setProgressState((prev) => ({ ...prev, isOpen: false }));
+    setErrorState((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
   const handleRetryError = useCallback(() => {
     const retryFn = errorState.onRetry || lastRetryFnRef.current;
+    lastRetryFnRef.current = null; // Consume immediately to prevent duplicate invocations
     if (retryFn) {
       retryFn();
     }
@@ -266,6 +272,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
   }, [errorState.onRetry]);
 
   const handleCloseError = useCallback(() => {
+    lastRetryFnRef.current = null;
     if (errorState.onClose) {
       errorState.onClose();
     }

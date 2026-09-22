@@ -22,8 +22,8 @@ export interface LlmRequestStartEvent {
 }
 
 export interface LlmRequestEndEvent {
-  provider: string;
-  model: string;
+  provider?: string;
+  model?: string;
   action?: string;
   success: boolean;
   error?: any;
