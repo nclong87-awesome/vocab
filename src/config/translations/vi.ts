@@ -467,6 +467,8 @@ export const viTranslations: LanguageTranslations = {
     api_error_circuit_breaker: "Circuit Breaker",
     api_error_circuit_breaker_desc: "Đã cách ly mô hình gặp lỗi và tự động định tuyến sang ứng viên khỏe mạnh tiếp theo.",
     api_error_auto_retry: "Tự động thử lại (lần {attempt}/{max}):",
+    api_error_max_reached: "Đã đạt số lần thử lại tối đa ({max}/{max}). Tự động thử lại đã dừng.",
+    chat_error_max_reached: "Đã đạt giới hạn thử lại ({max}/{max}).",
     api_error_pause_countdown: "Dừng đếm ngược",
     api_error_resume_countdown: "Tiếp tục đếm ngược",
     api_error_retry_now: "Thử lại ngay",

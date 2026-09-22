@@ -481,6 +481,8 @@ export const enTranslations: LanguageTranslations = {
     api_error_circuit_breaker: "Circuit Breaker",
     api_error_circuit_breaker_desc: "Isolated faulty model and automatically routing to the next healthy candidate.",
     api_error_auto_retry: "Auto-retrying (attempt {attempt}/{max}):",
+    api_error_max_reached: "Maximum retries reached ({max}/{max}). Auto-retry paused.",
+    chat_error_max_reached: "Maximum retries reached ({max}/{max}).",
     api_error_pause_countdown: "Pause Countdown",
     api_error_resume_countdown: "Resume Countdown",
     api_error_retry_now: "Retry Now",

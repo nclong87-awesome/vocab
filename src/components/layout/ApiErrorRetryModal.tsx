@@ -53,9 +53,11 @@ export default function ApiErrorRetryModal({
     }
   }, [isOpen, retryAttempt, failedModel]);
 
+  const isMaxReached = (retryAttempt ?? 1) >= (maxRetries ?? 3);
+
   // Countdown timer effect
   useEffect(() => {
-    if (!isOpen || isPaused || isRetrying) {
+    if (!isOpen || isPaused || isRetrying || isMaxReached) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -199,6 +201,14 @@ export default function ApiErrorRetryModal({
                 <span>{t("api_progress_smart_routing", currentAppLang) || "Auto-Failover"}</span>
               </div>
             </div>
+          ) : isMaxReached ? (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200/90 text-xs text-rose-900 font-medium flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+              <span>
+                {t("api_error_max_reached", currentAppLang, { max: String(maxRetries) }) ||
+                  `Maximum retries reached (${maxRetries}/${maxRetries}). Auto-retry paused.`}
+              </span>
+            </div>
           ) : (
             <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -226,15 +236,25 @@ export default function ApiErrorRetryModal({
             </div>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={togglePause}
-                className="flex-1 py-2.5 px-4 rounded-2xl border border-stone-300 bg-white hover:bg-stone-50 active:scale-98 text-stone-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center"
-              >
-                {isPaused
-                  ? t("api_error_resume_countdown", currentAppLang)
-                  : t("api_error_pause_countdown", currentAppLang)}
-              </button>
+              {isMaxReached ? (
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="flex-1 py-2.5 px-4 rounded-2xl border border-stone-300 bg-white hover:bg-stone-50 active:scale-98 text-stone-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center"
+                >
+                  {t("api_error_close", currentAppLang) || "Close"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={togglePause}
+                  className="flex-1 py-2.5 px-4 rounded-2xl border border-stone-300 bg-white hover:bg-stone-50 active:scale-98 text-stone-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center"
+                >
+                  {isPaused
+                    ? t("api_error_resume_countdown", currentAppLang)
+                    : t("api_error_pause_countdown", currentAppLang)}
+                </button>
+              )}
 
               <button
                 type="button"

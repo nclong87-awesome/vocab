@@ -231,8 +231,8 @@ export function useChat({
     }
 
     // Determine retry attempt count
-    const prevAttempts = retryAttemptsMapRef.current.get(prefix) || 1;
-    const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
+    const prevAttempts = retryAttemptsMapRef.current.get(prefix) || 0;
+    const currentAttempt = prevAttempts + 1;
     retryAttemptsMapRef.current.set(prefix, currentAttempt);
 
     // Trigger the Error & Retry Countdown Modal (Screenshot 2)
@@ -241,7 +241,7 @@ export function useChat({
       provider: failedProvider || "auto",
       model: failedModel || "9flare/pro/gpt-5.6-luna",
       action: prefix.includes("challenge-turn") ? "processChallengeTurn" : (prefix.includes("challenge") ? "generateChallenge" : "chat"),
-      retryAttempt: Math.min(3, Math.max(1, currentAttempt)),
+      retryAttempt: currentAttempt,
       maxRetries: 3,
       onRetry: (newConfig) => {
         retryAction(newConfig || currentConfig);
@@ -268,6 +268,8 @@ export function useChat({
         model: failedModel,
         isTimeout,
         canRetry: true,
+        retryAttempt: currentAttempt,
+        maxRetries: 3,
       },
     };
 

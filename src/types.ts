@@ -282,6 +282,8 @@ export interface ChatMessage {
     model?: string;
     isTimeout?: boolean;
     canRetry?: boolean;
+    retryAttempt?: number;
+    maxRetries?: number;
   };
 }
 

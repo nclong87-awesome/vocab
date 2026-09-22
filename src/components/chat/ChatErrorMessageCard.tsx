@@ -29,6 +29,11 @@ export default function ChatErrorMessageCard({
 
   const isExternallyDisabled = msg.errorInfo?.canRetry === false;
   const isExternallyRetrying = Boolean((msg.errorInfo as any)?.isRetrying);
+  const isMaxReached = Boolean(
+    msg.errorInfo?.retryAttempt &&
+    msg.errorInfo?.maxRetries &&
+    msg.errorInfo.retryAttempt >= msg.errorInfo.maxRetries
+  );
 
   const [secondsLeft, setSecondsLeft] = useState(5);
   const [isCancelled, setIsCancelled] = useState(false);
@@ -63,7 +68,7 @@ export default function ChatErrorMessageCard({
 
   // Interval timer effect - purely decrements secondsLeft
   useEffect(() => {
-    if (isCancelled || isRetrying || isExternallyDisabled || isExternallyRetrying) {
+    if (isCancelled || isRetrying || isExternallyDisabled || isExternallyRetrying || isMaxReached) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -95,7 +100,8 @@ export default function ChatErrorMessageCard({
       !isCancelled &&
       !isRetrying &&
       !isExternallyDisabled &&
-      !isExternallyRetrying
+      !isExternallyRetrying &&
+      !isMaxReached
     ) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -104,7 +110,7 @@ export default function ChatErrorMessageCard({
       setIsRetrying(true);
       onRetryRef.current();
     }
-  }, [secondsLeft, isCancelled, isRetrying, isExternallyDisabled, isExternallyRetrying]);
+  }, [secondsLeft, isCancelled, isRetrying, isExternallyDisabled, isExternallyRetrying, isMaxReached]);
 
   const activeRetrying = isRetrying || isExternallyRetrying;
   const activeCancelled = isCancelled || isExternallyDisabled;
@@ -164,7 +170,7 @@ export default function ChatErrorMessageCard({
       <div className="pt-2 border-t border-rose-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Left status / countdown */}
         <div className="flex flex-col">
-          {!activeCancelled && !activeRetrying && secondsLeft > 0 ? (
+          {!activeCancelled && !activeRetrying && !isMaxReached && secondsLeft > 0 ? (
             <>
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2.5 w-2.5">
@@ -186,6 +192,10 @@ export default function ChatErrorMessageCard({
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               <span>{t("chat_error_retrying_now", currentAppLang)}</span>
             </div>
+          ) : isMaxReached ? (
+            <span className="text-xs sm:text-sm font-medium text-rose-900">
+              {t("chat_error_max_reached", currentAppLang, { max: String(msg.errorInfo?.maxRetries || 3) })}
+            </span>
           ) : (
             <span className="text-xs text-stone-500 italic">
               {t("chat_error_retry_cancelled", currentAppLang)}
@@ -195,7 +205,7 @@ export default function ChatErrorMessageCard({
 
         {/* Right buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          {!activeCancelled && !activeRetrying && secondsLeft > 0 ? (
+          {!activeCancelled && !activeRetrying && !isMaxReached && secondsLeft > 0 ? (
             <>
               <button
                 type="button"
