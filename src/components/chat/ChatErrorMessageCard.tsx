@@ -27,19 +27,27 @@ export default function ChatErrorMessageCard({
     msg.content?.toLowerCase().includes("timed out")
   );
 
+  const isExternallyDisabled = msg.errorInfo?.canRetry === false;
+  const isExternallyRetrying = Boolean((msg.errorInfo as any)?.isRetrying);
+
   const [secondsLeft, setSecondsLeft] = useState(5);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const timerRef = useRef<any>(null);
 
-  // Trigger retry when countdown reaches 0
+  const onRetryRef = useRef(onRetry);
+  onRetryRef.current = onRetry;
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  // Trigger retry when button clicked or countdown reaches 0
   const handleTriggerRetry = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
     setIsRetrying(true);
-    onRetry();
+    onRetryRef.current();
   };
 
   const handleCancelCountdown = () => {
@@ -48,22 +56,24 @@ export default function ChatErrorMessageCard({
       timerRef.current = null;
     }
     setIsCancelled(true);
-    if (onCancel) {
-      onCancel();
+    if (onCancelRef.current) {
+      onCancelRef.current();
     }
   };
 
+  // Interval timer effect - purely decrements secondsLeft
   useEffect(() => {
-    if (isCancelled || isRetrying) return;
+    if (isCancelled || isRetrying || isExternallyDisabled || isExternallyRetrying) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
 
     timerRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          handleTriggerRetry();
           return 0;
         }
         return prev - 1;
@@ -76,7 +86,28 @@ export default function ChatErrorMessageCard({
         timerRef.current = null;
       }
     };
-  }, [isCancelled, isRetrying]);
+  }, [isCancelled, isRetrying, isExternallyDisabled, isExternallyRetrying]);
+
+  // Cleanly dispatch retry action when countdown reaches 0s
+  useEffect(() => {
+    if (
+      secondsLeft === 0 &&
+      !isCancelled &&
+      !isRetrying &&
+      !isExternallyDisabled &&
+      !isExternallyRetrying
+    ) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      setIsRetrying(true);
+      onRetryRef.current();
+    }
+  }, [secondsLeft, isCancelled, isRetrying, isExternallyDisabled, isExternallyRetrying]);
+
+  const activeRetrying = isRetrying || isExternallyRetrying;
+  const activeCancelled = isCancelled || isExternallyDisabled;
 
   const errorTitle = isTimeout
     ? t("chat_error_timeout_title", currentAppLang)
@@ -133,7 +164,7 @@ export default function ChatErrorMessageCard({
       <div className="pt-2 border-t border-rose-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Left status / countdown */}
         <div className="flex flex-col">
-          {!isCancelled && !isRetrying && secondsLeft > 0 ? (
+          {!activeCancelled && !activeRetrying && secondsLeft > 0 ? (
             <>
               <div className="flex items-center gap-2">
                 <span className="relative flex h-2.5 w-2.5">
@@ -150,7 +181,7 @@ export default function ChatErrorMessageCard({
                 </span>
               )}
             </>
-          ) : isRetrying ? (
+          ) : activeRetrying ? (
             <div className="flex items-center gap-2 text-rose-700 text-xs sm:text-sm font-medium">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               <span>{t("chat_error_retrying_now", currentAppLang)}</span>
@@ -164,7 +195,7 @@ export default function ChatErrorMessageCard({
 
         {/* Right buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          {!isCancelled && !isRetrying && secondsLeft > 0 ? (
+          {!activeCancelled && !activeRetrying && secondsLeft > 0 ? (
             <>
               <button
                 type="button"
@@ -186,7 +217,7 @@ export default function ChatErrorMessageCard({
                 <span>{t("chat_error_cancel_retry", currentAppLang)}</span>
               </button>
             </>
-          ) : !isRetrying ? (
+          ) : !activeRetrying ? (
             <button
               type="button"
               onClick={handleTriggerRetry}

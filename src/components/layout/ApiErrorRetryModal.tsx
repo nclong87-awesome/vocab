@@ -23,9 +23,15 @@ export default function ApiErrorRetryModal({
   onRetry,
   onClose,
 }: ApiErrorRetryModalProps) {
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(5);
   const [isPaused, setIsPaused] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const timerRef = useRef<any>(null);
+
+  const onRetryRef = useRef(onRetry);
+  onRetryRef.current = onRetry;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const currentAppLang =
     appLanguage ||
@@ -35,19 +41,21 @@ export default function ApiErrorRetryModal({
   // Reset countdown whenever modal opens with fresh attempt
   useEffect(() => {
     if (isOpen) {
-      setCountdown(3);
+      setCountdown(5);
       setIsPaused(false);
+      setIsRetrying(false);
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      setIsRetrying(false);
     }
   }, [isOpen, retryAttempt, failedModel]);
 
   // Countdown timer effect
   useEffect(() => {
-    if (!isOpen || isPaused) {
+    if (!isOpen || isPaused || isRetrying) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -58,14 +66,6 @@ export default function ApiErrorRetryModal({
     timerRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          // Auto trigger retry when reaches 0s
-          setTimeout(() => {
-            onRetry();
-          }, 50);
           return 0;
         }
         return prev - 1;
@@ -78,11 +78,24 @@ export default function ApiErrorRetryModal({
         timerRef.current = null;
       }
     };
-  }, [isOpen, isPaused, onRetry]);
+  }, [isOpen, isPaused, isRetrying]);
+
+  // When countdown hits 0s, cleanly trigger the retry action
+  useEffect(() => {
+    if (isOpen && countdown === 0 && !isRetrying && !isPaused) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      setIsRetrying(true);
+      onRetryRef.current();
+    }
+  }, [isOpen, countdown, isRetrying, isPaused]);
 
   if (!isOpen) return null;
 
   const togglePause = () => {
+    if (isRetrying) return;
     setIsPaused((prev) => !prev);
   };
 
@@ -91,7 +104,8 @@ export default function ApiErrorRetryModal({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    onRetry();
+    setIsRetrying(true);
+    onRetryRef.current();
   };
 
   const handleClose = () => {
@@ -99,7 +113,7 @@ export default function ApiErrorRetryModal({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    onClose();
+    onCloseRef.current();
   };
 
   // Format error message using current language translations
@@ -142,7 +156,8 @@ export default function ApiErrorRetryModal({
           <button
             type="button"
             onClick={handleClose}
-            className="text-stone-400 hover:text-stone-600 p-1 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
+            disabled={isRetrying}
+            className="text-stone-400 hover:text-stone-600 disabled:opacity-50 p-1 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
             title={t("api_error_close", currentAppLang)}
           >
             <X className="w-4 h-4 stroke-[2.5]" />
@@ -167,43 +182,70 @@ export default function ApiErrorRetryModal({
             </span>
           </div>
 
-          {/* Card 3: Automated retry countdown */}
-          <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-              <span className="text-xs sm:text-sm font-semibold text-stone-800">
-                {t("api_error_auto_retry", currentAppLang, {
-                  attempt: String(retryAttempt),
-                  max: String(maxRetries),
-                })}
-              </span>
+          {/* Card 3: Automated retry countdown or retrying status */}
+          {isRetrying ? (
+            <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-300 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-amber-950">
+                  {t("chat_error_retrying_now", currentAppLang) || "Retrying now..."}
+                </span>
+              </div>
+              <div className="px-3 py-1 bg-white border border-amber-300 rounded-xl font-bold text-amber-900 text-xs shadow-2xs flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                <span>{t("api_progress_smart_routing", currentAppLang) || "Auto-Failover"}</span>
+              </div>
             </div>
-            <div className="px-3 py-1 bg-white border border-amber-300 rounded-xl font-bold text-amber-900 text-sm shadow-2xs">
-              {countdown}s
+          ) : (
+            <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                <span className="text-xs sm:text-sm font-semibold text-stone-800">
+                  {t("api_error_auto_retry", currentAppLang, {
+                    attempt: String(retryAttempt),
+                    max: String(maxRetries),
+                  })}
+                </span>
+              </div>
+              <div className="px-3 py-1 bg-white border border-amber-300 rounded-xl font-bold text-amber-900 text-sm shadow-2xs">
+                {countdown}s
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer Buttons */}
         <div className="flex gap-3 mt-4">
-          <button
-            type="button"
-            onClick={togglePause}
-            className="flex-1 py-2.5 px-4 rounded-2xl border border-stone-300 bg-white hover:bg-stone-50 active:scale-98 text-stone-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center"
-          >
-            {isPaused
-              ? t("api_error_resume_countdown", currentAppLang)
-              : t("api_error_pause_countdown", currentAppLang)}
-          </button>
+          {isRetrying ? (
+            <div className="w-full py-2.5 px-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 shadow-2xs">
+              <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+              <span>{t("chat_error_retrying_now", currentAppLang)}</span>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={togglePause}
+                className="flex-1 py-2.5 px-4 rounded-2xl border border-stone-300 bg-white hover:bg-stone-50 active:scale-98 text-stone-700 text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center"
+              >
+                {isPaused
+                  ? t("api_error_resume_countdown", currentAppLang)
+                  : t("api_error_pause_countdown", currentAppLang)}
+              </button>
 
-          <button
-            type="button"
-            onClick={handleRetryNow}
-            className="flex-1 py-2.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>{t("api_error_retry_now", currentAppLang)}</span>
-          </button>
+              <button
+                type="button"
+                onClick={handleRetryNow}
+                className="flex-1 py-2.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>{t("api_error_retry_now", currentAppLang)}</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

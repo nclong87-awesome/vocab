@@ -1071,10 +1071,26 @@ export default function WordAddModal({
   // Retry error message handler
   const handleRetryErrorMessage = useCallback(
     (messageId: string) => {
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id === messageId) {
+            return {
+              ...m,
+              errorInfo: {
+                ...(m.errorInfo || { message: m.content, canRetry: true }),
+                isRetrying: true,
+              } as any,
+            };
+          }
+          return m;
+        })
+      );
       if (pendingRetryRef.current) {
         handleLookup(pendingRetryRef.current.word, pendingRetryRef.current.hint);
       }
+      setTimeout(() => {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }, 700);
     },
     [handleLookup]
   );

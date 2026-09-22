@@ -27,7 +27,7 @@ import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError } from "../utils/llmEvents";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError, publishCloseLlmModals } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
@@ -275,15 +275,38 @@ export function useChat({
   const handleRetryErrorMessage = (messageId: string) => {
     const retryFn = pendingRetriesRef.current.get(messageId);
     pendingRetriesRef.current.delete(messageId);
-    // Remove the error message from the chat
-    setChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+    // Mark message as retrying so the card displays the retrying spinner instead of vanishing
+    setChatMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === messageId) {
+          return {
+            ...m,
+            errorInfo: {
+              ...(m.errorInfo || {
+                message: m.content,
+                canRetry: true,
+              }),
+              isRetrying: true,
+            } as any,
+          };
+        }
+        return m;
+      })
+    );
+    // Close global error modal if open to prevent duplicate retries
+    publishCloseLlmModals();
     if (retryFn) {
       retryFn(llmConfig);
     }
+    // Remove the error message cleanly after a brief transition window
+    setTimeout(() => {
+      setChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+    }, 700);
   };
 
   const handleCancelErrorMessage = (messageId: string) => {
     pendingRetriesRef.current.delete(messageId);
+    publishCloseLlmModals();
     setChatMessages((prev) =>
       prev.map((m) => {
         if (m.id === messageId && m.errorInfo) {

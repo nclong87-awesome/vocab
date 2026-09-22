@@ -255,10 +255,14 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
 
   const handleRetryError = useCallback(() => {
     const retryFn = errorState.onRetry || lastRetryFnRef.current;
-    setErrorState((prev) => ({ ...prev, isOpen: false }));
     if (retryFn) {
       retryFn();
     }
+    // Give a brief visual transition window so the user sees the active retrying state
+    // rather than the modal vanishing abruptly. The next request start event will also close it cleanly.
+    setTimeout(() => {
+      setErrorState((prev) => ({ ...prev, isOpen: false }));
+    }, 600);
   }, [errorState.onRetry]);
 
   const handleCloseError = useCallback(() => {
