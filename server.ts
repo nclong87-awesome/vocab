@@ -3710,10 +3710,10 @@ NHIỆM VỤ ĐÁNH GIÁ:
    - Gán scoreLabel: "Xuất sắc! 🌟" (90-100), "Làm tốt lắm! 👏" (75-89), "Khá tốt! 👍" (60-74), "Cần luyện tập thêm! 💪" (<60).
    
    - QUY TẮC CHÍNH XÁC CHO "incorporatedTargetWord" (TỪ VỰNG MỤC TIÊU):
-     + Gán "incorporatedTargetWord": true NẾU VÀ CHỈ NẾU câu của học viên thực sự sử dụng từ vựng mục tiêu "${targetWord}" (chấp nhận cả các dạng chia thì, số nhiều/số ít, tiền tố/hậu tố, trạng từ -ly, phrasal verb tách rời, hoặc biến thể dấu gạch nối / khoảng trắng như "cost-effective" / "cost effective").
-     + BẮT BUỘC gán "incorporatedTargetWord": false NẾU học viên KHÔNG dùng từ "${targetWord}" (ví dụ: dùng từ đồng nghĩa khác như 'affordable' hay 'come over', hoặc không nhắc đến, hoặc bỏ trống/bỏ qua).
+     + Gán "incorporatedTargetWord": true NẾU VÀ CHỈ NẾU câu của học viên thực sự sử dụng từ vựng mục tiêu "${targetWord}" (chấp nhận cả các dạng chia thì, số nhiều/số ít, tiền tố/hậu tố, trạng từ -ly, phrasal verb tách rời, biến thể dấu gạch nối / khoảng trắng như "cost-effective" / "cost effective", cũng như các biến thể nhỏ về mạo từ và sở hữu cách trong cụm từ như có hoặc không có "a", "an", "the", hoặc dùng sở hữu cách "my", "his", "her", "their"... ví dụ: chấp nhận "pursue PhD" hoặc "pursue his PhD" khi từ mục tiêu là "pursue a PhD").
+     + BẮT BUỘC gán "incorporatedTargetWord": false NẾU học viên KHÔNG dùng từ/cụm từ "${targetWord}" (ví dụ: dùng từ đồng nghĩa khác hoàn toàn như 'affordable' thay cho 'cost-effective' hay 'drop by' thay cho 'come over', hoặc không nhắc đến, hoặc bỏ trống/bỏ qua).
      + Khi "incorporatedTargetWord" là false: TUYỆT ĐỐI KHÔNG khen trong "whatWentWell" rằng học viên đã dùng "${targetWord}". Thay vào đó, hãy khen ngợi từ đồng nghĩa/cấu trúc tự nhiên họ đã dùng trong "whatWentWell", và trong "areasForImprovement" hãy gợi ý cách lồng ghép từ mục tiêu "${targetWord}".
-     + Khi "incorporatedTargetWord" là true: Hãy ghi nhận và khen ngợi cách dùng chuẩn xác của từ mục tiêu "${targetWord}" trong "whatWentWell".
+     + Khi "incorporatedTargetWord" là true: Hãy ghi nhận và khen ngợi cách dùng chuẩn xác của từ mục tiêu "${targetWord}" trong "whatWentWell" (nếu có thiếu sót nhỏ về mạo từ như thiếu "a", vẫn có thể nhắc nhở nhẹ trong "areasForImprovement" nhưng vẫn tính "incorporatedTargetWord": true).
 
    - QUY TẮC CHÍNH XÁC CHO "incorporatedVocabClues" (CÁC TỪ GỢI Ý ĐÃ DÙNG):
      + Danh sách các từ gợi ý trong thử thách này: [${formattedClues}].
@@ -3759,7 +3759,7 @@ TRẢ VỀ JSON THUẦN:
   }
 }`;
 
-      systemInstruction = `Bạn là chuyên gia đánh giá thử thách dịch thuật tiếng Việt sang ${targetLanguage}. Tạo câu dịch mẫu tự nhiên nhất ("correctedSentence") có chứa từ vựng mục tiêu "${targetWord}", đánh giá linh hoạt bản dịch của học viên, và đưa ra nhận xét bằng tiếng Việt chi tiết, dễ hiểu. Đánh giá chính xác "incorporatedTargetWord" (true nếu học viên thực sự dùng từ mục tiêu) và "incorporatedVocabClues" (danh sách các từ gợi ý mà học viên đã dùng). Trả về JSON thuần.`;
+      systemInstruction = `Bạn là chuyên gia đánh giá thử thách dịch thuật tiếng Việt sang ${targetLanguage}. Tạo câu dịch mẫu tự nhiên nhất ("correctedSentence") có chứa từ vựng mục tiêu "${targetWord}", đánh giá linh hoạt bản dịch của học viên, và đưa ra nhận xét bằng tiếng Việt chi tiết, dễ hiểu. Đánh giá "incorporatedTargetWord" (true nếu học viên thực sự dùng từ mục tiêu hoặc biến thể ngữ pháp/mạo từ/sở hữu cách hợp lý) và "incorporatedVocabClues" (danh sách các từ gợi ý mà học viên đã dùng). Trả về JSON thuần.`;
       schemaDescription = `JSON object with intent: "submission" and evaluation object containing correctedSentence, score, scoreLabel, whatWentWell, areasForImprovement, incorporatedTargetWord (boolean), targetWordUsed (string), incorporatedVocabClues (string array of used clues), and suggestedVocabulary.`;
     } else {
       prompt = `Evaluate a language learner's translation attempt during a Translation Challenge.
@@ -3794,10 +3794,10 @@ TASK:
    - Calculate an overall accuracy score from 0 to 100. If skipped/empty: score 0, scoreLabel: "Review & Learn! 💡".
    
    - STRICT CHECK FOR "incorporatedTargetWord" (FEATURED TARGET WORD):
-     + Set "incorporatedTargetWord": true IF AND ONLY IF the learner actually included the featured target word "${targetWord}" or its valid grammatical inflections / forms (e.g. past tense, gerund, plural, adverbial forms like -ly, separable phrasal verb particles, or hyphen/space compound variants like "cost-effective" / "cost effective").
-     + Set "incorporatedTargetWord": false IF the learner used an alternative synonym (e.g. "affordable" instead of "${targetWord}"), omitted it, or skipped.
+     + Set "incorporatedTargetWord": true IF AND ONLY IF the learner actually included the featured target word "${targetWord}" or its valid grammatical inflections / forms (e.g. past tense, gerund, plural, adverbial forms like -ly, separable phrasal verb particles, hyphen/space compound variants like "cost-effective" / "cost effective", as well as minor variations in articles and possessives in phrases such as omitting or substituting "a", "an", "the", or possessives "his", "her", "my", "their" — e.g. accepting "pursue PhD" or "pursue his PhD" when the target is "pursue a PhD").
+     + Set "incorporatedTargetWord": false IF the learner used an entirely different synonym (e.g. "affordable" instead of "${targetWord}"), omitted it, or skipped.
      + When "incorporatedTargetWord" is false: Never claim in "whatWentWell" that the user used "${targetWord}". Instead, praise their natural synonym/phrasing in "whatWentWell" and suggest how to apply "${targetWord}" in "areasForImprovement".
-     + When "incorporatedTargetWord" is true: Acknowledge and praise their correct use of "${targetWord}" in "whatWentWell".
+     + When "incorporatedTargetWord" is true: Acknowledge and praise their correct use of "${targetWord}" in "whatWentWell" (if there is a minor article omission such as missing "a", note it constructively in "areasForImprovement" while still counting "incorporatedTargetWord": true).
 
    - STRICT CHECK FOR "incorporatedVocabClues" (CLUE WORDS ACTUALLY USED):
      + Designated Vocabulary Clues for this challenge: [${formattedClues}].
@@ -3841,7 +3841,7 @@ Return STRICTLY raw JSON matching:
   }
 }`;
 
-      systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Strictly determine whether the learner incorporated the designated target word ("incorporatedTargetWord") and which clue words they incorporated ("incorporatedVocabClues").`;
+      systemInstruction = `You are an AI Translation Challenge Evaluation Coach. Evaluate translation attempts in strict JSON output. Determine whether the learner incorporated the designated target word ("incorporatedTargetWord", accepting minor article/possessive variations) and which clue words they incorporated ("incorporatedVocabClues").`;
       schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object containing score, scoreLabel, userTranslation, incorporatedTargetWord (boolean), targetWordUsed (string), incorporatedVocabClues (string array), whatWentWell, areasForImprovement, correctedSentence, and suggestedVocabulary.`;
     }
 
