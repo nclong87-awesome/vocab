@@ -132,7 +132,8 @@ export async function enrichSingleWord(
       targetLanguage,
       nativeLanguage,
       cfg: llmConfig,
-      signal
+      signal,
+      action: "background_enrich"
     });
 
     if (signal?.aborted) {

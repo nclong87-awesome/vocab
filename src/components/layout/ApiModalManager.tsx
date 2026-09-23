@@ -45,6 +45,24 @@ export function isChatAction(action?: string): boolean {
   );
 }
 
+/**
+ * Determines whether an action is a non-interactive background worker task
+ * (such as background vocabulary auto-enrichment or background image query generation)
+ * which should never display an intrusive modal or disrupt active foreground requests.
+ */
+export function isBackgroundAction(action?: string): boolean {
+  if (!action) return false;
+  const act = action.toLowerCase().trim();
+  return (
+    act === "background_enrich" ||
+    act === "background" ||
+    act.startsWith("background_") ||
+    act === "image_query" ||
+    act === "background_image_query" ||
+    act.includes("enrich")
+  );
+}
+
 export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalManagerProps) {
   // Progress modal state
   const [progressState, setProgressState] = useState<{
@@ -82,10 +100,10 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
   onCancelRef.current = progressState.onCancel;
 
   // Synchronize central progress modal visibility with global state
-  // so inline progress indicators in chat can hide while this modal is open
+  // so inline progress indicators in chat and floating toasts can hide while this modal is open
   useEffect(() => {
-    publishCentralModalVisibility(progressState.isOpen);
-  }, [progressState.isOpen]);
+    publishCentralModalVisibility(progressState.isOpen || errorState.isOpen);
+  }, [progressState.isOpen, errorState.isOpen]);
 
   useEffect(() => {
     return () => {
@@ -161,6 +179,11 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
   // Listen to request start, end, and error events
   useEffect(() => {
     const unsubStart = subscribeLlmRequestStart((data: LlmRequestStartEvent) => {
+      // Do not open foreground progress modal for background actions
+      if (isBackgroundAction(data.action)) {
+        return;
+      }
+
       // Clear any prior watchdog timer
       if (timeoutWatchdogRef.current) {
         clearTimeout(timeoutWatchdogRef.current);
@@ -191,6 +214,10 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     });
 
     const unsubEnd = subscribeLlmRequestEnd((data) => {
+      if (isBackgroundAction(data.action)) {
+        return;
+      }
+
       if (timeoutWatchdogRef.current) {
         clearTimeout(timeoutWatchdogRef.current);
         timeoutWatchdogRef.current = null;
@@ -208,6 +235,10 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     });
 
     const unsubError = subscribeLlmApiError((data: LlmApiErrorEvent) => {
+      // Background worker errors should be handled by their respective services without blocking the screen
+      if (isBackgroundAction(data.action)) {
+        return;
+      }
       if (timeoutWatchdogRef.current) {
         clearTimeout(timeoutWatchdogRef.current);
         timeoutWatchdogRef.current = null;

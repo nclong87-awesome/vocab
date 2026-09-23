@@ -12,6 +12,7 @@ import {
   Eye
 } from "lucide-react";
 import { BatchEnrichmentProgress } from "../../services/backgroundEnrichmentService";
+import { useCentralModalOpen } from "../../utils/llmEvents";
 
 export interface ToastAction {
   label: string;
@@ -41,7 +42,11 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
   toast,
   onClose,
 }) => {
-  if (!toast) return null;
+  const isCentralModalOpen = useCentralModalOpen();
+
+  // Yield to central modals: never display floating toasts over active modal dialogs.
+  // When background enrichment is running concurrently, it is cleanly rendered inside the progress modal itself.
+  if (!toast || isCentralModalOpen) return null;
 
   const isEnrichmentProgress =
     toast.type === "enrichment_progress" ||

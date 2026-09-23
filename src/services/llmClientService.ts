@@ -1376,7 +1376,7 @@ export async function generateImageSearchQueryService(params: {
   }
 
   const llmConfig = getOverrideConfig(cfg);
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "image_query");
 
   const prompt = `You are an expert visual search query optimizer for vocabulary learners.
 Your mission is to generate the single most relevant, concise 1-3 word English search query to retrieve an authentic, iconic, high-quality photograph representing this noun.
@@ -1607,10 +1607,11 @@ export async function checkWordDefinitionsService(params: {
   nativeLanguage?: string;
   cfg?: LLMConfig;
   signal?: AbortSignal;
+  action?: string;
 }): Promise<any> {
-  const { word, hint, targetLanguage, nativeLanguage, cfg, signal } = params;
+  const { word, hint, targetLanguage, nativeLanguage, cfg, signal, action = "word_lookup" } = params;
   const llmConfig = getOverrideConfig(cfg);
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, action);
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
 

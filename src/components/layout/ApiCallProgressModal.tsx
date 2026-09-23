@@ -1,9 +1,14 @@
-import { useState, useEffect } from "react";
-import { Zap, X, Cpu, Clock, Compass } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Zap, X, Cpu, Clock, Compass, Sparkles, CheckCircle2 } from "lucide-react";
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses } from "../../utils/autoModeManager";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { t } from "../../config/i18n";
+import {
+  subscribeEnrichmentProgress,
+  cancelBatchEnrichment,
+  BatchEnrichmentProgress
+} from "../../services/backgroundEnrichmentService";
 
 export interface ApiCallProgressModalProps {
   isOpen: boolean;
@@ -27,11 +32,34 @@ export default function ApiCallProgressModal({
   onTimeout,
 }: ApiCallProgressModalProps) {
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [enrichmentProgress, setEnrichmentProgress] = useState<BatchEnrichmentProgress>({
+    isRunning: false,
+    total: 0,
+    processed: 0,
+    completedCount: 0,
+    multipleDefCount: 0,
+    errorCount: 0,
+  });
+  const [justCompletedEnrichment, setJustCompletedEnrichment] = useState(false);
 
   const currentAppLang =
     appLanguage ||
     (typeof window !== "undefined" ? localStorage.getItem("vocab_learner_app_lang") : null) ||
     "en";
+
+  // Subscribe to background vocabulary auto-enrichment progress
+  useEffect(() => {
+    return subscribeEnrichmentProgress((p) => {
+      setEnrichmentProgress((prev) => {
+        if (prev.isRunning && !p.isRunning && p.completedCount > 0) {
+          setJustCompletedEnrichment(true);
+          const timer = setTimeout(() => setJustCompletedEnrichment(false), 2600);
+          return { ...p, _timer: timer } as any;
+        }
+        return p;
+      });
+    });
+  }, []);
 
   // Reset or run elapsed timer while modal is open, with hard 30s safety timeout
   useEffect(() => {
@@ -62,6 +90,11 @@ export default function ApiCallProgressModal({
     return () => clearInterval(interval);
   }, [isOpen, provider, model, onTimeout]);
 
+  const handleStopEnrichment = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    cancelBatchEnrichment();
+  }, []);
+
   if (!isOpen) return null;
 
   // Format provider
@@ -85,16 +118,21 @@ export default function ApiCallProgressModal({
   const remainingSeconds = Math.max(0, (avgTimeMs - elapsedMs) / 1000);
 
   // SVG circle calculations
-  const radius = 64;
-  const circumference = 2 * Math.PI * radius; // ~402.12
+  const radius = 62;
+  const circumference = 2 * Math.PI * radius; // ~389.55
   const strokeDashoffset = circumference * (1 - progress / 100);
+
+  const enrichmentPercent =
+    enrichmentProgress.total > 0
+      ? Math.min(100, Math.round((enrichmentProgress.processed / enrichmentProgress.total) * 100))
+      : 0;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in select-none"
       id="api-call-progress-modal"
     >
-      <div className="relative w-full max-w-[370px] sm:max-w-[400px] bg-white rounded-3xl shadow-2xl p-6 border border-slate-100 overflow-hidden flex flex-col items-center">
+      <div className="relative w-full max-w-[370px] sm:max-w-[400px] bg-white rounded-3xl shadow-2xl p-5 sm:p-6 border border-slate-100 overflow-hidden flex flex-col items-center">
         {/* Top gradient glowing accent border */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
 
@@ -129,8 +167,8 @@ export default function ApiCallProgressModal({
         </div>
 
         {/* Circular Progress Gauge */}
-        <div className="my-3 sm:my-4 flex flex-col items-center justify-center relative">
-          <svg className="w-44 h-44 sm:w-48 sm:h-48 transform -rotate-90" viewBox="0 0 160 160">
+        <div className="my-2 sm:my-3 flex flex-col items-center justify-center relative">
+          <svg className="w-40 h-40 sm:w-44 sm:h-44 transform -rotate-90" viewBox="0 0 160 160">
             {/* Background ring */}
             <circle
               cx="80"
@@ -169,10 +207,10 @@ export default function ApiCallProgressModal({
         </div>
 
         {/* Horizontal separator */}
-        <div className="w-full border-t border-slate-100 my-3" />
+        <div className="w-full border-t border-slate-100 my-2.5" />
 
         {/* Bottom Details Section */}
-        <div className="flex flex-col items-center gap-2 w-full text-center">
+        <div className="flex flex-col items-center gap-1.5 w-full text-center">
           {/* Model Chip */}
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-50 border border-slate-200/80 text-xs font-mono font-medium text-stone-700 max-w-full">
             <Cpu className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
@@ -200,6 +238,67 @@ export default function ApiCallProgressModal({
             <span>{t("api_progress_smart_routing", currentAppLang)}</span>
           </div>
         </div>
+
+        {/* Background Enrichment Sub-Task Bar (Unified Coexistence) */}
+        {enrichmentProgress.isRunning && (
+          <div className="w-full mt-3 pt-2.5 border-t border-slate-100 animate-fade-in text-left">
+            <div className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-2.5 space-y-1.5 shadow-3xs">
+              <div className="flex items-center justify-between text-[11px] font-medium text-amber-950">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 animate-pulse" />
+                  <span className="font-semibold truncate">
+                    {t("auto_enrich_background_active", currentAppLang) || "Background Auto-Enrichment"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-mono text-[10px] font-bold text-amber-800">
+                    {enrichmentProgress.processed}/{enrichmentProgress.total} ({enrichmentPercent}%)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleStopEnrichment}
+                    className="text-stone-400 hover:text-rose-600 hover:bg-amber-100/80 p-0.5 rounded transition-colors cursor-pointer"
+                    title={t("auto_enrich_stop", currentAppLang) || "Stop background enrichment"}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Linear Progress Bar */}
+              <div className="w-full bg-amber-200/60 rounded-full h-1 overflow-hidden">
+                <div
+                  className="bg-amber-500 h-1 rounded-full transition-all duration-300"
+                  style={{ width: `${enrichmentPercent}%` }}
+                />
+              </div>
+
+              {/* Sub-text: Current word being enriched */}
+              {enrichmentProgress.currentWordText && (
+                <p className="text-[10px] text-amber-800/80 truncate">
+                  {t("auto_enrich_background_running_word", currentAppLang, {
+                    word: enrichmentProgress.currentWordText,
+                  }) || `Enriching: "${enrichmentProgress.currentWordText}"`}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Briefly show completion if it finished while modal was open */}
+        {!enrichmentProgress.isRunning && justCompletedEnrichment && (
+          <div className="w-full mt-3 pt-2.5 border-t border-slate-100 animate-fade-in text-left">
+            <div className="bg-emerald-50 border border-emerald-200/60 rounded-xl p-2 flex items-center justify-between text-[11px] text-emerald-900 font-medium shadow-3xs">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>{t("auto_enrich_background_complete", currentAppLang) || "Background enrichment finished"}</span>
+              </div>
+              <span className="font-mono text-[10px] font-bold text-emerald-700">
+                {enrichmentProgress.completedCount} done
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
