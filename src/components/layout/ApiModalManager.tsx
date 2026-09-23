@@ -287,6 +287,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
 
   const handleRetryError = useCallback(() => {
     const retryFn = errorState.onRetry || lastRetryFnRef.current;
+    const currentErrorId = errorState.errorId;
     lastRetryFnRef.current = null; // Consume immediately to prevent duplicate invocations
     if (retryCloseTimerRef.current) {
       clearTimeout(retryCloseTimerRef.current);
@@ -294,15 +295,21 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     }
     // Give a brief visual transition window so the user sees the active retrying state.
     // If the retry request starts or errors out, retryCloseTimerRef will be cancelled.
+    // Only close if the modal is still presenting this exact error.
     retryCloseTimerRef.current = setTimeout(() => {
-      setErrorState((prev) => ({ ...prev, isOpen: false }));
+      setErrorState((prev) => {
+        if (prev.errorId === currentErrorId) {
+          return { ...prev, isOpen: false };
+        }
+        return prev;
+      });
       retryCloseTimerRef.current = null;
     }, 600);
 
     if (retryFn) {
       retryFn();
     }
-  }, [errorState.onRetry]);
+  }, [errorState.onRetry, errorState.errorId]);
 
   const handleCloseError = useCallback(() => {
     if (retryCloseTimerRef.current) {

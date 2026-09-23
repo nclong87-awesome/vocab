@@ -113,8 +113,6 @@ export function useChat({
           abortControllerRef.current = null;
         }
         setActiveModelInfo(null);
-        publishLlmRequestEnd({ success: true });
-        publishCloseLlmModals();
       } else if (next) {
         startTypingWithConfig(overrideConfig);
       }
