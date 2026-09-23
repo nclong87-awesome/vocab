@@ -4,6 +4,7 @@ import { t } from "../../config/i18n";
 
 export interface ApiErrorRetryModalProps {
   isOpen: boolean;
+  errorId?: string;
   errorMessage: string;
   failedModel?: string;
   retryAttempt?: number;
@@ -15,6 +16,7 @@ export interface ApiErrorRetryModalProps {
 
 export default function ApiErrorRetryModal({
   isOpen,
+  errorId,
   errorMessage,
   failedModel = "9flare/pro/gpt-5.6-luna",
   retryAttempt = 2,
@@ -38,7 +40,9 @@ export default function ApiErrorRetryModal({
     (typeof window !== "undefined" ? localStorage.getItem("vocab_learner_app_lang") : null) ||
     "en";
 
-  // Reset countdown whenever modal opens with fresh attempt
+  const isMaxReached = (retryAttempt ?? 1) >= (maxRetries ?? 3);
+
+  // Reset countdown whenever modal opens with fresh attempt or new error arrives
   useEffect(() => {
     if (isOpen) {
       setCountdown(5);
@@ -51,9 +55,7 @@ export default function ApiErrorRetryModal({
       }
       setIsRetrying(false);
     }
-  }, [isOpen, retryAttempt, failedModel]);
-
-  const isMaxReached = (retryAttempt ?? 1) >= (maxRetries ?? 3);
+  }, [isOpen, errorId, retryAttempt, failedModel, errorMessage]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -80,11 +82,11 @@ export default function ApiErrorRetryModal({
         timerRef.current = null;
       }
     };
-  }, [isOpen, isPaused, isRetrying]);
+  }, [isOpen, isPaused, isRetrying, isMaxReached, errorId]);
 
   // When countdown hits 0s, cleanly trigger the retry action
   useEffect(() => {
-    if (isOpen && countdown === 0 && !isRetrying && !isPaused) {
+    if (isOpen && countdown === 0 && !isRetrying && !isPaused && !isMaxReached) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -92,7 +94,7 @@ export default function ApiErrorRetryModal({
       setIsRetrying(true);
       onRetryRef.current();
     }
-  }, [isOpen, countdown, isRetrying, isPaused]);
+  }, [isOpen, countdown, isRetrying, isPaused, isMaxReached]);
 
   if (!isOpen) return null;
 

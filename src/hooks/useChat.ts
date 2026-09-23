@@ -359,7 +359,6 @@ export function useChat({
     practiceMode: "auto" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
     options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
   ) => {
-    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
     if (practiceMode !== "translation_challenge") {
@@ -572,6 +571,7 @@ export function useChat({
         };
 
         setChatMessages([introMsg]);
+        retryAttemptsMapRef.current.clear();
       } catch (e: any) {
         if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
           console.log("Duel generation was cancelled by user.");
@@ -682,6 +682,7 @@ export function useChat({
         };
 
         setChatMessages([introMsg]);
+        retryAttemptsMapRef.current.clear();
       } catch (e: any) {
         if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
           console.log("Duel generation was cancelled by user.");
@@ -890,6 +891,7 @@ export function useChat({
         };
 
         setChatMessages([introMsg]);
+        retryAttemptsMapRef.current.clear();
       } catch (e: any) {
         if (controller.signal.aborted || e?.name === "AbortError" || String(e).includes("aborted")) {
           console.log("Quiz generation was cancelled by user.");
@@ -966,6 +968,7 @@ export function useChat({
         };
 
         setChatMessages([challengeMsg]);
+        retryAttemptsMapRef.current.clear();
       } catch (e: any) {
         console.error("Error generating translation challenge:", e);
         triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
@@ -1396,7 +1399,6 @@ export function useChat({
 
   // Add individual word directly from chat suggestions (or conversational input)
   const handleConversationalAddWord = async (wordText: string, hint?: string, overrideConfig?: LLMConfig) => {
-    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 
@@ -1676,6 +1678,7 @@ export function useChat({
             },
           ];
         });
+        retryAttemptsMapRef.current.clear();
       }
     } catch (err: any) {
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
@@ -1710,7 +1713,6 @@ export function useChat({
   const handleSendChatMessage = async (text: string, overrideConfig?: LLMConfig) => {
     if (!text.trim() && !activeChallenge) return;
 
-    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const effectiveText = text.trim() || "(No answer provided)";
 
@@ -2705,7 +2707,6 @@ export function useChat({
   };
 
   const handleConversationalGenerateWords = async (topic: string, count: number, overrideConfig?: LLMConfig) => {
-    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `gen-words-status-${Date.now()}`;
@@ -2892,6 +2893,7 @@ export function useChat({
           },
         ];
       });
+      retryAttemptsMapRef.current.clear();
     } catch (err: any) {
       console.error("Failed to generate words from topic:", err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
@@ -2918,7 +2920,6 @@ export function useChat({
   };
 
   const handleSuggestCasualReply = async (imageDataUrl: string | null, customPrompt: string) => {
-    retryAttemptsMapRef.current.clear();
     setConversationalState("none");
     const overrideConfig = imageDataUrl ? getVisionModelConfig() : undefined;
     const configToUse = overrideConfig || llmConfig;
@@ -3017,6 +3018,7 @@ export function useChat({
           },
         ];
       });
+      retryAttemptsMapRef.current.clear();
     } catch (err: any) {
       if (controller.signal.aborted || err?.name === "AbortError" || String(err).includes("aborted")) {
         console.log("Casual reply suggestion was aborted by the user.");
@@ -3051,7 +3053,6 @@ export function useChat({
   };
 
   const handleConversationalFixGrammar = async (userText: string, overrideConfig?: LLMConfig) => {
-    retryAttemptsMapRef.current.clear();
     const configToUse = overrideConfig || llmConfig;
     const configForServer = startTypingWithConfig(configToUse);
     const statusMsgId = `fix-grammar-status-${Date.now()}`;
@@ -3145,6 +3146,7 @@ export function useChat({
           },
         ];
       });
+      retryAttemptsMapRef.current.clear();
     } catch (err: any) {
       console.error("Fix Grammar Error:", err);
       setChatMessages((prev) => prev.filter((m) => m.id !== statusMsgId));
