@@ -26,7 +26,7 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { findWordInCollection, isCompletedWord, isIncompleteWord, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen, publishLlmRequestEnd, publishCloseLlmModals } from "../../utils/llmEvents";
+import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen, publishLlmRequestEnd, publishCloseLlmModals, publishLlmApiError } from "../../utils/llmEvents";
 import ChatMessageItem from "./ChatMessageItem";
 import LlmProgressIndicator from "./LlmProgressIndicator";
 
@@ -96,8 +96,13 @@ export default function WordAddModal({
   onWordAdded,
   showToast,
 }: WordAddModalProps) {
+  const retryAttemptsRef = useRef<number>(0);
+  const questionRetryAttemptsRef = useRef<number>(0);
+
   const handleCloseModal = useCallback(() => {
     stopSpeech();
+    retryAttemptsRef.current = 0;
+    questionRetryAttemptsRef.current = 0;
     onClose();
   }, [onClose]);
 
@@ -126,7 +131,13 @@ export default function WordAddModal({
   const isCentralModalOpen = useCentralModalOpen();
 
   const pendingWordSensesRef = useRef<{ word: string; senses: any[]; suggestedWords?: any[] } | null>(null);
-  const pendingRetryRef = useRef<{ word: string; hint?: string } | null>(null);
+  const pendingRetryRef = useRef<{
+    type?: "lookup" | "question";
+    word?: string;
+    hint?: string;
+    question?: string;
+    overrideData?: Partial<Word>;
+  } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -174,8 +185,10 @@ export default function WordAddModal({
 
   // Conversational chat question handler (allows asking questions while adding words)
   const handleQuestionChat = useCallback(
-    async (questionText: string) => {
+    async (questionText: string, overrideConfig?: LLMConfig, isRetry?: boolean) => {
       if (isTyping) return;
+
+      const activeConfig = overrideConfig || llmConfig;
 
       // Record inquiry to personalize future recommendations
       recordUserInquiry(questionText, {
@@ -185,25 +198,34 @@ export default function WordAddModal({
         source: "add_word_modal",
       });
 
-      const userMsgId = `user-q-${Date.now()}`;
-      const userMsg: ChatMessage = {
-        id: userMsgId,
-        role: "user",
-        content: questionText,
-        timestamp: new Date().toISOString(),
-      };
+      pendingRetryRef.current = { type: "question", question: questionText };
 
-      setMessages((prev) => [...prev, userMsg]);
+      if (!isRetry) {
+        const userMsgId = `user-q-${Date.now()}`;
+        const userMsg: ChatMessage = {
+          id: userMsgId,
+          role: "user",
+          content: questionText,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, userMsg]);
+      }
+
       setIsTyping(true);
-      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig, "chat");
-      setActiveModelInfo(activeInfo);
-      scrollToBottom();
-
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
       const controller = new AbortController();
       abortControllerRef.current = controller;
+
+      const activeInfo = notifyLlmRequestStartFromConfig(activeConfig, "chat", () => {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+      });
+      setActiveModelInfo(activeInfo);
+      scrollToBottom();
 
       try {
         const recentInquiries = getRecentUserInquiries(8);
@@ -224,7 +246,7 @@ export default function WordAddModal({
           : undefined;
 
         const chatHistory = [
-          ...messages.map((m) => ({
+          ...messages.filter((m) => !m.isError).map((m) => ({
             role: m.role as "user" | "assistant",
             content: m.content,
           })),
@@ -235,7 +257,7 @@ export default function WordAddModal({
           messages: chatHistory,
           targetLanguage,
           nativeLanguage,
-          llmConfig,
+          llmConfig: activeConfig,
           wordContext,
           userInquiries: recentInquiries,
           userProfile,
@@ -260,6 +282,8 @@ export default function WordAddModal({
           suggestedActions: filteredActions.length > 0 ? filteredActions : undefined,
         };
 
+        pendingRetryRef.current = null;
+        questionRetryAttemptsRef.current = 0;
         publishLlmRequestEnd({ success: true, provider: res.provider, model: res.model });
         publishCloseLlmModals();
         setMessages((prev) => [...prev.filter((m) => !m.isError), assistantMsg]);
@@ -273,11 +297,16 @@ export default function WordAddModal({
           err?.userMessage ||
           err?.message ||
           (typeof err === "string" ? err : "Failed to communicate with AI provider.");
-        const failedProvider = err?.provider || llmConfig?.provider || "AI";
-        const failedModel = err?.model || llmConfig?.model || "model";
+        const failedProvider = err?.provider || activeConfig?.provider || "auto";
+        const failedModel = err?.model || activeConfig?.model || "auto";
 
+        const prevAttempts = questionRetryAttemptsRef.current || 0;
+        const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
+        questionRetryAttemptsRef.current = currentAttempt;
+
+        const errorMsgId = `error-q-${Date.now()}`;
         const errorMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
+          id: errorMsgId,
           role: "assistant",
           content: rawMsg,
           timestamp: new Date().toISOString(),
@@ -290,8 +319,39 @@ export default function WordAddModal({
             model: failedModel,
             isTimeout: Boolean(err?.isTimeout || String(rawMsg).toLowerCase().includes("timeout")),
             canRetry: true,
+            retryAttempt: currentAttempt,
+            maxRetries: 3,
           },
         };
+
+        publishLlmRequestEnd({
+          provider: failedProvider,
+          model: failedModel,
+          action: "chat",
+          success: false,
+          error: err,
+        });
+
+        publishLlmApiError({
+          errorMessage: rawMsg,
+          provider: failedProvider,
+          model: failedModel,
+          action: "chat",
+          retryAttempt: currentAttempt,
+          maxRetries: 3,
+          onRetry: (newConfig) => {
+            if (currentAttempt >= 3) {
+              questionRetryAttemptsRef.current = 0;
+            }
+            setMessages((prev) => prev.filter((m) => m.id !== errorMsgId));
+            handleQuestionChat(questionText, newConfig || activeConfig, true);
+          },
+          onCancel: () => {
+            pendingRetryRef.current = null;
+            questionRetryAttemptsRef.current = 0;
+          },
+        });
+
         setMessages((prev) => [...prev, errorMsg]);
         scrollToBottom();
       } finally {
@@ -307,9 +367,17 @@ export default function WordAddModal({
 
   // Word lookup logic reusing Chat view pattern
   const handleLookup = useCallback(
-    async (targetText?: string, targetHint?: string, overrideData?: Partial<Word>) => {
+    async (
+      targetText?: string,
+      targetHint?: string,
+      overrideData?: Partial<Word>,
+      overrideConfig?: LLMConfig,
+      isRetry?: boolean
+    ) => {
       const wordToLookup = (targetText ?? wordInput).trim();
       if (!wordToLookup) return;
+
+      const activeConfig = overrideConfig || llmConfig;
 
       const effectiveHint =
         targetHint?.trim() ||
@@ -317,7 +385,12 @@ export default function WordAddModal({
         (overrideData?.translation && overrideData.translation !== overrideData.word ? overrideData.translation.trim() : undefined) ||
         (overrideData?.definition && overrideData.definition !== overrideData.word ? overrideData.definition.trim() : undefined);
 
-      pendingRetryRef.current = { word: wordToLookup, hint: effectiveHint || undefined };
+      pendingRetryRef.current = {
+        type: "lookup",
+        word: wordToLookup,
+        hint: effectiveHint || undefined,
+        overrideData,
+      };
 
       // Abort previous lookup if running
       if (abortControllerRef.current) {
@@ -326,20 +399,27 @@ export default function WordAddModal({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      // 1. Add user message
-      const userMsgId = `user-add-${Date.now()}`;
-      const userMsg: ChatMessage = {
-        id: userMsgId,
-        role: "user",
-        content: effectiveHint
-          ? `Add word: **"${wordToLookup}"**\n*Context/Hint*: ${effectiveHint}`
-          : `Add word: **"${wordToLookup}"**`,
-        timestamp: new Date().toISOString(),
-      };
+      // 1. Add user message only on initial lookup
+      if (!isRetry) {
+        const userMsgId = `user-add-${Date.now()}`;
+        const userMsg: ChatMessage = {
+          id: userMsgId,
+          role: "user",
+          content: effectiveHint
+            ? `Add word: **"${wordToLookup}"**\n*Context/Hint*: ${effectiveHint}`
+            : `Add word: **"${wordToLookup}"**`,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, userMsg]);
+      }
 
-      setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
-      const activeInfo = notifyLlmRequestStartFromConfig(llmConfig, "chat");
+      const activeInfo = notifyLlmRequestStartFromConfig(activeConfig, "chat", () => {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+      });
       setActiveModelInfo(activeInfo);
       scrollToBottom();
 
@@ -528,7 +608,7 @@ export default function WordAddModal({
           hint: effectiveHint || undefined,
           targetLanguage,
           nativeLanguage,
-          cfg: llmConfig,
+          cfg: activeConfig,
           signal: controller.signal,
         });
 
@@ -693,6 +773,7 @@ export default function WordAddModal({
         };
 
         pendingRetryRef.current = null;
+        retryAttemptsRef.current = 0;
         publishLlmRequestEnd({ success: true, provider: data.provider, model: data.model });
         publishCloseLlmModals();
         setMessages((prev) => [...prev.filter((m) => !m.isError), confirmMsg]);
@@ -706,11 +787,16 @@ export default function WordAddModal({
           err?.userMessage ||
           err?.message ||
           (typeof err === "string" ? err : "Failed to communicate with AI provider.");
-        const failedProvider = err?.provider || llmConfig?.provider || "AI";
-        const failedModel = err?.model || llmConfig?.model || "model";
+        const failedProvider = err?.provider || activeConfig?.provider || "auto";
+        const failedModel = err?.model || activeConfig?.model || "auto";
 
+        const prevAttempts = retryAttemptsRef.current || 0;
+        const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
+        retryAttemptsRef.current = currentAttempt;
+
+        const errorMsgId = `error-${Date.now()}`;
         const errorMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
+          id: errorMsgId,
           role: "assistant",
           content: rawMsg,
           timestamp: new Date().toISOString(),
@@ -723,8 +809,39 @@ export default function WordAddModal({
             model: failedModel,
             isTimeout: Boolean(err?.isTimeout || String(rawMsg).toLowerCase().includes("timeout")),
             canRetry: true,
+            retryAttempt: currentAttempt,
+            maxRetries: 3,
           },
         };
+
+        publishLlmRequestEnd({
+          provider: failedProvider,
+          model: failedModel,
+          action: "chat",
+          success: false,
+          error: err,
+        });
+
+        publishLlmApiError({
+          errorMessage: rawMsg,
+          provider: failedProvider,
+          model: failedModel,
+          action: "chat",
+          retryAttempt: currentAttempt,
+          maxRetries: 3,
+          onRetry: (newConfig) => {
+            if (currentAttempt >= 3) {
+              retryAttemptsRef.current = 0;
+            }
+            setMessages((prev) => prev.filter((m) => m.id !== errorMsgId));
+            handleLookup(wordToLookup, effectiveHint, overrideData, newConfig || activeConfig, true);
+          },
+          onCancel: () => {
+            pendingRetryRef.current = null;
+            retryAttemptsRef.current = 0;
+          },
+        });
+
         setMessages((prev) => [...prev, errorMsg]);
         scrollToBottom();
       } finally {
@@ -1090,14 +1207,22 @@ export default function WordAddModal({
           return m;
         })
       );
-      if (pendingRetryRef.current) {
-        handleLookup(pendingRetryRef.current.word, pendingRetryRef.current.hint);
+      if (pendingRetryRef.current?.type === "question" && pendingRetryRef.current.question) {
+        handleQuestionChat(pendingRetryRef.current.question, undefined, true);
+      } else if (pendingRetryRef.current?.word) {
+        handleLookup(
+          pendingRetryRef.current.word,
+          pendingRetryRef.current.hint,
+          pendingRetryRef.current.overrideData,
+          undefined,
+          true
+        );
       }
       setTimeout(() => {
         setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }, 700);
     },
-    [handleLookup]
+    [handleLookup, handleQuestionChat]
   );
 
   // Cancel error message handler

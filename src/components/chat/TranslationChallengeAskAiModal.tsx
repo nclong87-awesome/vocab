@@ -21,6 +21,7 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import { recordUserInquiry } from "../../services/userInquiryService";
+import { publishLlmApiError } from "../../utils/llmEvents";
 
 interface TranslationChallengeAskAiModalProps {
   isOpen: boolean;
@@ -174,7 +175,7 @@ Ask me anything about the feedback, word nuances, or grammar!`;
     setIsTyping(false);
   };
 
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string, overrideConfig?: LLMConfig) => {
     const query = (textToSend !== undefined ? textToSend : inputText).trim();
     if (!query || isTyping) return;
 
@@ -205,7 +206,7 @@ Ask me anything about the feedback, word nuances, or grammar!`;
     abortControllerRef.current = controller;
 
     try {
-      const effectiveConfig = getOverrideConfig(llmConfig);
+      const effectiveConfig = getOverrideConfig(overrideConfig || llmConfig);
       const promptSentence = challenge?.nativeSentence || "";
       const idealTranslation = challenge?.idealTranslation || "";
       const topicContext = challenge?.topicContext || "Daily Conversation";
@@ -292,7 +293,23 @@ USER LATEST INQUIRY:
         return;
       }
       console.error("Challenge Ask AI error:", err);
-      setErrorMsg(err?.message || "Failed to get AI response. Please try again.");
+      const rawMsg =
+        err?.userMessage ||
+        err?.message ||
+        (typeof err === "string" ? err : "Failed to get AI response. Please try again.");
+      setErrorMsg(rawMsg);
+      publishLlmApiError({
+        errorMessage: rawMsg,
+        provider: err?.provider || overrideConfig?.provider || llmConfig?.provider || "auto",
+        model: err?.model || overrideConfig?.model || llmConfig?.model || "auto",
+        action: "challenge_ask_ai",
+        onRetry: (newConfig) => {
+          setErrorMsg(null);
+          // Remove the last user message to avoid duplication when retrying
+          setMessages((prev) => prev.slice(0, -1));
+          handleSendMessage(query, newConfig || overrideConfig || llmConfig);
+        },
+      });
     } finally {
       setIsTyping(false);
       abortControllerRef.current = null;
