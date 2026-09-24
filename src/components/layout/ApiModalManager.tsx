@@ -14,6 +14,12 @@ import {
   LlmRequestStartEvent,
   LlmApiErrorEvent
 } from "../../utils/llmEvents";
+import {
+  subscribeEnrichmentProgress,
+  isEnrichmentQueueRunning,
+  cancelBatchEnrichment,
+  BatchEnrichmentProgress
+} from "../../services/backgroundEnrichmentService";
 
 export interface ApiModalManagerProps {
   llmConfig?: LLMConfig;
@@ -48,19 +54,17 @@ export function isChatAction(action?: string): boolean {
 
 /**
  * Determines whether an action is a non-interactive background worker task
- * (such as background vocabulary auto-enrichment or background image query generation)
+ * (such as silent image search keyword generation)
  * which should never display an intrusive modal or disrupt active foreground requests.
  */
 export function isBackgroundAction(action?: string): boolean {
   if (!action) return false;
   const act = action.toLowerCase().trim();
   return (
-    act === "background_enrich" ||
     act === "background" ||
-    act.startsWith("background_") ||
     act === "image_query" ||
     act === "background_image_query" ||
-    act.includes("enrich")
+    act.startsWith("background_image")
   );
 }
 
@@ -71,6 +75,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     action: string;
     provider: string;
     model: string;
+    requestId?: string | number;
     onCancel?: () => void;
   }>({
     isOpen: false,
@@ -128,7 +133,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     const providerName = currentReq?.provider || progressState.provider || "groq";
     const modelName = currentReq?.model || progressState.model || "openai/gpt-oss-120b";
 
-    // 1. Abort the hanging request
+    // 1. Abort the hanging request and any active enrichment queue
     if (onCancelRef.current) {
       try {
         onCancelRef.current();
@@ -136,6 +141,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         console.error("[ApiModalManager] Error cancelling timed-out request:", e);
       }
     }
+    cancelBatchEnrichment();
 
     // 2. Lock failing model via Circuit Breaker
     try {
@@ -205,6 +211,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         action: data.action || "chat",
         provider: data.provider,
         model: data.model,
+        requestId: data.timestamp || Date.now(),
         onCancel: data.onCancel,
       });
 
@@ -230,8 +237,32 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
           retryCloseTimerRef.current = null;
         }
         lastRetryFnRef.current = null;
+
+        // When enriching incomplete words, keep the progress dialog open
+        // until there are no remaining words in the queue!
+        if (isEnrichmentQueueRunning()) {
+          return;
+        }
+
         setProgressState((prev) => ({ ...prev, isOpen: false }));
         setErrorState((prev) => ({ ...prev, isOpen: false }));
+      }
+    });
+
+    // Subscribe to enrichment progress: close modal once queue completely finishes
+    const unsubEnrich = subscribeEnrichmentProgress((p: BatchEnrichmentProgress) => {
+      if (!p.isRunning) {
+        setProgressState((prev) => {
+          if (
+            prev.isOpen &&
+            (prev.action === "enrich_incomplete_words" ||
+              prev.action === "enrich_word" ||
+              prev.action.toLowerCase().includes("enrich"))
+          ) {
+            return { ...prev, isOpen: false };
+          }
+          return prev;
+        });
       }
     });
 
@@ -264,7 +295,12 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         retryAttempt: data.retryAttempt ?? 1,
         maxRetries: data.maxRetries ?? 3,
         onRetry: data.onRetry,
-        onClose: data.onCancel,
+        onClose: () => {
+          cancelBatchEnrichment();
+          if (data.onCancel) {
+            data.onCancel();
+          }
+        },
       });
     });
 
@@ -291,6 +327,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       }
       unsubStart();
       unsubEnd();
+      unsubEnrich();
       unsubError();
       unsubClose();
     };
@@ -313,6 +350,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         console.error("Error cancelling LLM request:", e);
       }
     }
+    cancelBatchEnrichment();
     setProgressState((prev) => ({ ...prev, isOpen: false }));
     setErrorState((prev) => ({ ...prev, isOpen: false }));
   }, []);
@@ -349,6 +387,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       retryCloseTimerRef.current = null;
     }
     lastRetryFnRef.current = null;
+    cancelBatchEnrichment();
     if (errorState.onClose) {
       errorState.onClose();
     }
@@ -363,6 +402,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         action={progressState.action}
         provider={progressState.provider}
         model={progressState.model}
+        requestId={progressState.requestId}
         llmConfig={llmConfig}
         appLanguage={appLanguage}
         onCancel={handleCancelProgress}

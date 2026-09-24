@@ -80,6 +80,19 @@ export function subscribeEnrichmentProgress(listener: ProgressListener): () => v
   };
 }
 
+export function isEnrichmentQueueRunning(): boolean {
+  return currentProgress.isRunning;
+}
+
+export function getEnrichmentProgress(): BatchEnrichmentProgress {
+  return currentProgress;
+}
+
+export function getRemainingEnrichmentCount(): number {
+  if (!currentProgress.isRunning) return 0;
+  return Math.max(0, currentProgress.total - currentProgress.processed);
+}
+
 function notifyProgress(progress: BatchEnrichmentProgress) {
   currentProgress = { ...progress };
   progressListeners.forEach((l) => {
@@ -105,9 +118,10 @@ export async function enrichSingleWord(
     nativeLanguage: string;
     llmConfig?: LLMConfig;
     signal?: AbortSignal;
+    action?: string;
   }
 ): Promise<EnrichmentResult> {
-  const { targetLanguage, nativeLanguage, llmConfig, signal } = options;
+  const { targetLanguage, nativeLanguage, llmConfig, signal, action = "enrich_incomplete_words" } = options;
 
   // If word is already flagged with multiple definitions, prevent automatic enrichment
   if (
@@ -133,7 +147,7 @@ export async function enrichSingleWord(
       nativeLanguage,
       cfg: llmConfig,
       signal,
-      action: "background_enrich"
+      action
     });
 
     if (signal?.aborted) {
@@ -369,7 +383,8 @@ export async function enrichIncompleteWordsQueue(
         targetLanguage: options.targetLanguage,
         nativeLanguage: options.nativeLanguage,
         llmConfig: options.llmConfig,
-        signal: controller.signal
+        signal: controller.signal,
+        action: "enrich_incomplete_words"
       });
 
       if (controller.signal.aborted) break;

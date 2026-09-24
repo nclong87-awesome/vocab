@@ -1747,7 +1747,7 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   const startTime = performance.now();
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal, { action });
     const parsed = cleanAndParseJson(resWithMeta.text);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
@@ -1778,6 +1778,13 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
       if (prov && mod) {
         recordModelResponse(prov, mod, duration);
       }
+      publishLlmRequestEnd({
+        provider: prov,
+        model: mod,
+        action,
+        success: true,
+        timestamp: Date.now()
+      });
       return {
         ...data,
         provider: prov,
@@ -1789,9 +1796,25 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     syncServerLocks(errData.serverLockedModels);
     const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    publishLlmRequestEnd({
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+      action,
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
     const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    publishLlmRequestEnd({
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+      action,
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || err?.message || "Failed to check word definitions.");
   }
 }

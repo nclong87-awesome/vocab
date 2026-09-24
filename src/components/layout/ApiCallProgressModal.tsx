@@ -19,6 +19,7 @@ export interface ApiCallProgressModalProps {
   appLanguage?: string;
   onCancel?: () => void;
   onTimeout?: () => void;
+  requestId?: string | number;
 }
 
 export default function ApiCallProgressModal({
@@ -30,6 +31,7 @@ export default function ApiCallProgressModal({
   appLanguage,
   onCancel,
   onTimeout,
+  requestId,
 }: ApiCallProgressModalProps) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [enrichmentProgress, setEnrichmentProgress] = useState<BatchEnrichmentProgress>({
@@ -68,6 +70,7 @@ export default function ApiCallProgressModal({
       return;
     }
 
+    setElapsedMs(0);
     const startTime = Date.now();
     let timedOut = false;
 
@@ -88,7 +91,7 @@ export default function ApiCallProgressModal({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isOpen, provider, model, onTimeout]);
+  }, [isOpen, provider, model, requestId, onTimeout]);
 
   const handleStopEnrichment = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -127,6 +130,13 @@ export default function ApiCallProgressModal({
       ? Math.min(100, Math.round((enrichmentProgress.processed / enrichmentProgress.total) * 100))
       : 0;
 
+  const displayActionName =
+    action === "enrich_incomplete_words"
+      ? "enrichIncompleteWords"
+      : action === "enrich_word"
+      ? "enrichWord"
+      : action;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in select-none"
@@ -142,7 +152,7 @@ export default function ApiCallProgressModal({
           <div className="flex items-center gap-2 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
             <span className="font-mono text-xs sm:text-sm font-semibold text-stone-800 tracking-tight truncate">
-              {action}
+              {displayActionName}
             </span>
           </div>
 

@@ -117,7 +117,8 @@ export function useBackgroundEnrichment(options: UseBackgroundEnrichmentOptions)
         const result = await enrichSingleWord(word, {
           targetLanguage: targetLangRef.current,
           nativeLanguage: nativeLangRef.current,
-          llmConfig: llmConfigRef.current
+          llmConfig: llmConfigRef.current,
+          action: "enrich_word"
         });
 
         // Update single word

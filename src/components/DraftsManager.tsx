@@ -141,7 +141,8 @@ export default function DraftsManager({
         const res = await enrichSingleWord(incWord, {
           targetLanguage,
           nativeLanguage,
-          llmConfig
+          llmConfig,
+          action: "enrich_word"
         });
         if (onUpdateWord) {
           onUpdateWord(res.updatedWord);
