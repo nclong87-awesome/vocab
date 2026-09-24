@@ -1283,10 +1283,24 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & INTENT DEDUCTION INSTRUCTIONS:
     if (controller.signal.aborted) return;
     const result = cleanAndParseJson(text);
     const responseTimeMs = Math.round(performance.now() - startTime);
+
+    let finalProvider = usedProvider;
+    let finalModel = usedModel;
+    if (!finalModel || finalModel === "auto" || !finalProvider || finalProvider === "auto") {
+      try {
+        const cand = getNextServerAutoCandidate(llmConfig);
+        if (!finalProvider || finalProvider === "auto") finalProvider = cand.provider;
+        if (!finalModel || finalModel === "auto") finalModel = cand.model;
+      } catch {
+        if (!finalProvider || finalProvider === "auto") finalProvider = "gemini";
+        if (!finalModel || finalModel === "auto") finalModel = "gemini-2.5-flash";
+      }
+    }
+
     res.json({
       ...result,
-      provider: usedProvider,
-      model: usedModel,
+      provider: finalProvider,
+      model: finalModel,
       responseTimeMs,
       serverLockedModels: getServerLockedModelsArray()
     });

@@ -103,16 +103,29 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
   } | null>(null);
 
   // Determine effective AI model and provider for current word
-  const activeAutoCand = (!llmConfig?.provider || llmConfig.provider === "auto" || !llmConfig.model || llmConfig.model === "auto")
-    ? getAutoCandidateWithMeta(llmConfig, undefined, false).candidate
-    : null;
+  let fallbackCand: { provider: string; model: string } | null = null;
+  try {
+    fallbackCand = getAutoCandidateWithMeta(llmConfig, undefined, false).candidate;
+  } catch {
+    fallbackCand = { provider: "groq", model: "openai/gpt-oss-120b" };
+  }
 
-  const currentWordEnrichmentModel = currentWord?.enrichmentModel || (regeneratedSuccessId === currentWord?.id ? lastEnrichmentMetadata?.model : undefined) || (activeAutoCand ? activeAutoCand.model : llmConfig?.model) || "gemini-3.5-flash-lite";
-  const currentWordEnrichmentProvider = currentWord?.enrichmentProvider || (regeneratedSuccessId === currentWord?.id ? lastEnrichmentMetadata?.provider : undefined) || (activeAutoCand ? activeAutoCand.provider : llmConfig?.provider) || "auto";
+  let effectiveWordModel = (regeneratedSuccessId === currentWord?.id ? lastEnrichmentMetadata?.model : undefined) || currentWord?.enrichmentModel;
+  let effectiveWordProvider = (regeneratedSuccessId === currentWord?.id ? lastEnrichmentMetadata?.provider : undefined) || currentWord?.enrichmentProvider;
 
-  const formattedModelName = formatModelDisplayName(currentWordEnrichmentModel);
-  const providerMeta = PROVIDER_OPTIONS.find((p) => p.id === currentWordEnrichmentProvider);
-  const providerDisplayName = providerMeta ? providerMeta.name.replace(/\s*\(Default\)/i, "") : (currentWordEnrichmentProvider && currentWordEnrichmentProvider !== "auto" ? currentWordEnrichmentProvider.charAt(0).toUpperCase() + currentWordEnrichmentProvider.slice(1) : "");
+  // Never show "auto" or "Auto Model" - always resolve to the actual model used / auto candidate
+  if (!effectiveWordModel || effectiveWordModel.toLowerCase() === "auto" || effectiveWordModel.toLowerCase() === "auto model") {
+    effectiveWordModel = (llmConfig?.model && llmConfig.model !== "auto") ? llmConfig.model : fallbackCand?.model || "openai/gpt-oss-120b";
+  }
+  if (!effectiveWordProvider || effectiveWordProvider.toLowerCase() === "auto" || effectiveWordProvider.toLowerCase() === "auto mode") {
+    effectiveWordProvider = (llmConfig?.provider && llmConfig.provider !== "auto") ? llmConfig.provider : fallbackCand?.provider || "groq";
+  }
+
+  const formattedModelName = formatModelDisplayName(effectiveWordModel);
+  const providerMeta = PROVIDER_OPTIONS.find((p) => p.id === effectiveWordProvider);
+  const providerDisplayName = providerMeta && providerMeta.id !== "auto"
+    ? providerMeta.name.replace(/\s*\(Default\)/i, "").trim()
+    : (effectiveWordProvider && effectiveWordProvider !== "auto" ? effectiveWordProvider.charAt(0).toUpperCase() + effectiveWordProvider.slice(1) : "");
 
   // Auto scroll current word thumbnail into view
   useEffect(() => {
@@ -206,7 +219,8 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
           hint: currentWord.context || currentWord.definition || currentWord.translation,
           targetLanguage,
           nativeLanguage,
-          cfg: newConfig
+          cfg: newConfig,
+          action: "regenerate_word"
         });
 
         if (data && data.word) {
@@ -216,12 +230,22 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
             ? normalizeWordCategory(data.category, data.word, normalizedPos)
             : data.category || currentWord.category || "General";
 
-          const usedProvider = data.provider || newConfig.provider || llmConfig?.provider || "auto";
-          const usedModel = data.model || newConfig.model || llmConfig?.model || "auto";
+          let usedProvider = data.provider;
+          let usedModel = data.model;
+          if (!usedModel || usedModel === "auto" || !usedProvider || usedProvider === "auto") {
+            try {
+              const cand = getAutoCandidateWithMeta(newConfig, undefined, false).candidate;
+              if (!usedProvider || usedProvider === "auto") usedProvider = cand.provider;
+              if (!usedModel || usedModel === "auto") usedModel = cand.model;
+            } catch {
+              if (!usedProvider || usedProvider === "auto") usedProvider = "groq";
+              if (!usedModel || usedModel === "auto") usedModel = "openai/gpt-oss-120b";
+            }
+          }
 
           setLastEnrichmentMetadata({
             provider: usedProvider,
-            model: formatModelDisplayName(usedModel),
+            model: usedModel,
             responseTimeMs: data.responseTimeMs
           });
 
@@ -238,8 +262,8 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
             suggestedWords: data.suggestedWords || currentWord.suggestedWords,
             imageKeyword: data.imageKeyword || currentWord.imageKeyword,
             completed: true,
-            enrichmentModel: data.model || usedModel,
-            enrichmentProvider: data.provider || usedProvider,
+            enrichmentModel: usedModel,
+            enrichmentProvider: usedProvider,
             enrichedAt: new Date().toISOString()
           };
 
@@ -268,7 +292,8 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
         hint: currentWord.context || currentWord.definition || currentWord.translation,
         targetLanguage,
         nativeLanguage,
-        cfg: llmConfig
+        cfg: llmConfig,
+        action: "regenerate_word"
       });
 
       if (data && data.word) {
@@ -278,12 +303,22 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
           ? normalizeWordCategory(data.category, data.word, normalizedPos)
           : data.category || currentWord.category || "General";
 
-        const usedProvider = data.provider || llmConfig?.provider || "auto";
-        const usedModel = data.model || llmConfig?.model || "auto";
+        let usedProvider = data.provider;
+        let usedModel = data.model;
+        if (!usedModel || usedModel === "auto" || !usedProvider || usedProvider === "auto") {
+          try {
+            const cand = getAutoCandidateWithMeta(llmConfig, undefined, false).candidate;
+            if (!usedProvider || usedProvider === "auto") usedProvider = cand.provider;
+            if (!usedModel || usedModel === "auto") usedModel = cand.model;
+          } catch {
+            if (!usedProvider || usedProvider === "auto") usedProvider = "groq";
+            if (!usedModel || usedModel === "auto") usedModel = "openai/gpt-oss-120b";
+          }
+        }
 
         setLastEnrichmentMetadata({
           provider: usedProvider,
-          model: formatModelDisplayName(usedModel),
+          model: usedModel,
           responseTimeMs: data.responseTimeMs
         });
 
@@ -300,8 +335,8 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
           suggestedWords: data.suggestedWords || currentWord.suggestedWords,
           imageKeyword: data.imageKeyword || currentWord.imageKeyword,
           completed: true,
-          enrichmentModel: data.model || usedModel,
-          enrichmentProvider: data.provider || usedProvider,
+          enrichmentModel: usedModel,
+          enrichmentProvider: usedProvider,
           enrichedAt: new Date().toISOString()
         };
 
@@ -720,8 +755,8 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
                   {/* Regenerated Response Metadata */}
                   {lastEnrichmentMetadata && regeneratedSuccessId === currentWord.id && (
                     <LlmResponseMetadata
-                      provider={lastEnrichmentMetadata.provider || currentWordEnrichmentProvider}
-                      model={lastEnrichmentMetadata.model || formattedModelName}
+                      provider={lastEnrichmentMetadata.provider || effectiveWordProvider}
+                      model={lastEnrichmentMetadata.model || effectiveWordModel}
                       responseTimeMs={lastEnrichmentMetadata.responseTimeMs}
                       dark={true}
                       className="mt-2 pt-2 border-stone-800"

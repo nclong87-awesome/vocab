@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, ShieldAlert, X, RefreshCw } from "lucide-react";
 import { t } from "../../config/i18n";
-import { extractCleanErrorMessage } from "../../utils/llmHelpers";
+import { extractCleanErrorMessage, formatModelDisplayName } from "../../utils/llmHelpers";
 
 function renderCleanErrorContent(text: string) {
   if (!text) return null;
@@ -160,13 +161,14 @@ export default function ApiErrorRetryModal({
     errorMessage.toLowerCase().includes("timed out");
 
   const cleanMsg = extractCleanErrorMessage(errorMessage);
+  const displayFailedModel = formatModelDisplayName(failedModel || "gemini-2.5-flash");
   const formattedError = isTimeout
-    ? t("api_error_timeout_desc", currentAppLang, { model: failedModel })
+    ? t("api_error_timeout_desc", currentAppLang, { model: displayFailedModel })
     : cleanMsg || t("api_error_fallback", currentAppLang);
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in select-none"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in select-none"
       id="api-error-retry-modal"
     >
       <div className="relative w-full max-w-[390px] sm:max-w-[430px] bg-white rounded-3xl shadow-2xl p-5 sm:p-6 border border-slate-100 overflow-hidden flex flex-col">
@@ -307,4 +309,6 @@ export default function ApiErrorRetryModal({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
 }

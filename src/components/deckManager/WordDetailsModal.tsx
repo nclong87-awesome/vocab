@@ -89,7 +89,8 @@ export default function WordDetailsModal({
         hint: targetWord.context || targetWord.category,
         targetLanguage: targetLanguage || "English",
         nativeLanguage: resolvedNative,
-        cfg: llmConfig
+        cfg: llmConfig,
+        action: "regenerate_word"
       });
 
       const updatedWord: Word = {
@@ -98,7 +99,9 @@ export default function WordDetailsModal({
         definition: details.definition || targetWord.definition,
         translation: details.translation || targetWord.translation,
         example: details.example || targetWord.example,
-        exampleTranslation: details.exampleTranslation || targetWord.exampleTranslation
+        exampleTranslation: details.exampleTranslation || targetWord.exampleTranslation,
+        enrichmentModel: details.model || targetWord.enrichmentModel,
+        enrichmentProvider: details.provider || targetWord.enrichmentProvider,
       };
 
       if (onUpdateWord) {
@@ -108,7 +111,6 @@ export default function WordDetailsModal({
       setTimeout(() => setInternalSuccessId(null), 3000);
     } catch (err: any) {
       console.error("Failed to re-generate word details in modal:", err);
-      alert("Unable to re-generate word details. Please verify your AI settings.");
     } finally {
       setInternalRegeneratingId(null);
     }

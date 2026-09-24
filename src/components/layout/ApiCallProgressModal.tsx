@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Zap, X, Cpu, Clock, Compass, Sparkles, CheckCircle2 } from "lucide-react";
 import { LLMConfig } from "../../types";
-import { getAllModelStatuses } from "../../utils/autoModeManager";
+import { getAllModelStatuses, getAutoCandidateWithMeta } from "../../utils/autoModeManager";
+import { formatModelDisplayName } from "../../utils/llmHelpers";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { t } from "../../config/i18n";
 import {
@@ -100,19 +102,31 @@ export default function ApiCallProgressModal({
 
   if (!isOpen) return null;
 
-  // Format provider
-  const rawProvider = provider || llmConfig?.provider || "groq";
+  // Format provider & model - resolve candidate if auto or empty
+  let rawProvider = provider || llmConfig?.provider || "groq";
+  let rawModel = model || llmConfig?.model || "openai/gpt-oss-120b";
+
+  if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model" || !rawProvider || rawProvider.toLowerCase() === "auto") {
+    try {
+      const cand = getAutoCandidateWithMeta(llmConfig, undefined, false).candidate;
+      if (!rawProvider || rawProvider.toLowerCase() === "auto") rawProvider = cand.provider;
+      if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model") rawModel = cand.model;
+    } catch {
+      if (!rawProvider || rawProvider.toLowerCase() === "auto") rawProvider = "groq";
+      if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model") rawModel = "openai/gpt-oss-120b";
+    }
+  }
+
   const provMeta = PROVIDER_OPTIONS.find((p) => p.id === rawProvider);
-  const displayProvider = provMeta?.name
+  const displayProvider = provMeta && provMeta.id !== "auto"
     ? provMeta.name.replace(/\s*\(Default\)/i, "").trim().toUpperCase()
     : rawProvider.toUpperCase();
 
-  // Format model
-  const displayModel = model || llmConfig?.model || "openai/gpt-oss-120b";
+  const displayModel = formatModelDisplayName(rawModel);
 
   // Calculate expected response time from historical rolling stats
   const statuses = getAllModelStatuses(llmConfig);
-  const match = statuses.find((s) => s.provider === rawProvider && s.model === displayModel);
+  const match = statuses.find((s) => s.provider === rawProvider && s.model === rawModel);
   const avgTimeMs = match?.avgResponseTimeMs ?? match?.lastResponseTimeMs ?? 20000;
   const expectedSeconds = Math.round(avgTimeMs / 1000);
 
@@ -135,11 +149,13 @@ export default function ApiCallProgressModal({
       ? "enrichIncompleteWords"
       : action === "enrich_word"
       ? "enrichWord"
+      : action === "regenerate_word" || action === "regenerateWord"
+      ? "regenerateWord"
       : action;
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in select-none"
+      className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in select-none"
       id="api-call-progress-modal"
     >
       <div className="relative w-full max-w-[370px] sm:max-w-[400px] bg-white rounded-3xl shadow-2xl p-5 sm:p-6 border border-slate-100 overflow-hidden flex flex-col items-center">
@@ -312,4 +328,6 @@ export default function ApiCallProgressModal({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
 }

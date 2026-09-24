@@ -98,7 +98,8 @@ function CollectionManager({
         hint: word.context || word.category,
         targetLanguage,
         nativeLanguage,
-        cfg: configToUse
+        cfg: configToUse,
+        action: "regenerate_word"
       });
 
       if (onUpdateWords) {
@@ -110,7 +111,9 @@ function CollectionManager({
               definition: details.definition || w.definition,
               translation: details.translation || w.translation,
               example: details.example || w.example,
-              exampleTranslation: details.exampleTranslation || w.exampleTranslation
+              exampleTranslation: details.exampleTranslation || w.exampleTranslation,
+              enrichmentModel: details.model || w.enrichmentModel,
+              enrichmentProvider: details.provider || w.enrichmentProvider,
             };
           }
           return w;
@@ -124,8 +127,6 @@ function CollectionManager({
       console.error("Failed to re-generate word details:", err);
       if (onLlmApiError && configToUse) {
         onLlmApiError(err, configToUse, (newConfig) => handleRegenerateWord(word, newConfig));
-      } else {
-        alert("Unable to re-generate word details. Please verify your AI Key.");
       }
     } finally {
       setRegeneratingWordId(null);

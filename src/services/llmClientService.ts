@@ -1449,10 +1449,44 @@ export async function autofillWordService(params: {
   nativeLanguage?: string;
   cfg?: LLMConfig;
   signal?: AbortSignal;
+  action?: string;
 }): Promise<any> {
-  const { word, hint, category, context, targetLanguage, nativeLanguage, cfg, signal } = params;
+  const { word, hint, category, context, targetLanguage, nativeLanguage, cfg, signal, action = "regenerate_word" } = params;
   const llmConfig = getOverrideConfig(cfg);
-  notifyLlmRequestStartFromConfig(llmConfig);
+
+  // Resolve actual candidate if in auto mode
+  let autoCandidate: { provider: string; model: string } | null = null;
+  if (!llmConfig?.provider || llmConfig.provider === "auto" || !llmConfig.model || llmConfig.model === "auto") {
+    try {
+      autoCandidate = getAutoCandidateWithMeta(llmConfig, undefined, false).candidate;
+    } catch {
+      autoCandidate = { provider: "groq", model: "openai/gpt-oss-120b" };
+    }
+  }
+
+  const effectiveProvider = autoCandidate?.provider || llmConfig?.provider || "gemini";
+  const effectiveModel = autoCandidate?.model || sanitizeModel(effectiveProvider, llmConfig?.model) || "gemini-2.5-flash";
+
+  // Setup abort controller for progress cancel support
+  const internalController = new AbortController();
+  if (signal) {
+    if (signal.aborted) {
+      internalController.abort();
+    } else {
+      signal.addEventListener("abort", () => internalController.abort());
+    }
+  }
+  const effectiveSignal = internalController.signal;
+
+  // Publish start event so the central progress modal opens with real candidate model
+  publishLlmRequestStart({
+    provider: effectiveProvider,
+    model: effectiveModel,
+    action,
+    isAutoMode: Boolean(autoCandidate),
+    timestamp: Date.now(),
+    onCancel: () => internalController.abort()
+  });
 
   function normalizeLanguageName(lang?: string): string {
     if (!lang) return "";
@@ -1573,49 +1607,120 @@ CRITICAL AUTOMATIC LANGUAGE DETECTION & TRANSLATION INSTRUCTIONS:
   const startTime = performance.now();
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
-    const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-    if (resWithMeta.provider && resWithMeta.model) {
-      recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
+    try {
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, effectiveSignal, { action });
+      const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
+      const usedProvider = (resWithMeta.provider && resWithMeta.provider !== "auto") ? resWithMeta.provider : effectiveProvider;
+      const usedModel = (resWithMeta.model && resWithMeta.model !== "auto") ? resWithMeta.model : effectiveModel;
+      if (usedProvider && usedModel) {
+        recordModelResponse(usedProvider, usedModel, duration);
+      }
+      publishLlmRequestEnd({
+        provider: usedProvider,
+        model: usedModel,
+        action,
+        success: true,
+        timestamp: Date.now()
+      });
+      const parsed = cleanAndParseJson(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: usedProvider,
+        model: usedModel,
+        responseTimeMs: duration
+      };
+    } catch (err: any) {
+      const parsedErr = parseLlmError(err, effectiveProvider);
+      publishLlmRequestEnd({
+        provider: effectiveProvider,
+        model: effectiveModel,
+        action,
+        success: false,
+        error: parsedErr,
+        timestamp: Date.now()
+      });
+      throw new Error(parsedErr.userMessage || err?.message || "Failed to auto-fill word definition.");
     }
-    return cleanAndParseJson(resWithMeta.text);
   }
 
   try {
     const res = await fetchWithTimeout("/api/autofill-word", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig }),
-      signal
+      body: JSON.stringify({ word, hint, targetLanguage: userTarget, nativeLanguage: userNative, llmConfig, action }),
+      signal: effectiveSignal
     });
 
     if (res.ok) {
       const data = await res.json();
       syncServerLocks(data.serverLockedModels);
       const duration = data.responseTimeMs || Math.round(performance.now() - startTime);
-      const prov = data.provider || llmConfig?.provider || "gemini";
-      const mod = data.model || sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model);
+      const prov = (data.provider && data.provider !== "auto") ? data.provider : effectiveProvider;
+      const mod = (data.model && data.model !== "auto") ? data.model : effectiveModel;
       if (prov && mod) {
         recordModelResponse(prov, mod, duration);
       }
-      return data;
+      publishLlmRequestEnd({
+        provider: prov,
+        model: mod,
+        action,
+        success: true,
+        timestamp: Date.now()
+      });
+      return {
+        ...data,
+        provider: prov,
+        model: mod,
+        responseTimeMs: duration
+      };
     }
 
     if (res.status === 405 || res.status === 404) {
-      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
+      const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, effectiveSignal, { action });
       const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
-      if (resWithMeta.provider && resWithMeta.model) {
-        recordModelResponse(resWithMeta.provider, resWithMeta.model, duration);
+      const usedProvider = (resWithMeta.provider && resWithMeta.provider !== "auto") ? resWithMeta.provider : effectiveProvider;
+      const usedModel = (resWithMeta.model && resWithMeta.model !== "auto") ? resWithMeta.model : effectiveModel;
+      if (usedProvider && usedModel) {
+        recordModelResponse(usedProvider, usedModel, duration);
       }
-      return cleanAndParseJson(resWithMeta.text);
+      publishLlmRequestEnd({
+        provider: usedProvider,
+        model: usedModel,
+        action,
+        success: true,
+        timestamp: Date.now()
+      });
+      const parsed = cleanAndParseJson(resWithMeta.text);
+      return {
+        ...parsed,
+        provider: usedProvider,
+        model: usedModel,
+        responseTimeMs: duration
+      };
     }
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     syncServerLocks(errData.serverLockedModels);
-    const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    const parsedErr = parseLlmError(errData, effectiveProvider);
+    publishLlmRequestEnd({
+      provider: effectiveProvider,
+      model: effectiveModel,
+      action,
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
-    const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    const parsedErr = parseLlmError(err, effectiveProvider);
+    publishLlmRequestEnd({
+      provider: effectiveProvider,
+      model: effectiveModel,
+      action,
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || err?.message || "Failed to auto-fill word definition.");
   }
 }
