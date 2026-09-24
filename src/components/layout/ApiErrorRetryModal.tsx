@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { AlertTriangle, ShieldAlert, X, RefreshCw } from "lucide-react";
 import { t } from "../../config/i18n";
 import { extractCleanErrorMessage } from "../../utils/llmHelpers";
@@ -52,6 +52,7 @@ export default function ApiErrorRetryModal({
   const [isPaused, setIsPaused] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const timerRef = useRef<any>(null);
+  const retriedForErrorRef = useRef<string | null>(null);
 
   const onRetryRef = useRef(onRetry);
   onRetryRef.current = onRetry;
@@ -65,22 +66,42 @@ export default function ApiErrorRetryModal({
 
   const isMaxReached = (retryAttempt ?? 1) >= (maxRetries ?? 3);
 
+  // Trigger retry safely with error-instance lock
+  const executeRetry = useCallback(() => {
+    if (isMaxReached) return;
+    const currentId = errorId || `err-attempt-${retryAttempt ?? 1}`;
+    if (retriedForErrorRef.current === currentId) {
+      return;
+    }
+    retriedForErrorRef.current = currentId;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRetrying(true);
+    onRetryRef.current();
+  }, [errorId, retryAttempt, isMaxReached]);
+
   // Reset countdown whenever modal opens with fresh attempt or new error arrives
   useEffect(() => {
     if (isOpen) {
       setCountdown(5);
       setIsPaused(false);
       setIsRetrying(false);
+      retriedForErrorRef.current = null;
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      setCountdown(5);
+      setIsPaused(false);
       setIsRetrying(false);
     }
   }, [isOpen, errorId, retryAttempt, failedModel, errorMessage]);
 
-  // Countdown timer effect
+  // Countdown timer effect: tick every 1000ms and execute retry cleanly when hitting 0
   useEffect(() => {
     if (!isOpen || isPaused || isRetrying || isMaxReached) {
       if (timerRef.current) {
@@ -93,6 +114,11 @@ export default function ApiErrorRetryModal({
     timerRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          executeRetry();
           return 0;
         }
         return prev - 1;
@@ -105,19 +131,7 @@ export default function ApiErrorRetryModal({
         timerRef.current = null;
       }
     };
-  }, [isOpen, isPaused, isRetrying, isMaxReached, errorId]);
-
-  // When countdown hits 0s, cleanly trigger the retry action
-  useEffect(() => {
-    if (isOpen && countdown === 0 && !isRetrying && !isPaused && !isMaxReached) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setIsRetrying(true);
-      onRetryRef.current();
-    }
-  }, [isOpen, countdown, isRetrying, isPaused, isMaxReached]);
+  }, [isOpen, isPaused, isRetrying, isMaxReached, errorId, executeRetry]);
 
   if (!isOpen) return null;
 
@@ -127,12 +141,7 @@ export default function ApiErrorRetryModal({
   };
 
   const handleRetryNow = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setIsRetrying(true);
-    onRetryRef.current();
+    executeRetry();
   };
 
   const handleClose = () => {

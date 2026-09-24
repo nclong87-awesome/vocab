@@ -239,6 +239,25 @@ export function useChat({
     const errorMsgId = `${prefix}-${Date.now()}`;
     let isDispatched = false;
 
+    const buildErrorMsg = (canRetry: boolean = true): ChatMessage => ({
+      id: errorMsgId,
+      role: "assistant",
+      content: displayErrorMsg,
+      timestamp: new Date().toISOString(),
+      provider: failedProvider,
+      model: failedModel,
+      isError: true,
+      errorInfo: {
+        message: displayErrorMsg,
+        provider: failedProvider,
+        model: failedModel,
+        isTimeout,
+        canRetry,
+        retryAttempt: currentAttempt,
+        maxRetries: 3,
+      },
+    });
+
     // Single-dispatch lock to guarantee only ONE retry request can ever be fired per error cycle
     const safeRetry = (newConfig?: LLMConfig) => {
       if (isDispatched) {
@@ -252,6 +271,10 @@ export function useChat({
       if (currentAttempt >= 3) {
         retryAttemptsMapRef.current.delete(prefix);
       }
+
+      // Clean up any error card from chat so it does not linger while retrying
+      setChatMessages((prev) => prev.filter((m) => m.id !== errorMsgId));
+
       retryAction(newConfig || currentConfig);
     };
 
@@ -270,31 +293,33 @@ export function useChat({
       },
       onCancel: () => {
         isDispatched = true;
-        pendingRetriesRef.current.delete(errorMsgId);
         retryAttemptsMapRef.current.clear();
+        // Allow user to manually retry from the inline card later
+        pendingRetriesRef.current.set(errorMsgId, (cfg) => {
+          setChatMessages((prev) => prev.filter((m) => m.id !== errorMsgId));
+          retryAction(cfg || currentConfig);
+        });
+        // Display the error card in the chat because the user explicitly cancelled the automated flow
+        const cancelledErrorMsg = buildErrorMsg(true);
+        setChatMessages((prev) => [
+          ...prev.filter((m) => !m.isError || !m.id.startsWith(prefix)),
+          cancelledErrorMsg,
+        ]);
       }
     });
 
-    const errorMsg: ChatMessage = {
-      id: errorMsgId,
-      role: "assistant",
-      content: displayErrorMsg,
-      timestamp: new Date().toISOString(),
-      provider: failedProvider,
-      model: failedModel,
-      isError: true,
-      errorInfo: {
-        message: displayErrorMsg,
-        provider: failedProvider,
-        model: failedModel,
-        isTimeout,
-        canRetry: true,
-        retryAttempt: currentAttempt,
-        maxRetries: 3,
-      },
-    };
-
-    setChatMessages((prev) => [...prev, errorMsg]);
+    // Only display inline error in chat if all retry attempts have failed (max reached)
+    // While automated retry countdown is active, keep the conversation clean!
+    if (currentAttempt >= 3) {
+      const finalErrorMsg = buildErrorMsg(true);
+      setChatMessages((prev) => [
+        ...prev.filter((m) => !m.isError || !m.id.startsWith(prefix)),
+        finalErrorMsg,
+      ]);
+    } else {
+      // Remove any lingering error card from prior attempts so the chat remains clean during retries
+      setChatMessages((prev) => prev.filter((m) => !m.isError || !m.id.startsWith(prefix)));
+    }
   };
 
   const handleRetryErrorMessage = (messageId: string) => {
@@ -2179,10 +2204,12 @@ export function useChat({
     const configForServer = startTypingWithConfig(configToUse);
 
     try {
-      const payloadMessages = chatMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const payloadMessages = chatMessages
+        .filter((m) => !m.isError && m.content)
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
       const lastPayloadMsg = payloadMessages[payloadMessages.length - 1];
       if (!lastPayloadMsg || lastPayloadMsg.role !== "user" || lastPayloadMsg.content !== text.trim()) {

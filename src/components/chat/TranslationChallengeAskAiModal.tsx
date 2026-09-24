@@ -94,10 +94,12 @@ export default function TranslationChallengeAskAiModal({
   const typingIndicatorRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const retryAttemptsRef = useRef<number>(0);
 
   // Initialize conversation stream when modal opens or challenge changes
   useEffect(() => {
     if (isOpen) {
+      retryAttemptsRef.current = 0;
       const promptSentence = challenge?.nativeSentence || "Translation Challenge";
       
       let welcomeText = `Hello! I'm your **AI Challenge Assistant**.
@@ -289,6 +291,7 @@ USER LATEST INQUIRY:
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      retryAttemptsRef.current = 0;
     } catch (err: any) {
       if (err?.name === "AbortError" || controller.signal.aborted) {
         return;
@@ -300,11 +303,18 @@ USER LATEST INQUIRY:
         (typeof err === "string" ? err : "Failed to get AI response. Please try again.");
       const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
       setErrorMsg(cleanMsg);
+
+      const prevAttempts = retryAttemptsRef.current || 0;
+      const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
+      retryAttemptsRef.current = currentAttempt;
+
       publishLlmApiError({
         errorMessage: cleanMsg,
         provider: err?.provider || overrideConfig?.provider || llmConfig?.provider || "auto",
         model: err?.model || overrideConfig?.model || llmConfig?.model || "auto",
         action: "challenge_ask_ai",
+        retryAttempt: currentAttempt,
+        maxRetries: 3,
         onRetry: (newConfig) => {
           setErrorMsg(null);
           // Remove the last user message to avoid duplication when retrying

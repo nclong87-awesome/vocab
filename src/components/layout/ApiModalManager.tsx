@@ -180,8 +180,8 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
   // Listen to request start, end, and error events
   useEffect(() => {
     const unsubStart = subscribeLlmRequestStart((data: LlmRequestStartEvent) => {
-      // Do not open foreground progress modal for background actions
-      if (isBackgroundAction(data.action)) {
+      // Do not open foreground progress modal for background or chat actions (chat has inline typing indicator)
+      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
         return;
       }
 
@@ -215,7 +215,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     });
 
     const unsubEnd = subscribeLlmRequestEnd((data) => {
-      if (isBackgroundAction(data.action)) {
+      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
         return;
       }
 
@@ -371,6 +371,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
 
       {/* Error & Automated Countdown Retry Dialog */}
       <ApiErrorRetryModal
+        key={errorState.errorId || `api-err-${errorState.retryAttempt}`}
         isOpen={errorState.isOpen}
         errorId={errorState.errorId}
         errorMessage={errorState.errorMessage}
