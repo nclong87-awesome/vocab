@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
+  ArrowLeft,
   X,
   ChevronLeft,
   ChevronRight,
@@ -41,6 +42,7 @@ export interface EnrichedWordsGalleryModalProps {
   onToggleStar?: (wordId: string) => void;
   onToggleLearned?: (wordId: string) => void;
   onAddWord?: (wordOrData?: string | any, hint?: string, initialData?: Partial<Word>) => void;
+  onAskAi?: (word: Word) => void;
   targetLanguage?: string;
   nativeLanguage?: string;
   appLanguage?: string;
@@ -58,6 +60,7 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
   onToggleStar,
   onToggleLearned,
   onAddWord,
+  onAskAi,
   targetLanguage = "English",
   nativeLanguage = "Vietnamese",
   appLanguage = "en",
@@ -380,412 +383,460 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-stone-950/75 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-3xl my-auto bg-stone-900 border border-stone-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header Bar */}
-        <div className="px-4 py-3.5 sm:px-6 bg-stone-900 border-b border-stone-800 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-bold text-stone-100 truncate">
-                  {t("gallery_enriched_modal_title", appLanguage) || "Enriched Words Gallery"}
-                </h3>
-                {wordsCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-                    {t("gallery_word_counter", appLanguage, {
-                      current: String(safeIndex + 1),
-                      total: String(wordsCount)
-                    }) || `${safeIndex + 1} / ${wordsCount}`}
+    <motion.div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gallery-modal-title"
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 15 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 bg-white flex flex-col h-full w-full overflow-hidden"
+    >
+      {/* Full-Screen Header identical to WordChatModal (Ask AI) */}
+      <header className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3 border-b border-stone-200 bg-white shrink-0 shadow-2xs z-10">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 sm:p-2 -ml-1 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
+            aria-label="Back"
+            title="Close"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h2 id="gallery-modal-title" className="text-sm sm:text-lg font-bold text-stone-900 tracking-tight truncate">
+                {t("gallery_enriched_modal_title", appLanguage) || "Enriched Words Gallery"}
+              </h2>
+              {wordsCount > 0 && (
+                <span className="text-[9px] sm:text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                  {safeIndex + 1} / {wordsCount}
+                </span>
+              )}
+              {/* AI Model Badge in Modal Header */}
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-stone-100 text-stone-700 border border-stone-200 flex items-center gap-1.5 shrink-0"
+                title={`AI Model: ${formattedModelName}${providerDisplayName ? ` (${providerDisplayName})` : ""}`}
+              >
+                <Bot className="w-3 h-3 text-stone-500 shrink-0" />
+                <span className="truncate max-w-[130px] sm:max-w-[200px]">
+                  {formattedModelName}
+                </span>
+                {providerDisplayName && (
+                  <span className="text-stone-400 text-[9px] font-sans font-normal hidden sm:inline">
+                    • {providerDisplayName}
                   </span>
                 )}
-                {/* AI Model Badge in Modal Header */}
-                <span
-                  className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-sky-950/80 text-sky-300 border border-sky-600/50 flex items-center gap-1.5 shrink-0 shadow-2xs"
-                  title={`AI Model: ${formattedModelName}${providerDisplayName ? ` (${providerDisplayName})` : ""}`}
-                >
-                  <Bot className="w-3 h-3 text-sky-400 shrink-0" />
-                  <span className="truncate max-w-[130px] sm:max-w-[200px]">
-                    {formattedModelName}
-                  </span>
-                  {providerDisplayName && (
-                    <span className="text-sky-400/70 text-[9px] font-sans font-normal hidden sm:inline">
-                      • {providerDisplayName}
-                    </span>
-                  )}
-                </span>
-              </div>
-              <p className="text-[11px] text-stone-400 truncate">
-                {t("incomplete_words_rule_explainer", appLanguage) || "Review enriched words, navigate forward/backward, and regenerate with AI."}
-              </p>
+              </span>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors cursor-pointer"
-              title="Close Gallery (Esc)"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2 text-[11px] sm:text-xs text-stone-500 truncate leading-tight">
+              {currentWord ? (
+                <>
+                  <span className="text-stone-800 font-medium truncate font-serif italic">"{currentWord.word}"</span>
+                  {currentWord.partOfSpeech && (
+                    <span className="font-mono text-stone-500">• {currentWord.partOfSpeech}</span>
+                  )}
+                  {currentWord.translation && (
+                    <span className="text-stone-600 truncate">• {currentWord.translation}</span>
+                  )}
+                </>
+              ) : (
+                <span>{targetLanguage} &bull; {nativeLanguage}</span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Word Thumbnail / Pills Selector Strip */}
-        {wordsCount > 1 && (
-          <div
-            ref={wordPillsRef}
-            className="px-4 py-2 bg-stone-950/60 border-b border-stone-800/80 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0"
+        <div className="flex items-center gap-1 shrink-0">
+          {currentWord && (
+            <button
+              type="button"
+              onClick={() => speakText(currentWord.word)}
+              className="p-1.5 sm:p-2 rounded-full text-stone-600 hover:text-stone-950 hover:bg-stone-100 transition-colors cursor-pointer"
+              title={`Pronounce "${currentWord.word}"`}
+            >
+              <Volume2 className="w-5 h-5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 sm:p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
+            title="Close"
           >
-            {localWords.map((w, idx) => {
-              const isSelected = idx === safeIndex;
-              return (
-                <button
-                  key={w.id || idx}
-                  data-index={idx}
-                  type="button"
-                  onClick={() => {
-                    setNavDirection(idx > safeIndex ? 1 : -1);
-                    setCurrentIndex(idx);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    isSelected
-                      ? "bg-amber-500 text-stone-950 font-bold shadow-xs scale-102"
-                      : "bg-stone-800/80 hover:bg-stone-800 text-stone-300 border border-stone-700/60 hover:text-white"
-                  }`}
-                >
-                  <span className="font-mono text-[10px] opacity-75">{idx + 1}.</span>
-                  <span className="truncate max-w-[120px]">{w.word}</span>
-                  {w.completed && <CheckCircle2 className={`w-3 h-3 ${isSelected ? "text-stone-950" : "text-emerald-400"}`} />}
-                </button>
-              );
-            })}
-          </div>
-        )}
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
 
-        {/* Main Content Area */}
+      {/* Word Thumbnail / Pills Selector Strip */}
+      {wordsCount > 1 && (
         <div
-          className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 bg-stone-900"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
+          ref={wordPillsRef}
+          className="px-3 sm:px-6 py-2 bg-stone-50/80 border-b border-stone-200/80 flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0"
         >
-          {currentWord ? (
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={currentWord.id || safeIndex}
-                initial={{ opacity: 0, x: navDirection * 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -navDirection * 20 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="space-y-4"
+          {localWords.map((w, idx) => {
+            const isSelected = idx === safeIndex;
+            return (
+              <button
+                key={w.id || idx}
+                data-index={idx}
+                type="button"
+                onClick={() => {
+                  setNavDirection(idx > safeIndex ? 1 : -1);
+                  setCurrentIndex(idx);
+                }}
+                className={`px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  isSelected
+                    ? "bg-stone-900 text-white font-bold shadow-xs scale-102"
+                    : "bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 hover:text-stone-950"
+                }`}
               >
-                {/* Success Banner if Regenerated */}
-                {regeneratedSuccessId === currentWord.id && (
-                  <div className="p-3 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-emerald-200 text-xs font-bold flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>{t("gallery_regenerated_success", appLanguage) || "Word details regenerated successfully with AI!"}</span>
+                <span className="font-mono text-[10px] opacity-60">{idx + 1}.</span>
+                <span className="truncate max-w-[120px]">{w.word}</span>
+                {w.completed && <CheckCircle2 className={`w-3 h-3 ${isSelected ? "text-amber-400" : "text-emerald-600"}`} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <main
+        className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6 space-y-4 max-w-4xl w-full mx-auto bg-stone-50/30"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {currentWord ? (
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={currentWord.id || safeIndex}
+              initial={{ opacity: 0, x: navDirection * 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -navDirection * 20 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="space-y-4"
+            >
+              {/* Success Banner if Regenerated */}
+              {regeneratedSuccessId === currentWord.id && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-medium flex items-center justify-between gap-2 flex-wrap shadow-2xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-semibold">{t("gallery_regenerated_success", appLanguage) || "Word details regenerated successfully with AI!"}</span>
+                  </div>
+                  {lastEnrichmentMetadata?.model && (
+                    <span className="font-mono text-[11px] text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-300 flex items-center gap-1 shrink-0">
+                      <Bot className="w-3 h-3 text-emerald-600" />
+                      {lastEnrichmentMetadata.model}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Word Card container */}
+              <div className="bg-white border border-stone-200 rounded-2xl p-4 sm:p-6 space-y-5 shadow-xs">
+                {/* Top Word Header Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-200">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight font-serif">
+                        {currentWord.word}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => speakText(currentWord.word)}
+                        className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 transition-colors cursor-pointer"
+                        title="Listen Pronunciation"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    {lastEnrichmentMetadata?.model && (
-                      <span className="font-mono text-[11px] text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded border border-emerald-700/50 flex items-center gap-1 shrink-0">
-                        <Bot className="w-3 h-3 text-emerald-400" />
-                        {lastEnrichmentMetadata.model}
+
+                    {/* Meta Tags Row */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {currentWord.pronunciation && (
+                        <span className="text-xs font-mono text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded">
+                          {currentWord.pronunciation}
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold uppercase font-mono bg-stone-100 text-stone-700 px-2 py-0.5 rounded tracking-wider border border-stone-200">
+                        {currentWord.partOfSpeech || "word"}
                       </span>
+                      {currentWord.category && (
+                        <span className="text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded flex items-center gap-1">
+                          <span>🏷️</span>
+                          <span>{currentWord.category}</span>
+                        </span>
+                      )}
+                      <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                        <span>Auto-Enriched</span>
+                      </span>
+                      {/* Enriched AI Model Pill */}
+                      <span
+                        className="text-[10px] font-mono font-semibold text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded flex items-center gap-1.5 shadow-2xs"
+                        title={`AI Model used to enrich: ${formattedModelName}${providerDisplayName ? ` via ${providerDisplayName}` : ""}`}
+                      >
+                        <Bot className="w-2.5 h-2.5 text-sky-600 shrink-0" />
+                        <span>{formattedModelName}</span>
+                        {providerDisplayName && (
+                          <span className="text-sky-600 text-[9px] font-sans font-normal">({providerDisplayName})</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quick Card Controls */}
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {onToggleStar && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleStar(currentWord.id)}
+                        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                          currentWord.starred
+                            ? "bg-amber-50 text-amber-600 border-amber-300"
+                            : "bg-white text-stone-400 border-stone-200 hover:text-stone-700 hover:bg-stone-50"
+                        }`}
+                        title="Toggle Star"
+                      >
+                        <Star className={`w-4 h-4 ${currentWord.starred ? "fill-amber-400 text-amber-500" : ""}`} />
+                      </button>
+                    )}
+
+                    {onToggleLearned && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleLearned(currentWord.id)}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                          currentWord.learned
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${currentWord.learned ? "bg-emerald-500" : "bg-stone-400"}`} />
+                        <span>{currentWord.learned ? "Mastered" : "Learning"}</span>
+                      </button>
+                    )}
+
+                    {onAddWord && (
+                      <button
+                        type="button"
+                        onClick={() => onAddWord(currentWord.word, currentWord.context || currentWord.definition || currentWord.translation, currentWord)}
+                        className="p-2 rounded-xl bg-white hover:bg-stone-50 text-stone-600 border border-stone-200 transition-colors cursor-pointer"
+                        title="Edit word details"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {onAskAi && (
+                      <button
+                        type="button"
+                        onClick={() => onAskAi(currentWord)}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Ask AI about this word"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Ask AI</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Meaning Highlight Block */}
+                <div className="bg-amber-50/80 border border-amber-200/80 p-4 rounded-xl space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-amber-900 tracking-wider block font-mono">
+                    Meaning / Translation
+                  </span>
+                  <p className="text-base sm:text-lg font-bold text-stone-900 leading-snug">
+                    {currentWord.translation || "No translation available"}
+                  </p>
+                </div>
+
+                {/* Definition Block */}
+                {currentWord.definition && (
+                  <div className="space-y-1 bg-stone-50 border border-stone-200/80 p-3.5 sm:p-4 rounded-xl">
+                    <span className="text-[10px] font-mono font-bold uppercase text-stone-500 tracking-wider block">
+                      Definition ({targetLanguage})
+                    </span>
+                    <p className="text-xs sm:text-sm text-stone-800 font-serif italic leading-relaxed">
+                      "{currentWord.definition}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Context & Usage Domain */}
+                {currentWord.context && (
+                  <div className="space-y-1 bg-stone-50/70 border border-stone-200/70 p-3.5 rounded-xl">
+                    <span className="text-[10px] font-mono font-bold uppercase text-stone-500 tracking-wider block">
+                      Usage Context & Domain
+                    </span>
+                    <p className="text-xs text-stone-700 leading-relaxed font-sans">
+                      {currentWord.context}
+                    </p>
+                  </div>
+                )}
+
+                {/* Context Example Sentence */}
+                {currentWord.example && (
+                  <div className="bg-stone-50 border border-stone-200/80 p-4 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-500 block">
+                        Example Sentence
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {currentWord.exampleTranslation && (
+                          <button
+                            type="button"
+                            onClick={() => setShowExampleTranslation((prev) => !prev)}
+                            className={`px-2 py-1 rounded-lg border text-[11px] transition-colors flex items-center gap-1 cursor-pointer ${
+                              showExampleTranslation
+                                ? "bg-amber-100 text-amber-900 border-amber-300 font-semibold"
+                                : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                            }`}
+                            title={showExampleTranslation ? "Hide sentence translation" : "Show sentence translation"}
+                          >
+                            <Languages className="w-3.5 h-3.5" />
+                            <span className="text-[10px]">{showExampleTranslation ? "Hide" : "Translate"}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => speakText(currentWord.example!)}
+                          className="p-1 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 transition-colors flex items-center justify-center cursor-pointer"
+                          title="Listen to example sentence"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="font-serif italic text-stone-900 text-sm leading-relaxed">
+                      "{currentWord.example}"
+                    </p>
+
+                    {currentWord.exampleTranslation && showExampleTranslation && (
+                      <p className="text-xs text-stone-600 font-sans border-t border-stone-200 pt-2 mt-1.5">
+                        {currentWord.exampleTranslation}
+                      </p>
                     )}
                   </div>
                 )}
 
-                {/* Word Card Cardboard container */}
-                <div className="bg-stone-850 border border-stone-700 rounded-xl p-4 sm:p-5 space-y-4 shadow-md">
-                  {/* Top Word Header Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-750">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <h2 className="text-2xl sm:text-3xl font-bold text-stone-100 tracking-tight font-serif">
-                          {currentWord.word}
-                        </h2>
-                        <button
-                          type="button"
-                          onClick={() => speakText(currentWord.word)}
-                          className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-colors cursor-pointer"
-                          title="Listen Pronunciation (Space)"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Meta Tags Row: Pronunciation, Part of Speech, Category */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {currentWord.pronunciation && (
-                          <span className="text-xs font-mono text-stone-300 bg-stone-800 border border-stone-700 px-2 py-0.5 rounded">
-                            {currentWord.pronunciation}
-                          </span>
-                        )}
-                        <span className="text-[10px] font-bold uppercase font-mono bg-stone-700 text-amber-300 px-2 py-0.5 rounded tracking-wider border border-stone-600">
-                          {currentWord.partOfSpeech || "word"}
-                        </span>
-                        {currentWord.category && (
-                          <span className="text-[10px] font-medium bg-amber-950/60 text-amber-300 border border-amber-800/60 px-2 py-0.5 rounded flex items-center gap-1">
-                            <span>🏷️</span>
-                            <span>{currentWord.category}</span>
-                          </span>
-                        )}
-                        <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded flex items-center gap-1">
-                          <Sparkles className="w-2.5 h-2.5" />
-                          <span>Auto-Enriched</span>
-                        </span>
-                        {/* Enriched AI Model Pill */}
-                        <span
-                          className="text-[10px] font-mono font-semibold text-sky-300 bg-sky-950/70 border border-sky-600/50 px-2 py-0.5 rounded flex items-center gap-1.5 shadow-2xs"
-                          title={`AI Model used to enrich: ${formattedModelName}${providerDisplayName ? ` via ${providerDisplayName}` : ""}`}
-                        >
-                          <Bot className="w-2.5 h-2.5 text-sky-400 shrink-0" />
-                          <span>{formattedModelName}</span>
-                          {providerDisplayName && (
-                            <span className="text-sky-400/70 text-[9px] font-sans font-normal">({providerDisplayName})</span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Quick Card Controls */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {onToggleStar && (
-                        <button
-                          type="button"
-                          onClick={() => onToggleStar(currentWord.id)}
-                          className={`p-2 rounded-lg border transition-colors cursor-pointer ${
-                            currentWord.starred
-                              ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
-                              : "bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200"
-                          }`}
-                          title="Toggle Star"
-                        >
-                          <Star className={`w-4 h-4 ${currentWord.starred ? "fill-amber-400" : ""}`} />
-                        </button>
-                      )}
-
-                      {onToggleLearned && (
-                        <button
-                          type="button"
-                          onClick={() => onToggleLearned(currentWord.id)}
-                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                            currentWord.learned
-                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                              : "bg-stone-800 text-stone-300 border-stone-700 hover:text-stone-100"
-                          }`}
-                        >
-                          <span className={`w-2 h-2 rounded-full ${currentWord.learned ? "bg-emerald-400" : "bg-stone-500"}`} />
-                          <span>{currentWord.learned ? "Mastered" : "Learning"}</span>
-                        </button>
-                      )}
-
-                      {onAddWord && (
-                        <button
-                          type="button"
-                          onClick={() => onAddWord(currentWord.word, currentWord.context || currentWord.definition || currentWord.translation, currentWord)}
-                          className="p-2 rounded-lg bg-stone-800 hover:bg-stone-750 text-stone-300 border border-stone-700 transition-colors cursor-pointer"
-                          title="Edit word details"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Meaning Highlight Block */}
-                  <div className="bg-amber-950/30 border border-amber-500/30 p-3.5 rounded-xl space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-amber-400 tracking-wider block">
-                      Meaning / Translation
+                {/* Suggested Companion Vocabulary */}
+                {currentWord.suggestedWords && currentWord.suggestedWords.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <span className="text-[10px] font-mono font-bold uppercase text-stone-500 tracking-wider block">
+                      Commonly Paired Vocabulary
                     </span>
-                    <p className="text-base sm:text-lg font-bold text-stone-100 leading-snug">
-                      {currentWord.translation || "No translation available"}
-                    </p>
-                  </div>
-
-                  {/* Definition Block */}
-                  {currentWord.definition && (
-                    <div className="space-y-1 bg-stone-900/90 border border-stone-750 p-3 rounded-xl">
-                      <span className="text-[10px] font-mono font-bold uppercase text-stone-400 tracking-wider block">
-                        Definition ({targetLanguage})
-                      </span>
-                      <p className="text-xs sm:text-sm text-stone-200 font-serif italic leading-relaxed">
-                        "{currentWord.definition}"
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Context & Usage Domain */}
-                  {currentWord.context && (
-                    <div className="space-y-1 bg-stone-900/60 border border-stone-800 p-3 rounded-xl">
-                      <span className="text-[10px] font-mono font-bold uppercase text-stone-400 tracking-wider block">
-                        Usage Context & Domain
-                      </span>
-                      <p className="text-xs text-stone-300 leading-relaxed font-sans">
-                        {currentWord.context}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Context Example Sentence */}
-                  {currentWord.example && (
-                    <div className="bg-stone-900/80 border border-stone-750 p-3.5 rounded-xl space-y-2 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400 block">
-                          Example Sentence
-                        </span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {currentWord.exampleTranslation && (
-                            <button
-                              type="button"
-                              onClick={() => setShowExampleTranslation((prev) => !prev)}
-                              className={`p-1 rounded border text-[11px] transition-colors flex items-center gap-1 cursor-pointer ${
-                                showExampleTranslation
-                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                                  : "bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200"
-                              }`}
-                              title={showExampleTranslation ? "Hide sentence translation" : "Show sentence translation"}
-                            >
-                              <Languages className="w-3.5 h-3.5" />
-                              <span className="text-[10px]">{showExampleTranslation ? "Hide" : "Translate"}</span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => speakText(currentWord.example!)}
-                            className="p-1 rounded border border-stone-700 bg-stone-800 hover:bg-stone-750 text-stone-300 transition-colors flex items-center justify-center cursor-pointer"
-                            title="Listen to example sentence"
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {currentWord.suggestedWords.map((s, idx) => {
+                        const sWordText = typeof s === "string" ? s : s.word;
+                        const sWordTranslation = typeof s === "string" ? undefined : s.translation;
+                        const isAdded = addedSuggestedWords.has(sWordText);
+                        return (
+                          <div
+                            key={idx}
+                            className="px-2.5 py-1 rounded-lg bg-stone-100 border border-stone-200 flex items-center gap-2 text-xs"
                           >
-                            <Volume2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="font-serif italic text-stone-100 text-sm leading-relaxed">
-                        "{currentWord.example}"
-                      </p>
-
-                      {currentWord.exampleTranslation && showExampleTranslation && (
-                        <p className="text-xs text-stone-400 font-sans border-t border-stone-800 pt-1.5 mt-1">
-                          {currentWord.exampleTranslation}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Suggested Companion Vocabulary */}
-                  {currentWord.suggestedWords && currentWord.suggestedWords.length > 0 && (
-                    <div className="space-y-2 pt-1">
-                      <span className="text-[10px] font-mono font-bold uppercase text-stone-400 tracking-wider block">
-                        Commonly Paired Vocabulary
-                      </span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {currentWord.suggestedWords.map((s, idx) => {
-                          const sWordText = typeof s === "string" ? s : s.word;
-                          const sWordTranslation = typeof s === "string" ? undefined : s.translation;
-                          const isAdded = addedSuggestedWords.has(sWordText);
-                          return (
-                            <div
-                              key={idx}
-                              className="px-2.5 py-1 rounded-lg bg-stone-800 border border-stone-700 flex items-center gap-2 text-xs"
-                            >
-                              <span className="font-bold text-stone-200">{sWordText}</span>
-                              {sWordTranslation && <span className="text-stone-400 text-[11px]">— {sWordTranslation}</span>}
-                              {onAddWord && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddSuggestedWord(sWordText, sWordTranslation)}
-                                  disabled={isAdded}
-                                  className={`p-1 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
-                                    isAdded
-                                      ? "text-emerald-400 bg-emerald-950/40"
-                                      : "text-amber-400 hover:text-amber-300 bg-amber-500/15 hover:bg-amber-500/25"
-                                  }`}
-                                  title={isAdded ? "Added to collection" : "Add to collection"}
-                                >
-                                  {isAdded ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Visual Word Images Section */}
-                  <div className="pt-2 border-t border-stone-800">
-                    <WordImageGallery
-                      word={currentWord}
-                      onImagesChange={handleImagesChange}
-                      llmConfig={llmConfig}
-                      className="rounded-xl border-stone-700 bg-stone-900"
-                    />
-                  </div>
-
-                  {/* Memory Strength, SRS Info, & AI Model */}
-                  <div className="pt-3 border-t border-stone-800 flex flex-wrap items-center justify-between gap-2.5 text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[10px] text-stone-400 uppercase font-mono">Memory Strength:</span>
-                      <MemoryStrengthBar strength={currentWord.strength || 0} />
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0 flex-wrap">
-                      <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                        <span className="text-stone-400">{t("gallery_model_label", appLanguage) || "Model"}:</span>
-                        <span className="text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/60 flex items-center gap-1 font-semibold">
-                          <Bot className="w-2.5 h-2.5 text-sky-400" />
-                          {formattedModelName}
-                          {providerDisplayName && <span className="opacity-70 font-normal">({providerDisplayName})</span>}
-                        </span>
-                      </div>
-
-                      {currentWord.lastReviewed && (
-                        <span className="text-[10px] text-stone-400 font-mono">
-                          Reviewed: {new Date(currentWord.lastReviewed).toLocaleDateString()}
-                        </span>
-                      )}
+                            <span className="font-bold text-stone-800">{sWordText}</span>
+                            {sWordTranslation && <span className="text-stone-500 text-[11px]">— {sWordTranslation}</span>}
+                            {onAddWord && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddSuggestedWord(sWordText, sWordTranslation)}
+                                disabled={isAdded}
+                                className={`p-1 rounded text-[10px] font-semibold transition-colors cursor-pointer ${
+                                  isAdded
+                                    ? "text-emerald-700 bg-emerald-100"
+                                    : "text-amber-800 hover:text-amber-900 bg-amber-100 hover:bg-amber-200"
+                                }`}
+                                title={isAdded ? "Added to collection" : "Add to collection"}
+                              >
+                                {isAdded ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
+                )}
 
-                  {/* Regenerated Response Metadata */}
-                  {lastEnrichmentMetadata && regeneratedSuccessId === currentWord.id && (
-                    <LlmResponseMetadata
-                      provider={lastEnrichmentMetadata.provider || effectiveWordProvider}
-                      model={lastEnrichmentMetadata.model || effectiveWordModel}
-                      responseTimeMs={lastEnrichmentMetadata.responseTimeMs}
-                      dark={true}
-                      className="mt-2 pt-2 border-stone-800"
-                    />
-                  )}
+                {/* Visual Word Images Section */}
+                <div className="pt-2 border-t border-stone-200">
+                  <WordImageGallery
+                    word={currentWord}
+                    onImagesChange={handleImagesChange}
+                    llmConfig={llmConfig}
+                    className="rounded-xl border-stone-200 bg-stone-50/50"
+                  />
                 </div>
-              </motion.div>
-            </AnimatePresence>
-          ) : (
-            <div className="p-12 text-center space-y-3 bg-stone-850 rounded-xl border border-stone-800">
-              <BookOpen className="w-8 h-8 text-stone-500 mx-auto" />
-              <h4 className="text-sm font-bold text-stone-200">
-                {t("gallery_empty_title", appLanguage) || "No Enriched Words Found"}
-              </h4>
-              <p className="text-xs text-stone-400 max-w-sm mx-auto">
-                {t("gallery_empty_desc", appLanguage) || "No auto-completed words are available to display right now."}
-              </p>
-            </div>
-          )}
-        </div>
 
-        {/* Gallery Navigation and Action Bar Footer */}
-        <div className="px-4 py-3 sm:px-6 bg-stone-900 border-t border-stone-800 flex items-center justify-between gap-3 shrink-0">
+                {/* Memory Strength, SRS Info, & AI Model */}
+                <div className="pt-3 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2.5 text-xs text-stone-600">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] text-stone-500 uppercase font-mono">Memory Strength:</span>
+                    <MemoryStrengthBar strength={currentWord.strength || 0} />
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                      <span className="text-stone-500">{t("gallery_model_label", appLanguage) || "Model"}:</span>
+                      <span className="text-stone-800 bg-stone-100 px-2 py-0.5 rounded border border-stone-200 flex items-center gap-1 font-semibold">
+                        <Bot className="w-2.5 h-2.5 text-stone-600" />
+                        {formattedModelName}
+                        {providerDisplayName && <span className="opacity-70 font-normal">({providerDisplayName})</span>}
+                      </span>
+                    </div>
+
+                    {currentWord.lastReviewed && (
+                      <span className="text-[10px] text-stone-500 font-mono">
+                        Reviewed: {new Date(currentWord.lastReviewed).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Regenerated Response Metadata */}
+                {lastEnrichmentMetadata && regeneratedSuccessId === currentWord.id && (
+                  <LlmResponseMetadata
+                    provider={lastEnrichmentMetadata.provider || effectiveWordProvider}
+                    model={lastEnrichmentMetadata.model || effectiveWordModel}
+                    responseTimeMs={lastEnrichmentMetadata.responseTimeMs}
+                    dark={false}
+                    className="mt-2 pt-2 border-stone-200"
+                  />
+                )}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        ) : (
+          <div className="p-12 text-center space-y-3 bg-white rounded-2xl border border-stone-200 shadow-xs">
+            <BookOpen className="w-8 h-8 text-stone-400 mx-auto" />
+            <h4 className="text-sm font-bold text-stone-800">
+              {t("gallery_empty_title", appLanguage) || "No Enriched Words Found"}
+            </h4>
+            <p className="text-xs text-stone-500 max-w-sm mx-auto">
+              {t("gallery_empty_desc", appLanguage) || "No auto-completed words are available to display right now."}
+            </p>
+          </div>
+        )}
+      </main>
+
+      {/* Gallery Navigation and Action Bar Footer matching Ask AI / WordAddModal */}
+      <footer className="border-t border-stone-200 bg-white p-3 sm:px-6 py-2.5 sm:py-3 shrink-0 shadow-2xs z-10">
+        <div className="max-w-4xl w-full mx-auto flex items-center justify-between gap-3">
           {/* Previous Button */}
           <button
             type="button"
             onClick={handlePrev}
             disabled={wordsCount <= 1}
-            className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-750 disabled:opacity-40 disabled:cursor-not-allowed text-stone-200 border border-stone-700 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            className="px-3.5 py-2 rounded-xl bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed text-stone-700 border border-stone-200 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             title="Previous Word (Arrow Left)"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -797,7 +848,7 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
             type="button"
             onClick={handleRegenerateWord}
             disabled={!currentWord || isRegenerating}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 disabled:opacity-50 disabled:cursor-not-allowed text-stone-950 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20"
+            className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-98"
             title="Regenerate this word's definition and examples with AI (R)"
           >
             <RefreshCw className={`w-4 h-4 ${isRegenerating ? "animate-spin" : ""}`} />
@@ -813,15 +864,15 @@ export const EnrichedWordsGalleryModal: React.FC<EnrichedWordsGalleryModalProps>
             type="button"
             onClick={handleNext}
             disabled={wordsCount <= 1}
-            className="px-3.5 py-2 rounded-xl bg-stone-800 hover:bg-stone-750 disabled:opacity-40 disabled:cursor-not-allowed text-stone-200 border border-stone-700 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            className="px-3.5 py-2 rounded-xl bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed text-stone-700 border border-stone-200 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             title="Next Word (Arrow Right)"
           >
             <span className="hidden sm:inline">{t("gallery_nav_next", appLanguage) || "Next"}</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-      </div>
-    </div>,
+      </footer>
+    </motion.div>,
     document.body
   );
 };

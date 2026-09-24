@@ -142,18 +142,18 @@ export default function WordDetailsModal({
         onClick={(e) => e.stopPropagation()}
         id="word-details-modal-container"
       >
-        {/* Modal Header */}
-        <div className="bg-stone-900 text-white p-4 sm:p-4.5 flex items-center justify-between gap-3 border-b border-stone-800 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-amber-400 text-stone-950 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              <BookOpen className="w-4 h-4" />
+        {/* Modal Header matching Ask AI style */}
+        <div className="bg-white text-stone-900 px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 border-b border-stone-200 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+              <BookOpen className="w-4 h-4 text-amber-700" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold tracking-wide uppercase text-amber-300">
+                <h3 className="text-sm font-bold text-stone-900">
                   Word Details
                 </h3>
-                <span className="text-[10px] font-mono bg-stone-800 text-stone-300 px-2 py-0.5 rounded-full border border-stone-700">
+                <span className="text-[10px] font-mono bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full border border-stone-200">
                   Collection Entry
                 </span>
               </div>
@@ -163,7 +163,7 @@ export default function WordDetailsModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-stone-800 text-stone-400 hover:text-white hover:bg-stone-700 transition-all cursor-pointer shrink-0"
+            className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-all cursor-pointer shrink-0"
             title="Close"
             id="word-details-modal-close-btn"
           >

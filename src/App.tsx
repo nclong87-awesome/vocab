@@ -902,6 +902,9 @@ export default function App() {
         onToggleStar={handleToggleStar}
         onToggleLearned={handleToggleLearned}
         onAddWord={handleOpenAddWordModal}
+        onAskAi={(word) => {
+          setSelectedWordForChat(word);
+        }}
         targetLanguage={targetLanguage}
         nativeLanguage={nativeLanguage}
         appLanguage={appLanguage}
