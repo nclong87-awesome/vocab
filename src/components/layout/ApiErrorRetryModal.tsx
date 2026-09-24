@@ -1,6 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, ShieldAlert, X, RefreshCw } from "lucide-react";
 import { t } from "../../config/i18n";
+import { extractCleanErrorMessage } from "../../utils/llmHelpers";
+
+function renderCleanErrorContent(text: string) {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s)]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-rose-700 underline font-medium hover:text-rose-900 break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
 
 export interface ApiErrorRetryModalProps {
   isOpen: boolean;
@@ -120,14 +143,17 @@ export default function ApiErrorRetryModal({
     onCloseRef.current();
   };
 
-  // Format error message using current language translations
-  let formattedError = errorMessage || t("api_error_fallback", currentAppLang);
-  if (formattedError.includes("Timeout 30s") || formattedError.includes("30 seconds") || formattedError.includes("30 giây")) {
-    formattedError = t("api_error_timeout_desc", currentAppLang, { model: failedModel });
-  } else if (formattedError.includes("HTTP 401") || formattedError.includes("Unauthorized")) {
-    const prefix = t("api_error_model_failed_prefix", currentAppLang, { model: failedModel });
-    formattedError = `${prefix}: HTTP 401: Unauthorized.`;
-  }
+  // Format error message: show error message only
+  const isTimeout =
+    errorMessage.includes("Timeout 30s") ||
+    errorMessage.includes("30 seconds") ||
+    errorMessage.includes("30 giây") ||
+    errorMessage.toLowerCase().includes("timed out");
+
+  const cleanMsg = extractCleanErrorMessage(errorMessage);
+  const formattedError = isTimeout
+    ? t("api_error_timeout_desc", currentAppLang, { model: failedModel })
+    : cleanMsg || t("api_error_fallback", currentAppLang);
 
   return (
     <div
@@ -172,7 +198,7 @@ export default function ApiErrorRetryModal({
         <div className="flex flex-col gap-2.5 mb-1">
           {/* Card 1: Error details */}
           <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200/80 text-xs text-rose-950 font-normal leading-relaxed break-words font-sans">
-            {formattedError}
+            {renderCleanErrorContent(formattedError)}
           </div>
 
           {/* Card 2: Circuit Breaker isolation status */}

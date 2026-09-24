@@ -4,6 +4,7 @@ import ApiCallProgressModal from "./ApiCallProgressModal";
 import ApiErrorRetryModal from "./ApiErrorRetryModal";
 import { lockModel, recordModelFailure } from "../../utils/autoModeManager";
 import { t } from "../../config/i18n";
+import { extractCleanErrorMessage } from "../../utils/llmHelpers";
 import {
   subscribeLlmRequestStart,
   subscribeLlmRequestEnd,
@@ -258,7 +259,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       setErrorState({
         isOpen: true,
         errorId: `err-${Date.now()}-${Math.random()}`,
-        errorMessage: data.errorMessage,
+        errorMessage: extractCleanErrorMessage(data.errorMessage),
         failedModel: data.model,
         retryAttempt: data.retryAttempt ?? 1,
         maxRetries: data.maxRetries ?? 3,

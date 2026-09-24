@@ -27,6 +27,7 @@ import { getRotatedVisionModel } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
 import { lockModel } from "../utils/autoModeManager";
+import { extractCleanErrorMessage } from "../utils/llmHelpers";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError, publishCloseLlmModals, publishLlmRequestEnd } from "../utils/llmEvents";
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
@@ -220,9 +221,10 @@ export function useChat({
       (typeof window !== "undefined" ? localStorage.getItem("vocab_learner_app_lang") : null) ||
       "en";
 
+    const cleanMsg = extractCleanErrorMessage(rawMsg);
     const displayErrorMsg = isTimeout
       ? t("api_error_timeout_desc", currentAppLang, { model: failedModel || "" })
-      : rawMsg;
+      : cleanMsg || t("api_error_fallback", currentAppLang);
 
     if (failedProvider && failedModel && (currentConfig.provider === "auto" || currentConfig.model === "auto")) {
       lockModel(failedProvider, failedModel, 3600000, displayErrorMsg);
@@ -276,13 +278,13 @@ export function useChat({
     const errorMsg: ChatMessage = {
       id: errorMsgId,
       role: "assistant",
-      content: rawMsg,
+      content: displayErrorMsg,
       timestamp: new Date().toISOString(),
       provider: failedProvider,
       model: failedModel,
       isError: true,
       errorInfo: {
-        message: rawMsg,
+        message: displayErrorMsg,
         provider: failedProvider,
         model: failedModel,
         isTimeout,

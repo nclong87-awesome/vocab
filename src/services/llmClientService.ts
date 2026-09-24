@@ -1,7 +1,7 @@
 import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile, QuizSuggestedWord } from "../types";
 import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions, isQuestionSentenceValid, getDefaultContextSentence, extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { areWordsEquivalent, isNoun, isPhrasalVerb } from "../utils/wordNormalization";
-import { resizeImageDataUrl } from "../utils/llmHelpers";
+import { resizeImageDataUrl, extractCleanErrorMessage } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
@@ -219,6 +219,26 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
     };
   }
 
+  // 1b. Insufficient Credits / Payment Required (402)
+  if (
+    statusCode === 402 ||
+    lowerMsg.includes("credit") ||
+    lowerMsg.includes("afford") ||
+    lowerMsg.includes("payment required") ||
+    lowerMsg.includes("insufficient balance")
+  ) {
+    const cleanExtracted = extractCleanErrorMessage(originalMessage);
+    return {
+      statusCode: 402,
+      errorType: "UNKNOWN",
+      userMessage: cleanExtracted || `Insufficient Credits (402): Your ${provUpper} account requires more credits to complete this request.`,
+      originalMessage,
+      isRetryable: false,
+      provider,
+      rawResponse
+    };
+  }
+
   // 2. Permission Denied / Access Forbidden (403)
   if (
     statusCode === 403 ||
@@ -360,10 +380,11 @@ export function parseLlmError(err: any, provider: string = "gemini"): ParsedLlmE
   }
 
   // Default fallback error
+  const cleanFallback = extractCleanErrorMessage(originalMessage);
   return {
     statusCode: statusCode || 400,
     errorType: "UNKNOWN",
-    userMessage: `${provUpper} Connection Error: ${originalMessage || "Failed to communicate with LLM model."}`,
+    userMessage: cleanFallback || `${provUpper} Connection Error: Failed to communicate with LLM model.`,
     originalMessage,
     isRetryable: statusCode >= 500 || statusCode === 429,
     provider,

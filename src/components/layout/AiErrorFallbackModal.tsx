@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { AlertCircle, RefreshCw, Check, X, Bot } from "lucide-react";
 import { LLMConfig, LLMProvider } from "../../types";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
-import { getProviderDisplayName } from "../../utils/llmHelpers";
+import { getProviderDisplayName, extractCleanErrorMessage } from "../../utils/llmHelpers";
 import { isModelLocked } from "../../utils/autoModeManager";
 import { getStoredAccessCode } from "../../utils";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
@@ -104,7 +104,7 @@ export default function AiErrorFallbackModal({
                 Error Details:
               </span>
               <p className="text-xs text-red-950 leading-relaxed font-mono break-words">
-                {errorMessage || "Failed to communicate with AI provider."}
+                {extractCleanErrorMessage(errorMessage) || "Failed to communicate with AI provider."}
               </p>
             </div>
 

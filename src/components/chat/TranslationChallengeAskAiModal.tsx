@@ -22,6 +22,7 @@ import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import { recordUserInquiry } from "../../services/userInquiryService";
 import { publishLlmApiError } from "../../utils/llmEvents";
+import { extractCleanErrorMessage } from "../../utils/llmHelpers";
 
 interface TranslationChallengeAskAiModalProps {
   isOpen: boolean;
@@ -297,9 +298,10 @@ USER LATEST INQUIRY:
         err?.userMessage ||
         err?.message ||
         (typeof err === "string" ? err : "Failed to get AI response. Please try again.");
-      setErrorMsg(rawMsg);
+      const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
+      setErrorMsg(cleanMsg);
       publishLlmApiError({
-        errorMessage: rawMsg,
+        errorMessage: cleanMsg,
         provider: err?.provider || overrideConfig?.provider || llmConfig?.provider || "auto",
         model: err?.model || overrideConfig?.model || llmConfig?.model || "auto",
         action: "challenge_ask_ai",

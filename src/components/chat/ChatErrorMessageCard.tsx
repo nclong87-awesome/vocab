@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { Clock, RefreshCw, X, AlertTriangle } from "lucide-react";
 import { ChatMessage, LLMConfig } from "../../types";
 import { t } from "../../config/i18n";
+import { extractCleanErrorMessage } from "../../utils/llmHelpers";
 
 interface ChatErrorMessageCardProps {
   msg: ChatMessage;
@@ -107,7 +108,7 @@ export default function ChatErrorMessageCard({
 
       {/* Error Message Details */}
       <div className="text-xs sm:text-sm text-stone-700 bg-white/70 rounded-xl p-3 border border-rose-100/80 mb-3.5 leading-relaxed break-words font-mono">
-        {msg.errorInfo?.message || msg.content || "An error occurred while communicating with the AI service."}
+        {extractCleanErrorMessage(msg.errorInfo?.message || msg.content) || "An error occurred while communicating with the AI service."}
       </div>
 
       {/* Countdown & Action Bar */}

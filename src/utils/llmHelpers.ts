@@ -445,3 +445,107 @@ export function resizeImageDataUrl(dataUrl: string, maxDimension = 1600, quality
     img.src = dataUrl;
   });
 }
+
+/**
+ * Extracts a clean, user-readable error message from raw error objects,
+ * JSON error bodies (e.g. OpenRouter, Gemini, OpenAI, Anthropic), or prefixed strings.
+ * Discards raw JSON structures, internal metadata, user IDs, previous_errors arrays,
+ * and repetitive provider/connection error prefixes to show only the actual error message.
+ */
+export function extractCleanErrorMessage(rawError: any): string {
+  if (!rawError) return "";
+
+  let str = "";
+  if (typeof rawError === "string") {
+    str = rawError;
+  } else if (typeof rawError === "object") {
+    if (rawError.userMessage && typeof rawError.userMessage === "string") {
+      str = rawError.userMessage;
+    } else if (rawError.message && typeof rawError.message === "string") {
+      str = rawError.message;
+    } else if (rawError.error?.message && typeof rawError.error.message === "string") {
+      str = rawError.error.message;
+    } else {
+      try {
+        str = JSON.stringify(rawError);
+      } catch {
+        str = String(rawError);
+      }
+    }
+  } else {
+    str = String(rawError);
+  }
+
+  str = str.trim();
+
+  // Try extracting inner message if a JSON object substring exists
+  const jsonStart = str.indexOf("{");
+  const jsonEnd = str.lastIndexOf("}");
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    const jsonSub = str.substring(jsonStart, jsonEnd + 1);
+    try {
+      const parsed = JSON.parse(jsonSub);
+      const extracted =
+        parsed?.error?.message ||
+        (typeof parsed?.error === "string" ? parsed.error : null) ||
+        parsed?.message ||
+        parsed?.detail ||
+        parsed?.error_description ||
+        (Array.isArray(parsed?.errors) ? parsed.errors[0]?.message : null) ||
+        (Array.isArray(parsed?.error) ? parsed.error[0]?.message : null) ||
+        (parsed?.error?.details?.[0]?.message) ||
+        (parsed?.error?.status && parsed?.error?.code ? `${parsed.error.status}: ${parsed.error.code}` : null);
+
+      if (extracted && typeof extracted === "string" && extracted.trim()) {
+        return extractCleanErrorMessage(extracted.trim());
+      }
+    } catch {
+      // Regex fallback if JSON.parse fails
+      const msgMatch = jsonSub.match(/"message"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (msgMatch && msgMatch[1]) {
+        try {
+          const unescaped = JSON.parse(`"${msgMatch[1]}"`);
+          if (unescaped && typeof unescaped === "string" && unescaped.trim()) {
+            return extractCleanErrorMessage(unescaped.trim());
+          }
+        } catch {
+          const cleanedRegex = msgMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\").trim();
+          if (cleanedRegex) {
+            return extractCleanErrorMessage(cleanedRegex);
+          }
+        }
+      }
+    }
+  }
+
+  // Strip repetitive prefixes like "OPENROUTER Connection Error: OPENROUTER API Error (402): "
+  let cleaned = str;
+  let prev = "";
+  while (cleaned !== prev) {
+    prev = cleaned;
+    cleaned = cleaned
+      .replace(/^[A-Za-z0-9_/-]+\s+Connection Error:\s*/i, "")
+      .replace(/^[A-Za-z0-9_/-]+\s+API Error\s*(?:\(\d+\))?:\s*/i, "")
+      .replace(/^API Error\s*(?:\(\d+\))?:\s*/i, "")
+      .replace(/^HTTP\s*\d{3}(?::\s*|\s+)/i, "")
+      .replace(/^Error:\s*/i, "")
+      .replace(/^Uncaught\s+(?:Error:\s*)?/i, "")
+      .trim();
+  }
+
+  // If after stripping prefixes, it still looks like a JSON object, attempt one more parse
+  if (cleaned.startsWith("{") && cleaned.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(cleaned);
+      const msg = parsed?.error?.message || parsed?.message || (typeof parsed?.error === "string" ? parsed.error : null);
+      if (msg && typeof msg === "string" && msg.trim()) {
+        return msg.trim();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  return cleaned || str;
+}
+

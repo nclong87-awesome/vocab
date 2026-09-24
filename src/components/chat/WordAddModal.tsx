@@ -26,6 +26,7 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { findWordInCollection, isCompletedWord, isIncompleteWord, isNoun, isPhrasalVerb, normalizeWordCategory, normalizeWordPartOfSpeech } from "../../utils/wordNormalization";
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
+import { extractCleanErrorMessage } from "../../utils/llmHelpers";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen, publishLlmRequestEnd, publishCloseLlmModals, publishLlmApiError } from "../../utils/llmEvents";
 import ChatMessageItem from "./ChatMessageItem";
 import LlmProgressIndicator from "./LlmProgressIndicator";
@@ -304,17 +305,18 @@ export default function WordAddModal({
         const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
         questionRetryAttemptsRef.current = currentAttempt;
 
+        const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
         const errorMsgId = `error-q-${Date.now()}`;
         const errorMsg: ChatMessage = {
           id: errorMsgId,
           role: "assistant",
-          content: rawMsg,
+          content: cleanMsg,
           timestamp: new Date().toISOString(),
           provider: failedProvider,
           model: failedModel,
           isError: true,
           errorInfo: {
-            message: rawMsg,
+            message: cleanMsg,
             provider: failedProvider,
             model: failedModel,
             isTimeout: Boolean(err?.isTimeout || String(rawMsg).toLowerCase().includes("timeout")),
@@ -333,7 +335,7 @@ export default function WordAddModal({
         });
 
         publishLlmApiError({
-          errorMessage: rawMsg,
+          errorMessage: cleanMsg,
           provider: failedProvider,
           model: failedModel,
           action: "chat",
@@ -794,17 +796,18 @@ export default function WordAddModal({
         const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
         retryAttemptsRef.current = currentAttempt;
 
+        const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
         const errorMsgId = `error-${Date.now()}`;
         const errorMsg: ChatMessage = {
           id: errorMsgId,
           role: "assistant",
-          content: rawMsg,
+          content: cleanMsg,
           timestamp: new Date().toISOString(),
           provider: failedProvider,
           model: failedModel,
           isError: true,
           errorInfo: {
-            message: rawMsg,
+            message: cleanMsg,
             provider: failedProvider,
             model: failedModel,
             isTimeout: Boolean(err?.isTimeout || String(rawMsg).toLowerCase().includes("timeout")),
@@ -823,7 +826,7 @@ export default function WordAddModal({
         });
 
         publishLlmApiError({
-          errorMessage: rawMsg,
+          errorMessage: cleanMsg,
           provider: failedProvider,
           model: failedModel,
           action: "chat",

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { LLMConfig, TTSConfig, LLMProvider } from "../types";
 import { getDefaultLLMConfig } from "../config/llmProviders";
 import { DEFAULT_TTS_CONFIG } from "../utils/ttsService";
-import { switchActiveProvider, sanitizeLlmConfig } from "../utils/llmHelpers";
+import { switchActiveProvider, sanitizeLlmConfig, extractCleanErrorMessage } from "../utils/llmHelpers";
 import { lockModel } from "../utils/autoModeManager";
 import { publishLlmApiError } from "../utils/llmEvents";
 import {
@@ -43,11 +43,12 @@ export function useLlmAndTtsConfig() {
     retryAction: (newConfig: LLMConfig) => void
   ) => {
     const rawMsg = err?.userMessage || err?.message || (typeof err === "string" ? err : "Failed to communicate with AI provider.");
+    const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
     const provider = err?.provider || currentConfig.provider || "groq";
     const model = err?.model || currentConfig.model || "9flare/pro/gpt-5.6-luna";
 
     if (provider && model) {
-      lockModel(provider, model, 3600000, rawMsg);
+      lockModel(provider, model, 3600000, cleanMsg);
     }
 
     const prevAttempts = retryAttemptsRef.current;
@@ -55,7 +56,7 @@ export function useLlmAndTtsConfig() {
     retryAttemptsRef.current = currentAttempt;
 
     publishLlmApiError({
-      errorMessage: rawMsg,
+      errorMessage: cleanMsg,
       provider,
       model,
       retryAttempt: currentAttempt,
@@ -73,7 +74,7 @@ export function useLlmAndTtsConfig() {
 
     setAiErrorModal({
       isOpen: false,
-      errorMessage: rawMsg,
+      errorMessage: cleanMsg,
       failedProvider: provider as LLMProvider,
       retryAction
     });
