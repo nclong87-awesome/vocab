@@ -8,6 +8,7 @@ import PhotoCaptureModal from "./chat/PhotoCaptureModal";
 import MessageList from "./chat/MessageList";
 import QuickActionsSection from "./chat/QuickActionsSection";
 import ChatInputForm from "./chat/ChatInputForm";
+import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -94,6 +95,9 @@ function ChatView({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+
+  // Virtual keyboard detection: hide quick actions when keyboard is open to maximize spaces for chat messages & vocab hints
+  const isKeyboardOpen = useVirtualKeyboard({ inputRef });
 
   // Listen for text insertion from global Search Words dialog
   useEffect(() => {
@@ -526,31 +530,33 @@ function ChatView({
         onRepopulateInput={handleRepopulateInput}
       />
 
-      {/* Quick Actions Component */}
-      <QuickActionsSection
-        targetLanguage={targetLanguage}
-        nativeLanguage={nativeLanguage}
-        appLanguage={appLanguage}
-        llmConfig={llmConfig}
-        actionLastUsed={actionLastUsed}
-        handleRecordActionUse={handleRecordActionUse}
-        onSendMessage={onSendMessage}
-        onClearHistory={onClearHistory}
-        onAddWord={onAddWord}
-        onGenerateByTopic={onGenerateByTopic}
-        startPractice={startPractice}
-        onFixGrammar={onFixGrammar}
-        onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
-        onOpenWordLibrary={onOpenWordLibrary}
-        onOpenChallenge={() => startPractice(undefined, "translation_challenge")}
-        onSwitchProvider={onSwitchProvider}
-        showToast={showToast}
-        scrollToBottom={scrollToBottom}
-        focusInput={focusInput}
-        setIsPhotoModalOpen={setIsPhotoModalOpen}
-        setSelectedImage={setSelectedImage}
-        words={words}
-      />
+      {/* Quick Actions Component - Hidden when virtual keyboard is open to maximize spaces for messages & challenge vocab hints */}
+      {!isKeyboardOpen && (
+        <QuickActionsSection
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          appLanguage={appLanguage}
+          llmConfig={llmConfig}
+          actionLastUsed={actionLastUsed}
+          handleRecordActionUse={handleRecordActionUse}
+          onSendMessage={onSendMessage}
+          onClearHistory={onClearHistory}
+          onAddWord={onAddWord}
+          onGenerateByTopic={onGenerateByTopic}
+          startPractice={startPractice}
+          onFixGrammar={onFixGrammar}
+          onSuggestCasualReplyPrompt={onSuggestCasualReplyPrompt}
+          onOpenWordLibrary={onOpenWordLibrary}
+          onOpenChallenge={() => startPractice(undefined, "translation_challenge")}
+          onSwitchProvider={onSwitchProvider}
+          showToast={showToast}
+          scrollToBottom={scrollToBottom}
+          focusInput={focusInput}
+          setIsPhotoModalOpen={setIsPhotoModalOpen}
+          setSelectedImage={setSelectedImage}
+          words={words}
+        />
+      )}
 
       {/* Input Message Footer Form */}
       <ChatInputForm
@@ -572,6 +578,7 @@ function ChatView({
         handleImageFileChange={handleImageFileChange}
         fileInputRef={fileInputRef}
         inputRef={inputRef}
+        isKeyboardOpen={isKeyboardOpen}
       />
 
       {/* Photo Capture & Upload Modal */}

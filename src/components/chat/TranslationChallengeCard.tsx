@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
   Languages, 
@@ -71,6 +71,7 @@ export default function TranslationChallengeCard({
 }: TranslationChallengeCardProps) {
   const [showVocabHints, setShowVocabHints] = useState(false);
   const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
+  const hintsContainerRef = useRef<HTMLDivElement>(null);
   const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
   const [playingItemKey, setPlayingItemKey] = useState<string | null>(null);
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
@@ -289,7 +290,17 @@ export default function TranslationChallengeCard({
             <button
               id="btn-toggle-vocab-hints"
               type="button"
-              onClick={() => setShowVocabHints(!showVocabHints)}
+              onClick={() => {
+                setShowVocabHints(prev => {
+                  const next = !prev;
+                  if (next) {
+                    setTimeout(() => {
+                      hintsContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    }, 80);
+                  }
+                  return next;
+                });
+              }}
               className="text-[11px] font-medium text-stone-600 hover:text-stone-900 flex items-center gap-1 transition-colors cursor-pointer ml-auto py-1 px-2 rounded-md hover:bg-stone-100"
             >
               <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
@@ -301,7 +312,7 @@ export default function TranslationChallengeCard({
 
         {/* Collapsible Key Target Words Hints */}
         {showVocabHints && challenge.keyTargetWords && (
-          <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
+          <div ref={hintsContainerRef} className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
                 Vocab Clues & Options:
