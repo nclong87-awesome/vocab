@@ -17,7 +17,7 @@ interface QuickActionsSectionProps {
   llmConfig: LLMConfig;
   actionLastUsed: Record<string, number>;
   handleRecordActionUse: (actionId: string) => void;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (text: string, overrideConfig?: any, options?: any) => Promise<void>;
   onClearHistory: () => void;
   onAddWord: (word?: string, hint?: string) => void;
   onGenerateByTopic?: () => void;

@@ -52,7 +52,7 @@ interface TranslationChallengeCardProps {
   onViewHistory?: (word: Word) => void;
   onAskAi?: (word: Word) => void;
   showToast?: (msg: string) => void;
-  onSubmitAnswer?: (answer: string) => Promise<void> | void;
+  onSubmitAnswer?: (answer: string, options?: { source?: string }) => Promise<void> | void;
 }
 
 export default function TranslationChallengeCard({
@@ -132,7 +132,7 @@ export default function TranslationChallengeCard({
     setIsSubmitting(true);
     try {
       if (onSubmitAnswer) {
-        await onSubmitAnswer(textToSubmit);
+        await onSubmitAnswer(textToSubmit, { source: "challenge_card" });
       }
       setUserAnswer("");
     } catch (err: any) {

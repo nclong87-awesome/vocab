@@ -14,7 +14,11 @@ interface MessageListProps {
   appLanguage?: string;
   ttsConfig: TTSConfig;
   llmConfig: LLMConfig;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (
+    text: string,
+    overrideConfig?: LLMConfig,
+    options?: { source?: "bottom_input" | "challenge_card" | "quick_action" | string }
+  ) => Promise<void>;
   onAddWord: (word?: string, hint?: string, extraData?: Partial<Word>) => void;
   onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddMultipleWords?: (words: any[]) => void;

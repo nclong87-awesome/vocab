@@ -12,7 +12,11 @@ import { useVirtualKeyboard } from "../hooks/useVirtualKeyboard";
 
 interface ChatViewProps {
   messages: ChatMessage[];
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (
+    text: string,
+    overrideConfig?: LLMConfig,
+    options?: { source?: "bottom_input" | "challenge_card" | "quick_action" | string }
+  ) => Promise<void>;
   onClearHistory: () => void;
   isTyping: boolean;
   activeModelInfo?: { provider: string; model: string } | null;
@@ -442,7 +446,7 @@ function ChatView({
     if (!inputText.trim() || isTyping) return;
     const txt = inputText.trim();
     setInputText("");
-    onSendMessage(txt);
+    onSendMessage(txt, undefined, { source: "bottom_input" });
     scrollToBottom("smooth");
   }, [conversationalState, selectedImage, inputText, isTyping, onSuggestCasualReply, onAnalyzeImageVocab, onSendMessage, scrollToBottom]);
 

@@ -23,6 +23,8 @@ export interface ChallengeTurnParams {
   nativeLanguage?: string;
   targetLanguage?: string;
   llmConfig?: LLMConfig;
+  fromBottomInput?: boolean;
+  action?: string;
 }
 
 function buildVietnameseChallengePrompt(params: GenerateChallengeParams, randomSeed: string): {
@@ -959,13 +961,15 @@ Return STRICTLY raw JSON matching:
   effectiveConfig.nativeLanguage = nativeLanguage;
   effectiveConfig.onlyReliableModels = true;
 
+  const actionToUse = params.action || (params.fromBottomInput ? "chat" : "processChallengeTurn");
+
   const resWithMeta = await callLLMClientSideWithMeta(
     prompt,
     systemInstruction,
     schemaDescription,
     effectiveConfig,
     undefined,
-    { action: "processChallengeTurn" }
+    { action: actionToUse }
   );
   const cleaned = cleanJsonResponse(resWithMeta.text);
   const parsed = JSON.parse(cleaned);
@@ -1066,10 +1070,12 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
         action: "Challenge Evaluation"
       }).catch(() => undefined);
 
+      const actionToUse = params.action || (params.fromBottomInput ? "chat" : "processChallengeTurn");
+
       publishLlmRequestEnd({
         provider: data.provider,
         model: data.model,
-        action: "processChallengeTurn",
+        action: actionToUse,
         success: true,
         timestamp: Date.now()
       });

@@ -88,9 +88,9 @@ export function useChat({
     return () => unsubscribe();
   }, []);
 
-  const startTypingWithConfig = (overrideConfig?: LLMConfig): LLMConfig => {
+  const startTypingWithConfig = (overrideConfig?: LLMConfig, actionName: string = "chat"): LLMConfig => {
     const cfgToUse = overrideConfig || llmConfig;
-    const activeInfo = notifyLlmRequestStartFromConfig(cfgToUse, "chat", () => {
+    const activeInfo = notifyLlmRequestStartFromConfig(cfgToUse, actionName, () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -1735,7 +1735,11 @@ export function useChat({
     return undefined;
   };
 
-  const handleSendChatMessage = async (text: string, overrideConfig?: LLMConfig) => {
+  const handleSendChatMessage = async (
+    text: string, 
+    overrideConfig?: LLMConfig,
+    options?: { source?: "bottom_input" | "challenge_card" | "quick_action" | string }
+  ) => {
     let challengeToProcess = activeChallenge;
     if (!challengeToProcess && chatMessages && chatMessages.length > 0) {
       for (let i = chatMessages.length - 1; i >= 0; i--) {
@@ -1793,7 +1797,12 @@ export function useChat({
       setIsTyping(true);
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      const configForServer = startTypingWithConfig(configToUse);
+
+      // When the user sends a message from the text input field at the bottom,
+      // refrain from utilizing the LLM progress modal and instead employ the previous inline progress indicator.
+      const isFromBottomInput = options?.source === "bottom_input" || options?.source !== "challenge_card";
+      const challengeAction = isFromBottomInput ? "chat" : "processChallengeTurn";
+      const configForServer = startTypingWithConfig(configToUse, challengeAction);
 
       try {
         const chatHistory = chatMessages.slice(-6).map((m) => ({
@@ -1808,6 +1817,8 @@ export function useChat({
           nativeLanguage,
           targetLanguage,
           llmConfig: configForServer,
+          fromBottomInput: isFromBottomInput,
+          action: challengeAction,
         });
 
         if (result.intent === "incomplete") {
@@ -2073,7 +2084,12 @@ export function useChat({
         }
       } catch (err: any) {
         console.error("Error processing challenge turn:", err);
-        triggerChatErrorWithCountdown(err, configToUse, (newConfig) => handleSendChatMessage(userText, newConfig), "challenge-turn-error");
+        triggerChatErrorWithCountdown(
+          err, 
+          configToUse, 
+          (newConfig) => handleSendChatMessage(userText, newConfig, options), 
+          isFromBottomInput ? "chat-error" : "challenge-turn-error"
+        );
       } finally {
         setIsTyping(false);
       }
