@@ -45,10 +45,19 @@ export function isChatAction(action?: string): boolean {
     act === "fix_grammar" ||
     act === "chat_quiz" ||
     act === "quick_chat" ||
+    act === "word_lookup" ||
+    act === "jit_suggested_actions" ||
+    act === "suggested_actions" ||
+    act === "check_word" ||
+    act === "add_word" ||
     act.startsWith("chat") ||
     act.includes("chat") ||
     act.includes("ask ai") ||
-    act.includes("ask_ai")
+    act.includes("ask_ai") ||
+    act.includes("subchat") ||
+    act.includes("sub_chat") ||
+    act.includes("jit") ||
+    act.includes("lookup")
   );
 }
 
@@ -267,8 +276,8 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     });
 
     const unsubError = subscribeLlmApiError((data: LlmApiErrorEvent) => {
-      // Background worker errors should be handled by their respective services without blocking the screen
-      if (isBackgroundAction(data.action)) {
+      // Background worker errors and interactive chat/sub-chat errors should be handled by their respective surfaces without blocking the screen with the LLM request dialog
+      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
         return;
       }
       if (timeoutWatchdogRef.current) {

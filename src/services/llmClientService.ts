@@ -2093,7 +2093,7 @@ CRITICAL INSTRUCTIONS:
 };`;
 
   if (isStaticHost()) {
-    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal);
+    const resWithMeta = await callLLMClientSideWithMeta(prompt, systemInstruction, schemaDesc, llmConfig, signal, { action: "fix_grammar" });
     const parsed = cleanAndParseJson(resWithMeta.text);
     const duration = resWithMeta.responseTimeMs || Math.round(performance.now() - startTime);
     if (resWithMeta.provider && resWithMeta.model) {
@@ -2409,7 +2409,9 @@ Do NOT suggest quizzes or tests.`;
 
       const sys = `Return 3 interactive suggested actions as valid JSON only.`;
       const schema = `{"suggestedActions": [{"label": "string", "action": "send_message", "payload": {"message": "string"}}]}`;
-      const res = await callLLMClientSideWithMeta(prompt, sys, schema, llmConfig);
+      const res = await callLLMClientSideWithMeta(prompt, sys, schema, llmConfig, signal, {
+        action: "jit_suggested_actions"
+      });
       const parsed = JSON.parse(res.text);
       if (Array.isArray(parsed?.suggestedActions)) {
         return parsed.suggestedActions.map((a: any) => ({
@@ -3328,7 +3330,9 @@ ${schemaDesc}`;
       rawText = await workerRes.text();
     } else {
       // no image, just use the prompt directly with the LLM
-      const resWithMeta = await callLLMClientSideWithMeta(userText, systemPrompt, schemaDesc, llmConfig, signal);
+      const resWithMeta = await callLLMClientSideWithMeta(userText, systemPrompt, schemaDesc, llmConfig, signal, {
+        action: "suggest_casual_reply"
+      });
       rawText = resWithMeta.text;
     }
 

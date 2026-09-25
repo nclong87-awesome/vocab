@@ -21,7 +21,6 @@ import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import { recordUserInquiry } from "../../services/userInquiryService";
-import { publishLlmApiError } from "../../utils/llmEvents";
 import { extractCleanErrorMessage } from "../../utils/llmHelpers";
 
 interface TranslationChallengeAskAiModalProps {
@@ -303,25 +302,6 @@ USER LATEST INQUIRY:
         (typeof err === "string" ? err : "Failed to get AI response. Please try again.");
       const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
       setErrorMsg(cleanMsg);
-
-      const prevAttempts = retryAttemptsRef.current || 0;
-      const currentAttempt = prevAttempts >= 3 ? 1 : prevAttempts + 1;
-      retryAttemptsRef.current = currentAttempt;
-
-      publishLlmApiError({
-        errorMessage: cleanMsg,
-        provider: err?.provider || overrideConfig?.provider || llmConfig?.provider || "auto",
-        model: err?.model || overrideConfig?.model || llmConfig?.model || "auto",
-        action: "challenge_ask_ai",
-        retryAttempt: currentAttempt,
-        maxRetries: 3,
-        onRetry: (newConfig) => {
-          setErrorMsg(null);
-          // Remove the last user message to avoid duplication when retrying
-          setMessages((prev) => prev.slice(0, -1));
-          handleSendMessage(query, newConfig || overrideConfig || llmConfig);
-        },
-      });
     } finally {
       setIsTyping(false);
       abortControllerRef.current = null;

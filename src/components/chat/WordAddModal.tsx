@@ -27,9 +27,8 @@ import { findWordInCollection, isCompletedWord, isIncompleteWord, isNoun, isPhra
 import { formatExistingWordDetails, getRemainingWordActions } from "../../utils/actionExtractor";
 import { t } from "../../config/i18n";
 import { extractCleanErrorMessage } from "../../utils/llmHelpers";
-import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, useCentralModalOpen, publishLlmRequestEnd, publishCloseLlmModals, publishLlmApiError } from "../../utils/llmEvents";
+import { notifyLlmRequestStartFromConfig, publishLlmRequestEnd, publishCloseLlmModals } from "../../utils/llmEvents";
 import ChatMessageItem from "./ChatMessageItem";
-import LlmProgressIndicator from "./LlmProgressIndicator";
 
 export interface WordAddModalProps {
   isOpen: boolean;
@@ -126,10 +125,8 @@ export default function WordAddModal({
   const [currentWord, setCurrentWord] = useState<Word | null>(initialData ? (initialData as Word) : null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [activeModelInfo, setActiveModelInfo] = useState<{ provider: string; model: string } | null>(null);
   const [isGeneratingAiActions, setIsGeneratingAiActions] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
-  const isCentralModalOpen = useCentralModalOpen();
 
   const pendingWordSensesRef = useRef<{ word: string; senses: any[]; suggestedWords?: any[] } | null>(null);
   const pendingRetryRef = useRef<{
@@ -154,14 +151,6 @@ export default function WordAddModal({
     inputRef.current?.focus();
   }, []);
 
-  // Subscribe to LLM request start events to keep activeModelInfo updated with the live candidate model
-  useEffect(() => {
-    const unsubscribe = subscribeLlmRequestStart((data) => {
-      setActiveModelInfo({ provider: data.provider, model: data.model });
-    });
-    return () => unsubscribe();
-  }, []);
-
   // Keyboard shortcut: ESC to close
   useEffect(() => {
     if (!isOpen) return;
@@ -181,7 +170,6 @@ export default function WordAddModal({
       abortControllerRef.current = null;
     }
     setIsTyping(false);
-    setActiveModelInfo(null);
   }, []);
 
   // Conversational chat question handler (allows asking questions while adding words)
@@ -219,13 +207,12 @@ export default function WordAddModal({
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      const activeInfo = notifyLlmRequestStartFromConfig(activeConfig, "chat", () => {
+      notifyLlmRequestStartFromConfig(activeConfig, "chat", () => {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
           abortControllerRef.current = null;
         }
       });
-      setActiveModelInfo(activeInfo);
       scrollToBottom();
 
       try {
@@ -334,26 +321,6 @@ export default function WordAddModal({
           error: err,
         });
 
-        publishLlmApiError({
-          errorMessage: cleanMsg,
-          provider: failedProvider,
-          model: failedModel,
-          action: "chat",
-          retryAttempt: currentAttempt,
-          maxRetries: 3,
-          onRetry: (newConfig) => {
-            if (currentAttempt >= 3) {
-              questionRetryAttemptsRef.current = 0;
-            }
-            setMessages((prev) => prev.filter((m) => m.id !== errorMsgId));
-            handleQuestionChat(questionText, newConfig || activeConfig, true);
-          },
-          onCancel: () => {
-            pendingRetryRef.current = null;
-            questionRetryAttemptsRef.current = 0;
-          },
-        });
-
         setMessages((prev) => [...prev, errorMsg]);
         scrollToBottom();
       } finally {
@@ -361,7 +328,6 @@ export default function WordAddModal({
           abortControllerRef.current = null;
         }
         setIsTyping(false);
-        setActiveModelInfo(null);
       }
     },
     [isTyping, currentWord, llmConfig, scrollToBottom, messages, targetLanguage, nativeLanguage]
@@ -416,20 +382,18 @@ export default function WordAddModal({
       }
 
       setIsTyping(true);
-      const activeInfo = notifyLlmRequestStartFromConfig(activeConfig, "chat", () => {
+      notifyLlmRequestStartFromConfig(activeConfig, "chat", () => {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
           abortControllerRef.current = null;
         }
       });
-      setActiveModelInfo(activeInfo);
       scrollToBottom();
 
       // Check if already in collection (only completed words count as existing)
       const existingMatch = findWordInCollection(words, wordToLookup);
       if (existingMatch && isCompletedWord(existingMatch)) {
         setIsTyping(false);
-        setActiveModelInfo(null);
         setCurrentWord(existingMatch);
         const existingDetails = formatExistingWordDetails(existingMatch, currentAppLang);
         const remainingActions = getRemainingWordActions(messages, words, wordToLookup, currentAppLang);
@@ -471,7 +435,6 @@ export default function WordAddModal({
 
       if (isCompleteData) {
         setIsTyping(false);
-        setActiveModelInfo(null);
         const rawPos = overrideData.partOfSpeech || "word";
         const rawCat = overrideData.category || "General";
         const isPv = isPhrasalVerb(wordToLookup, rawPos, rawCat);
@@ -556,7 +519,6 @@ export default function WordAddModal({
         overrideData.hasMultipleDefinitions
       ) {
         setIsTyping(false);
-        setActiveModelInfo(null);
         const validSenses = overrideData.senses.filter((s) => Boolean(s && (s.definition || s.translation)));
         if (validSenses.length > 1) {
           pendingWordSensesRef.current = {
@@ -825,26 +787,6 @@ export default function WordAddModal({
           error: err,
         });
 
-        publishLlmApiError({
-          errorMessage: cleanMsg,
-          provider: failedProvider,
-          model: failedModel,
-          action: "chat",
-          retryAttempt: currentAttempt,
-          maxRetries: 3,
-          onRetry: (newConfig) => {
-            if (currentAttempt >= 3) {
-              retryAttemptsRef.current = 0;
-            }
-            setMessages((prev) => prev.filter((m) => m.id !== errorMsgId));
-            handleLookup(wordToLookup, effectiveHint, overrideData, newConfig || activeConfig, true);
-          },
-          onCancel: () => {
-            pendingRetryRef.current = null;
-            retryAttemptsRef.current = 0;
-          },
-        });
-
         setMessages((prev) => [...prev, errorMsg]);
         scrollToBottom();
       } finally {
@@ -852,7 +794,6 @@ export default function WordAddModal({
           abortControllerRef.current = null;
         }
         setIsTyping(false);
-        setActiveModelInfo(null);
       }
     },
     [wordInput, words, currentAppLang, targetLanguage, nativeLanguage, llmConfig, messages, scrollToBottom]
@@ -1413,14 +1354,22 @@ export default function WordAddModal({
           />
         ))}
 
-        {/* Typing / Progress Indicator - hidden while central modal is open */}
-        {isTyping && !isCentralModalOpen && (
-          <div className="pt-2">
-            <LlmProgressIndicator
-              llmConfig={llmConfig}
-              activeModelInfo={activeModelInfo}
-              onCancel={handleCancel}
-            />
+        {/* Typing indicator */}
+        {isTyping && (
+          <div className="scroll-mt-4 flex items-center gap-2 text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-full px-4 py-2 w-fit my-2">
+            <div className="flex space-x-1">
+              <div className="w-1.5 h-1.5 bg-stone-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <div className="w-1.5 h-1.5 bg-stone-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+              <div className="w-1.5 h-1.5 bg-stone-500 rounded-full animate-bounce" />
+            </div>
+            <span className="text-stone-600 font-medium">Thinking...</span>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="ml-2 inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer"
+            >
+              <Square className="w-2.5 h-2.5 fill-current" /> Stop
+            </button>
           </div>
         )}
 
