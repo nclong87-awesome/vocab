@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, Upload, Volume2, Languages } from "lucide-react";
+import { Sparkles, Upload } from "lucide-react";
 import { ChatMessage, LLMConfig, TTSConfig, Word, LLMProvider, UserPersonalityProfile } from "../types";
 import { speakText, stopSpeech, getLanguageCode, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { resizeImageDataUrl } from "../utils/llmHelpers";
@@ -490,42 +490,6 @@ function ChatView({
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>{toast}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Active Translation Challenge Sticky Header (Pinned at top of chat when virtual keyboard is open) */}
-      <AnimatePresence>
-        {isKeyboardOpen && activeChallengeData && activeChallengeData.nativeSentence && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -8, height: 0 }}
-            transition={{ duration: 0.15 }}
-            className="z-30 bg-amber-50/95 backdrop-blur-xs border-b border-amber-300/90 px-3 py-2 shadow-xs flex items-center justify-between gap-2 shrink-0 overflow-hidden"
-          >
-            <div className="min-w-0 flex-1">
-              <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider font-mono flex items-center gap-1">
-                <Languages className="w-3 h-3 text-amber-700" />
-                Translate into {activeChallengeData.targetLanguage || targetLanguage || "English"}:
-              </span>
-              <p className="text-xs sm:text-sm font-bold text-stone-900 leading-snug line-clamp-2 select-text">
-                "{activeChallengeData.nativeSentence}"
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => speakText(
-                activeChallengeData.nativeSentence,
-                ttsConfig,
-                llmConfig,
-                getLanguageCode(nativeLanguage || "Vietnamese")
-              )}
-              className="p-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg shrink-0 transition-colors cursor-pointer"
-              title="Listen sentence"
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-            </button>
           </motion.div>
         )}
       </AnimatePresence>

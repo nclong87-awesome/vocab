@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { 
   Languages, 
   Sparkles, 
@@ -25,6 +25,7 @@ import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSC
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
 import { useSpeechToText } from "../../hooks/useSpeechToText";
+import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
 import WordReviewedBanner from "./WordReviewedBanner";
@@ -87,6 +88,9 @@ export default function TranslationChallengeCard({
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
+
+  // Virtual keyboard detection: ONLY show the in-card sentence banner when virtual keyboard is open
+  const isKeyboardOpen = useVirtualKeyboard({ inputRef: textareaRef });
 
   const effectiveTargetLang = challenge?.targetLanguage || targetLanguage || "English";
 
@@ -475,30 +479,42 @@ export default function TranslationChallengeCard({
 
         {/* Answer Textarea Field - Placed right above the Ask AI button */}
         <div className="pt-2 space-y-2">
-          {/* Sentence Reference Banner above Textarea - Always visible above input and when keyboard opens */}
-          <div className="p-2.5 sm:p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl shadow-2xs space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider font-mono flex items-center gap-1">
-                <Languages className="w-3.5 h-3.5 text-amber-700" />
-                Translate into {effectiveTargetLang}:
-              </span>
-              <button
-                type="button"
-                onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence-ref")}
-                className="p-1 text-amber-800 hover:text-amber-950 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
-                title="Listen sentence"
+          {/* Sentence Reference Banner above Textarea - ONLY visible when virtual keyboard is open */}
+          <AnimatePresence>
+            {isKeyboardOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -6, height: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="overflow-hidden"
               >
-                {playingItemKey === "prompt-sentence-ref" ? (
-                  <Square className="w-3.5 h-3.5 text-amber-600 fill-amber-600 animate-pulse" />
-                ) : (
-                  <Volume2 className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </div>
-            <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug select-text">
-              "{challenge.nativeSentence}"
-            </p>
-          </div>
+                <div className="p-2.5 sm:p-3 bg-amber-50/95 border border-amber-300/90 rounded-xl shadow-2xs space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider font-mono flex items-center gap-1">
+                      <Languages className="w-3.5 h-3.5 text-amber-700" />
+                      Translate into {effectiveTargetLang}:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence-ref")}
+                      className="p-1 text-amber-800 hover:text-amber-950 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                      title="Listen sentence"
+                    >
+                      {playingItemKey === "prompt-sentence-ref" ? (
+                        <Square className="w-3.5 h-3.5 text-amber-600 fill-amber-600 animate-pulse" />
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug select-text">
+                    "{challenge.nativeSentence}"
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="flex items-center justify-between text-xs px-0.5">
             <label
