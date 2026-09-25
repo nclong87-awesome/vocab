@@ -127,7 +127,7 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig, action?: 
     model = sanitizeModelName(provider, model);
   }
 
-  const payload: LlmRequestStartEvent = { provider, model, timestamp: Date.now(), action, isAutoMode, onCancel };
+  const payload: LlmRequestStartEvent = { provider, model, timestamp: Date.now(), action: action || "llm_request", isAutoMode, onCancel };
   publishLlmRequestStart(payload);
   return { provider, model };
 }

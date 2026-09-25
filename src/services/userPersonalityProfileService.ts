@@ -10,7 +10,7 @@ import {
 import { getDefaultLLMConfig } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost } from "../utils";
 import { logApiRequest } from "./requestHistoryService";
-import { notifyLlmRequestStartFromConfig } from "../utils/llmEvents";
+import { notifyLlmRequestStartFromConfig, publishLlmRequestEnd } from "../utils/llmEvents";
 import { sanitizeModel } from "./llmClientService";
 
 export interface BuildDigestParams {
@@ -170,7 +170,7 @@ export async function analyzeAndSavePersonalityProfile(
   params: AnalyzePersonalityProfileParams
 ): Promise<UserPersonalityProfile> {
   const { words, stats, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal } = params;
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "background");
   const startTime = performance.now();
 
   const digestData = buildUserActivityDigest({ words, stats, targetLanguage, nativeLanguage });
@@ -179,6 +179,7 @@ export async function analyzeAndSavePersonalityProfile(
     // If running in static host mode without Node backend, return the client-side adaptive profile
     const fallback = generateFallbackPersonalityProfile({ words, stats, targetLanguage, nativeLanguage });
     await saveUserPersonalityProfileToDB(fallback);
+    publishLlmRequestEnd({ action: "background", success: true, timestamp: Date.now() });
     return fallback;
   }
 
@@ -221,6 +222,7 @@ export async function analyzeAndSavePersonalityProfile(
 
       await saveUserPersonalityProfileToDB(data);
       syncMilestoneMarkersOnProfileSaved();
+      publishLlmRequestEnd({ provider: prov, model: mod, action: "background", success: true, timestamp: Date.now() });
       return data;
     }
 
@@ -231,6 +233,7 @@ export async function analyzeAndSavePersonalityProfile(
     const fallback = generateFallbackPersonalityProfile({ words, stats, targetLanguage, nativeLanguage });
     await saveUserPersonalityProfileToDB(fallback);
     syncMilestoneMarkersOnProfileSaved();
+    publishLlmRequestEnd({ action: "background", success: false, error: err, timestamp: Date.now() });
     return fallback;
   }
 }

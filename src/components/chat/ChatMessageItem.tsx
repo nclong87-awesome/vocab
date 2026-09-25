@@ -906,6 +906,7 @@ function ChatMessageItem({
               onAskAi={(w) => setSelectedChatWord(w)}
               onPlayAudio={(text) => speakText(text, ttsConfig, llmConfig, getLanguageCode(targetLanguage))}
               showToast={showToast}
+              onSubmitAnswer={(answerText) => onSendMessage(answerText)}
             />
           ) : (
             <>

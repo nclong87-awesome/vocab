@@ -15,11 +15,16 @@ import {
   ChevronDown,
   ChevronUp,
   Volume2,
-  Square
+  Square,
+  Mic,
+  Send,
+  X,
+  CornerDownLeft
 } from "lucide-react";
 import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig } from "../../types";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
+import { useSpeechToText } from "../../hooks/useSpeechToText";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
 import WordReviewedBanner from "./WordReviewedBanner";
@@ -46,6 +51,7 @@ interface TranslationChallengeCardProps {
   onViewHistory?: (word: Word) => void;
   onAskAi?: (word: Word) => void;
   showToast?: (msg: string) => void;
+  onSubmitAnswer?: (answer: string) => Promise<void> | void;
 }
 
 export default function TranslationChallengeCard({
@@ -68,15 +74,76 @@ export default function TranslationChallengeCard({
   onViewHistory,
   onAskAi,
   showToast,
+  onSubmitAnswer,
 }: TranslationChallengeCardProps) {
   const [showVocabHints, setShowVocabHints] = useState(false);
   const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
   const hintsContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [userAnswer, setUserAnswer] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
   const [playingItemKey, setPlayingItemKey] = useState<string | null>(null);
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
+
+  const effectiveTargetLang = challenge?.targetLanguage || targetLanguage || "English";
+
+  const {
+    isListening,
+    isSupported: isSpeechSupported,
+    startListening,
+    stopListening,
+  } = useSpeechToText({
+    targetLanguage: effectiveTargetLang,
+    onTranscript: (transcript) => {
+      if (transcript) {
+        setUserAnswer((prev) => {
+          const trimmed = prev.trim();
+          if (!trimmed) return transcript;
+          return `${trimmed} ${transcript}`;
+        });
+      }
+    },
+    onError: (err) => {
+      showToast?.(err);
+    },
+  });
+
+  const handleToggleVoice = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening(effectiveTargetLang);
+    }
+  };
+
+  const handleSubmitTranslation = async (answerOverride?: string) => {
+    const textToSubmit = answerOverride !== undefined ? answerOverride : userAnswer.trim();
+    if (!textToSubmit && answerOverride === undefined) return;
+    if (isListening) {
+      stopListening();
+    }
+    setIsSubmitting(true);
+    try {
+      if (onSubmitAnswer) {
+        await onSubmitAnswer(textToSubmit);
+      }
+      setUserAnswer("");
+    } catch (err: any) {
+      showToast?.(err?.message || "Failed to submit answer.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAnswerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.key === "Enter" && !e.shiftKey) || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) {
+      e.preventDefault();
+      handleSubmitTranslation();
+    }
+  };
 
   const activeProvider = provider || challenge?.provider || evaluation?.provider;
   const activeModel = model || challenge?.model || evaluation?.model;
@@ -384,12 +451,120 @@ export default function TranslationChallengeCard({
                         {inCol ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Plus className="w-3.5 h-3.5" />}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setUserAnswer((prev) => {
+                          const trimmed = prev.trim();
+                          return trimmed ? `${trimmed} ${kw.word}` : kw.word;
+                        });
+                        textareaRef.current?.focus();
+                      }}
+                      className="text-stone-400 hover:text-stone-700 p-0.5 rounded transition-colors cursor-pointer ml-0.5"
+                      title={`Insert "${kw.word}" into your translation`}
+                    >
+                      <CornerDownLeft className="w-3 h-3" />
+                    </button>
                   </div>
                 );
               })}
             </div>
           </div>
         )}
+
+        {/* Answer Textarea Field - Placed right above the Ask AI button */}
+        <div className="pt-2 space-y-2">
+          <div className="flex items-center justify-between text-xs px-0.5">
+            <label
+              htmlFor={`challenge-answer-${challenge.id || "prompt"}`}
+              className="font-semibold text-stone-700 flex items-center gap-1.5"
+            >
+              <span>Your translation ({effectiveTargetLang}):</span>
+            </label>
+            <span className="text-[11px] text-stone-400 hidden sm:inline font-mono">
+              Press Enter ↵ to submit · Shift+Enter for new line
+            </span>
+          </div>
+
+          <div className="relative border border-stone-200/90 hover:border-stone-300 focus-within:border-stone-400 focus-within:ring-2 focus-within:ring-stone-900/5 bg-stone-50/70 focus-within:bg-white rounded-xl transition-all shadow-xs overflow-hidden">
+            <textarea
+              ref={textareaRef}
+              id={`challenge-answer-${challenge.id || "prompt"}`}
+              value={userAnswer}
+              onChange={(e) => setUserAnswer(e.target.value)}
+              onKeyDown={handleAnswerKeyDown}
+              disabled={isSubmitting}
+              placeholder={`Type your ${effectiveTargetLang} translation here...`}
+              rows={2}
+              className="w-full bg-transparent p-3 sm:p-3.5 text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none resize-y min-h-[68px] max-h-48 leading-relaxed font-sans disabled:opacity-50"
+            />
+
+            {/* In-Textarea Action Toolbar */}
+            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-stone-100/70 border-t border-stone-200/60">
+              <div className="flex items-center gap-2">
+                {isSpeechSupported && (
+                  <button
+                    type="button"
+                    onClick={handleToggleVoice}
+                    disabled={isSubmitting}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                      isListening
+                        ? "bg-rose-100 text-rose-700 border border-rose-300 animate-pulse"
+                        : "bg-white hover:bg-stone-200 text-stone-600 border border-stone-200/80 shadow-3xs"
+                    }`}
+                    title={isListening ? "Stop listening" : `Speak your translation in ${effectiveTargetLang}`}
+                  >
+                    <Mic className={`w-3.5 h-3.5 ${isListening ? "text-rose-600 animate-pulse" : "text-stone-500"}`} />
+                    <span className="text-[11px] font-medium">{isListening ? "Listening..." : "Voice"}</span>
+                  </button>
+                )}
+
+                {userAnswer.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setUserAnswer("")}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-700 transition-colors p-1 cursor-pointer"
+                    title="Clear text"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Clear</span>
+                  </button>
+                )}
+
+                {!userAnswer.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleSubmitTranslation("(No answer provided)")}
+                    disabled={isSubmitting}
+                    className="text-[11px] text-stone-400 hover:text-stone-600 underline decoration-stone-300 transition-colors cursor-pointer"
+                    title="Reveal answer without typing"
+                  >
+                    Don't know? Reveal answer
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  id="btn-submit-challenge-answer"
+                  type="button"
+                  onClick={() => handleSubmitTranslation()}
+                  disabled={!userAnswer.trim() || isSubmitting}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
+                    userAnswer.trim() && !isSubmitting
+                      ? "bg-stone-900 hover:bg-stone-800 active:scale-95 text-amber-400 cursor-pointer"
+                      : "bg-stone-200/80 text-stone-400 cursor-not-allowed"
+                  }`}
+                >
+                  <Send className="w-3 h-3" />
+                  <span>{isSubmitting ? "Submitting..." : "Submit Answer"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Ask AI Support Button */}
         <div className="pt-1">

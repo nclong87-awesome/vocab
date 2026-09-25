@@ -217,7 +217,7 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
       // Open central progress modal for active request
       setProgressState({
         isOpen: true,
-        action: data.action || "chat",
+        action: data.action || "llm_request",
         provider: data.provider,
         model: data.model,
         requestId: data.timestamp || Date.now(),
@@ -231,16 +231,12 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     });
 
     const unsubEnd = subscribeLlmRequestEnd((data) => {
-      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
-        return;
-      }
-
       if (timeoutWatchdogRef.current) {
         clearTimeout(timeoutWatchdogRef.current);
         timeoutWatchdogRef.current = null;
       }
 
-      if (data.success) {
+      if (data.success || data.error || data.success === false) {
         if (retryCloseTimerRef.current) {
           clearTimeout(retryCloseTimerRef.current);
           retryCloseTimerRef.current = null;
@@ -276,24 +272,24 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
     });
 
     const unsubError = subscribeLlmApiError((data: LlmApiErrorEvent) => {
-      // Background worker errors and interactive chat/sub-chat errors should be handled by their respective surfaces without blocking the screen with the LLM request dialog
-      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
-        return;
-      }
       if (timeoutWatchdogRef.current) {
         clearTimeout(timeoutWatchdogRef.current);
         timeoutWatchdogRef.current = null;
       }
-      // CRITICAL: Cancel any pending retry-close timeout so it doesn't dismiss this new error!
       if (retryCloseTimerRef.current) {
         clearTimeout(retryCloseTimerRef.current);
         retryCloseTimerRef.current = null;
       }
 
-      lastRetryFnRef.current = data.onRetry;
-
-      // Close progress modal
+      // Always close progress modal when an error event fires
       setProgressState((prev) => ({ ...prev, isOpen: false }));
+
+      // Background worker errors and interactive chat/sub-chat errors should be handled by their respective surfaces
+      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
+        return;
+      }
+
+      lastRetryFnRef.current = data.onRetry;
 
       // Open error retry modal with unique errorId so countdown and retrying flags reset
       setErrorState({

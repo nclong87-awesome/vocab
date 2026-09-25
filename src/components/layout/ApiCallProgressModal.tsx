@@ -179,16 +179,19 @@ export default function ApiCallProgressModal({
               <span>{displayProvider}</span>
             </div>
 
-            {onCancel && (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="text-stone-400 hover:text-stone-700 p-1 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
-                title={t("api_progress_cancel", currentAppLang)}
-              >
-                <X className="w-4 h-4 stroke-[2.5]" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                cancelBatchEnrichment();
+                if (onCancel) {
+                  onCancel();
+                }
+              }}
+              className="text-stone-400 hover:text-stone-700 p-1 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
+              title={t("api_progress_cancel", currentAppLang) || "Close"}
+            >
+              <X className="w-4 h-4 stroke-[2.5]" />
+            </button>
           </div>
         </div>
 

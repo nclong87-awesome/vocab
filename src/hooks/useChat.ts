@@ -1736,7 +1736,20 @@ export function useChat({
   };
 
   const handleSendChatMessage = async (text: string, overrideConfig?: LLMConfig) => {
-    if (!text.trim() && !activeChallenge) return;
+    let challengeToProcess = activeChallenge;
+    if (!challengeToProcess && chatMessages && chatMessages.length > 0) {
+      for (let i = chatMessages.length - 1; i >= 0; i--) {
+        const m = chatMessages[i];
+        if (m.challengeEvaluation) break;
+        if (m.challengeData) {
+          challengeToProcess = m.challengeData;
+          setActiveChallenge(m.challengeData);
+          break;
+        }
+      }
+    }
+
+    if (!text.trim() && !challengeToProcess) return;
 
     const configToUse = overrideConfig || llmConfig;
     const effectiveText = text.trim() || "(No answer provided)";
@@ -1767,7 +1780,7 @@ export function useChat({
       return;
     }
 
-    if (activeChallenge) {
+    if (challengeToProcess) {
       const userText = effectiveText;
       const lowerText = userText.toLowerCase();
 
@@ -1789,7 +1802,7 @@ export function useChat({
         }));
 
         const result = await processChallengeTurn({
-          challenge: activeChallenge,
+          challenge: challengeToProcess,
           userMessage: userText,
           chatHistory,
           nativeLanguage,
@@ -1828,15 +1841,15 @@ export function useChat({
           }
 
           // Check if user incorporated the specific target word from collection or vocab clues
-          const targetColWord = activeChallenge.targetWordFromCollection;
+          const targetColWord = challengeToProcess.targetWordFromCollection;
           let primaryTargetWord: Word | undefined = undefined;
 
           if (targetColWord?.word) {
             primaryTargetWord = findWordInCollection(wordsRef.current, targetColWord.word);
           }
           // Fallback: check key target words against collection
-          if (!primaryTargetWord && activeChallenge.keyTargetWords) {
-            for (const kw of activeChallenge.keyTargetWords) {
+          if (!primaryTargetWord && challengeToProcess.keyTargetWords) {
+            for (const kw of challengeToProcess.keyTargetWords) {
               if (kw?.word) {
                 const foundInCol = findWordInCollection(wordsRef.current, kw.word);
                 if (foundInCol) {
@@ -1901,10 +1914,10 @@ export function useChat({
             // Target word was not in collection; do not add to collection
           }
 
-          // 2. Process all vocab clues in activeChallenge.keyTargetWords
+          // 2. Process all vocab clues in challengeToProcess.keyTargetWords
           // Only boost strength if the clue ALREADY exists in the user's collection!
           // Non-existent words are skipped and NEVER added to the collection.
-          const vocabClues = activeChallenge.keyTargetWords || [];
+          const vocabClues = challengeToProcess.keyTargetWords || [];
           const incorporatedClueWords: string[] = [];
 
           for (const clue of vocabClues) {

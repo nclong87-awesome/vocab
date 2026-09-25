@@ -2,6 +2,7 @@ import { ChallengeData, ChallengeKeyWord, ChallengeTurnResult, ChallengeSuggeste
 import { fetchWithTimeout, safeParseResponseJson, isStaticHost } from "../utils";
 import { callLLMClientSideWithMeta, cleanJsonResponse, getOverrideConfig } from "./llmClientService";
 import { logApiRequest } from "./requestHistoryService";
+import { notifyLlmRequestStartFromConfig, publishLlmRequestEnd } from "../utils/llmEvents";
 import { getTranslationChallengeCandidateWords, isWordPracticedToday } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 import { getPreferredModelsForLanguage } from "../config/llmProviders";
@@ -520,6 +521,8 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
   const effectiveConfig = getOverrideConfig(params.llmConfig);
   const effectiveParams = { ...params, llmConfig: effectiveConfig };
 
+  notifyLlmRequestStartFromConfig(effectiveConfig, "generateChallenge");
+
   // 1. Static host environment (e.g. GitHub Pages): use Cloudflare Worker / client-side LLM directly
   if (isStaticHost()) {
     return generateChallengeClientSide(effectiveParams, randomSeed);
@@ -572,6 +575,14 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
         statusCode: 200,
         action: "Translation Challenge"
       }).catch(() => undefined);
+
+      publishLlmRequestEnd({
+        provider: data.provider,
+        model: data.model,
+        action: "generateChallenge",
+        success: true,
+        timestamp: Date.now()
+      });
 
       return {
         id: `challenge-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -1054,6 +1065,14 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
         statusCode: 200,
         action: "Challenge Evaluation"
       }).catch(() => undefined);
+
+      publishLlmRequestEnd({
+        provider: data.provider,
+        model: data.model,
+        action: "processChallengeTurn",
+        success: true,
+        timestamp: Date.now()
+      });
 
       return data as ChallengeTurnResult;
     }

@@ -1936,7 +1936,7 @@ export async function generateRandomWordsService(params: {
 }): Promise<{ words: any[]; provider?: string; model?: string; responseTimeMs?: number }> {
   const { topic, targetLanguage, nativeLanguage, count = 5, existingWords, cfg, signal } = params;
   const llmConfig = getOverrideConfig(cfg);
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "generate_random_words");
   const userNative = nativeLanguage || "Vietnamese";
   const userTarget = targetLanguage || "Spanish";
   const startTime = performance.now();
@@ -2008,6 +2008,13 @@ CRITICAL INSTRUCTIONS:
       if (prov && mod) {
         recordModelResponse(prov, mod, duration);
       }
+      publishLlmRequestEnd({
+        provider: prov,
+        model: mod,
+        action: "generate_random_words",
+        success: true,
+        timestamp: Date.now()
+      });
       return {
         words,
         provider: prov,
@@ -2019,9 +2026,25 @@ CRITICAL INSTRUCTIONS:
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     syncServerLocks(errData.serverLockedModels);
     const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    publishLlmRequestEnd({
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+      action: "generate_random_words",
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
     const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    publishLlmRequestEnd({
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+      action: "generate_random_words",
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || err?.message || "Failed to generate random words.");
   }
 }
@@ -2059,7 +2082,7 @@ export interface FixGrammarResult {
 
 export async function fixGrammarService(params: FixGrammarRequest): Promise<FixGrammarResult> {
   const { userText, targetLanguage, nativeLanguage, llmConfig, signal } = params;
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "fix_grammar");
   const userTarget = targetLanguage || "English";
   const userNative = nativeLanguage || "Vietnamese";
   const startTime = performance.now();
@@ -2123,6 +2146,13 @@ CRITICAL INSTRUCTIONS:
       if (prov && mod) {
         recordModelResponse(prov, mod, duration);
       }
+      publishLlmRequestEnd({
+        provider: prov,
+        model: mod,
+        action: "fix_grammar",
+        success: true,
+        timestamp: Date.now()
+      });
       return {
         ...data,
         provider: prov,
@@ -2133,9 +2163,25 @@ CRITICAL INSTRUCTIONS:
 
     const errData = await res.json().catch(() => ({ error: res.statusText }));
     const parsedErr = parseLlmError(errData, llmConfig?.provider || "gemini");
+    publishLlmRequestEnd({
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+      action: "fix_grammar",
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || `Server error (${res.status}): ${res.statusText}`);
   } catch (err: any) {
     const parsedErr = parseLlmError(err, llmConfig?.provider || "gemini");
+    publishLlmRequestEnd({
+      provider: llmConfig?.provider || "gemini",
+      model: sanitizeModel(llmConfig?.provider || "gemini", llmConfig?.model),
+      action: "fix_grammar",
+      success: false,
+      error: parsedErr,
+      timestamp: Date.now()
+    });
     throw new Error(parsedErr.userMessage || err?.message || "Failed to check or fix grammar.");
   }
 }
@@ -2465,7 +2511,7 @@ export async function generateAiQuizQuestionsService(
   params: QuizGenerationRequest
 ): Promise<QuizGenerationResult> {
   const { words, targetLanguage = "English", nativeLanguage = "Vietnamese", llmConfig, signal, practiceMode } = params;
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "generate_quiz");
   const startTime = performance.now();
 
   if (!words || words.length === 0) {
@@ -2962,6 +3008,14 @@ Output MUST be strictly valid JSON matching this schema:
         recordModelResponse(provider, model, responseTimeMs);
       }
 
+      publishLlmRequestEnd({
+        provider,
+        model,
+        action: "generate_quiz",
+        success: true,
+        timestamp: Date.now()
+      });
+
       return {
         questions: validQuestions.slice(0, 3),
         provider,
@@ -2972,6 +3026,14 @@ Output MUST be strictly valid JSON matching this schema:
     throw new Error("Failed to generate quiz questions from AI provider. Please try again or switch model.");
   } catch (err: any) {
     console.warn("AI Quiz Generation failed:", err);
+    publishLlmRequestEnd({
+      provider,
+      model,
+      action: "generate_quiz",
+      success: false,
+      error: err,
+      timestamp: Date.now()
+    });
     throw err;
   }
 }
