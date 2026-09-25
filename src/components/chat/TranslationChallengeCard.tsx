@@ -475,6 +475,31 @@ export default function TranslationChallengeCard({
 
         {/* Answer Textarea Field - Placed right above the Ask AI button */}
         <div className="pt-2 space-y-2">
+          {/* Sentence Reference Banner above Textarea - Always visible above input and when keyboard opens */}
+          <div className="p-2.5 sm:p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl shadow-2xs space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider font-mono flex items-center gap-1">
+                <Languages className="w-3.5 h-3.5 text-amber-700" />
+                Translate into {effectiveTargetLang}:
+              </span>
+              <button
+                type="button"
+                onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence-ref")}
+                className="p-1 text-amber-800 hover:text-amber-950 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                title="Listen sentence"
+              >
+                {playingItemKey === "prompt-sentence-ref" ? (
+                  <Square className="w-3.5 h-3.5 text-amber-600 fill-amber-600 animate-pulse" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+            <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug select-text">
+              "{challenge.nativeSentence}"
+            </p>
+          </div>
+
           <div className="flex items-center justify-between text-xs px-0.5">
             <label
               htmlFor={`challenge-answer-${challenge.id || "prompt"}`}

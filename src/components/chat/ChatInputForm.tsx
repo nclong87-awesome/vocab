@@ -46,12 +46,12 @@ function ChatInputForm({
   handleImageFileChange,
   fileInputRef,
   inputRef,
-  isKeyboardOpen: propIsKeyboardOpen,
+  isKeyboardOpen: _propIsKeyboardOpen,
 }: ChatInputFormProps) {
   const baseTextRef = useRef("");
-  // Virtual keyboard detection: only show active challenge sentence sticky banner when virtual keyboard is open
+  // Virtual keyboard detection: only show active challenge sentence sticky banner above bottom input when bottom input is focused
   const detectedKeyboardOpen = useVirtualKeyboard({ inputRef });
-  const isKeyboardOpen = propIsKeyboardOpen !== undefined ? propIsKeyboardOpen : detectedKeyboardOpen;
+  const isKeyboardOpen = detectedKeyboardOpen;
   // Default to native language as requested
   const [speechLangMode, setSpeechLangMode] = useState<"native" | "target">("native");
 
