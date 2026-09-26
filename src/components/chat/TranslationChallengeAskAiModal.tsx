@@ -13,6 +13,8 @@ import {
   BookOpen,
   Sparkles,
   MessageSquare,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { ChallengeData, ChallengeEvaluation, Word, TTSConfig, LLMConfig } from "../../types";
 import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
@@ -22,6 +24,7 @@ import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import { recordUserInquiry } from "../../services/userInquiryService";
 import { extractCleanErrorMessage } from "../../utils/llmHelpers";
+import { t } from "../../config/i18n";
 
 interface TranslationChallengeAskAiModalProps {
   isOpen: boolean;
@@ -87,6 +90,8 @@ export default function TranslationChallengeAskAiModal({
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(5);
+  const [isCountdownCancelled, setIsCountdownCancelled] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const latestResponseRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +99,7 @@ export default function TranslationChallengeAskAiModal({
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const retryAttemptsRef = useRef<number>(0);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize conversation stream when modal opens or challenge changes
   useEffect(() => {
@@ -187,7 +193,12 @@ Ask me anything about the feedback, word nuances, or grammar!`;
       category: challenge?.topicContext || "Translation Challenge",
     });
 
+    if (retryTimerRef.current) {
+      clearInterval(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     setErrorMsg(null);
+    setIsCountdownCancelled(false);
     setInputText("");
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
@@ -302,11 +313,49 @@ USER LATEST INQUIRY:
         (typeof err === "string" ? err : "Failed to get AI response. Please try again.");
       const cleanMsg = extractCleanErrorMessage(rawMsg) || rawMsg;
       setErrorMsg(cleanMsg);
+      setCountdown(5);
+      setIsCountdownCancelled(false);
     } finally {
       setIsTyping(false);
       abortControllerRef.current = null;
     }
   };
+
+  // Automated 5-second countdown timer for retrying failed requests
+  useEffect(() => {
+    if (!errorMsg || isTyping || isCountdownCancelled) {
+      if (retryTimerRef.current) {
+        clearInterval(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+      return;
+    }
+
+    setCountdown(5);
+    retryTimerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (retryTimerRef.current) {
+            clearInterval(retryTimerRef.current);
+            retryTimerRef.current = null;
+          }
+          const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+          if (lastUserMsg) {
+            handleSendMessage(lastUserMsg.content);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (retryTimerRef.current) {
+        clearInterval(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [errorMsg, isTyping, isCountdownCancelled, messages]);
 
   return createPortal(
     <motion.div
@@ -513,22 +562,68 @@ USER LATEST INQUIRY:
           </div>
         )}
 
-        {/* Error message */}
+        {/* Error message with 5s retry countdown */}
         {errorMsg && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center justify-between gap-2">
-            <span>{errorMsg}</span>
-            <button
-              type="button"
-              onClick={() => {
-                const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-                if (lastUserMsg) {
-                  handleSendMessage(lastUserMsg.content);
-                }
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-600 text-white font-medium rounded-md hover:bg-rose-700 transition-colors cursor-pointer shrink-0"
-            >
-              Retry
-            </button>
+          <div className="p-3.5 bg-gradient-to-r from-rose-50 to-amber-50/50 border border-rose-200 rounded-2xl text-xs text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 shrink-0 mt-0.5">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-rose-950 break-words">{errorMsg}</p>
+                {!isCountdownCancelled && !isTyping ? (
+                  <div className="flex items-center gap-2 mt-1.5 text-xs font-semibold text-amber-900">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    <span>
+                      {t("chat_error_auto_retry_countdown", appLanguage, { seconds: String(countdown) })}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-stone-500 italic mt-1 block">
+                    {t("chat_error_retry_cancelled", appLanguage)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => {
+                  if (retryTimerRef.current) {
+                    clearInterval(retryTimerRef.current);
+                    retryTimerRef.current = null;
+                  }
+                  const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+                  if (lastUserMsg) {
+                    handleSendMessage(lastUserMsg.content);
+                  }
+                }}
+                disabled={isTyping}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-medium rounded-xl transition-all shadow-xs cursor-pointer text-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>{t("chat_error_try_again_now", appLanguage)}</span>
+              </button>
+              {!isCountdownCancelled && !isTyping && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (retryTimerRef.current) {
+                      clearInterval(retryTimerRef.current);
+                      retryTimerRef.current = null;
+                    }
+                    setIsCountdownCancelled(true);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-stone-100 border border-stone-200 text-stone-600 font-medium rounded-xl transition-colors cursor-pointer text-xs"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>{t("chat_error_cancel_retry", appLanguage)}</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </main>

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Clock, RefreshCw, X, AlertTriangle } from "lucide-react";
 import { ChatMessage, LLMConfig } from "../../types";
 import { t } from "../../config/i18n";
@@ -36,21 +36,31 @@ export default function ChatErrorMessageCard({
     msg.errorInfo.retryAttempt >= msg.errorInfo.maxRetries
   );
 
+  const [countdown, setCountdown] = useState(5);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const onRetryRef = useRef(onRetry);
   onRetryRef.current = onRetry;
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
-  // Trigger retry when button manually clicked
+  // Trigger retry when button manually clicked or countdown reaches 0
   const handleTriggerRetry = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setIsRetrying(true);
     onRetryRef.current();
   };
 
   const handleCancelCountdown = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setIsCancelled(true);
     if (onCancelRef.current) {
       onCancelRef.current();
@@ -59,6 +69,38 @@ export default function ChatErrorMessageCard({
 
   const activeRetrying = isRetrying || isExternallyRetrying;
   const activeCancelled = isCancelled || isExternallyDisabled;
+
+  // Automated 5-second countdown timer for retrying failed requests
+  useEffect(() => {
+    if (activeCancelled || activeRetrying || isMaxReached) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          handleTriggerRetry();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [activeCancelled, activeRetrying, isMaxReached]);
 
   const errorTitle = isTimeout
     ? t("chat_error_timeout_title", currentAppLang)
@@ -114,7 +156,7 @@ export default function ChatErrorMessageCard({
       {/* Countdown & Action Bar */}
       <div className="pt-2 border-t border-rose-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Left status */}
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           {activeRetrying ? (
             <div className="flex items-center gap-2 text-rose-700 text-xs sm:text-sm font-medium">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -128,11 +170,24 @@ export default function ChatErrorMessageCard({
             <span className="text-xs text-stone-500 italic">
               {t("chat_error_retry_cancelled", currentAppLang)}
             </span>
-          ) : isAutoMode ? (
-            <span className="text-[11px] sm:text-xs text-stone-600">
-              {t("chat_error_auto_mode_switch_note", currentAppLang)}
-            </span>
-          ) : null}
+          ) : (
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-amber-900">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <span>
+                  {t("chat_error_auto_retry_countdown", currentAppLang, { seconds: String(countdown) })}
+                </span>
+              </div>
+              {isAutoMode && (
+                <span className="text-[11px] text-stone-500 mt-0.5">
+                  {t("chat_error_auto_mode_switch_note", currentAppLang)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right buttons */}

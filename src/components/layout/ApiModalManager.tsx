@@ -33,14 +33,25 @@ export interface ApiModalManagerProps {
 export function isChatAction(action?: string): boolean {
   if (!action) return false;
   const act = action.toLowerCase().trim();
+
+  // Explicitly exclude translation challenge actions (they use central modal or dedicated countdown handling)
+  if (
+    act.includes("challenge") ||
+    act.includes("translation") ||
+    act === "generatechallenge" ||
+    act === "processchallengeturn" ||
+    act === "challenge_turn" ||
+    act === "challenge-turn"
+  ) {
+    return false;
+  }
+
   return (
     act === "chat" ||
     act === "send_message" ||
     act === "chat_message" ||
     act === "ask_ai" ||
     act === "word_chat" ||
-    act === "challenge_ask_ai" ||
-    act === "challenge ask ai" ||
     act === "suggest_casual_reply" ||
     act === "fix_grammar" ||
     act === "chat_quiz" ||
@@ -236,20 +247,22 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
         timeoutWatchdogRef.current = null;
       }
 
+      // Always close progress modal when request ends
       if (data.success || data.error || data.success === false) {
+        // When enriching incomplete words, keep the progress dialog open
+        // until there are no remaining words in the queue!
+        if (!isEnrichmentQueueRunning()) {
+          setProgressState((prev) => ({ ...prev, isOpen: false }));
+        }
+      }
+
+      // Close error retry modal ONLY when a request or retry succeeds
+      if (data.success) {
         if (retryCloseTimerRef.current) {
           clearTimeout(retryCloseTimerRef.current);
           retryCloseTimerRef.current = null;
         }
         lastRetryFnRef.current = null;
-
-        // When enriching incomplete words, keep the progress dialog open
-        // until there are no remaining words in the queue!
-        if (isEnrichmentQueueRunning()) {
-          return;
-        }
-
-        setProgressState((prev) => ({ ...prev, isOpen: false }));
         setErrorState((prev) => ({ ...prev, isOpen: false }));
       }
     });

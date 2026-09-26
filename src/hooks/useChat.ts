@@ -37,6 +37,7 @@ import { recordUserInquiry, getRecentUserInquiries } from "../services/userInqui
 import { ChallengeData } from "../types";
 import { generateChallenge, processChallengeTurn } from "../services/challengeService";
 import { getUserPersonalityProfile, recordLearningInteraction } from "../services/userPersonalityProfileService";
+import { isChatAction } from "../components/layout/ApiModalManager";
 
 interface UseChatProps {
   words: Word[];
@@ -280,12 +281,22 @@ export function useChat({
 
     pendingRetriesRef.current.set(errorMsgId, safeRetry);
 
+    const resolvedAction = prefix.includes("challenge-turn")
+      ? "processChallengeTurn"
+      : (prefix.includes("challenge") || prefix.includes("translation"))
+      ? "generateChallenge"
+      : prefix.includes("duel")
+      ? "confuserDuel"
+      : prefix.includes("quiz")
+      ? "chat_quiz"
+      : "chat";
+
     // Trigger the Error & Retry Countdown Modal
     publishLlmApiError({
       errorMessage: displayErrorMsg,
       provider: failedProvider || "auto",
       model: failedModel || "9flare/pro/gpt-5.6-luna",
-      action: prefix.includes("challenge-turn") ? "processChallengeTurn" : (prefix.includes("challenge") ? "generateChallenge" : "chat"),
+      action: resolvedAction,
       retryAttempt: currentAttempt,
       maxRetries: 3,
       onRetry: (newConfig) => {
@@ -308,13 +319,16 @@ export function useChat({
       }
     });
 
-    // Only display inline error in chat if all retry attempts have failed (max reached)
-    // While automated retry countdown is active, keep the conversation clean!
-    if (currentAttempt >= 3) {
-      const finalErrorMsg = buildErrorMsg(true);
+    const isModalHandled = !isChatAction(resolvedAction);
+
+    // If handled by central modal, keep chat clean during countdown attempts 1 & 2.
+    // If NOT handled by central modal (i.e. inline chat actions), display the inline ChatErrorMessageCard
+    // immediately with its 5-second countdown ticker so the user sees the countdown!
+    if (!isModalHandled || currentAttempt >= 3) {
+      const errorCardMsg = buildErrorMsg(true);
       setChatMessages((prev) => [
         ...prev.filter((m) => !m.isError || !m.id.startsWith(prefix)),
-        finalErrorMsg,
+        errorCardMsg,
       ]);
     } else {
       // Remove any lingering error card from prior attempts so the chat remains clean during retries
@@ -938,7 +952,7 @@ export function useChat({
       }
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      const configForServer = startTypingWithConfig(configToUse);
+      const configForServer = startTypingWithConfig(configToUse, "generateChallenge");
 
       try {
         let recentSentences: string[] = [];
@@ -996,7 +1010,7 @@ export function useChat({
         retryAttemptsMapRef.current.clear();
       } catch (e: any) {
         console.error("Error generating translation challenge:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "practice-error");
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "challenge-error");
       } finally {
         setIsTyping(false);
       }
@@ -1799,10 +1813,10 @@ export function useChat({
       abortControllerRef.current = controller;
 
       // When the user sends a message from the text input field at the bottom,
-      // refrain from utilizing the LLM progress modal and instead employ the previous inline progress indicator.
+      // refrain from utilizing the foreground progress modal during active typing.
       const isFromBottomInput = options?.source === "bottom_input" || options?.source !== "challenge_card";
-      const challengeAction = isFromBottomInput ? "chat" : "processChallengeTurn";
-      const configForServer = startTypingWithConfig(configToUse, challengeAction);
+      const challengeAction = "processChallengeTurn";
+      const configForServer = startTypingWithConfig(configToUse, isFromBottomInput ? "chat" : challengeAction);
 
       try {
         const chatHistory = chatMessages.slice(-6).map((m) => ({
@@ -2088,7 +2102,7 @@ export function useChat({
           err, 
           configToUse, 
           (newConfig) => handleSendChatMessage(userText, newConfig, options), 
-          isFromBottomInput ? "chat-error" : "challenge-turn-error"
+          "challenge-turn-error"
         );
       } finally {
         setIsTyping(false);
