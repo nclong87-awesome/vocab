@@ -103,6 +103,53 @@ function ChatView({
   // Virtual keyboard detection: hide quick actions and pin active sentence when keyboard is open
   const isKeyboardOpen = useVirtualKeyboard();
 
+  // Track if a textarea in the chat above (e.g. Translation Challenge card) is currently focused
+  const [isTextareaAboveFocused, setIsTextareaAboveFocused] = useState(false);
+
+  useEffect(() => {
+    let timer: any = null;
+
+    const checkFocus = () => {
+      if (typeof document === "undefined") return;
+      const active = document.activeElement;
+      const isTextarea = Boolean(
+        active &&
+        active.tagName.toLowerCase() === "textarea" &&
+        !inputRef.current?.contains(active)
+      );
+      setIsTextareaAboveFocused(isTextarea);
+    };
+
+    const handleFocusIn = () => {
+      if (timer) clearTimeout(timer);
+      checkFocus();
+      requestAnimationFrame(checkFocus);
+    };
+
+    const handleFocusOut = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(checkFocus, 100);
+    };
+
+    const handleCustomFocus = (e: any) => {
+      if (timer) clearTimeout(timer);
+      setIsTextareaAboveFocused(Boolean(e.detail?.focused));
+    };
+
+    window.addEventListener("focusin", handleFocusIn);
+    window.addEventListener("focusout", handleFocusOut);
+    window.addEventListener("vocab-textarea-focus-change", handleCustomFocus);
+
+    checkFocus();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focusin", handleFocusIn);
+      window.removeEventListener("focusout", handleFocusOut);
+      window.removeEventListener("vocab-textarea-focus-change", handleCustomFocus);
+    };
+  }, []);
+
   // Listen for text insertion from global Search Words dialog
   useEffect(() => {
     const handleInsert = (e: any) => {
@@ -534,8 +581,8 @@ function ChatView({
         onRepopulateInput={handleRepopulateInput}
       />
 
-      {/* Quick Actions Component - Hidden when virtual keyboard is open to maximize spaces for messages & challenge vocab hints */}
-      {!isKeyboardOpen && (
+      {/* Quick Actions Component - Hidden when virtual keyboard is open or when textarea above is focused */}
+      {!isKeyboardOpen && !isTextareaAboveFocused && (
         <QuickActionsSection
           targetLanguage={targetLanguage}
           nativeLanguage={nativeLanguage}
@@ -562,7 +609,7 @@ function ChatView({
         />
       )}
 
-      {/* Input Message Footer Form */}
+      {/* Input Message Footer Form - Hidden when a textarea above is focused */}
       <ChatInputForm
         inputText={inputText}
         setInputText={setInputText}
@@ -583,6 +630,7 @@ function ChatView({
         fileInputRef={fileInputRef}
         inputRef={inputRef}
         isKeyboardOpen={isKeyboardOpen}
+        isHidden={isTextareaAboveFocused}
       />
 
       {/* Photo Capture & Upload Modal */}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { 
   Languages, 
@@ -92,6 +92,17 @@ export default function TranslationChallengeCard({
   // Virtual keyboard detection: ONLY show the in-card sentence banner when virtual keyboard is open
   const isKeyboardOpen = useVirtualKeyboard({ inputRef: textareaRef });
 
+  // Cleanup: ensure bottom bar is unhidden when challenge card unmounts
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("vocab-textarea-focus-change", { detail: { focused: false } })
+        );
+      }
+    };
+  }, []);
+
   const effectiveTargetLang = challenge?.targetLanguage || targetLanguage || "English";
 
   const {
@@ -129,6 +140,12 @@ export default function TranslationChallengeCard({
     if (isListening) {
       stopListening();
     }
+    textareaRef.current?.blur();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("vocab-textarea-focus-change", { detail: { focused: false } })
+      );
+    }
     setIsSubmitting(true);
     try {
       if (onSubmitAnswer) {
@@ -145,6 +162,7 @@ export default function TranslationChallengeCard({
   const handleAnswerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.key === "Enter" && !e.shiftKey) || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) {
       e.preventDefault();
+      textareaRef.current?.blur();
       handleSubmitTranslation();
     }
   };
@@ -535,6 +553,27 @@ export default function TranslationChallengeCard({
               value={userAnswer}
               onChange={(e) => setUserAnswer(e.target.value)}
               onKeyDown={handleAnswerKeyDown}
+              onFocus={(e) => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(
+                    new CustomEvent("vocab-textarea-focus-change", { detail: { focused: true } })
+                  );
+                }
+                setTimeout(() => {
+                  e.target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }, 120);
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  const active = typeof document !== "undefined" ? document.activeElement : null;
+                  const isStillTextarea = active?.tagName.toLowerCase() === "textarea";
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("vocab-textarea-focus-change", { detail: { focused: isStillTextarea } })
+                    );
+                  }
+                }, 80);
+              }}
               disabled={isSubmitting}
               placeholder={`Type your ${effectiveTargetLang} translation here...`}
               rows={2}
@@ -577,7 +616,10 @@ export default function TranslationChallengeCard({
                 {!userAnswer.trim() && (
                   <button
                     type="button"
-                    onClick={() => handleSubmitTranslation("(No answer provided)")}
+                    onClick={() => {
+                      textareaRef.current?.blur();
+                      handleSubmitTranslation("(No answer provided)");
+                    }}
                     disabled={isSubmitting}
                     className="text-[11px] text-stone-400 hover:text-stone-600 underline decoration-stone-300 transition-colors cursor-pointer"
                     title="Reveal answer without typing"

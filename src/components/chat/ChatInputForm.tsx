@@ -26,6 +26,7 @@ interface ChatInputFormProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   inputRef: React.RefObject<HTMLInputElement | null>;
   isKeyboardOpen?: boolean;
+  isHidden?: boolean;
 }
 
 function ChatInputForm({
@@ -47,6 +48,7 @@ function ChatInputForm({
   fileInputRef,
   inputRef,
   isKeyboardOpen: _propIsKeyboardOpen,
+  isHidden = false,
 }: ChatInputFormProps) {
   const baseTextRef = useRef("");
   // Virtual keyboard detection: only show active challenge sentence sticky banner above bottom input when bottom input is focused
@@ -104,8 +106,21 @@ function ChatInputForm({
     handleSubmit(e);
   }, [isListening, stopListening, handleSubmit]);
 
+  // If hidden while speech recognition is active, stop listening
+  React.useEffect(() => {
+    if (isHidden && isListening) {
+      stopListening();
+    }
+  }, [isHidden, isListening, stopListening]);
+
   return (
-    <form onSubmit={onFormSubmit} className="p-2.5 sm:p-3 bg-white border-t border-stone-200 shrink-0">
+    <form 
+      onSubmit={onFormSubmit} 
+      className={`p-2.5 sm:p-3 bg-white border-t border-stone-200 shrink-0 ${
+        isHidden ? "hidden pointer-events-none select-none" : ""
+      }`}
+      aria-hidden={isHidden}
+    >
       {/* Active Translation Challenge Sticky Banner (Only visible when virtual keyboard is open) */}
       <AnimatePresence>
         {isKeyboardOpen && activeChallenge && activeChallenge.nativeSentence && (
