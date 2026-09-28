@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { 
   Languages, 
@@ -79,6 +79,7 @@ export default function TranslationChallengeCard({
 }: TranslationChallengeCardProps) {
   const [showVocabHints, setShowVocabHints] = useState(false);
   const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
+  const vocabHintsRef = useRef<HTMLDivElement>(null);
   const hintsContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [userAnswer, setUserAnswer] = useState("");
@@ -88,6 +89,30 @@ export default function TranslationChallengeCard({
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
+
+  const scrollToVocabHints = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const target = vocabHintsRef.current || hintsContainerRef.current;
+    if (!target) return;
+
+    // 1. Direct scroll container calculation (bulletproof across Android Chrome, iOS Safari & mobile webviews)
+    const scrollContainer = target.closest("#chat-messages-body, .chat-message-body") as HTMLElement | null;
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const offsetTop = targetRect.top - containerRect.top + scrollContainer.scrollTop - 12;
+      scrollContainer.scrollTo({
+        top: Math.max(0, offsetTop),
+        behavior,
+      });
+    }
+
+    // 2. Standard scrollIntoView alignment
+    try {
+      target.scrollIntoView({ behavior, block: "start" });
+    } catch {
+      // Fallback
+    }
+  }, []);
 
   const reviewedWords = useMemo(() => {
     const list: Word[] = [];
@@ -136,6 +161,22 @@ export default function TranslationChallengeCard({
 
   // Virtual keyboard detection: ONLY show the in-card sentence banner when virtual keyboard is open
   const isKeyboardOpen = useVirtualKeyboard({ inputRef: textareaRef });
+
+  // Auto scroll to Vocab hints when the virtual keyboard is open
+  useEffect(() => {
+    if (!isKeyboardOpen || evaluation) return;
+
+    // Staggered scrolls to account for virtual keyboard slide-up animation and viewport resize
+    const t1 = setTimeout(() => scrollToVocabHints("smooth"), 60);
+    const t2 = setTimeout(() => scrollToVocabHints("smooth"), 180);
+    const t3 = setTimeout(() => scrollToVocabHints("smooth"), 360);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isKeyboardOpen, evaluation, scrollToVocabHints]);
 
   // Cleanup: ensure bottom bar is unhidden when challenge card unmounts
   useEffect(() => {
@@ -412,7 +453,11 @@ export default function TranslationChallengeCard({
         </div>
 
         {/* Optional Context & Hints */}
-        <div className="pt-1 flex items-center justify-between gap-2 flex-wrap text-xs text-stone-600">
+        <div 
+          ref={vocabHintsRef} 
+          id="challenge-vocab-hints-section"
+          className="pt-1 flex items-center justify-between gap-2 flex-wrap text-xs text-stone-600 scroll-mt-3 sm:scroll-mt-4"
+        >
           {challenge.personalityNote ? (
             <div className="flex items-center gap-1.5 text-stone-500 text-xs">
               <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
@@ -429,7 +474,7 @@ export default function TranslationChallengeCard({
                   const next = !prev;
                   if (next) {
                     setTimeout(() => {
-                      hintsContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      scrollToVocabHints("smooth");
                     }, 80);
                   }
                   return next;
@@ -446,7 +491,7 @@ export default function TranslationChallengeCard({
 
         {/* Collapsible Key Target Words Hints */}
         {showVocabHints && challenge.keyTargetWords && (
-          <div ref={hintsContainerRef} className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
+          <div ref={hintsContainerRef} className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs scroll-mt-3 sm:scroll-mt-4">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
                 Vocab Clues & Options:
@@ -527,6 +572,9 @@ export default function TranslationChallengeCard({
                           return trimmed ? `${trimmed} ${kw.word}` : kw.word;
                         });
                         textareaRef.current?.focus();
+                        setTimeout(() => {
+                          scrollToVocabHints("smooth");
+                        }, 50);
                       }}
                       className="text-stone-400 hover:text-stone-700 p-0.5 rounded transition-colors cursor-pointer ml-0.5"
                       title={`Insert "${kw.word}" into your translation`}
@@ -598,15 +646,19 @@ export default function TranslationChallengeCard({
               value={userAnswer}
               onChange={(e) => setUserAnswer(e.target.value)}
               onKeyDown={handleAnswerKeyDown}
-              onFocus={(e) => {
+              onFocus={() => {
                 if (typeof window !== "undefined") {
                   window.dispatchEvent(
                     new CustomEvent("vocab-textarea-focus-change", { detail: { focused: true } })
                   );
                 }
+                // When focusing to type with virtual keyboard, auto scroll to Vocab hints
                 setTimeout(() => {
-                  e.target.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                }, 120);
+                  scrollToVocabHints("smooth");
+                }, 100);
+                setTimeout(() => {
+                  scrollToVocabHints("smooth");
+                }, 320);
               }}
               onBlur={() => {
                 setTimeout(() => {
