@@ -11,25 +11,51 @@ interface UseSpeechToTextOptions {
 
 /**
  * Removes immediate adjacent identical duplicate words or repeated phrase stutter
- * e.g. "Xin Xin chào" -> "Xin chào", "hello hello hello" -> "hello"
+ * e.g. "recently recently" -> "recently", "in the morning in the morning" -> "in the morning"
  */
 export function removeImmediateWordDuplications(text: string): string {
   if (!text) return "";
-  const words = text.trim().split(/\s+/);
+  let words = text.trim().split(/\s+/);
   if (words.length <= 1) return text.trim();
 
-  const cleanedWords: string[] = [];
-  for (let i = 0; i < words.length; i++) {
-    const current = words[i];
-    const prev = cleanedWords[cleanedWords.length - 1];
+  // Multi-pass check for repeated phrases of length N down to 1
+  let changed = true;
+  let iterations = 0;
+  while (changed && iterations < 5) {
+    changed = false;
+    iterations++;
+    const maxPhraseLen = Math.floor(words.length / 2);
+    for (let len = Math.min(maxPhraseLen, 8); len >= 1; len--) {
+      for (let i = 0; i <= words.length - 2 * len; i++) {
+        // Exception for legitimate English repetitions like "had had", "that that" (only when len === 1)
+        if (len === 1) {
+          const w = words[i].toLowerCase().replace(/[.,!?;:]/g, "");
+          if (w === "had" || w === "that") {
+            continue;
+          }
+        }
 
-    if (prev && current.toLowerCase() === prev.toLowerCase()) {
-      continue;
+        const phrase1 = words
+          .slice(i, i + len)
+          .map((w) => w.toLowerCase().replace(/[.,!?;:]/g, ""))
+          .join(" ");
+        const phrase2 = words
+          .slice(i + len, i + 2 * len)
+          .map((w) => w.toLowerCase().replace(/[.,!?;:]/g, ""))
+          .join(" ");
+
+        if (phrase1 && phrase1 === phrase2) {
+          // Remove the duplicate phrase
+          words.splice(i + len, len);
+          changed = true;
+          break;
+        }
+      }
+      if (changed) break;
     }
-    cleanedWords.push(current);
   }
 
-  return cleanedWords.join(" ");
+  return words.join(" ");
 }
 
 /**

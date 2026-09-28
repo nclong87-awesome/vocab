@@ -24,7 +24,7 @@ import {
 import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig } from "../../types";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
-import { useSpeechToText } from "../../hooks/useSpeechToText";
+import { useSpeechToText, removeImmediateWordDuplications } from "../../hooks/useSpeechToText";
 import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
@@ -82,6 +82,7 @@ export default function TranslationChallengeCard({
   const vocabHintsRef = useRef<HTMLDivElement>(null);
   const hintsContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const voiceBaseTextRef = useRef("");
   const [userAnswer, setUserAnswer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
@@ -200,11 +201,10 @@ export default function TranslationChallengeCard({
     targetLanguage: effectiveTargetLang,
     onTranscript: (transcript) => {
       if (transcript) {
-        setUserAnswer((prev) => {
-          const trimmed = prev.trim();
-          if (!trimmed) return transcript;
-          return `${trimmed} ${transcript}`;
-        });
+        const base = voiceBaseTextRef.current.trim();
+        const cleanTranscript = removeImmediateWordDuplications(transcript.trim());
+        const combined = base ? `${base} ${cleanTranscript}` : cleanTranscript;
+        setUserAnswer(removeImmediateWordDuplications(combined));
       }
     },
     onError: (err) => {
@@ -216,6 +216,7 @@ export default function TranslationChallengeCard({
     if (isListening) {
       stopListening();
     } else {
+      voiceBaseTextRef.current = userAnswer;
       startListening(effectiveTargetLang);
     }
   };
@@ -226,6 +227,7 @@ export default function TranslationChallengeCard({
     if (isListening) {
       stopListening();
     }
+    voiceBaseTextRef.current = "";
     textareaRef.current?.blur();
     if (typeof window !== "undefined") {
       window.dispatchEvent(
@@ -644,7 +646,12 @@ export default function TranslationChallengeCard({
               ref={textareaRef}
               id={`challenge-answer-${challenge.id || "prompt"}`}
               value={userAnswer}
-              onChange={(e) => setUserAnswer(e.target.value)}
+              onChange={(e) => {
+                setUserAnswer(e.target.value);
+                if (isListening) {
+                  voiceBaseTextRef.current = e.target.value;
+                }
+              }}
               onKeyDown={handleAnswerKeyDown}
               onFocus={() => {
                 if (typeof window !== "undefined") {
@@ -700,7 +707,13 @@ export default function TranslationChallengeCard({
                 {userAnswer.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setUserAnswer("")}
+                    onClick={() => {
+                      setUserAnswer("");
+                      voiceBaseTextRef.current = "";
+                      if (isListening) {
+                        stopListening();
+                      }
+                    }}
                     disabled={isSubmitting}
                     className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-700 transition-colors p-1 cursor-pointer"
                     title="Clear text"

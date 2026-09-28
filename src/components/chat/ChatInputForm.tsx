@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, Mic, MicOff, Send, X } from "lucide-react";
-import { useSpeechToText } from "../../hooks/useSpeechToText";
+import { useSpeechToText, removeImmediateWordDuplications } from "../../hooks/useSpeechToText";
 import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
 import { getLanguageCode } from "../../utils/ttsService";
 import { ChallengeData, TTSConfig, LLMConfig } from "../../types";
@@ -64,9 +64,9 @@ function ChatInputForm({
 
   const handleTranscript = useCallback((transcript: string) => {
     const base = baseTextRef.current.trim();
-    const cleanTranscript = transcript.trim();
+    const cleanTranscript = removeImmediateWordDuplications(transcript.trim());
     const updated = base ? `${base} ${cleanTranscript}` : cleanTranscript;
-    setInputText(updated);
+    setInputText(removeImmediateWordDuplications(updated));
   }, [setInputText]);
 
   const handleSpeechError = useCallback((errMsg: string) => {
