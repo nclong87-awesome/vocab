@@ -34,18 +34,6 @@ export function isChatAction(action?: string): boolean {
   if (!action) return false;
   const act = action.toLowerCase().trim();
 
-  // Explicitly exclude translation challenge actions (they use central modal or dedicated countdown handling)
-  if (
-    act.includes("challenge") ||
-    act.includes("translation") ||
-    act === "generatechallenge" ||
-    act === "processchallengeturn" ||
-    act === "challenge_turn" ||
-    act === "challenge-turn"
-  ) {
-    return false;
-  }
-
   return (
     act === "chat" ||
     act === "send_message" ||
@@ -61,8 +49,17 @@ export function isChatAction(action?: string): boolean {
     act === "suggested_actions" ||
     act === "check_word" ||
     act === "add_word" ||
+    act === "generatechallenge" ||
+    act === "processchallengeturn" ||
+    act === "challenge_turn" ||
+    act === "challenge-turn" ||
+    act === "confuserduel" ||
     act.startsWith("chat") ||
     act.includes("chat") ||
+    act.includes("challenge") ||
+    act.includes("translation") ||
+    act.includes("duel") ||
+    act.includes("quiz") ||
     act.includes("ask ai") ||
     act.includes("ask_ai") ||
     act.includes("subchat") ||

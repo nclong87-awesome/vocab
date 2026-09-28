@@ -157,7 +157,7 @@ function formatActionLabel(act: { label: string; action: string; payload?: any }
   return rawLabel;
 }
 
-function ChatMessageItem({
+function ChatMessageItemContent({
   msg,
   isLatestMessage,
   messages,
@@ -184,27 +184,16 @@ function ChatMessageItem({
   handleRecordActionUse,
   words,
   onUpdateWords,
-  onRetryErrorMessage,
-  onCancelErrorMessage,
+  onRetryErrorMessage: _onRetryErrorMessage,
+  onCancelErrorMessage: _onCancelErrorMessage,
   hideAskAiButton,
   onRepopulateInput,
 }: ChatMessageItemProps) {
-  if (msg.isError) {
-    return (
-      <ChatErrorMessageCard
-        msg={msg}
-        appLanguage={appLanguage}
-        llmConfig={llmConfig}
-        onRetry={() => onRetryErrorMessage?.(msg.id)}
-        onCancel={() => onCancelErrorMessage?.(msg.id)}
-      />
-    );
-  }
-
   const isUser = msg.role === "user";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
+  const [customActionPayloads, setCustomActionPayloads] = useState<Record<number, any>>({});
 
   const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "en";
 
@@ -737,8 +726,6 @@ function ChatMessageItem({
 
     return unfilteredActions.filter(act => !inlineMatchedActions.has(act));
   }, [unfilteredActions, displayContent]);
-
-  const [customActionPayloads, setCustomActionPayloads] = useState<Record<number, any>>({});
 
   const handleActionClick = (act: { label: string; action: string; payload?: any }, actionIndex?: number) => {
     if (act.action === "copy_text" || act.action === "copy_sentence") {
@@ -1697,6 +1684,22 @@ function ChatMessageItem({
       </AnimatePresence>
     </div>
   );
+}
+
+function ChatMessageItem(props: ChatMessageItemProps) {
+  if (props.msg.isError) {
+    return (
+      <ChatErrorMessageCard
+        msg={props.msg}
+        appLanguage={props.appLanguage}
+        llmConfig={props.llmConfig}
+        onRetry={() => props.onRetryErrorMessage?.(props.msg.id)}
+        onCancel={() => props.onCancelErrorMessage?.(props.msg.id)}
+      />
+    );
+  }
+
+  return <ChatMessageItemContent {...props} />;
 }
 
 export default React.memo(ChatMessageItem);

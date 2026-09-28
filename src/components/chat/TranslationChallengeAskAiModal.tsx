@@ -162,8 +162,6 @@ Ask me anything about the feedback, word nuances, or grammar!`;
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleCloseModal]);
 
-  if (!isOpen) return null;
-
   const handleSpeak = (text: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     speakText(text, ttsConfig, llmConfig, targetLanguage);
@@ -355,7 +353,9 @@ USER LATEST INQUIRY:
         retryTimerRef.current = null;
       }
     };
-  }, [errorMsg, isTyping, isCountdownCancelled, messages]);
+  }, [errorMsg, isTyping, isCountdownCancelled, messages, isOpen]);
+
+  if (!isOpen) return null;
 
   return createPortal(
     <motion.div

@@ -342,7 +342,6 @@ export function useChat({
       return;
     }
     pendingRetriesRef.current.delete(messageId);
-    retryAttemptsMapRef.current.clear();
     // Mark message as retrying so the card displays the retrying spinner instead of vanishing
     setChatMessages((prev) =>
       prev.map((m) => {
@@ -396,7 +395,7 @@ export function useChat({
   const startPractice = async (
     overrideConfig?: LLMConfig,
     practiceMode: "auto" | "quiz_only" | "balanced" | "sandwich_duel" | "sandwich_quiz" | "confuser_duel" | "translation_challenge" = "auto",
-    options?: { warmupWordIds?: string[]; incorrectWordIds?: string[] }
+    options?: { warmupWordIds?: string[]; incorrectWordIds?: string[]; isRetry?: boolean }
   ) => {
     const configToUse = overrideConfig || llmConfig;
     setActiveQuiz(null);
@@ -406,7 +405,9 @@ export function useChat({
     setConversationalState("none");
     setPendingWordSenses(null);
     setPendingTopicSubject("");
-    setChatMessages([]);
+    if (!options?.isRetry) {
+      setChatMessages([]);
+    }
 
     const activeWords = await getEffectiveWords();
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
@@ -1010,7 +1011,7 @@ export function useChat({
         retryAttemptsMapRef.current.clear();
       } catch (e: any) {
         console.error("Error generating translation challenge:", e);
-        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode), "challenge-error");
+        triggerChatErrorWithCountdown(e, configToUse, (newConfig) => startPractice(newConfig, practiceMode, { ...options, isRetry: true }), "challenge-error");
       } finally {
         setIsTyping(false);
       }
@@ -1752,7 +1753,7 @@ export function useChat({
   const handleSendChatMessage = async (
     text: string, 
     overrideConfig?: LLMConfig,
-    options?: { source?: "bottom_input" | "challenge_card" | "quick_action" | string }
+    options?: { source?: "bottom_input" | "challenge_card" | "quick_action" | string; isRetry?: boolean }
   ) => {
     let challengeToProcess = activeChallenge;
     if (!challengeToProcess && chatMessages && chatMessages.length > 0) {
@@ -1775,8 +1776,8 @@ export function useChat({
     let newUserMessage: ChatMessage | null = null;
     setChatMessages((prev) => {
       const last = prev[prev.length - 1];
-      if (last && last.role === "user" && last.content === effectiveText) {
-        newUserMessage = last;
+      if (options?.isRetry || (last && last.role === "user" && last.content === effectiveText)) {
+        newUserMessage = last || null;
         return prev;
       }
       newUserMessage = {
@@ -2086,6 +2087,7 @@ export function useChat({
             ],
           };
           setChatMessages((prev) => [...prev, evalMsg]);
+          retryAttemptsMapRef.current.clear();
 
           // Record learning interaction for continuous milestone profiling
           recordLearningInteraction("study_review", {
@@ -2101,7 +2103,7 @@ export function useChat({
         triggerChatErrorWithCountdown(
           err, 
           configToUse, 
-          (newConfig) => handleSendChatMessage(userText, newConfig, options), 
+          (newConfig) => handleSendChatMessage(userText, newConfig, { ...options, isRetry: true }), 
           "challenge-turn-error"
         );
       } finally {

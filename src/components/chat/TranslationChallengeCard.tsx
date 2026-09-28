@@ -89,6 +89,51 @@ export default function TranslationChallengeCard({
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
 
+  const reviewedWords = useMemo(() => {
+    const list: Word[] = [];
+    const seenWords = new Set<string>();
+
+    // 1. If evaluation.augmentedWords is present, build Word objects for all augmented words that exist in collection
+    if (evaluation?.augmentedWords && evaluation.augmentedWords.length > 0) {
+      for (const aug of evaluation.augmentedWords) {
+        const lower = aug.word.toLowerCase().trim();
+        if (seenWords.has(lower)) continue;
+        seenWords.add(lower);
+
+        const matched = words?.length ? findWordInCollection(words, aug.word) : undefined;
+        if (matched) {
+          list.push({
+            ...matched,
+            strength: typeof aug.newStrength === "number" ? aug.newStrength : matched.strength,
+          });
+        }
+      }
+    }
+
+    // 2. Fallback to single target word if list is empty, but ONLY if it exists in the collection
+    if (list.length === 0) {
+      const rawTargetWord = evaluation?.targetWordUsed || challenge?.targetWordFromCollection?.word;
+      if (rawTargetWord || challenge?.targetWordFromCollection) {
+        let matchedWord: Word | undefined = undefined;
+        if (challenge?.targetWordFromCollection?.id && words?.length) {
+          matchedWord = words.find((w) => w.id === challenge.targetWordFromCollection?.id);
+        }
+        if (!matchedWord && rawTargetWord && words?.length) {
+          matchedWord = findWordInCollection(words, rawTargetWord);
+        }
+
+        if (matchedWord) {
+          list.push({
+            ...matchedWord,
+            strength: typeof evaluation?.targetWordNewStrength === "number" ? evaluation.targetWordNewStrength : matchedWord.strength,
+          });
+        }
+      }
+    }
+
+    return list;
+  }, [words, evaluation, challenge]);
+
   // Virtual keyboard detection: ONLY show the in-card sentence banner when virtual keyboard is open
   const isKeyboardOpen = useVirtualKeyboard({ inputRef: textareaRef });
 
@@ -751,51 +796,6 @@ export default function TranslationChallengeCard({
     );
 
     const targetWordText = evaluation.targetWordUsed || challenge?.targetWordFromCollection?.word;
-
-    const reviewedWords = useMemo(() => {
-      const list: Word[] = [];
-      const seenWords = new Set<string>();
-
-      // 1. If evaluation.augmentedWords is present, build Word objects for all augmented words that exist in collection
-      if (evaluation?.augmentedWords && evaluation.augmentedWords.length > 0) {
-        for (const aug of evaluation.augmentedWords) {
-          const lower = aug.word.toLowerCase().trim();
-          if (seenWords.has(lower)) continue;
-          seenWords.add(lower);
-
-          const matched = words?.length ? findWordInCollection(words, aug.word) : undefined;
-          if (matched) {
-            list.push({
-              ...matched,
-              strength: typeof aug.newStrength === "number" ? aug.newStrength : matched.strength,
-            });
-          }
-        }
-      }
-
-      // 2. Fallback to single target word if list is empty, but ONLY if it exists in the collection
-      if (list.length === 0) {
-        const rawTargetWord = evaluation?.targetWordUsed || challenge?.targetWordFromCollection?.word;
-        if (rawTargetWord || challenge?.targetWordFromCollection) {
-          let matchedWord: Word | undefined = undefined;
-          if (challenge?.targetWordFromCollection?.id && words?.length) {
-            matchedWord = words.find((w) => w.id === challenge.targetWordFromCollection?.id);
-          }
-          if (!matchedWord && rawTargetWord && words?.length) {
-            matchedWord = findWordInCollection(words, rawTargetWord);
-          }
-
-          if (matchedWord) {
-            list.push({
-              ...matchedWord,
-              strength: typeof evaluation?.targetWordNewStrength === "number" ? evaluation.targetWordNewStrength : matchedWord.strength,
-            });
-          }
-        }
-      }
-
-      return list;
-    }, [words, evaluation, challenge]);
 
     return (
       <div id="challenge-evaluation-card" className="w-full p-4 sm:p-5 bg-white border border-stone-200/90 rounded-2xl shadow-xs space-y-3.5">
