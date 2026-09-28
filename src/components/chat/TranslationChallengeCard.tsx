@@ -221,9 +221,10 @@ export default function TranslationChallengeCard({
     }
   };
 
-  const handleSubmitTranslation = async (answerOverride?: string) => {
-    const textToSubmit = answerOverride !== undefined ? answerOverride : userAnswer.trim();
-    if (!textToSubmit && answerOverride === undefined) return;
+  const handleSubmitTranslation = useCallback(async (answerOverride?: string) => {
+    const domVal = textareaRef.current?.value ?? "";
+    const effectiveText = answerOverride !== undefined ? answerOverride : (domVal.trim() || userAnswer.trim());
+    if (!effectiveText && answerOverride === undefined) return;
     if (isListening) {
       stopListening();
     }
@@ -237,21 +238,60 @@ export default function TranslationChallengeCard({
     setIsSubmitting(true);
     try {
       if (onSubmitAnswer) {
-        await onSubmitAnswer(textToSubmit, { source: "challenge_card" });
+        await onSubmitAnswer(effectiveText, { source: "challenge_card" });
       }
       setUserAnswer("");
+      if (textareaRef.current) {
+        textareaRef.current.value = "";
+      }
     } catch (err: any) {
       showToast?.(err?.message || "Failed to submit answer.");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [userAnswer, isListening, stopListening, onSubmitAnswer, showToast]);
+
+  const lastSubmitTimeRef = useRef(0);
+  const touchStartPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const triggerSubmit = useCallback((answerOverride?: string) => {
+    const now = Date.now();
+    if (now - lastSubmitTimeRef.current < 600) return;
+    lastSubmitTimeRef.current = now;
+    handleSubmitTranslation(answerOverride);
+  }, [handleSubmitTranslation]);
+
+  const handleTouchStartOnSubmit = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartPosRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+    }
+  }, []);
+
+  const handleTouchEndOnSubmit = useCallback((e: React.TouchEvent, customAnswer?: string) => {
+    if (!touchStartPosRef.current) return;
+    const touch = e.changedTouches[0];
+    if (touch) {
+      const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+      const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+      const dt = Date.now() - touchStartPosRef.current.time;
+      // Valid tap on touch device: moved < 12px within 600ms
+      if (dx < 12 && dy < 12 && dt < 600) {
+        e.preventDefault();
+        triggerSubmit(customAnswer);
+      }
+    }
+    touchStartPosRef.current = null;
+  }, [triggerSubmit]);
 
   const handleAnswerKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.key === "Enter" && !e.shiftKey) || ((e.ctrlKey || e.metaKey) && e.key === "Enter")) {
+    if (((e.key === "Enter" || e.keyCode === 13) && !e.shiftKey) || ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.keyCode === 13))) {
       e.preventDefault();
       textareaRef.current?.blur();
-      handleSubmitTranslation();
+      triggerSubmit();
     }
   };
 
@@ -690,9 +730,11 @@ export default function TranslationChallengeCard({
                 {isSpeechSupported && (
                   <button
                     type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={handleToggleVoice}
                     disabled={isSubmitting}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer select-none touch-manipulation ${
                       isListening
                         ? "bg-rose-100 text-rose-700 border border-rose-300 animate-pulse"
                         : "bg-white hover:bg-stone-200 text-stone-600 border border-stone-200/80 shadow-3xs"
@@ -704,18 +746,23 @@ export default function TranslationChallengeCard({
                   </button>
                 )}
 
-                {userAnswer.length > 0 && (
+                {(userAnswer.length > 0 || Boolean(textareaRef.current?.value)) && (
                   <button
                     type="button"
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       setUserAnswer("");
+                      if (textareaRef.current) {
+                        textareaRef.current.value = "";
+                      }
                       voiceBaseTextRef.current = "";
                       if (isListening) {
                         stopListening();
                       }
                     }}
                     disabled={isSubmitting}
-                    className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-700 transition-colors p-1 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-700 transition-colors p-1 cursor-pointer select-none touch-manipulation"
                     title="Clear text"
                   >
                     <X className="w-3 h-3" />
@@ -723,15 +770,19 @@ export default function TranslationChallengeCard({
                   </button>
                 )}
 
-                {!userAnswer.trim() && (
+                {!userAnswer.trim() && !textareaRef.current?.value?.trim() && (
                   <button
                     type="button"
-                    onClick={() => {
-                      textareaRef.current?.blur();
-                      handleSubmitTranslation("(No answer provided)");
+                    onPointerDown={(e) => e.preventDefault()}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onTouchStart={handleTouchStartOnSubmit}
+                    onTouchEnd={(e) => handleTouchEndOnSubmit(e, "(No answer provided)")}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      triggerSubmit("(No answer provided)");
                     }}
                     disabled={isSubmitting}
-                    className="text-[11px] text-stone-400 hover:text-stone-600 underline decoration-stone-300 transition-colors cursor-pointer"
+                    className="text-[11px] text-stone-400 hover:text-stone-600 underline decoration-stone-300 transition-colors cursor-pointer select-none touch-manipulation"
                     title="Reveal answer without typing"
                   >
                     Don't know? Reveal answer
@@ -743,10 +794,23 @@ export default function TranslationChallengeCard({
                 <button
                   id="btn-submit-challenge-answer"
                   type="button"
-                  onClick={() => handleSubmitTranslation()}
-                  disabled={!userAnswer.trim() || isSubmitting}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
-                    userAnswer.trim() && !isSubmitting
+                  onPointerDown={(e) => {
+                    // Critical for mobile virtual keyboard: prevents textarea from blurring
+                    // before the tap/click completes, preventing premature keyboard closing and layout-shift cancellation
+                    e.preventDefault();
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                  }}
+                  onTouchStart={handleTouchStartOnSubmit}
+                  onTouchEnd={(e) => handleTouchEndOnSubmit(e)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    triggerSubmit();
+                  }}
+                  disabled={(!userAnswer.trim() && !textareaRef.current?.value?.trim()) || isSubmitting}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs select-none touch-manipulation ${
+                    (userAnswer.trim() || textareaRef.current?.value?.trim()) && !isSubmitting
                       ? "bg-stone-900 hover:bg-stone-800 active:scale-95 text-amber-400 cursor-pointer"
                       : "bg-stone-200/80 text-stone-400 cursor-not-allowed"
                   }`}

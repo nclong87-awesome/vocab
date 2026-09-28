@@ -292,8 +292,12 @@ function ChatInputForm({
         {/* Embedded Send Button (Right) */}
         <button
           type="submit"
+          onPointerDown={(e) => {
+            // Prevent input blur before form submit triggers
+            e.preventDefault();
+          }}
           disabled={(!inputText.trim() && !selectedImage) || isTyping}
-          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all shrink-0 ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all shrink-0 select-none touch-manipulation ${
             (inputText.trim() || selectedImage) && !isTyping
               ? "bg-stone-900 hover:bg-stone-800 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-xs"
               : "text-stone-300 cursor-not-allowed opacity-40"
