@@ -494,20 +494,13 @@ export default function TranslationChallengeCard({
           </p>
         </div>
 
-        {/* Optional Context & Hints */}
-        <div 
-          ref={vocabHintsRef} 
-          id="challenge-vocab-hints-section"
-          className="pt-1 flex items-center justify-between gap-2 flex-wrap text-xs text-stone-600 scroll-mt-3 sm:scroll-mt-4"
-        >
-          {challenge.personalityNote ? (
-            <div className="flex items-center gap-1.5 text-stone-500 text-xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span className="line-clamp-2">{challenge.personalityNote}</span>
-            </div>
-          ) : <div />}
-
-          {challenge.keyTargetWords && challenge.keyTargetWords.length > 0 && (
+        {/* Optional Vocab Hints Toggle */}
+        {((challenge.keyTargetWords && challenge.keyTargetWords.length > 0) || challenge.personalityNote) && (
+          <div 
+            ref={vocabHintsRef} 
+            id="challenge-vocab-hints-section"
+            className="pt-1 flex items-center justify-end gap-2 text-xs text-stone-600 scroll-mt-3 sm:scroll-mt-4"
+          >
             <button
               id="btn-toggle-vocab-hints"
               type="button"
@@ -522,111 +515,122 @@ export default function TranslationChallengeCard({
                   return next;
                 });
               }}
-              className="text-[11px] font-medium text-stone-600 hover:text-stone-900 flex items-center gap-1 transition-colors cursor-pointer ml-auto py-1 px-2 rounded-md hover:bg-stone-100"
+              className="text-[11px] font-medium text-stone-600 hover:text-stone-900 flex items-center gap-1 transition-colors cursor-pointer py-1 px-2 rounded-md hover:bg-stone-100"
             >
               <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
               <span>{showVocabHints ? "Hide Hints" : "Vocab Hints"}</span>
               {showVocabHints ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Collapsible Key Target Words Hints */}
-        {showVocabHints && challenge.keyTargetWords && (
-          <div ref={hintsContainerRef} className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs scroll-mt-3 sm:scroll-mt-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
-                Vocab Clues & Options:
-              </span>
-              {(() => {
-                const countInCol = challenge.keyTargetWords.filter(
-                  (kw) => isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()]
-                ).length;
-                return (
-                  <span className="text-[11px] text-stone-500">
-                    {countInCol > 0 ? (
-                      <span className="text-emerald-700 font-medium">
-                        {countInCol} {countInCol === 1 ? "word" : "words"} in your collection
-                      </span>
-                    ) : (
-                      <span>Multiple valid options</span>
-                    )}
+        {/* Collapsible Key Target Words & Context Hints */}
+        {showVocabHints && ((challenge.keyTargetWords && challenge.keyTargetWords.length > 0) || challenge.personalityNote) && (
+          <div ref={hintsContainerRef} id="challenge-vocab-hints-content" className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2.5 text-xs scroll-mt-3 sm:scroll-mt-4">
+            {challenge.personalityNote && (
+              <div className="flex items-start gap-1.5 text-stone-600 text-xs bg-amber-50/80 border border-amber-200/60 p-2.5 rounded-lg leading-relaxed">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span>{challenge.personalityNote}</span>
+              </div>
+            )}
+
+            {challenge.keyTargetWords && challenge.keyTargetWords.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-semibold text-stone-700 block text-[11px] uppercase tracking-wider font-mono">
+                    Vocab Clues & Options:
                   </span>
-                );
-              })()}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {challenge.keyTargetWords.map((kw, i) => {
-                const inCol = isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()];
-                const isPlayingKw = playingItemKey === `kw-${i}`;
-                return (
-                  <div
-                    key={i}
-                    onClick={() => {
-                      if (!inCol) handleAddSingleWord(kw);
-                    }}
-                    title={inCol ? "Saved in collection" : "Click to add to collection"}
-                    className={`px-2.5 py-1 rounded-lg flex items-center gap-2 border transition-all ${
-                      inCol
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-default"
-                        : "bg-white hover:bg-stone-100 border-stone-200 hover:border-stone-300 cursor-pointer active:scale-95"
-                    }`}
-                  >
-                    <button
-                      id={`btn-play-clue-${i}`}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayText(kw.word, challenge.targetLanguage || "English", `kw-${i}`);
-                      }}
-                      className="text-stone-400 hover:text-stone-800 p-0.5 rounded cursor-pointer transition-colors"
-                      title={`Listen "${kw.word}"`}
-                    >
-                      {isPlayingKw ? (
-                        <Square className="w-3 h-3 text-amber-600 fill-amber-600 animate-pulse" />
-                      ) : (
-                        <Volume2 className="w-3 h-3" />
-                      )}
-                    </button>
-                    <span className="font-medium text-stone-800">{kw.word}</span>
-                    <span className="text-stone-500">({kw.translation})</span>
-                    {(onAddIncompleteWord || onAddWord) && (
-                      <button
-                        id={`btn-add-clue-${i}`}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddSingleWord(kw);
+                  {(() => {
+                    const countInCol = challenge.keyTargetWords.filter(
+                      (kw) => isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()]
+                    ).length;
+                    return (
+                      <span className="text-[11px] text-stone-500">
+                        {countInCol > 0 ? (
+                          <span className="text-emerald-700 font-medium">
+                            {countInCol} {countInCol === 1 ? "word" : "words"} in your collection
+                          </span>
+                        ) : (
+                          <span>Multiple valid options</span>
+                        )}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {challenge.keyTargetWords.map((kw, i) => {
+                    const inCol = isWordInCollection(words, kw.word) || addedWordKeys[kw.word.toLowerCase()];
+                    const isPlayingKw = playingItemKey === `kw-${i}`;
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => {
+                          if (!inCol) handleAddSingleWord(kw);
                         }}
-                        disabled={inCol}
-                        className="ml-1 text-stone-500 hover:text-stone-800 disabled:text-emerald-700 transition-colors cursor-pointer"
-                        title={inCol ? "Saved" : "Add to collection"}
+                        title={inCol ? "Saved in collection" : "Click to add to collection"}
+                        className={`px-2.5 py-1 rounded-lg flex items-center gap-2 border transition-all ${
+                          inCol
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-default"
+                            : "bg-white hover:bg-stone-100 border-stone-200 hover:border-stone-300 cursor-pointer active:scale-95"
+                        }`}
                       >
-                        {inCol ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Plus className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setUserAnswer((prev) => {
-                          const trimmed = prev.trim();
-                          return trimmed ? `${trimmed} ${kw.word}` : kw.word;
-                        });
-                        textareaRef.current?.focus();
-                        setTimeout(() => {
-                          scrollToVocabHints("smooth");
-                        }, 50);
-                      }}
-                      className="text-stone-400 hover:text-stone-700 p-0.5 rounded transition-colors cursor-pointer ml-0.5"
-                      title={`Insert "${kw.word}" into your translation`}
-                    >
-                      <CornerDownLeft className="w-3 h-3" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                        <button
+                          id={`btn-play-clue-${i}`}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayText(kw.word, challenge.targetLanguage || "English", `kw-${i}`);
+                          }}
+                          className="text-stone-400 hover:text-stone-800 p-0.5 rounded cursor-pointer transition-colors"
+                          title={`Listen "${kw.word}"`}
+                        >
+                          {isPlayingKw ? (
+                            <Square className="w-3 h-3 text-amber-600 fill-amber-600 animate-pulse" />
+                          ) : (
+                            <Volume2 className="w-3 h-3" />
+                          )}
+                        </button>
+                        <span className="font-medium text-stone-800">{kw.word}</span>
+                        <span className="text-stone-500">({kw.translation})</span>
+                        {(onAddIncompleteWord || onAddWord) && (
+                          <button
+                            id={`btn-add-clue-${i}`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddSingleWord(kw);
+                            }}
+                            disabled={inCol}
+                            className="ml-1 text-stone-500 hover:text-stone-800 disabled:text-emerald-700 transition-colors cursor-pointer"
+                            title={inCol ? "Saved" : "Add to collection"}
+                          >
+                            {inCol ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Plus className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUserAnswer((prev) => {
+                              const trimmed = prev.trim();
+                              return trimmed ? `${trimmed} ${kw.word}` : kw.word;
+                            });
+                            textareaRef.current?.focus();
+                            setTimeout(() => {
+                              scrollToVocabHints("smooth");
+                            }, 50);
+                          }}
+                          className="text-stone-400 hover:text-stone-700 p-0.5 rounded transition-colors cursor-pointer ml-0.5"
+                          title={`Insert "${kw.word}" into your translation`}
+                        >
+                          <CornerDownLeft className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -988,16 +988,10 @@ export function useChat({
 
         setActiveChallenge(challengeData);
 
-        const targetWordNotice = challengeData.targetWordFromCollection
-          ? `\n\n🎯 **Featured Target Word:** \`${challengeData.targetWordFromCollection.word}\`${challengeData.targetWordFromCollection.translation ? ` (*${challengeData.targetWordFromCollection.translation}*)` : ""}\n*💡 Incorporate this word and any collection words in the vocab clues to boost their strength by **+30 points**!*`
-          : (challengeData.keyTargetWords && challengeData.keyTargetWords.length > 0
-            ? `\n\n💡 *Tip: Mention words from your collection in your translation to boost their strength by **+30 points**!*`
-            : "");
-
         const challengeMsg: ChatMessage = {
           id: `challenge-start-${Date.now()}`,
           role: "assistant",
-          content: `### 🎯 Translation Challenge\n\n**Translate into ${targetLanguage}:**\n> "${challengeData.nativeSentence}"${targetWordNotice}\n\n*Topic:* \`${challengeData.topicContext || "General"}\` • *Profile Match:* ${challengeData.personalityNote || "Tailored for your archetype"}\n\n💡 *Type your translation in ${targetLanguage} in the chat below, or ask for a hint!*`,
+          content: `### 🎯 Translation Challenge\n\n**Translate into ${targetLanguage}:**\n> "${challengeData.nativeSentence}"\n\n*Topic:* \`${challengeData.topicContext || "General"}\`\n\n💡 *Type your translation in ${targetLanguage} or click Vocab Hints for clues!*`,
           timestamp: new Date().toISOString(),
           challengeData,
           suggestedActions: [
