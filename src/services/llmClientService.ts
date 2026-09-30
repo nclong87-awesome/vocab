@@ -3274,7 +3274,7 @@ export interface SuggestReplyResult {
 
 export async function suggestCasualReplyService(params: SuggestReplyRequest): Promise<SuggestReplyResult> {
   const { imageDataUrl, customPrompt, targetLanguage, nativeLanguage, llmConfig, signal } = params;
-  notifyLlmRequestStartFromConfig(llmConfig);
+  notifyLlmRequestStartFromConfig(llmConfig, "suggest_casual_reply");
   const startTime = performance.now();
 
   const userTarget = targetLanguage || "English";
@@ -3338,6 +3338,13 @@ ${schemaDesc}`;
         if (prov && mod) {
           recordModelResponse(prov, mod, duration);
         }
+        publishLlmRequestEnd({
+          provider: prov,
+          model: mod,
+          action: "suggest_casual_reply",
+          success: true,
+          timestamp: Date.now()
+        });
         return {
           ...data,
           provider: prov,
@@ -3348,6 +3355,14 @@ ${schemaDesc}`;
       const errorJson = await res.json().catch(() => null);
       throw new Error(errorJson?.error || `Server API suggest-casual-reply failed with status ${res.status}`);
     } catch (e: any) {
+      publishLlmRequestEnd({
+        provider,
+        model,
+        action: "suggest_casual_reply",
+        success: false,
+        error: e,
+        timestamp: Date.now()
+      });
       console.error("Server API suggest-casual-reply failed:", e);
       throw e;
     }
@@ -3403,6 +3418,13 @@ ${schemaDesc}`;
       const parsed = JSON.parse(cleaned);
       if (parsed && (parsed.suggestedReplies || parsed.vocabularyCandidates)) {
         const duration = Math.round(performance.now() - startTime);
+        publishLlmRequestEnd({
+          provider: provider,
+          model: model,
+          action: "suggest_casual_reply",
+          success: true,
+          timestamp: Date.now()
+        });
         return {
           ...parsed,
           provider: provider,
@@ -3414,6 +3436,14 @@ ${schemaDesc}`;
 
     throw new Error("Image analysis worker did not return valid JSON with suggestedReplies and vocabularyCandidates.");
   } catch (err: any) {
+    publishLlmRequestEnd({
+      provider: provider,
+      model: model,
+      action: "suggest_casual_reply",
+      success: false,
+      error: err,
+      timestamp: Date.now()
+    });
     console.error("Client side suggest casual reply error:", err);
     throw err;
   }

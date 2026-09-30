@@ -2991,7 +2991,7 @@ export function useChat({
     const configToUse = overrideConfig || llmConfig;
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    const configForServer = startTypingWithConfig(configToUse);
+    const configForServer = startTypingWithConfig(configToUse, "suggest_casual_reply");
     const statusMsgId = `suggest-reply-status-${Date.now()}`;
     const currentAppLang = appLanguage || localStorage.getItem("vocab_learner_app_lang") || nativeLanguage || "Vietnamese";
 

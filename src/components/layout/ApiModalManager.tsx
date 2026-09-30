@@ -27,11 +27,35 @@ export interface ApiModalManagerProps {
 }
 
 /**
+ * Determines whether an action is part of the Suggest Reply feature.
+ * Suggest Reply uses the chat stream's inline typing indicator and progress message,
+ * and must never open the global LLM progress dialog modal.
+ */
+export function isSuggestReplyAction(action?: string): boolean {
+  if (!action) return false;
+  const act = action.toLowerCase().trim();
+  return (
+    act === "suggest_casual_reply" ||
+    act === "suggest_reply" ||
+    act === "suggest_replies" ||
+    act === "suggestreply" ||
+    act === "casual_reply" ||
+    act === "suggest_another" ||
+    act === "suggesting_reply" ||
+    act.includes("suggest_casual_reply") ||
+    act.includes("suggest_reply") ||
+    act.includes("casual_reply") ||
+    (act.includes("suggest") && act.includes("reply"))
+  );
+}
+
+/**
  * Determines whether an action is part of the interactive chat experience
  * (where the chat interface already has its own inline typing/progress indicator).
  */
 export function isChatAction(action?: string): boolean {
   if (!action) return false;
+  if (isSuggestReplyAction(action)) return true;
   const act = action.toLowerCase().trim();
 
   return (
@@ -41,6 +65,9 @@ export function isChatAction(action?: string): boolean {
     act === "ask_ai" ||
     act === "word_chat" ||
     act === "suggest_casual_reply" ||
+    act === "suggest_reply" ||
+    act === "suggest_replies" ||
+    act === "casual_reply" ||
     act === "fix_grammar" ||
     act === "chat_quiz" ||
     act === "quick_chat" ||
@@ -203,8 +230,8 @@ export default function ApiModalManager({ llmConfig, appLanguage }: ApiModalMana
   // Listen to request start, end, and error events
   useEffect(() => {
     const unsubStart = subscribeLlmRequestStart((data: LlmRequestStartEvent) => {
-      // Do not open foreground progress modal for background or chat actions (chat has inline typing indicator)
-      if (isBackgroundAction(data.action) || isChatAction(data.action)) {
+      // Do not open foreground progress modal for background, chat, or suggest reply actions (uses inline typing indicator)
+      if (isBackgroundAction(data.action) || isChatAction(data.action) || isSuggestReplyAction(data.action)) {
         return;
       }
 
