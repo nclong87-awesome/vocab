@@ -735,6 +735,18 @@ export function autoMergeLocalAndRemote(
   );
   const mergedSettings = Array.from(settingsMap.values());
 
+  // Merge poor sentence reports
+  const localPoor = localData.stores.poorSentences || [];
+  const remotePoor = remoteData.stores?.poorSentences || [];
+  const poorMap = new Map<string, any>();
+  for (const p of [...remotePoor, ...localPoor]) {
+    if (p && p.id) poorMap.set(p.id, p);
+    else if (p && p.nativeSentence) poorMap.set(p.nativeSentence, p);
+  }
+  const mergedPoorSentences = Array.from(poorMap.values()).sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
   const mergedExportData: IndexedDBExportData = {
     version: localData.version || 1,
     dbName: localData.dbName || "VocabLearnerDB",
@@ -743,7 +755,8 @@ export function autoMergeLocalAndRemote(
       words: mergedWordsList,
       stats: [mergedStatsRec],
       settings: mergedSettings,
-      deletedWords: finalMergedDeletedList
+      deletedWords: finalMergedDeletedList,
+      poorSentences: mergedPoorSentences
     }
   };
 

@@ -430,3 +430,25 @@ export interface ChallengeMessage {
   };
 }
 
+export interface PoorSentenceReport {
+  id: string;
+  timestamp: string; // ISO string
+  challengeId?: string;
+  nativeSentence: string;
+  targetLanguage: string;
+  nativeLanguage: string;
+  topicContext?: string;
+  targetWord?: string;
+  keyTargetWords?: ChallengeKeyWord[];
+  idealTranslation?: string;
+  userTranslation?: string;
+  evaluationScore?: number;
+  evaluationFeedback?: string;
+  provider?: string;
+  model?: string;
+  responseTimeMs?: number;
+  reason?: string;
+  notes?: string;
+  phase: "prompt" | "evaluation";
+}
+

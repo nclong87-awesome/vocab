@@ -29,6 +29,7 @@ import {
   Smartphone,
   HelpCircle,
   Clock,
+  Flag
 } from "lucide-react";
 import { APP_VERSION } from "../config/appVersion";
 import { TTSConfig, TTSEngine, LLMConfig, LLMProvider } from "../types";
@@ -39,12 +40,14 @@ import { speakText, stopSpeech, getLanguageCode, getVoicesForLanguage, waitForVo
 import { 
   exportIndexedDBDatabase, 
   importIndexedDBDatabase, 
-  resetIndexedDBDatabase 
+  resetIndexedDBDatabase,
+  getPoorSentenceReportsFromDB
 } from "../db/indexedDB";
 import { syncToGist, syncFromGist } from "../services/githubGistService";
 import { useModalBackNavigation } from "../hooks/useModalBackNavigation";
 import { sanitizeDataForCloudSync } from "../utils/cloudSyncMerge";
 import RequestHistoryModal from "./RequestHistoryModal";
+import PoorSentencesModal from "./settings/PoorSentencesModal";
 
 import { SUPPORTED_LANGUAGES } from "../config/languages";
 import { t } from "../config/i18n";
@@ -101,6 +104,22 @@ export default function SettingsView({
   const [ttsSaveSuccess, setTtsSaveSuccess] = useState<string | null>(null);
   const [showVoicePackGuideModal, setShowVoicePackGuideModal] = useState(false);
   const [isRequestHistoryModalOpen, setIsRequestHistoryModalOpen] = useState(false);
+  const [isPoorSentencesModalOpen, setIsPoorSentencesModalOpen] = useState(false);
+  const [poorSentencesCount, setPoorSentencesCount] = useState(0);
+
+  const loadPoorSentencesCount = async () => {
+    try {
+      const data = await getPoorSentenceReportsFromDB();
+      setPoorSentencesCount(data.length);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadPoorSentencesCount();
+    const handleUpdate = () => loadPoorSentencesCount();
+    window.addEventListener("vocab-poor-sentences-updated", handleUpdate);
+    return () => window.removeEventListener("vocab-poor-sentences-updated", handleUpdate);
+  }, []);
   
   useModalBackNavigation(showVoicePackGuideModal, () => setShowVoicePackGuideModal(false));
 
@@ -660,6 +679,17 @@ export default function SettingsView({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={() => setIsPoorSentencesModalOpen(true)}
+                className="px-3 py-1.5 bg-white hover:bg-amber-50 border border-stone-300 hover:border-amber-300 text-stone-800 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs shrink-0"
+                title="View collected poor translation challenge sentences dataset for LLM improvement"
+                id="settings-poor-sentences-btn"
+              >
+                <Flag className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
+                <span>Poor Sentences ({poorSentencesCount})</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsRequestHistoryModalOpen(true)}
@@ -1848,6 +1878,34 @@ export default function SettingsView({
           </div>
         )}
 
+        {/* Translation Quality & LLM Tuning Dataset Card */}
+        <div className="border border-stone-200 p-5 bg-amber-50/40 border-l-4 border-l-amber-500 rounded-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-xs sm:text-sm">
+                <Flag className="w-4 h-4 text-amber-600 fill-amber-600" />
+                <span>Translation Challenge Quality Reports (LLM Tuning Dataset)</span>
+              </div>
+              <p className="text-xs text-stone-600 max-w-2xl leading-relaxed">
+                Flawed, unnatural, or erroneous challenge sentences collected from user practice. Browse details, review tagged issues, and export as JSON or CSV to improve LLM system prompts and fine-tuning datasets.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-3 py-1 bg-amber-100 border border-amber-300 text-amber-900 font-bold text-xs rounded-full">
+                {poorSentencesCount} {poorSentencesCount === 1 ? "sentence" : "sentences"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPoorSentencesModalOpen(true)}
+                className="px-3.5 py-2 bg-stone-900 hover:bg-black text-amber-400 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              >
+                <span>View & Export Dataset</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Danger Zone: Reset Vocabularies & Words Data */}
         <div className="pt-4 border-t border-red-100 bg-red-50/50 p-5 border border-red-200 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2110,6 +2168,13 @@ export default function SettingsView({
       <RequestHistoryModal
         isOpen={isRequestHistoryModalOpen}
         onClose={() => setIsRequestHistoryModalOpen(false)}
+      />
+
+      {/* Poorly Generated Sentences Dataset Modal */}
+      <PoorSentencesModal
+        isOpen={isPoorSentencesModalOpen}
+        onClose={() => setIsPoorSentencesModalOpen(false)}
+        showToast={(msg) => setDbStatusMessage({ type: "info", text: msg })}
       />
     </div>
   );

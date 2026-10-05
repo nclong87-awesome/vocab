@@ -19,15 +19,18 @@ import {
   Mic,
   Send,
   X,
-  CornerDownLeft
+  CornerDownLeft,
+  Flag
 } from "lucide-react";
-import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig } from "../../types";
+import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig, PoorSentenceReport } from "../../types";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
 import { useSpeechToText, removeImmediateWordDuplications } from "../../hooks/useSpeechToText";
 import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
+import { getPoorSentenceReportsFromDB } from "../../db/indexedDB";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
+import ReportPoorSentenceModal from "./ReportPoorSentenceModal";
 import WordReviewedBanner from "./WordReviewedBanner";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import WordChatModal from "./WordChatModal";
@@ -90,6 +93,51 @@ export default function TranslationChallengeCard({
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
+
+  // Poorly generated sentence reporting state
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [existingReport, setExistingReport] = useState<PoorSentenceReport | null>(null);
+  const [isReported, setIsReported] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkReportedStatus = async () => {
+      const sentence = challenge?.nativeSentence;
+      if (!sentence) {
+        if (isMounted) {
+          setIsReported(false);
+          setExistingReport(null);
+        }
+        return;
+      }
+      try {
+        const all = await getPoorSentenceReportsFromDB();
+        const found = all.find(
+          (r) =>
+            (challenge?.id && r.challengeId === challenge.id) ||
+            (r.nativeSentence && r.nativeSentence.trim().toLowerCase() === sentence.trim().toLowerCase())
+        );
+        if (isMounted) {
+          setIsReported(Boolean(found));
+          setExistingReport(found || null);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    checkReportedStatus();
+
+    const handleUpdate = () => {
+      checkReportedStatus();
+    };
+
+    window.addEventListener("vocab-poor-sentences-updated", handleUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("vocab-poor-sentences-updated", handleUpdate);
+    };
+  }, [challenge?.id, challenge?.nativeSentence]);
 
   const scrollToVocabHints = useCallback((behavior: ScrollBehavior = "smooth") => {
     const target = vocabHintsRef.current || hintsContainerRef.current;
@@ -475,19 +523,37 @@ export default function TranslationChallengeCard({
             <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider font-mono">
               Translate into {challenge.targetLanguage || "English"}:
             </span>
-            <button
-              id="btn-play-prompt-sentence"
-              type="button"
-              onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence")}
-              className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
-              title="Listen sentence"
-            >
-              {playingItemKey === "prompt-sentence" ? (
-                <Square className="w-3.5 h-3.5 text-amber-600 fill-amber-600 animate-pulse" />
-              ) : (
-                <Volume2 className="w-3.5 h-3.5" />
-              )}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                id="btn-report-poor-challenge-prompt"
+                type="button"
+                onClick={() => setIsReportModalOpen(true)}
+                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all cursor-pointer ${
+                  isReported
+                    ? "bg-amber-100 text-amber-900 border border-amber-300 shadow-3xs"
+                    : "text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                }`}
+                title={isReported ? "Reported as poor sentence (Click to edit or remove)" : "Report poorly generated sentence for LLM enhancement"}
+              >
+                <Flag className={`w-3.5 h-3.5 ${isReported ? "fill-amber-600 text-amber-600" : ""}`} />
+                <span className="hidden sm:inline text-[11px]">
+                  {isReported ? "Flagged" : "Flag poor sentence"}
+                </span>
+              </button>
+              <button
+                id="btn-play-prompt-sentence"
+                type="button"
+                onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence")}
+                className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                title="Listen sentence"
+              >
+                {playingItemKey === "prompt-sentence" ? (
+                  <Square className="w-3.5 h-3.5 text-amber-600 fill-amber-600 animate-pulse" />
+                ) : (
+                  <Volume2 className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
           </div>
           <p className="text-base sm:text-lg font-semibold text-stone-900 leading-relaxed font-sans">
             "{challenge.nativeSentence}"
@@ -862,6 +928,29 @@ export default function TranslationChallengeCard({
           onAddWord={onAddWord}
           showToast={showToast}
         />
+
+        {/* Report Poor Sentence Modal */}
+        <ReportPoorSentenceModal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          challenge={challenge}
+          evaluation={evaluation}
+          provider={activeProvider}
+          model={activeModel}
+          responseTimeMs={activeResponseTimeMs}
+          targetLanguage={targetLanguage}
+          nativeLanguage={_nativeLanguage}
+          existingReport={existingReport}
+          onReportSaved={(rep) => {
+            setExistingReport(rep);
+            setIsReported(true);
+          }}
+          onReportDeleted={() => {
+            setExistingReport(null);
+            setIsReported(false);
+          }}
+          showToast={showToast}
+        />
       </div>
     );
   }
@@ -946,30 +1035,50 @@ export default function TranslationChallengeCard({
             </div>
           </div>
 
-          {/* Essential Audio Feedback Playback Button - Top Right */}
-          <button
-            id="btn-play-essential-challenge-feedback"
-            type="button"
-            onClick={handlePlayEssentialAudio}
-            className={`shrink-0 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 whitespace-nowrap ${
-              isPlayingEssentialAudio
-                ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
-            }`}
-            title="Play essential feedback (Score, Ideal translation, and Target word)"
-          >
-            {isPlayingEssentialAudio ? (
-              <>
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Stop Audio</span>
-              </>
-            ) : (
-              <>
-                <Volume2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>Listen Feedback</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Flag Poor Sentence Button */}
+            <button
+              id="btn-report-poor-challenge-evaluation"
+              type="button"
+              onClick={() => setIsReportModalOpen(true)}
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs ${
+                isReported
+                  ? "bg-amber-100 text-amber-900 border-amber-300 shadow-3xs"
+                  : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+              }`}
+              title={isReported ? "Reported as poor sentence (Click to edit or remove)" : "Report poorly generated sentence for LLM enhancement"}
+            >
+              <Flag className={`w-3.5 h-3.5 ${isReported ? "fill-amber-600 text-amber-600" : "text-stone-500"}`} />
+              <span className="text-[11px] hidden sm:inline">
+                {isReported ? "Flagged" : "Flag poor sentence"}
+              </span>
+            </button>
+
+            {/* Essential Audio Feedback Playback Button - Top Right */}
+            <button
+              id="btn-play-essential-challenge-feedback"
+              type="button"
+              onClick={handlePlayEssentialAudio}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 whitespace-nowrap ${
+                isPlayingEssentialAudio
+                  ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                  : "bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200"
+              }`}
+              title="Play essential feedback (Score, Ideal translation, and Target word)"
+            >
+              {isPlayingEssentialAudio ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>Stop Audio</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Listen Feedback</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Enhanced Obvious Score Showcase Banner */}
@@ -1082,19 +1191,33 @@ export default function TranslationChallengeCard({
                   <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider font-mono block">
                     Ideal Target Translation
                   </span>
-                  <button
-                    id="btn-play-ideal-translation"
-                    type="button"
-                    onClick={() => handlePlayText(evaluation.correctedSentence, targetLanguage || "English", "ideal-sentence")}
-                    className="p-1 rounded-md text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100/70 transition-colors cursor-pointer"
-                    title="Listen to ideal translation"
-                  >
-                    {isPlayingIdeal ? (
-                      <Square className="w-3.5 h-3.5 fill-emerald-800 text-emerald-800 animate-pulse" />
-                    ) : (
-                      <Volume2 className="w-3.5 h-3.5" />
-                    )}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsReportModalOpen(true)}
+                      className={`p-1 rounded-md text-xs transition-colors cursor-pointer ${
+                        isReported
+                          ? "text-amber-800 hover:text-amber-950 bg-amber-100"
+                          : "text-emerald-700/70 hover:text-emerald-950 hover:bg-emerald-100/70"
+                      }`}
+                      title={isReported ? "Flagged (Click to edit or remove)" : "Flag poor translation for LLM enhancement"}
+                    >
+                      <Flag className={`w-3 h-3 ${isReported ? "fill-amber-700 text-amber-700" : ""}`} />
+                    </button>
+                    <button
+                      id="btn-play-ideal-translation"
+                      type="button"
+                      onClick={() => handlePlayText(evaluation.correctedSentence, targetLanguage || "English", "ideal-sentence")}
+                      className="p-1 rounded-md text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100/70 transition-colors cursor-pointer"
+                      title="Listen to ideal translation"
+                    >
+                      {isPlayingIdeal ? (
+                        <Square className="w-3.5 h-3.5 fill-emerald-800 text-emerald-800 animate-pulse" />
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <p className="text-xs sm:text-sm font-bold text-emerald-950 break-words">
                   "{evaluation.correctedSentence}"
@@ -1448,6 +1571,29 @@ export default function TranslationChallengeCard({
             />
           )}
         </AnimatePresence>
+
+        {/* Report Poor Sentence Modal */}
+        <ReportPoorSentenceModal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          challenge={challenge}
+          evaluation={evaluation}
+          provider={activeProvider}
+          model={activeModel}
+          responseTimeMs={activeResponseTimeMs}
+          targetLanguage={targetLanguage}
+          nativeLanguage={_nativeLanguage}
+          existingReport={existingReport}
+          onReportSaved={(rep) => {
+            setExistingReport(rep);
+            setIsReported(true);
+          }}
+          onReportDeleted={() => {
+            setExistingReport(null);
+            setIsReported(false);
+          }}
+          showToast={showToast}
+        />
       </div>
     );
   }

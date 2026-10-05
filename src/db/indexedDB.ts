@@ -1,4 +1,4 @@
-import { Word, UserStats, LLMConfig, TTSConfig, ApiRequestLog, UserPersonalityProfile } from "../types";
+import { Word, UserStats, LLMConfig, TTSConfig, ApiRequestLog, UserPersonalityProfile, PoorSentenceReport } from "../types";
 import { deduplicateDeletedWords } from "../utils/cloudSyncMerge";
 import { sanitizeLlmConfig } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
@@ -17,12 +17,13 @@ const STORES = {
   stats: "stats",
   settings: "settings",
   deletedWords: "deleted_words",
-  apiLogs: "api_logs"
+  apiLogs: "api_logs",
+  poorSentences: "poor_sentences"
 } as const;
 
 type StoreName = keyof typeof STORES;
 
-const ALL_STORES: StoreName[] = ["words", "stats", "settings", "deletedWords", "apiLogs"];
+const ALL_STORES: StoreName[] = ["words", "stats", "settings", "deletedWords", "apiLogs", "poorSentences"];
 
 /** Keys of records kept inside the shared `settings` store. */
 const KEYS = {
@@ -87,7 +88,8 @@ const STORE_KEY_PATHS: Record<StoreName, string> = {
   stats: "id",
   settings: "key",
   deletedWords: "id",
-  apiLogs: "id"
+  apiLogs: "id",
+  poorSentences: "id"
 };
 
 function createMissingStores(db: IDBDatabase): void {
@@ -758,18 +760,20 @@ export interface IndexedDBExportData {
     stats: StoredRecord<UserStats>[];
     settings: StoredSetting[];
     deletedWords?: DeletedWordRecord[];
+    poorSentences?: PoorSentenceReport[];
     config?: never;
   };
 }
 
 // Export the full database as a JSON object (one snapshot-consistent transaction)
 export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
-  const [words, stats, settings, deletedWords] = await withStores(ALL_STORES, "readonly", (tx) =>
+  const [words, stats, settings, deletedWords, poorSentences] = await withStores(ALL_STORES, "readonly", (tx) =>
     Promise.all([
       readAll<Word>(tx, "words"),
       readAll<StoredRecord<UserStats>>(tx, "stats"),
       readAll<StoredSetting>(tx, "settings"),
-      readAll<DeletedWordRecord>(tx, "deletedWords")
+      readAll<DeletedWordRecord>(tx, "deletedWords"),
+      readAll<PoorSentenceReport>(tx, "poorSentences")
     ])
   );
 
@@ -781,7 +785,7 @@ export async function exportIndexedDBDatabase(): Promise<IndexedDBExportData> {
     return rec;
   });
 
-  const stores = { words, stats: cleanedStats, settings, deletedWords };
+  const stores = { words, stats: cleanedStats, settings, deletedWords, poorSentences };
 
   return {
     version: DB_SCHEMA_VERSION,
@@ -994,6 +998,75 @@ export async function clearApiRequestLogsFromDB(): Promise<void> {
     }
   } catch (err) {
     console.warn("Notice: could not clear API request logs in IndexedDB:", err);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Poorly Generated Challenge Sentences (LLM Quality & Enhancement Dataset)   */
+/* -------------------------------------------------------------------------- */
+
+export async function savePoorSentenceReportToDB(report: PoorSentenceReport): Promise<void> {
+  try {
+    await withStores(["poorSentences"], "readwrite", (tx) => {
+      tx.objectStore(STORES.poorSentences).put(report);
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-poor-sentences-updated", { detail: { report } }));
+    }
+  } catch (err) {
+    console.error("Error saving poor sentence report to IndexedDB:", err);
+  }
+}
+
+export async function getPoorSentenceReportsFromDB(): Promise<PoorSentenceReport[]> {
+  try {
+    const list = await withStores(["poorSentences"], "readonly", (tx) => readAll<PoorSentenceReport>(tx, "poorSentences"));
+    list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return list;
+  } catch (err) {
+    console.warn("Notice: could not load poor sentence reports from IndexedDB:", err);
+    return [];
+  }
+}
+
+export async function deletePoorSentenceReportFromDB(id: string): Promise<void> {
+  try {
+    await withStores(["poorSentences"], "readwrite", (tx) => {
+      tx.objectStore(STORES.poorSentences).delete(id);
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-poor-sentences-updated", { detail: { deletedId: id } }));
+    }
+  } catch (err) {
+    console.error("Error deleting poor sentence report from IndexedDB:", err);
+  }
+}
+
+export async function clearAllPoorSentenceReportsFromDB(): Promise<void> {
+  try {
+    await withStores(["poorSentences"], "readwrite", (tx) => {
+      tx.objectStore(STORES.poorSentences).clear();
+    });
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vocab-poor-sentences-updated"));
+    }
+  } catch (err) {
+    console.error("Error clearing poor sentence reports in IndexedDB:", err);
+  }
+}
+
+export async function isSentenceReportedInDB(nativeSentence: string, challengeId?: string): Promise<boolean> {
+  if (!nativeSentence && !challengeId) return false;
+  try {
+    const all = await getPoorSentenceReportsFromDB();
+    const cleanSentence = (nativeSentence || "").trim().toLowerCase();
+    return all.some((item) => {
+      if (challengeId && item.challengeId === challengeId) return true;
+      if (cleanSentence && (item.nativeSentence || "").trim().toLowerCase() === cleanSentence) return true;
+      return false;
+    });
+  } catch {
+    return false;
   }
 }
 
