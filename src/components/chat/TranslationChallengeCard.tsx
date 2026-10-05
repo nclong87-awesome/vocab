@@ -27,7 +27,7 @@ import { isWordInCollection, findWordInCollection } from "../../utils/wordNormal
 import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../utils/ttsService";
 import { useSpeechToText, removeImmediateWordDuplications } from "../../hooks/useSpeechToText";
 import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
-import { getPoorSentenceReportsFromDB } from "../../db/indexedDB";
+import { getPoorSentenceReportsFromDB, savePoorSentenceReportToDB } from "../../db/indexedDB";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
 import ReportPoorSentenceModal from "./ReportPoorSentenceModal";
@@ -98,6 +98,44 @@ export default function TranslationChallengeCard({
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [existingReport, setExistingReport] = useState<PoorSentenceReport | null>(null);
   const [isReported, setIsReported] = useState(false);
+
+  const handleFlagClick = async () => {
+    if (!challenge?.nativeSentence) return;
+    if (!isReported) {
+      try {
+        const report: PoorSentenceReport = {
+          id: `poor_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          timestamp: new Date().toISOString(),
+          challengeId: challenge.id,
+          nativeSentence: challenge.nativeSentence.trim(),
+          targetLanguage: challenge.targetLanguage || targetLanguage || "English",
+          nativeLanguage: challenge.nativeLanguage || "Vietnamese",
+          topicContext: challenge.topicContext,
+          targetWord: challenge.targetWordFromCollection?.word || evaluation?.targetWordUsed || undefined,
+          keyTargetWords: challenge.keyTargetWords,
+          idealTranslation: evaluation?.correctedSentence || challenge.idealTranslation || undefined,
+          userTranslation: evaluation?.userTranslation?.trim() || undefined,
+          evaluationScore: evaluation?.score,
+          evaluationFeedback: evaluation
+            ? `${evaluation.whatWentWell ? `Well: ${evaluation.whatWentWell}. ` : ""}${evaluation.areasForImprovement ? `Improve: ${evaluation.areasForImprovement}` : ""}`.trim()
+            : undefined,
+          provider: activeProvider,
+          model: activeModel,
+          responseTimeMs: activeResponseTimeMs,
+          reason: "Unnatural Phrasing",
+          phase: evaluation ? "evaluation" : "prompt",
+        };
+        await savePoorSentenceReportToDB(report);
+        setIsReported(true);
+        setExistingReport(report);
+        showToast?.("Sentence collected for LLM enhancement dataset!");
+      } catch (err) {
+        showToast?.("Failed to flag sentence.");
+      }
+    } else {
+      setIsReportModalOpen(true);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -527,17 +565,17 @@ export default function TranslationChallengeCard({
               <button
                 id="btn-report-poor-challenge-prompt"
                 type="button"
-                onClick={() => setIsReportModalOpen(true)}
-                className={`p-1 sm:px-2 sm:py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all cursor-pointer ${
+                onClick={handleFlagClick}
+                className={`p-1.5 sm:px-2.5 sm:py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs ${
                   isReported
-                    ? "bg-amber-100 text-amber-900 border border-amber-300 shadow-3xs"
-                    : "text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-2xs"
+                    : "text-stone-400 hover:text-amber-700 hover:bg-amber-50 border border-transparent hover:border-amber-200"
                 }`}
-                title={isReported ? "Reported as poor sentence (Click to edit or remove)" : "Report poorly generated sentence for LLM enhancement"}
+                title={isReported ? "Flagged for LLM tuning (Click to edit note or unflag)" : "Flag poor sentence for LLM improvement"}
               >
-                <Flag className={`w-3.5 h-3.5 ${isReported ? "fill-amber-600 text-amber-600" : ""}`} />
+                <Flag className={`w-3.5 h-3.5 ${isReported ? "fill-white text-white" : ""}`} />
                 <span className="hidden sm:inline text-[11px]">
-                  {isReported ? "Flagged" : "Flag poor sentence"}
+                  {isReported ? "Flagged" : "Flag sentence"}
                 </span>
               </button>
               <button
@@ -1040,17 +1078,17 @@ export default function TranslationChallengeCard({
             <button
               id="btn-report-poor-challenge-evaluation"
               type="button"
-              onClick={() => setIsReportModalOpen(true)}
-              className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs ${
+              onClick={handleFlagClick}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs ${
                 isReported
-                  ? "bg-amber-100 text-amber-900 border-amber-300 shadow-3xs"
-                  : "bg-stone-50 hover:bg-stone-100 text-stone-600 border-stone-200"
+                  ? "bg-amber-500 hover:bg-amber-600 text-white shadow-2xs"
+                  : "bg-stone-50 hover:bg-amber-50 text-stone-600 hover:text-amber-800 border border-stone-200 hover:border-amber-200"
               }`}
-              title={isReported ? "Reported as poor sentence (Click to edit or remove)" : "Report poorly generated sentence for LLM enhancement"}
+              title={isReported ? "Flagged for LLM tuning (Click to edit note or unflag)" : "Flag poor sentence for LLM improvement"}
             >
-              <Flag className={`w-3.5 h-3.5 ${isReported ? "fill-amber-600 text-amber-600" : "text-stone-500"}`} />
+              <Flag className={`w-3.5 h-3.5 ${isReported ? "fill-white text-white" : "text-stone-500"}`} />
               <span className="text-[11px] hidden sm:inline">
-                {isReported ? "Flagged" : "Flag poor sentence"}
+                {isReported ? "Flagged" : "Flag sentence"}
               </span>
             </button>
 
@@ -1194,7 +1232,7 @@ export default function TranslationChallengeCard({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setIsReportModalOpen(true)}
+                      onClick={handleFlagClick}
                       className={`p-1 rounded-md text-xs transition-colors cursor-pointer ${
                         isReported
                           ? "text-amber-800 hover:text-amber-950 bg-amber-100"
