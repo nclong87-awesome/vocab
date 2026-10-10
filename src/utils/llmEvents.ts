@@ -124,8 +124,8 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig, action?: 
         provider = cand.provider;
         model = cand.model;
       } catch (e) {
-        provider = "groq";
-        model = "openai/gpt-oss-120b";
+        provider = "openrouter";
+        model = "google/gemini-3.8-flash";
       }
     }
   } else {

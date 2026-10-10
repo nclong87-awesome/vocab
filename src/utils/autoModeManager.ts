@@ -1283,46 +1283,29 @@ export function getNextAutoCandidate(
     const hasPreferred = Array.isArray(preferredModels) && preferredModels.length > 0;
 
     // When language-preferred models are active, strictly prioritize the top preferred candidates!
-    // Rotate only among the top 2 preferred models (e.g. Gemini 3.8 and Gemini 3.7) to avoid starving top models
-    // or selecting lower-tier fallbacks like Cloudflare Singapore Gemma.
+    // Non-advancing queries (predictions for pub/sub & UI indicators) always return top available preferred model.
     if (hasPreferred) {
-      if (tier1Tested.length > 0) {
-        tier1Tested.sort((a, b) => {
-          const idxA = preferredModels.indexOf(a.cand.model);
-          const idxB = preferredModels.indexOf(b.cand.model);
-          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-        });
-        const topTestedPool = tier1Tested.slice(0, 2);
+      if (!advance) {
+        return available[0];
+      }
+
+      // Filter available candidates that belong to preferredModels
+      const preferredAvailable = available.filter((c) => preferredModels.includes(c.model));
+      preferredAvailable.sort((a, b) => {
+        const idxA = preferredModels.indexOf(a.model);
+        const idxB = preferredModels.indexOf(b.model);
+        return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+      });
+
+      if (preferredAvailable.length > 0) {
+        // Rotate only between the top 2 preferred models if both are healthy
+        const topPool = preferredAvailable.slice(0, Math.min(2, preferredAvailable.length));
         const rotIdx = getAutoRotationIndex();
-        const idx = rotIdx % topTestedPool.length;
+        const idx = rotIdx % topPool.length;
         if (advance) {
           saveAutoRotationIndex(rotIdx + 1);
         }
-        return topTestedPool[idx].cand;
-      }
-
-      if (tier1Probes.length > 0) {
-        tier1Probes.sort((a, b) => {
-          const idxA = preferredModels.indexOf(a.model);
-          const idxB = preferredModels.indexOf(b.model);
-          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-        });
-        const topProbesPool = tier1Probes.slice(0, 2);
-        const rotIdx = getAutoRotationIndex();
-        const idx = rotIdx % topProbesPool.length;
-        if (advance) {
-          saveAutoRotationIndex(rotIdx + 1);
-        }
-        return topProbesPool[idx];
-      }
-
-      if (tier2.length > 0) {
-        tier2.sort((a, b) => {
-          const idxA = preferredModels.indexOf(a.cand.model);
-          const idxB = preferredModels.indexOf(b.cand.model);
-          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-        });
-        return tier2[0].cand;
+        return topPool[idx];
       }
 
       return available[0];

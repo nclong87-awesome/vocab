@@ -1000,6 +1000,9 @@ export function useChat({
           content: `### 🎯 Translation Challenge\n\n**Translate into ${targetLanguage}:**\n> "${challengeData.nativeSentence}"\n\n*Topic:* \`${challengeData.topicContext || "General"}\`\n\n💡 *Type your translation in ${targetLanguage} or click Vocab Hints for clues!*`,
           timestamp: new Date().toISOString(),
           challengeData,
+          provider: challengeData?.provider,
+          model: challengeData?.model,
+          responseTimeMs: challengeData?.responseTimeMs,
           suggestedActions: [
             { label: "🏳️ Submit empty answer", action: "submit_empty_challenge" },
             { label: "🎯 Next Translation challenge", action: "start_translation_challenge" },
