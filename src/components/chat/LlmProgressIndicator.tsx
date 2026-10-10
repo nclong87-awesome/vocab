@@ -3,7 +3,7 @@ import { Clock, X } from "lucide-react";
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses, getNextAutoCandidate } from "../../utils/autoModeManager";
 import { PROVIDER_OPTIONS } from "../../config/llmProviders";
-import { subscribeLlmRequestStart, useCentralModalOpen } from "../../utils/llmEvents";
+import { subscribeLlmRequestStart, subscribeLlmRequestEnd, useCentralModalOpen } from "../../utils/llmEvents";
 
 interface LlmProgressIndicatorProps {
   llmConfig: LLMConfig;
@@ -25,10 +25,20 @@ export default function LlmProgressIndicator({ llmConfig, onCancel, activeModelI
   }, [activeModelInfo]);
 
   useEffect(() => {
-    const unsubscribe = subscribeLlmRequestStart((data) => {
-      setLiveModelInfo({ provider: data.provider, model: data.model });
+    const unsubStart = subscribeLlmRequestStart((data) => {
+      if (data?.provider && data?.model) {
+        setLiveModelInfo({ provider: data.provider, model: data.model });
+      }
     });
-    return () => unsubscribe();
+    const unsubEnd = subscribeLlmRequestEnd((data) => {
+      if (data?.provider && data?.model) {
+        setLiveModelInfo({ provider: data.provider, model: data.model });
+      }
+    });
+    return () => {
+      unsubStart();
+      unsubEnd();
+    };
   }, []);
 
   // Resolve active provider and model

@@ -412,6 +412,7 @@ export interface ChallengeTurnResult {
   provider?: string;
   model?: string;
   responseTimeMs?: number;
+  serverLockedModels?: Array<{ key: string; expiresAt: number }> | string[];
 }
 
 export interface ChallengeMessage {

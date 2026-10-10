@@ -23,10 +23,10 @@ import {
 import { getCertificateTopics, getGeneralTopics } from "../config/topicSuggestions";
 import { saveAllWordsToDB, getAllWordsFromDB, getUserPersonalityProfileFromDB } from "../db/indexedDB";
 import { recordStrengthHistory } from "../utils/strengthHistoryHelpers";
-import { getRotatedVisionModel } from "../config/llmProviders";
+import { getRotatedVisionModel, getPreferredModelsForLanguage } from "../config/llmProviders";
 import { extractOrGenerateTopicActions, getRemainingWordActions, formatExistingWordDetails } from "../utils/actionExtractor";
 import { extractWordsFromPayload } from "../utils/jsonSanitizer";
-import { lockModel } from "../utils/autoModeManager";
+import { lockModel, recordModelResponse, syncServerLocks } from "../utils/autoModeManager";
 import { extractCleanErrorMessage } from "../utils/llmHelpers";
 import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmApiError, publishCloseLlmModals, publishLlmRequestEnd } from "../utils/llmEvents";
 import { t } from "../config/i18n";
@@ -99,10 +99,11 @@ export function useChat({
     });
     setActiveModelInfo(activeInfo);
     setIsTypingState(true);
+    const isAutoMode = !cfgToUse.provider || cfgToUse.provider === "auto" || !cfgToUse.model || cfgToUse.model === "auto";
     return {
       ...cfgToUse,
-      preferredProvider: activeInfo.provider,
-      preferredModel: activeInfo.model,
+      preferredProvider: isAutoMode ? cfgToUse.preferredProvider : (cfgToUse.preferredProvider || activeInfo.provider),
+      preferredModel: isAutoMode ? cfgToUse.preferredModel : (cfgToUse.preferredModel || activeInfo.model),
     };
   };
 
@@ -986,6 +987,11 @@ export function useChat({
           }
         }
 
+        if (challengeData?.provider && challengeData?.model) {
+          setActiveModelInfo({ provider: challengeData.provider, model: challengeData.model });
+          recordModelResponse(challengeData.provider, challengeData.model, challengeData.responseTimeMs || 2000);
+        }
+
         setActiveChallenge(challengeData);
 
         const challengeMsg: ChatMessage = {
@@ -1811,7 +1817,15 @@ export function useChat({
       // refrain from utilizing the foreground progress modal during active typing.
       const isFromBottomInput = options?.source === "bottom_input" || options?.source !== "challenge_card";
       const challengeAction = "processChallengeTurn";
-      const configForServer = startTypingWithConfig(configToUse, isFromBottomInput ? "chat" : challengeAction);
+      const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+      const enrichedConfig: LLMConfig = {
+        ...configToUse,
+        nativeLanguage,
+        language: nativeLanguage,
+        preferredModels,
+        onlyReliableModels: true,
+      };
+      const configForServer = startTypingWithConfig(enrichedConfig, isFromBottomInput ? "chat" : challengeAction);
 
       try {
         const chatHistory = chatMessages.slice(-6).map((m) => ({
@@ -1831,6 +1845,13 @@ export function useChat({
         });
 
         if (result.intent === "incomplete") {
+          if (result.provider && result.model) {
+            setActiveModelInfo({ provider: result.provider, model: result.model });
+            recordModelResponse(result.provider, result.model, result.responseTimeMs || 2000);
+          }
+          if (result.serverLockedModels) {
+            syncServerLocks(result.serverLockedModels);
+          }
           const shortDraft = userText.length > 25 ? userText.slice(0, 25) + "…" : userText;
           const incompleteMsg: ChatMessage = {
             id: `challenge-incomplete-${Date.now()}`,
@@ -2047,6 +2068,25 @@ export function useChat({
 
           const bonusLine = bonusSections.length > 0 ? `\n\n${bonusSections.join("\n\n")}` : "";
 
+          const actualProvider = result.provider || configForServer?.preferredProvider || configForServer?.provider || "openrouter";
+          const actualModel = result.model || configForServer?.preferredModel || configForServer?.model || "google/gemini-3.8-flash";
+          const actualResponseTimeMs = result.responseTimeMs;
+
+          if (result.provider && result.model) {
+            setActiveModelInfo({ provider: result.provider, model: result.model });
+            recordModelResponse(result.provider, result.model, actualResponseTimeMs || 2000);
+          }
+
+          if (result.serverLockedModels) {
+            syncServerLocks(result.serverLockedModels);
+          }
+
+          if (evalRes) {
+            evalRes.provider = actualProvider;
+            evalRes.model = actualModel;
+            evalRes.responseTimeMs = actualResponseTimeMs;
+          }
+
           const finalTargetWord = primaryTargetWordText || evalRes.targetWordUsed || currentChallenge?.targetWordFromCollection?.word;
 
           const essentialAudioText = buildEssentialChallengeAudioText(
@@ -2065,9 +2105,9 @@ export function useChat({
             challengeEvaluation: evalRes,
             audioWord: finalTargetWord,
             quizSpeechText: essentialAudioText,
-            provider: result.provider || configForServer?.provider || "google",
-            model: result.model || configForServer?.model || "gemini-2.5-flash",
-            responseTimeMs: result.responseTimeMs,
+            provider: actualProvider,
+            model: actualModel,
+            responseTimeMs: actualResponseTimeMs,
             suggestedWords: (evalRes.suggestedVocabulary || []).map((v) => ({
               word: v.word,
               translation: v.translation || "",

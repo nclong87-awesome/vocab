@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { LLMConfig } from "../types";
-import { getNextAutoCandidate } from "./autoModeManager";
+import { getNextAutoCandidate, isModelLocked } from "./autoModeManager";
 import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 function sanitizeModelName(provider: string, model?: string): string {
@@ -115,13 +115,18 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig, action?: 
   const isAutoMode = provider === "auto" || model === "auto";
 
   if (isAutoMode) {
-    try {
-      const cand = getNextAutoCandidate(llmConfig, undefined, false);
-      provider = cand.provider;
-      model = cand.model;
-    } catch (e) {
-      provider = "gemini";
-      model = "gemini-2.5-flash";
+    if (llmConfig?.preferredProvider && llmConfig?.preferredModel && !isModelLocked(llmConfig.preferredProvider, llmConfig.preferredModel)) {
+      provider = llmConfig.preferredProvider;
+      model = llmConfig.preferredModel;
+    } else {
+      try {
+        const cand = getNextAutoCandidate(llmConfig, undefined, false);
+        provider = cand.provider;
+        model = cand.model;
+      } catch (e) {
+        provider = "groq";
+        model = "openai/gpt-oss-120b";
+      }
     }
   } else {
     model = sanitizeModelName(provider, model);

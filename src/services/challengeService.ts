@@ -6,6 +6,7 @@ import { notifyLlmRequestStartFromConfig, publishLlmRequestEnd } from "../utils/
 import { getTranslationChallengeCandidateWords, isWordPracticedToday } from "../utils/spacedRepetition";
 import { findWordInCollection, hasUserIncorporatedWord } from "../utils/wordNormalization";
 import { getPreferredModelsForLanguage } from "../config/llmProviders";
+import { syncServerLocks, recordModelResponse } from "../utils/autoModeManager";
 
 export interface GenerateChallengeParams {
   nativeLanguage?: string;
@@ -520,7 +521,23 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
  */
 export async function generateChallenge(params: GenerateChallengeParams): Promise<ChallengeData> {
   const randomSeed = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  const effectiveConfig = getOverrideConfig(params.llmConfig);
+  const preferredModels = getPreferredModelsForLanguage(params.nativeLanguage);
+  const baseConfig: LLMConfig = params.llmConfig || {
+    provider: "auto",
+    model: "auto",
+    apiKey: "",
+    baseUrl: "",
+    isLoggedIn: false,
+  };
+  const enrichedConfig: LLMConfig = {
+    ...baseConfig,
+    nativeLanguage: params.nativeLanguage,
+    language: params.nativeLanguage,
+    preferredModels,
+    onlyReliableModels: true,
+  };
+  const isAutoMode = !enrichedConfig.provider || enrichedConfig.provider === "auto" || !enrichedConfig.model || enrichedConfig.model === "auto";
+  const effectiveConfig = isAutoMode ? enrichedConfig : (getOverrideConfig(enrichedConfig) || enrichedConfig);
   const effectiveParams = { ...params, llmConfig: effectiveConfig };
 
   notifyLlmRequestStartFromConfig(effectiveConfig, "generateChallenge");
@@ -541,6 +558,9 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
     const data = await safeParseResponseJson(res);
 
     if (res.ok && data && data.nativeSentence) {
+      if (data.serverLockedModels) {
+        syncServerLocks(data.serverLockedModels);
+      }
       let targetWord: ChallengeData["targetWordFromCollection"] = undefined;
       if (effectiveParams.words && effectiveParams.words.length > 0) {
         if (data.targetWordFromCollection?.id && effectiveParams.words.some((w) => w.id === data.targetWordFromCollection.id)) {
@@ -566,6 +586,9 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
       );
 
       const duration = data.responseTimeMs || 0;
+      if (data.provider && data.model) {
+        recordModelResponse(data.provider, data.model, duration);
+      }
       logApiRequest({
         provider: data.provider || "auto",
         model: data.model || "auto",
@@ -1032,7 +1055,13 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
     const data = await safeParseResponseJson(res);
 
     if (res.ok && data && data.intent) {
+      if (data.serverLockedModels) {
+        syncServerLocks(data.serverLockedModels);
+      }
       if (data.evaluation) {
+        if (data.provider) data.evaluation.provider = data.provider;
+        if (data.model) data.evaluation.model = data.model;
+        if (data.responseTimeMs) data.evaluation.responseTimeMs = data.responseTimeMs;
         const isEmptySub = params.userMessage.trim() === "" || params.userMessage.trim() === "🔍";
         data.evaluation.userTranslation = data.evaluation.userTranslation?.trim() || params.userMessage.trim();
         const targetWord = params.challenge.targetWordFromCollection?.word;
@@ -1056,6 +1085,10 @@ export async function processChallengeTurn(params: ChallengeTurnParams): Promise
         } else {
           data.evaluation.incorporatedVocabClues = [];
         }
+      }
+
+      if (data.provider && data.model) {
+        recordModelResponse(data.provider, data.model, data.responseTimeMs || 0);
       }
 
       logApiRequest({

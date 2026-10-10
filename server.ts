@@ -348,16 +348,30 @@ function getNextServerAutoCandidate(llmConfig?: LLMRequestConfig, excludedKeys?:
 
   if (Array.isArray(preferredModels) && preferredModels.length > 0) {
     const priorityCandidates = candidates.filter(c => preferredModels.includes(c.model));
+    priorityCandidates.sort((a, b) => {
+      const idxA = preferredModels.indexOf(a.model);
+      const idxB = preferredModels.indexOf(b.model);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
     const fallbackCandidates = candidates.filter(c => !preferredModels.includes(c.model));
 
-    // 1. Rotate through available priority candidates
-    for (let i = 0; i < priorityCandidates.length; i++) {
-      const idx = (serverAutoRotationIndex + i) % priorityCandidates.length;
-      const cand = priorityCandidates[idx];
+    // 1. Rotate through top available priority candidates (top 2), not down to lower-tier fallbacks like Cloudflare
+    const topPriority = priorityCandidates.slice(0, Math.min(2, priorityCandidates.length));
+    for (let i = 0; i < topPriority.length; i++) {
+      const idx = (serverAutoRotationIndex + i) % topPriority.length;
+      const cand = topPriority[idx];
       const key = `${cand.provider}:${cand.model}`;
 
       if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
-        serverAutoRotationIndex = (idx + 1) % priorityCandidates.length;
+        serverAutoRotationIndex = (idx + 1) % topPriority.length;
+        return cand;
+      }
+    }
+
+    // If top 2 are locked/excluded, check remaining priority candidates in order
+    for (const cand of priorityCandidates.slice(2)) {
+      const key = `${cand.provider}:${cand.model}`;
+      if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
         return cand;
       }
     }
@@ -647,6 +661,11 @@ async function callLLMAutoCandidatesWithMeta(
 
   if (Array.isArray(preferredModels) && preferredModels.length > 0) {
     const priority = candidates.filter(c => preferredModels.includes(c.model));
+    priority.sort((a, b) => {
+      const idxA = preferredModels.indexOf(a.model);
+      const idxB = preferredModels.indexOf(b.model);
+      return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+    });
     const fallback = candidates.filter(c => !preferredModels.includes(c.model));
     candidates = [...priority, ...fallback];
   }
@@ -712,7 +731,7 @@ async function callLLMAutoCandidatesWithMeta(
   throw lastError || new Error("All AI models in Auto Mode failed on server.");
 }
 
-async function callLLMAutoCandidates(
+export async function _callLLMAutoCandidates(
   prompt: string,
   systemInstruction: string,
   schemaDescription: string,
@@ -3434,8 +3453,10 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY):
       delete effectiveLlmConfig.provider;
     }
 
-    const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
-    const parsed = cleanAndParseJson(rawResult);
+    const startTime = Date.now();
+    const metaResult = await callLLMAutoCandidatesWithMeta(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
+    const parsed = cleanAndParseJson(metaResult.text);
+    const responseTimeMs = Date.now() - startTime;
 
     if (parsed && parsed.nativeSentence && (parsed.idealTranslation || isVietnameseNative)) {
       if (Array.isArray(words) && words.length > 0) {
@@ -3553,7 +3574,13 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY):
         }
       }
 
-      return res.json(parsed);
+      return res.json({
+        ...parsed,
+        provider: metaResult.provider,
+        model: metaResult.model,
+        responseTimeMs,
+        serverLockedModels: getServerLockedModelsArray(),
+      });
     }
     throw new Error("Failed to parse valid challenge payload from LLM response");
   } catch (error: any) {
@@ -3641,6 +3668,7 @@ app.post("/api/challenge-turn", async (req, res) => {
         provider: "server",
         model: "instant-evaluation",
         responseTimeMs: 25,
+        serverLockedModels: getServerLockedModelsArray(),
       });
     }
 
@@ -3677,6 +3705,7 @@ app.post("/api/challenge-turn", async (req, res) => {
         provider: "server",
         model: "instant-detection",
         responseTimeMs: 15,
+        serverLockedModels: getServerLockedModelsArray(),
       });
     }
 
@@ -3869,8 +3898,10 @@ Return STRICTLY raw JSON matching:
       delete effectiveLlmConfig.provider;
     }
 
-    const rawResult = await callLLMAutoCandidates(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
-    const parsed = cleanAndParseJson(rawResult);
+    const startTime = Date.now();
+    const metaResult = await callLLMAutoCandidatesWithMeta(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
+    const parsed = cleanAndParseJson(metaResult.text);
+    const responseTimeMs = Date.now() - startTime;
 
     if (parsed && (parsed.intent === "assistance" || parsed.intent === "submission")) {
       if (parsed.evaluation) {
@@ -3896,7 +3927,13 @@ Return STRICTLY raw JSON matching:
           parsed.evaluation.incorporatedVocabClues = [];
         }
       }
-      return res.json(parsed);
+      return res.json({
+        ...parsed,
+        provider: metaResult.provider,
+        model: metaResult.model,
+        responseTimeMs,
+        serverLockedModels: getServerLockedModelsArray(),
+      });
     }
     throw new Error("Failed to parse valid challenge turn response from LLM");
   } catch (error: any) {

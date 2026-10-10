@@ -2,7 +2,7 @@ import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile, QuizS
 import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions, isQuestionSentenceValid, getDefaultContextSentence, extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
 import { areWordsEquivalent, isNoun, isPhrasalVerb } from "../utils/wordNormalization";
 import { resizeImageDataUrl, extractCleanErrorMessage } from "../utils/llmHelpers";
-import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS, getPreferredModelsForLanguage } from "../config/llmProviders";
 import { fetchWithTimeout, isStaticHost, getStoredAccessCode } from "../utils";
 import { 
   getAutoCandidateWithMeta,
@@ -106,6 +106,27 @@ export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined 
   if (llmConfig?.model && RELIABLE_MODELS.some(m => m === llmConfig.model)) {
     return llmConfig;
   }
+
+  // Prioritize language-preferred models if language is known
+  const preferredModels = llmConfig?.preferredModels ||
+    getPreferredModelsForLanguage(llmConfig?.nativeLanguage || llmConfig?.language);
+
+  if (Array.isArray(preferredModels) && preferredModels.length > 0) {
+    const prefMatch = getRotatedDefaultModel(preferredModels);
+    if (prefMatch) {
+      const savedProfile = llmConfig?.savedProviders?.[prefMatch.provider];
+      return {
+        ...llmConfig,
+        provider: prefMatch.provider,
+        model: prefMatch.model,
+        apiKey: savedProfile?.apiKey || llmConfig?.apiKey || "",
+        baseUrl: savedProfile?.baseUrl || llmConfig?.baseUrl || "",
+        isLoggedIn: savedProfile?.isLoggedIn ?? llmConfig?.isLoggedIn ?? true,
+        savedProviders: llmConfig?.savedProviders,
+      };
+    }
+  }
+
   let overrideConfig: LLMConfig | undefined = undefined;
   const match = getRotatedDefaultModel(RELIABLE_MODELS);
   if (match) {

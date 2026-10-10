@@ -381,9 +381,15 @@ export default function TranslationChallengeCard({
     }
   };
 
-  const activeProvider = provider || challenge?.provider || evaluation?.provider;
-  const activeModel = model || challenge?.model || evaluation?.model;
-  const activeResponseTimeMs = responseTimeMs ?? challenge?.responseTimeMs ?? evaluation?.responseTimeMs;
+  const activeProvider = evaluation
+    ? (evaluation.provider || provider || challenge?.provider)
+    : (provider || challenge?.provider || evaluation?.provider);
+  const activeModel = evaluation
+    ? (evaluation.model || model || challenge?.model)
+    : (model || challenge?.model || evaluation?.model);
+  const activeResponseTimeMs = evaluation
+    ? (evaluation.responseTimeMs ?? responseTimeMs ?? challenge?.responseTimeMs)
+    : (responseTimeMs ?? challenge?.responseTimeMs ?? evaluation?.responseTimeMs);
 
   const handlePlayEssentialAudio = () => {
     if (!evaluation) return;

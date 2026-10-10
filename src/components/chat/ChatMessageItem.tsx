@@ -885,9 +885,9 @@ function ChatMessageItemContent({
               nativeLanguage={nativeLanguage}
               ttsConfig={ttsConfig}
               llmConfig={llmConfig}
-              provider={msg.provider || msg.challengeData?.provider}
-              model={msg.model || msg.challengeData?.model}
-              responseTimeMs={msg.responseTimeMs ?? msg.challengeData?.responseTimeMs}
+              provider={msg.challengeEvaluation ? (msg.challengeEvaluation.provider || msg.provider) : (msg.provider || msg.challengeData?.provider)}
+              model={msg.challengeEvaluation ? (msg.challengeEvaluation.model || msg.model) : (msg.model || msg.challengeData?.model)}
+              responseTimeMs={msg.challengeEvaluation ? (msg.challengeEvaluation.responseTimeMs ?? msg.responseTimeMs) : (msg.responseTimeMs ?? msg.challengeData?.responseTimeMs)}
               words={words}
               onUpdateWords={onUpdateWords}
               onAddWord={onAddWord}

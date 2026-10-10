@@ -1239,6 +1239,11 @@ export function getNextAutoCandidate(
   if (Array.isArray(preferredModels) && preferredModels.length > 0) {
     const preferredAvailable = available.filter(cand => preferredModels.includes(cand.model));
     if (preferredAvailable.length > 0) {
+      preferredAvailable.sort((a, b) => {
+        const idxA = preferredModels.indexOf(a.model);
+        const idxB = preferredModels.indexOf(b.model);
+        return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+      });
       available = preferredAvailable;
     }
   }
@@ -1275,44 +1280,64 @@ export function getNextAutoCandidate(
     tier2.sort((a, b) => a.time - b.time);
     tier4.sort((a, b) => a.time - b.time);
 
-    const currentExplorationCount = advance 
-      ? incrementExplorationCallCounter() 
-      : getExplorationCallCounter();
+    const hasPreferred = Array.isArray(preferredModels) && preferredModels.length > 0;
 
-    // Low-frequency Epsilon-Greedy Exploration: Every 12th call, probe a Tier 2 or Tier 4 model if Tier 1 is non-empty
-    // to give slower models a chance to re-evaluate latency and get promoted!
-    const isExplorationTurn = currentExplorationCount > 0 && currentExplorationCount % 12 === 0;
-    if (isExplorationTurn && (tier2.length > 0 || tier4.length > 0)) {
-      const probePool = [...tier2.map(t => t.cand), ...tier4.map(t => t.cand)];
-      const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % probePool.length;
-      if (advance) {
-        saveAutoRotationIndex(rotIdx + 1);
-      }
-      const probeCandidate = probePool[idx];
-      console.log(`[Auto Mode - Epsilon Exploration Probe] Probing Tier 2/4 candidate to re-evaluate response time (Call #${currentExplorationCount}): ${probeCandidate.provider}:${probeCandidate.model}`);
-      return probeCandidate;
-    }
-
-    // 1. Probe/New Selection: If there are any untested models (0 successful requests),
-    // prioritize them first with fair round-robin rotation so new models get probed immediately without crowding out.
-    // Once a model completes 1 successful request, it graduates and joins the normal Tier 1 rotation.
-    if (tier1Probes.length > 0) {
-      const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % tier1Probes.length;
-      const selected = tier1Probes[idx];
-
-      if (advance) {
-        saveAutoRotationIndex(rotIdx + 1);
+    // When language-preferred models are active, strictly prioritize the top preferred candidates!
+    // Rotate only among the top 2 preferred models (e.g. Gemini 3.8 and Gemini 3.7) to avoid starving top models
+    // or selecting lower-tier fallbacks like Cloudflare Singapore Gemma.
+    if (hasPreferred) {
+      if (tier1Tested.length > 0) {
+        tier1Tested.sort((a, b) => {
+          const idxA = preferredModels.indexOf(a.cand.model);
+          const idxB = preferredModels.indexOf(b.cand.model);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+        const topTestedPool = tier1Tested.slice(0, 2);
+        const rotIdx = getAutoRotationIndex();
+        const idx = rotIdx % topTestedPool.length;
+        if (advance) {
+          saveAutoRotationIndex(rotIdx + 1);
+        }
+        return topTestedPool[idx].cand;
       }
 
-      console.log(`[Auto Mode - Probe/New Selection] Probing untested candidate (0 successes): ${selected.provider}:${selected.model}`);
-      return selected;
+      if (tier1Probes.length > 0) {
+        tier1Probes.sort((a, b) => {
+          const idxA = preferredModels.indexOf(a.model);
+          const idxB = preferredModels.indexOf(b.model);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+        const topProbesPool = tier1Probes.slice(0, 2);
+        const rotIdx = getAutoRotationIndex();
+        const idx = rotIdx % topProbesPool.length;
+        if (advance) {
+          saveAutoRotationIndex(rotIdx + 1);
+        }
+        return topProbesPool[idx];
+      }
+
+      if (tier2.length > 0) {
+        tier2.sort((a, b) => {
+          const idxA = preferredModels.indexOf(a.cand.model);
+          const idxB = preferredModels.indexOf(b.cand.model);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+        return tier2[0].cand;
+      }
+
+      return available[0];
     }
 
     // 2. Standard Tier 1 Round-Robin Rotation:
     // All tested Tier 1 models rotate equally with equal probability across queries.
     if (tier1Tested.length > 0) {
+      if (hasPreferred) {
+        tier1Tested.sort((a, b) => {
+          const idxA = preferredModels.indexOf(a.cand.model);
+          const idxB = preferredModels.indexOf(b.cand.model);
+          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+        });
+      }
       const rotIdx = getAutoRotationIndex();
       const idx = rotIdx % tier1Tested.length;
       if (advance) {
