@@ -100,7 +100,7 @@ export function getEffectiveStrengthHistory(word: Word): StrengthHistoryEntry[] 
   // Memory decay only applies to words that have achieved mastered status.
   // If the word was never mastered, filter out spurious memory_decay tuples.
   // Also filter out any spurious memory_decay tuples that occurred on the same day as a practice session (< 24h after practice).
-  const wasEverMastered = word.learned || (word.strength ?? 0) >= 80 || sortedTuples.some(t => t[1] >= 80);
+  const wasEverMastered = (word.strength ?? 0) >= 80 || sortedTuples.some(t => t[1] >= 80 || t[2] === "mastered");
   const candidateTuples: StrengthHistoryTuple[] = [];
   let lastPracticeTimestampSec = 0;
 
@@ -241,7 +241,7 @@ export function recordStrengthHistory(
 
   // Defensive guard: Memory decay only applies to words that are or were mastered
   if (reason === "memory_decay") {
-    const isMastered = word.learned || (word.strength ?? 0) >= 80 || existingTuples.some(t => t[1] >= 80);
+    const isMastered = (word.strength ?? 0) >= 80 || existingTuples.some(t => t[1] >= 80 || t[2] === "mastered");
     if (!isMastered) {
       return word;
     }

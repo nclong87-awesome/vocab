@@ -47,7 +47,11 @@ export default function StrengthHistoryModal({
   const { baselineStrength, lastPracticeDate } = getLastPracticeBaseline(word);
   const hasPracticeRecord = Boolean(word.lastReviewedAt || lastPracticeDate || word.lastReviewed || historyEntries.some(e => e.reason !== "created"));
   const elapsedDays = Math.floor(daysSincePractice);
-  const isMastered = word.learned || baselineStrength >= 80;
+  const historyTuples = (word.strengthHistory || []).filter(
+    (t): t is import("../../types").StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+  );
+  const hasGenuineMastery = currentStrength >= 80 || baselineStrength >= 80 || historyTuples.some(t => t[1] >= 80 || t[2] === "mastered");
+  const isMastered = Boolean(hasGenuineMastery && (word.learned || currentStrength >= 80));
   const reviewInfo = getNextReviewInfo(word);
   const actualDecay = (isMastered && baselineStrength > currentStrength)
     ? Math.round(baselineStrength - currentStrength)
@@ -201,7 +205,7 @@ export default function StrengthHistoryModal({
                   {Math.round(currentStrength)}%
                 </span>
                 <span className="text-[9px] font-semibold text-stone-500">
-                  {word.learned ? "Mastered" : "Learning"}
+                  {isMastered ? "Mastered" : "Learning"}
                 </span>
               </div>
             </div>

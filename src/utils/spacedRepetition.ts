@@ -722,8 +722,13 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
   const currentStrength = word.strength ?? 0;
   const reviewCount = getWordReviewCount(word);
 
-  // Memory decay STRICTLY applies ONLY to words that have achieved Mastered status (learned === true or baselineStrength >= 80)
-  const isMastered = word.learned || baselineStrength >= 80;
+  // Memory decay STRICTLY applies ONLY to words that have achieved Mastered status (strength >= 80% or genuine mastery history)
+  const history = (word.strengthHistory || []).filter(
+    (t): t is StrengthHistoryTuple => Array.isArray(t) && t.length >= 3
+  );
+  const wasEverTrulyMastered = baselineStrength >= 80 || currentStrength >= 80 || history.some(t => t[1] >= 80 || t[2] === "mastered");
+
+  const isMastered = wasEverTrulyMastered && (word.learned || baselineStrength >= 80);
   if (!isMastered) {
     // Unmastered words retain their earned baseline strength without passive decay.
     // If an unmastered word previously had its strength reduced below baseline due to old decay, restore it.
@@ -731,9 +736,12 @@ export function calculateDecayedWordStrength(word: Word, now: Date = new Date())
       ? baselineStrength
       : currentStrength;
 
+    // Self-healing: if word was never truly mastered (< 80% and no mastery history), learned must be false
+    const correctedLearned = wasEverTrulyMastered ? word.learned : false;
+
     return {
       newStrength: restoredStrength,
-      newLearned: word.learned,
+      newLearned: correctedLearned,
       hasDecayed: false,
       daysSinceReview: 0,
       decayAmount: 0
@@ -860,8 +868,9 @@ export function recalculateWordsMemoryDecay(words: Word[], now: Date = new Date(
       // 4. Any spurious intra-day memory_decay entries recorded within 24h of practice
       // 5. Any spurious memory_decay entries recorded while word is inside its scheduled retention window
       const { baselineStrength } = getLastPracticeBaseline(word);
-      const isMastered = word.learned || baselineStrength >= 80;
       const history = word.strengthHistory || [];
+      const wasEverTrulyMastered = baselineStrength >= 80 || (word.strength ?? 0) >= 80 || history.some(t => Array.isArray(t) && (t[1] >= 80 || t[2] === "mastered"));
+      const isMastered = wasEverTrulyMastered && (word.learned || baselineStrength >= 80);
       const hasUnwantedDecayHistory = !isMastered && history.some(t => Array.isArray(t) && t[2] === "memory_decay");
 
       let hasSpuriousIntraDayDecay = false;

@@ -316,7 +316,8 @@ export function autoMergeLocalAndRemote(
           mergedLearned = true;
         } else {
           mergedStrength = latestEntry[1];
-          mergedLearned = mergedStrength >= 80 ? true : Boolean(lWord.learned || match.learned);
+          const everMastered = cappedHistoryList.some(t => t[1] >= 80 || t[2] === "mastered");
+          mergedLearned = mergedStrength >= 80 ? true : (everMastered ? Boolean(lWord.learned || match.learned) : false);
         }
       } else {
         if (localReviewTime > remoteReviewTime) {

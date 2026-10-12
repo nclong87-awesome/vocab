@@ -2019,12 +2019,12 @@ export function useChat({
                     aug.isTargetWord
                       ? (didIncorporatePrimary
                         ? `Incorporated target word in translation challenge (+${aug.strengthGained}% strength gained)`
-                        : `Featured target word in translation challenge (+${aug.strengthGained}% strength gained & marked as learned)`)
+                        : `Featured target word in translation challenge (+${aug.strengthGained}% strength gained)`)
                       : `Incorporated vocab clue "${aug.word}" in translation challenge (+${aug.strengthGained}% strength gained)`
                   );
                   return {
                     ...rec,
-                    learned: aug.isTargetWord && !didIncorporatePrimary ? true : (aug.newStrength >= 80 ? true : rec.learned),
+                    learned: aug.newStrength >= 80 ? true : rec.learned,
                     lastReviewed: new Date().toISOString(),
                   };
                 }
@@ -2056,7 +2056,7 @@ export function useChat({
             if (evalRes.incorporatedTargetWord) {
               bonusSections.push(`🎉 **Target Word Incorporated (+30 Strength Points)!**\nYou successfully incorporated **"${evalRes.targetWordUsed}"** in your response! Word strength increased from ${evalRes.targetWordPrevStrength ?? 0}% to **${evalRes.targetWordNewStrength ?? 30}%** (+30%).`);
             } else {
-              bonusSections.push(`💡 **Featured Target Word:** **"${evalRes.targetWordUsed}"** *(+10 Strength Points & Marked as Learned)*\nThe target word was not included in your translation, so it has been awarded +10 points and marked as learned to prevent immediate repetition in subsequent challenges.`);
+              bonusSections.push(`💡 **Featured Target Word:** **"${evalRes.targetWordUsed}"** *(+10 Strength Points)*\nThe target word was not included in your translation, so it has been awarded +10 points to reinforce your memory and scheduled for spaced repetition review.`);
             }
           }
 
