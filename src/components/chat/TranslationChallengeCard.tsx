@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import { 
-  Languages, 
   Sparkles, 
   CheckCircle2, 
   AlertCircle, 
@@ -14,7 +13,6 @@ import {
   Brain,
   ChevronDown,
   ChevronUp,
-  ChevronRight,
   Volume2,
   Square,
   Mic,
@@ -22,8 +20,7 @@ import {
   CornerDownLeft,
   Flag,
   Globe,
-  Play,
-  Timer
+  Play
 } from "lucide-react";
 import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig, PoorSentenceReport } from "../../types";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
@@ -31,7 +28,6 @@ import { speakText, stopSpeech, buildEssentialChallengeAudioText } from "../../u
 import { useSpeechToText, removeImmediateWordDuplications } from "../../hooks/useSpeechToText";
 import { useVirtualKeyboard } from "../../hooks/useVirtualKeyboard";
 import { getPoorSentenceReportsFromDB, savePoorSentenceReportToDB } from "../../db/indexedDB";
-import { callLLMClientSideWithMeta } from "../../services/llmClientService";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import TranslationChallengeAskAiModal from "./TranslationChallengeAskAiModal";
 import ReportPoorSentenceModal from "./ReportPoorSentenceModal";
@@ -92,7 +88,6 @@ export default function TranslationChallengeCard({
   const voiceBaseTextRef = useRef("");
   const [userAnswer, setUserAnswer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAutoTranslating, setIsAutoTranslating] = useState(false);
   const [isPlayingEssentialAudio, setIsPlayingEssentialAudio] = useState(false);
   const [playingItemKey, setPlayingItemKey] = useState<string | null>(null);
   const [isAskAiModalOpen, setIsAskAiModalOpen] = useState(false);
@@ -535,43 +530,6 @@ export default function TranslationChallengeCard({
     }
   };
 
-  const handleAiAutoTranslate = async () => {
-    if (!challenge?.nativeSentence || isAutoTranslating) return;
-    setIsAutoTranslating(true);
-    try {
-      const promptPayload = `Translate the following ${challenge.nativeLanguage || "Vietnamese"} sentence into ${effectiveTargetLang}:
-"${challenge.nativeSentence}"
-
-Provide ONLY the direct translation without any quotes, preamble, or extra notes.`;
-      
-      const systemInstruction = `You are a professional translator. Output ONLY the translated sentence in ${effectiveTargetLang}. No quotes or extra commentary.`;
-
-      const res = await callLLMClientSideWithMeta(
-        promptPayload,
-        systemInstruction,
-        "",
-        llmConfig,
-        undefined,
-        { action: "Auto Translate Challenge" }
-      );
-
-      const clean = res.text?.trim().replace(/^["']|["']$/g, "") || "";
-      if (clean) {
-        setUserAnswer(clean);
-        if (textareaRef.current) {
-          textareaRef.current.value = clean;
-        }
-        showToast?.("AI translation generated!");
-      } else {
-        showToast?.("Failed to generate translation.");
-      }
-    } catch (e: any) {
-      showToast?.("Auto-translate error: " + (e?.message || "Failed"));
-    } finally {
-      setIsAutoTranslating(false);
-    }
-  };
-
   // 1. RENDER CHALLENGE PROMPT CARD (Aesthetics matching target screenshot)
   if (challenge && !evaluation) {
     return (
@@ -818,65 +776,13 @@ Provide ONLY the direct translation without any quotes, preamble, or extra notes
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Card 2: AI Auto-Translate & AI Explanation Panel (Dark Glass Card) */}
-        <div id="challenge-ai-quick-panel" className="bg-gradient-to-b from-[#1e293b] via-[#0f172a] to-[#020617] text-white p-4 sm:p-5 rounded-2xl border border-slate-700/60 shadow-lg space-y-3 relative overflow-hidden">
-          {/* Button 1: AI Auto-Translate */}
-          <button
-            id="btn-ai-auto-translate"
-            type="button"
-            onClick={handleAiAutoTranslate}
-            disabled={isAutoTranslating}
-            className="w-full p-3.5 sm:p-4 bg-slate-700/30 hover:bg-slate-700/50 active:scale-[0.99] border border-slate-600/40 rounded-xl flex items-center justify-between text-slate-100 font-bold text-xs sm:text-sm cursor-pointer transition-all shadow-xs"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="p-2 bg-slate-600/40 text-slate-200 rounded-lg shrink-0">
-                <Languages className="w-4 h-4" />
-              </span>
-              <span className="tracking-wide uppercase font-bold truncate">
-                {isAutoTranslating ? "Translating with AI..." : "AI AUTO-TRANSLATE"}
-              </span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
-          </button>
-
-          {/* Button 2: AI Explanation */}
-          <button
-            id="btn-ai-explanation"
-            type="button"
-            onClick={() => setIsAskAiModalOpen(true)}
-            className="w-full p-3.5 sm:p-4 bg-slate-700/30 hover:bg-slate-700/50 active:scale-[0.99] border border-slate-600/40 rounded-xl flex items-center justify-between text-slate-100 font-bold text-xs sm:text-sm cursor-pointer transition-all shadow-xs relative overflow-hidden group"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="p-2 bg-purple-600/30 text-purple-200 rounded-lg shrink-0">
-                <Sparkles className="w-4 h-4" />
-              </span>
-              <span className="tracking-wide uppercase font-bold truncate">
-                AI EXPLANATION
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 ml-2">
-              <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
-              <ChevronRight className="w-4 h-4 text-slate-400" />
-            </div>
-          </button>
-
-          {/* Footer Status Metadata Row */}
-          <div className="pt-1 flex items-center justify-center gap-3 sm:gap-4 text-[11px] font-mono text-slate-400 opacity-90 flex-wrap">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-0.5 bg-slate-400 inline-block rounded-full" />
-              <span>{activeProvider || "OpenRouter"}</span>
-            </span>
-            <span className="flex items-center gap-1 text-purple-300">
-              <Sparkles className="w-3 h-3 text-purple-400" />
-              <span>{activeModel || "Gemini-3.8"}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Timer className="w-3 h-3 text-slate-400" />
-              <span>{activeResponseTimeMs ? `${(activeResponseTimeMs / 1000).toFixed(1)}s` : "Timer"}</span>
-            </span>
-          </div>
+          {/* AI Response Metadata */}
+          <LlmResponseMetadata
+            provider={activeProvider}
+            model={activeModel}
+            responseTimeMs={activeResponseTimeMs}
+          />
         </div>
 
         {/* Translation Challenge Ask AI Modal */}
