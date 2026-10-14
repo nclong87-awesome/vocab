@@ -796,6 +796,7 @@ export default function TranslationChallengeCard({
           appLanguage={_appLanguage}
           ttsConfig={ttsConfig}
           llmConfig={llmConfig}
+          words={words}
           onAddIncompleteWord={onAddIncompleteWord}
           onAddWord={onAddWord}
           showToast={showToast}
@@ -902,6 +903,18 @@ export default function TranslationChallengeCard({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Ask AI Support in Evaluation */}
+            <button
+              id="btn-ask-ai-challenge-evaluation"
+              type="button"
+              onClick={() => setIsAskAiModalOpen(true)}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs hover:scale-102 active:scale-98 whitespace-nowrap"
+              title="Ask AI about feedback or words in this challenge"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span>Ask AI</span>
+            </button>
+
             {/* Flag Poor Sentence Button */}
             <button
               id="btn-report-poor-challenge-evaluation"
@@ -1282,6 +1295,23 @@ export default function TranslationChallengeCard({
             setExistingReport(null);
             setIsReported(false);
           }}
+          showToast={showToast}
+        />
+
+        {/* Translation Challenge Ask AI Modal in Evaluation View */}
+        <TranslationChallengeAskAiModal
+          isOpen={isAskAiModalOpen}
+          onClose={() => setIsAskAiModalOpen(false)}
+          challenge={challenge}
+          evaluation={evaluation}
+          nativeLanguage={_nativeLanguage}
+          targetLanguage={targetLanguage}
+          appLanguage={_appLanguage}
+          ttsConfig={ttsConfig}
+          llmConfig={llmConfig}
+          words={words}
+          onAddIncompleteWord={onAddIncompleteWord}
+          onAddWord={onAddWord}
           showToast={showToast}
         />
       </div>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   ArrowLeft,
   X, 
@@ -15,11 +15,15 @@ import {
   MessageSquare,
   AlertTriangle,
   RefreshCw,
+  Plus,
+  BookPlus,
+  Tag,
 } from "lucide-react";
 import { ChallengeData, ChallengeEvaluation, Word, TTSConfig, LLMConfig } from "../../types";
 import { speakText, stopSpeech, DEFAULT_TTS_CONFIG } from "../../utils/ttsService";
 import { callLLMClientSideWithMeta, getOverrideConfig, formatLlmResponseText } from "../../services/llmClientService";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
+import { isWordInCollection } from "../../utils/wordNormalization";
 import FormattedMessage from "./FormattedMessage";
 import LlmResponseMetadata from "./LlmResponseMetadata";
 import { recordUserInquiry } from "../../services/userInquiryService";
@@ -36,6 +40,7 @@ interface TranslationChallengeAskAiModalProps {
   appLanguage?: string;
   ttsConfig?: TTSConfig;
   llmConfig?: LLMConfig;
+  words?: Word[];
   onAddIncompleteWord?: (wordData: Partial<Word>) => void;
   onAddWord?: (wordText?: string, hint?: string, extraData?: Partial<Word>) => void;
   showToast?: (msg: string) => void;
@@ -56,6 +61,50 @@ interface ChatItem {
   responseTimeMs?: number;
 }
 
+/**
+ * Extracts potential bold or backticked vocabulary candidate terms from an AI response.
+ */
+function extractPotentialVocab(content: string): string[] {
+  if (!content) return [];
+  const found = new Set<string>();
+  
+  // Match bold phrases: **word** or __word__
+  const boldRegex = /(?:\*\*|__)(.*?)(?:\*\*|__)/g;
+  let match: RegExpExecArray | null;
+  while ((match = boldRegex.exec(content)) !== null) {
+    const raw = match[1].trim().replace(/^["“'‘(]|["”'’)]$/g, "").trim();
+    if (
+      raw &&
+      raw.length >= 2 &&
+      raw.length <= 40 &&
+      !raw.includes("\n") &&
+      !/[.!?]$/.test(raw) &&
+      !raw.startsWith("#") &&
+      !raw.toLowerCase().startsWith("http")
+    ) {
+      found.add(raw);
+    }
+  }
+
+  // Match inline backticks: `word`
+  const codeRegex = /`([^`]+)`/g;
+  while ((match = codeRegex.exec(content)) !== null) {
+    const raw = match[1].trim().replace(/^["“'‘(]|["”'’)]$/g, "").trim();
+    if (
+      raw &&
+      raw.length >= 2 &&
+      raw.length <= 40 &&
+      !raw.includes("\n") &&
+      !/[.!?]$/.test(raw) &&
+      !raw.startsWith("#")
+    ) {
+      found.add(raw);
+    }
+  }
+
+  return Array.from(found);
+}
+
 export default function TranslationChallengeAskAiModal({
   isOpen,
   onClose,
@@ -66,9 +115,10 @@ export default function TranslationChallengeAskAiModal({
   appLanguage = "vi",
   ttsConfig = DEFAULT_TTS_CONFIG,
   llmConfig,
-  onAddIncompleteWord: _onAddIncompleteWord,
-  onAddWord: _onAddWord,
-  showToast: _showToast,
+  words = [],
+  onAddIncompleteWord,
+  onAddWord,
+  showToast,
 }: TranslationChallengeAskAiModalProps) {
   const handleCloseModal = React.useCallback(() => {
     stopSpeech();
@@ -94,12 +144,36 @@ export default function TranslationChallengeAskAiModal({
   const [isCountdownCancelled, setIsCountdownCancelled] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+  // Quick Add Incomplete Word Modal states
+  const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
+  const [quickAddWord, setQuickAddWord] = useState("");
+  const [quickAddTranslation, setQuickAddTranslation] = useState("");
+  const [quickAddPos, setQuickAddPos] = useState("");
+  const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
+  const [inModalToast, setInModalToast] = useState<string | null>(null);
+
   const latestResponseRef = useRef<HTMLDivElement | null>(null);
   const typingIndicatorRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const quickAddInputRef = useRef<HTMLInputElement | null>(null);
   const retryAttemptsRef = useRef<number>(0);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-clear in-modal toast
+  useEffect(() => {
+    if (!inModalToast) return;
+    const tId = setTimeout(() => setInModalToast(null), 3500);
+    return () => clearTimeout(tId);
+  }, [inModalToast]);
+
+  // Focus quick-add input when modal opens
+  useEffect(() => {
+    if (isQuickAddModalOpen) {
+      const timer = setTimeout(() => quickAddInputRef.current?.focus(), 80);
+      return () => clearTimeout(timer);
+    }
+  }, [isQuickAddModalOpen]);
 
   // Initialize conversation stream when modal opens or challenge changes
   useEffect(() => {
@@ -180,6 +254,148 @@ Ask me anything about the feedback, word nuances, or grammar!`;
     }
     setIsTyping(false);
   };
+
+  // Open quick-add modal with optional prefilled word/translation
+  const handleOpenQuickAddModal = (initialWord?: string, initialTranslation?: string, initialPos?: string) => {
+    const rawWord = (initialWord || "").trim();
+    setQuickAddWord(rawWord);
+    setQuickAddTranslation((initialTranslation || "").trim());
+    setQuickAddPos((initialPos || "").trim());
+    setIsQuickAddModalOpen(true);
+  };
+
+  // One-click quick add incomplete word (e.g. from detected vocabulary chips)
+  const handleQuickAddIncompleteDirect = (wordToAdd: string, translationToAdd?: string) => {
+    const trimmedWord = wordToAdd.trim();
+    if (!trimmedWord) return;
+
+    const payload: Partial<Word> = {
+      word: trimmedWord,
+      translation: translationToAdd?.trim() || "",
+      definition: translationToAdd?.trim() || `Key term from Ask AI: "${challenge?.nativeSentence || ''}"`,
+      partOfSpeech: "expression",
+      category: challenge?.topicContext || "Challenge Practice",
+      completed: false, // Incomplete word
+      context: challenge?.nativeSentence
+        ? `From challenge: "${challenge.nativeSentence}"`
+        : evaluation?.correctedSentence
+        ? `From challenge: "${evaluation.correctedSentence}"`
+        : undefined,
+    };
+
+    if (onAddIncompleteWord) {
+      onAddIncompleteWord(payload);
+    } else if (onAddWord) {
+      onAddWord(payload.word, payload.translation, payload);
+    }
+
+    setAddedWordKeys((prev) => ({ ...prev, [trimmedWord.toLowerCase()]: true }));
+
+    const toastMsg = t("toast_added_incomplete_word", appLanguage, { word: trimmedWord }) ||
+      `Added "${trimmedWord}" to collection (incomplete)!`;
+    setInModalToast(toastMsg);
+    showToast?.(toastMsg);
+  };
+
+  // Save incomplete word from the modal form
+  const handleSaveIncompleteWord = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmedWord = quickAddWord.trim();
+    if (!trimmedWord) return;
+
+    const payload: Partial<Word> = {
+      word: trimmedWord,
+      translation: quickAddTranslation.trim(),
+      definition: quickAddTranslation.trim() || `Key term from Ask AI: "${challenge?.nativeSentence || ''}"`,
+      partOfSpeech: quickAddPos.trim() || "expression",
+      category: challenge?.topicContext || "Challenge Practice",
+      completed: false, // Incomplete word
+      context: challenge?.nativeSentence
+        ? `From challenge: "${challenge.nativeSentence}"`
+        : evaluation?.correctedSentence
+        ? `From challenge: "${evaluation.correctedSentence}"`
+        : undefined,
+    };
+
+    if (onAddIncompleteWord) {
+      onAddIncompleteWord(payload);
+    } else if (onAddWord) {
+      onAddWord(payload.word, payload.translation, payload);
+    }
+
+    setAddedWordKeys((prev) => ({ ...prev, [trimmedWord.toLowerCase()]: true }));
+
+    const toastMsg = t("toast_added_incomplete_word", appLanguage, { word: trimmedWord }) ||
+      `Added "${trimmedWord}" to collection (incomplete)!`;
+    setInModalToast(toastMsg);
+    showToast?.(toastMsg);
+
+    setIsQuickAddModalOpen(false);
+    setQuickAddWord("");
+    setQuickAddTranslation("");
+    setQuickAddPos("");
+  };
+
+  // Candidate vocabulary suggestions derived from challenge context and chat messages
+  const suggestedPills = useMemo(() => {
+    const list: { word: string; translation?: string; pos?: string }[] = [];
+    const seen = new Set<string>();
+
+    // From challenge target word
+    if (challenge?.targetWordFromCollection?.word) {
+      const w = challenge.targetWordFromCollection.word.trim();
+      const lower = w.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        list.push({
+          word: w,
+          translation: challenge.targetWordFromCollection.translation,
+          pos: challenge.targetWordFromCollection.partOfSpeech,
+        });
+      }
+    }
+
+    // From key target words
+    if (challenge?.keyTargetWords && challenge.keyTargetWords.length > 0) {
+      for (const kw of challenge.keyTargetWords) {
+        if (!kw.word) continue;
+        const w = kw.word.trim();
+        const lower = w.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          list.push({ word: w, translation: kw.translation });
+        }
+      }
+    }
+
+    // From suggested vocabulary in evaluation
+    if (evaluation?.suggestedVocabulary && evaluation.suggestedVocabulary.length > 0) {
+      for (const sv of evaluation.suggestedVocabulary) {
+        if (!sv.word) continue;
+        const w = sv.word.trim();
+        const lower = w.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          list.push({ word: w, translation: sv.translation, pos: sv.partOfSpeech });
+        }
+      }
+    }
+
+    // From latest assistant message
+    const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant");
+    if (lastAssistantMsg) {
+      const extracted = extractPotentialVocab(lastAssistantMsg.content);
+      for (const w of extracted) {
+        const lower = w.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          list.push({ word: w });
+        }
+      }
+    }
+
+    return list.slice(0, 8);
+  }, [challenge, evaluation, messages]);
 
   const handleSendMessage = async (textToSend?: string, overrideConfig?: LLMConfig) => {
     const query = (textToSend !== undefined ? textToSend : inputText).trim();
@@ -368,7 +584,22 @@ USER LATEST INQUIRY:
       transition={{ duration: 0.2 }}
       className="fixed inset-0 z-50 bg-white flex flex-col h-full w-full overflow-hidden"
     >
-      {/* Simple Header */}
+      {/* In-Modal Notification Banner */}
+      <AnimatePresence>
+        {inModalToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 text-amber-300 border border-amber-400/40 px-4 py-2 rounded-full text-xs font-bold shadow-xl flex items-center gap-2 pointer-events-none backdrop-blur-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>{inModalToast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
       <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-stone-200 bg-white shrink-0 shadow-2xs z-10">
         <div className="flex items-center gap-2.5 min-w-0">
           <button
@@ -382,7 +613,7 @@ USER LATEST INQUIRY:
           </button>
 
           <div className="flex items-center gap-2 min-w-0">
-            <span className="p-1.5 bg-indigo-600 text-white rounded-lg shrink-0">
+            <span className="p-1.5 bg-indigo-600 text-white rounded-lg shrink-0 shadow-3xs">
               <Sparkles className="w-4 h-4" />
             </span>
             <h2 id="challenge-ask-ai-title" className="text-base font-bold text-stone-900 truncate">
@@ -391,15 +622,29 @@ USER LATEST INQUIRY:
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleCloseModal}
-          className="p-1.5 rounded-full text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer"
-          aria-label="Close"
-          title="Close dialog"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Header Action Button to Quick Add Incomplete Word */}
+          <button
+            type="button"
+            id="btn-ask-ai-header-add-word"
+            onClick={() => handleOpenQuickAddModal()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl text-xs transition-all cursor-pointer shadow-3xs"
+            title="Quickly add new word (as incomplete word)"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>{appLanguage === "vi" ? "Thêm từ mới" : "Add Word"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="p-1.5 rounded-full text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer"
+            aria-label="Close"
+            title="Close dialog"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}
@@ -408,6 +653,8 @@ USER LATEST INQUIRY:
         {messages.map((m, idx) => {
           const isUser = m.role === "user";
           const isLast = idx === messages.length - 1;
+          const detectedWords = !isUser ? extractPotentialVocab(m.content) : [];
+
           return (
             <div
               key={m.id || idx}
@@ -432,8 +679,60 @@ USER LATEST INQUIRY:
                       appLanguage={appLanguage}
                     />
 
-                    {/* Action buttons (Copy / Speak) */}
+                    {/* Detected Vocabulary Chips for 1-click Incomplete Word Addition */}
+                    {detectedWords.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-stone-200/60">
+                        <span className="text-[11px] font-semibold text-stone-500 flex items-center gap-1">
+                          <Plus className="w-3 h-3 text-indigo-500" />
+                          <span>{appLanguage === "vi" ? "Lưu nhanh:" : "Quick add:"}</span>
+                        </span>
+                        {detectedWords.map((cand) => {
+                          const isSaved = addedWordKeys[cand.toLowerCase()] || (words && isWordInCollection(words, cand));
+                          return (
+                            <button
+                              key={cand}
+                              type="button"
+                              onClick={() => {
+                                if (!isSaved) {
+                                  handleQuickAddIncompleteDirect(cand);
+                                }
+                              }}
+                              disabled={isSaved}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                isSaved
+                                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-default"
+                                  : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 border border-indigo-200/90 active:scale-95 shadow-3xs"
+                              }`}
+                              title={isSaved ? "Already in collection" : `Add "${cand}" as incomplete word`}
+                            >
+                              {isSaved ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
+                                  <span>{cand}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3 h-3 text-indigo-600 stroke-[2.5]" />
+                                  <span>{cand}</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Action buttons (Copy / Speak / Add Word) */}
                     <div className="flex items-center justify-end gap-1 pt-1.5 border-t border-stone-200/50 text-stone-400">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenQuickAddModal()}
+                        className="p-1 px-1.5 rounded hover:bg-stone-200/60 text-stone-500 hover:text-indigo-600 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                        title="Quickly add new word (as incomplete word)"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <span className="text-[11px] font-medium hidden sm:inline">{appLanguage === "vi" ? "Thêm từ" : "Add Word"}</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleSpeak(m.content)}
@@ -472,6 +771,18 @@ USER LATEST INQUIRY:
         {/* Quick Action Presets below the agent message */}
         {!isTyping && (
           <div className="p-3 bg-stone-50/80 border border-stone-200/80 rounded-2xl flex flex-wrap gap-1.5">
+            {/* Quick Add Word action button in presets */}
+            <button
+              type="button"
+              id="btn-preset-quick-add-word"
+              onClick={() => handleOpenQuickAddModal()}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/90 border border-indigo-200 rounded-xl text-xs font-semibold text-indigo-900 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-3xs"
+              title="Quickly add new word (as incomplete word)"
+            >
+              <Plus className="w-3.5 h-3.5 text-indigo-600 stroke-[2.5]" />
+              <span>{appLanguage === "vi" ? "Thêm từ mới" : "Quick Add Word"}</span>
+            </button>
+
             {!evaluation ? (
               <>
                 <button
@@ -638,6 +949,16 @@ USER LATEST INQUIRY:
             }}
             className="flex items-center gap-2"
           >
+            {/* Quick Add Word Button in input bar */}
+            <button
+              type="button"
+              onClick={() => handleOpenQuickAddModal(inputText)}
+              className="w-11 h-11 bg-stone-100 hover:bg-indigo-50 hover:text-indigo-600 text-stone-500 border border-stone-200/80 rounded-2xl transition-all flex items-center justify-center cursor-pointer shrink-0 active:scale-95 shadow-3xs"
+              title="Quickly add new word (as incomplete word)"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+            </button>
+
             <div className="relative flex-1">
               <textarea
                 ref={inputRef}
@@ -671,6 +992,189 @@ USER LATEST INQUIRY:
           </form>
         </div>
       </footer>
+
+      {/* Quick Add Incomplete Word Modal */}
+      <AnimatePresence>
+        {isQuickAddModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-60 bg-stone-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+            onClick={() => setIsQuickAddModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 bg-stone-50/80">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 bg-indigo-600 text-white rounded-xl shrink-0 shadow-2xs">
+                    <BookPlus className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-sm font-bold text-stone-900">
+                        {appLanguage === "vi" ? "Thêm từ mới" : "Quick Add Word"}
+                      </h3>
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300/80 rounded-md">
+                        {appLanguage === "vi" ? "Chưa hoàn thiện" : "Draft / Incomplete"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-500">
+                      {appLanguage === "vi"
+                        ? "Từ sẽ được AI tự động làm giàu chi tiết trong nền"
+                        : "AI will auto-enrich definition & audio in the background"}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAddModalOpen(false)}
+                  className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSaveIncompleteWord} className="p-5 space-y-4 overflow-y-auto">
+                {/* Suggestions pills if available */}
+                {suggestedPills.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block">
+                      {appLanguage === "vi" ? "Gợi ý từ ngữ cảnh:" : "Suggested from context:"}
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {suggestedPills.map((sug) => {
+                        const isAlready = addedWordKeys[sug.word.toLowerCase()] || (words && isWordInCollection(words, sug.word));
+                        return (
+                          <button
+                            key={sug.word}
+                            type="button"
+                            onClick={() => {
+                              setQuickAddWord(sug.word);
+                              if (sug.translation) setQuickAddTranslation(sug.translation);
+                              if (sug.pos) setQuickAddPos(sug.pos);
+                            }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                              quickAddWord.toLowerCase() === sug.word.toLowerCase()
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                : isAlready
+                                ? "bg-stone-100 text-stone-500 border-stone-200"
+                                : "bg-stone-50 hover:bg-indigo-50 text-stone-800 border-stone-200/90 hover:border-indigo-300"
+                            }`}
+                          >
+                            <span>{sug.word}</span>
+                            {sug.translation && (
+                              <span className={`text-[10px] ${quickAddWord.toLowerCase() === sug.word.toLowerCase() ? "text-indigo-200" : "text-stone-400"}`}>
+                                ({sug.translation})
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Word Input */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-700 flex items-center justify-between">
+                    <span>{appLanguage === "vi" ? "Từ / Cụm từ cần lưu" : "Target Word / Phrase"} <span className="text-rose-500">*</span></span>
+                    {quickAddWord.trim() && words && isWordInCollection(words, quickAddWord.trim()) && (
+                      <span className="text-[11px] font-semibold text-amber-600 flex items-center gap-0.5">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>{appLanguage === "vi" ? "Đã có trong bộ sưu tập" : "Already in collection"}</span>
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    ref={quickAddInputRef}
+                    type="text"
+                    value={quickAddWord}
+                    onChange={(e) => setQuickAddWord(e.target.value)}
+                    placeholder={appLanguage === "vi" ? "ví dụ: aurora, Northern Lights..." : "e.g. aurora, Northern Lights..."}
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 focus:border-indigo-500 focus:bg-white rounded-xl text-sm font-semibold text-stone-900 placeholder:text-stone-400 focus:outline-hidden transition-all shadow-inner"
+                    required
+                  />
+                </div>
+
+                {/* Meaning / Translation Input */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-stone-700">
+                    <span>{appLanguage === "vi" ? "Nghĩa / Dịch nghĩa (tuỳ chọn)" : "Meaning / Translation (optional)"}</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={quickAddTranslation}
+                    onChange={(e) => setQuickAddTranslation(e.target.value)}
+                    placeholder={appLanguage === "vi" ? "ví dụ: cực quang" : "e.g. northern lights / polar lights"}
+                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 focus:border-indigo-500 focus:bg-white rounded-xl text-sm text-stone-900 placeholder:text-stone-400 focus:outline-hidden transition-all shadow-inner"
+                  />
+                </div>
+
+                {/* Part of Speech */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-stone-700 flex items-center gap-1">
+                    <Tag className="w-3 h-3 text-stone-400" />
+                    <span>{appLanguage === "vi" ? "Từ loại (tuỳ chọn)" : "Part of Speech (optional)"}</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["noun", "verb", "adjective", "adverb", "phrasal verb", "expression"].map((pos) => (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() => setQuickAddPos(quickAddPos === pos ? "" : pos)}
+                        className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                          quickAddPos === pos
+                            ? "bg-indigo-100 text-indigo-900 border-indigo-300 font-bold"
+                            : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
+                        }`}
+                      >
+                        {pos}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Context Note */}
+                {challenge?.nativeSentence && (
+                  <div className="p-2.5 bg-stone-50 border border-stone-200/70 rounded-xl text-xs text-stone-600">
+                    <span className="font-semibold text-stone-700">{appLanguage === "vi" ? "Ngữ cảnh:" : "Context:"}</span>{" "}
+                    <span className="italic">"{challenge.nativeSentence}"</span>
+                  </div>
+                )}
+
+                {/* Submit / Cancel Footer */}
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickAddModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer"
+                  >
+                    {appLanguage === "vi" ? "Huỷ" : "Cancel"}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!quickAddWord.trim()}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:bg-stone-200 text-white disabled:text-stone-400 text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>{appLanguage === "vi" ? "Lưu từ nháp" : "Add as Incomplete Word"}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>,
     document.body
   );
