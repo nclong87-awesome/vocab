@@ -23,6 +23,7 @@ import {
   deletePoorSentenceReportFromDB,
   clearAllPoorSentenceReportsFromDB
 } from "../../db/indexedDB";
+import { getHighlightedSentenceSegments } from "../../utils/challengeHighlight";
 
 interface PoorSentencesModalProps {
   isOpen: boolean;
@@ -514,7 +515,29 @@ export default function PoorSentencesModal({
                           Generated Challenge Sentence ({report.nativeLanguage}):
                         </span>
                         <p className="text-sm sm:text-base font-bold text-stone-900 leading-snug break-words">
-                          "{report.nativeSentence}"
+                          "
+                          {(() => {
+                            const { segments } = getHighlightedSentenceSegments(report.nativeSentence, {
+                              targetWordInNativeSentence: report.targetWordInNativeSentence,
+                              targetWordFromCollection: report.targetWord ? { word: report.targetWord } : undefined,
+                              keyTargetWords: report.keyTargetWords,
+                            });
+                            return segments.map((seg, sIdx) => {
+                              if (seg.isHighlight) {
+                                return (
+                                  <mark
+                                    key={sIdx}
+                                    className="bg-amber-100 text-amber-950 font-black px-1.5 py-0.5 rounded-lg border border-amber-300/80 shadow-3xs mx-0.5 inline-block decoration-clone"
+                                    title={report.targetWord ? `Target: "${report.targetWord}"` : undefined}
+                                  >
+                                    {seg.text}
+                                  </mark>
+                                );
+                              }
+                              return <span key={sIdx}>{seg.text}</span>;
+                            });
+                          })()}
+                          "
                         </p>
                       </div>
 

@@ -29,6 +29,7 @@ import LlmResponseMetadata from "./LlmResponseMetadata";
 import { recordUserInquiry } from "../../services/userInquiryService";
 import { extractCleanErrorMessage } from "../../utils/llmHelpers";
 import { t } from "../../config/i18n";
+import { getHighlightedSentenceSegments } from "../../utils/challengeHighlight";
 
 interface TranslationChallengeAskAiModalProps {
   isOpen: boolean;
@@ -151,6 +152,10 @@ export default function TranslationChallengeAskAiModal({
   const [quickAddPos, setQuickAddPos] = useState("");
   const [addedWordKeys, setAddedWordKeys] = useState<Record<string, boolean>>({});
   const [inModalToast, setInModalToast] = useState<string | null>(null);
+
+  const { cleanSentence: contextCleanSentence, segments: contextSentenceSegments } = useMemo(() => {
+    return getHighlightedSentenceSegments(challenge?.nativeSentence, challenge, words);
+  }, [challenge, words]);
 
   const latestResponseRef = useRef<HTMLDivElement | null>(null);
   const typingIndicatorRef = useRef<HTMLDivElement | null>(null);
@@ -1145,10 +1150,27 @@ USER LATEST INQUIRY:
                 </div>
 
                 {/* Context Note */}
-                {challenge?.nativeSentence && (
+                {(contextCleanSentence || challenge?.nativeSentence) && (
                   <div className="p-2.5 bg-stone-50 border border-stone-200/70 rounded-xl text-xs text-stone-600">
                     <span className="font-semibold text-stone-700">{appLanguage === "vi" ? "Ngữ cảnh:" : "Context:"}</span>{" "}
-                    <span className="italic">"{challenge.nativeSentence}"</span>
+                    <span className="italic">
+                      "
+                      {contextSentenceSegments.map((seg, idx) => {
+                        if (seg.isHighlight) {
+                          return (
+                            <mark
+                              key={idx}
+                              className="bg-amber-100 text-amber-950 font-bold px-1 rounded not-italic"
+                              title={challenge?.targetWordFromCollection?.word ? `Target: ${challenge.targetWordFromCollection.word}` : undefined}
+                            >
+                              {seg.text}
+                            </mark>
+                          );
+                        }
+                        return <span key={idx}>{seg.text}</span>;
+                      })}
+                      "
+                    </span>
                   </div>
                 )}
 

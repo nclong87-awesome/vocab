@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -10,6 +10,7 @@ import {
 import { ChallengeData, ChallengeEvaluation, PoorSentenceReport } from "../../types";
 import { useModalBackNavigation } from "../../hooks/useModalBackNavigation";
 import { savePoorSentenceReportToDB, deletePoorSentenceReportFromDB } from "../../db/indexedDB";
+import { getHighlightedSentenceSegments } from "../../utils/challengeHighlight";
 
 interface ReportPoorSentenceModalProps {
   isOpen: boolean;
@@ -71,7 +72,10 @@ export default function ReportPoorSentenceModal({
 
   if (!isOpen || typeof document === "undefined") return null;
 
-  const effectiveNativeSentence = challenge?.nativeSentence || "";
+  const { cleanSentence: effectiveNativeSentence, highlightWord: targetHighlightWord, segments: sentenceSegments } = useMemo(() => {
+    return getHighlightedSentenceSegments(challenge?.nativeSentence, challenge);
+  }, [challenge]);
+
   const effectiveTargetLang = challenge?.targetLanguage || targetLanguage;
   const effectiveNativeLang = challenge?.nativeLanguage || nativeLanguage;
   const effectiveProvider = provider || challenge?.provider || evaluation?.provider || "AI Engine";
@@ -95,6 +99,7 @@ export default function ReportPoorSentenceModal({
         timestamp: existingReport?.timestamp || new Date().toISOString(),
         challengeId: challenge?.id,
         nativeSentence: effectiveNativeSentence.trim(),
+        targetWordInNativeSentence: targetHighlightWord || challenge?.targetWordInNativeSentence || undefined,
         targetLanguage: effectiveTargetLang,
         nativeLanguage: effectiveNativeLang,
         topicContext: challenge?.topicContext,
@@ -191,7 +196,22 @@ export default function ReportPoorSentenceModal({
                 )}
               </div>
               <p className="text-xs sm:text-sm font-bold text-stone-900 leading-snug">
-                "{effectiveNativeSentence}"
+                "
+                {sentenceSegments.map((seg, idx) => {
+                  if (seg.isHighlight) {
+                    return (
+                      <mark
+                        key={idx}
+                        className="bg-amber-100 text-amber-950 font-black px-1.5 py-0.5 rounded-lg border border-amber-300/80 shadow-3xs mx-0.5 inline-block decoration-clone"
+                        title={targetWord ? `Target word: "${targetWord}"` : undefined}
+                      >
+                        {seg.text}
+                      </mark>
+                    );
+                  }
+                  return <span key={idx}>{seg.text}</span>;
+                })}
+                "
               </p>
               <div className="flex items-center justify-between gap-2 text-[10.5px] text-stone-500 font-mono pt-0.5">
                 <span>Model: <strong className="text-stone-700">{effectiveModel}</strong></span>

@@ -334,6 +334,7 @@ export interface ChallengeKeyWord {
 export interface ChallengeData {
   id: string;
   nativeSentence: string;
+  targetWordInNativeSentence?: string;
   targetLanguage: string;
   nativeLanguage: string;
   topicContext?: string;
@@ -347,6 +348,7 @@ export interface ChallengeData {
     hint?: string;
     strength?: number;
     partOfSpeech?: string;
+    nativeWordInSentence?: string;
   };
   personalityNote?: string;
   createdAt: string;
@@ -436,6 +438,7 @@ export interface PoorSentenceReport {
   timestamp: string; // ISO string
   challengeId?: string;
   nativeSentence: string;
+  targetWordInNativeSentence?: string;
   targetLanguage: string;
   nativeLanguage: string;
   topicContext?: string;

@@ -34,6 +34,7 @@ import ReportPoorSentenceModal from "./ReportPoorSentenceModal";
 import WordReviewedBanner from "./WordReviewedBanner";
 import StrengthHistoryModal from "../analytics/StrengthHistoryModal";
 import WordChatModal from "./WordChatModal";
+import { getHighlightedSentenceSegments } from "../../utils/challengeHighlight";
 
 interface TranslationChallengeCardProps {
   challenge?: ChallengeData;
@@ -94,6 +95,11 @@ export default function TranslationChallengeCard({
   const [selectedHistoryWord, setSelectedHistoryWord] = useState<Word | null>(null);
   const [selectedChatWord, setSelectedChatWord] = useState<Word | null>(null);
 
+  // Compute sentence segments with target word highlighted (or graceful fallback)
+  const { cleanSentence: promptCleanSentence, highlightWord: promptHighlightWord, segments: promptSentenceSegments } = useMemo(() => {
+    return getHighlightedSentenceSegments(challenge?.nativeSentence, challenge, words);
+  }, [challenge, words]);
+
   // Poorly generated sentence reporting state
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [existingReport, setExistingReport] = useState<PoorSentenceReport | null>(null);
@@ -110,20 +116,22 @@ export default function TranslationChallengeCard({
     : (responseTimeMs ?? challenge?.responseTimeMs ?? evaluation?.responseTimeMs);
 
   const handleFlagClick = async () => {
-    if (!challenge?.nativeSentence) return;
+    const rawSentence = promptCleanSentence || challenge?.nativeSentence;
+    if (!rawSentence) return;
     if (!isReported) {
       try {
         const report: PoorSentenceReport = {
           id: `poor_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           timestamp: new Date().toISOString(),
-          challengeId: challenge.id,
-          nativeSentence: challenge.nativeSentence.trim(),
-          targetLanguage: challenge.targetLanguage || targetLanguage || "English",
-          nativeLanguage: challenge.nativeLanguage || "Vietnamese",
-          topicContext: challenge.topicContext,
-          targetWord: challenge.targetWordFromCollection?.word || evaluation?.targetWordUsed || undefined,
-          keyTargetWords: challenge.keyTargetWords,
-          idealTranslation: evaluation?.correctedSentence || challenge.idealTranslation || undefined,
+          challengeId: challenge?.id,
+          nativeSentence: rawSentence.trim(),
+          targetWordInNativeSentence: promptHighlightWord || challenge?.targetWordInNativeSentence || undefined,
+          targetLanguage: challenge?.targetLanguage || targetLanguage || "English",
+          nativeLanguage: challenge?.nativeLanguage || "Vietnamese",
+          topicContext: challenge?.topicContext,
+          targetWord: challenge?.targetWordFromCollection?.word || evaluation?.targetWordUsed || undefined,
+          keyTargetWords: challenge?.keyTargetWords,
+          idealTranslation: evaluation?.correctedSentence || challenge?.idealTranslation || undefined,
           userTranslation: evaluation?.userTranslation?.trim() || undefined,
           evaluationScore: evaluation?.score,
           evaluationFeedback: evaluation
@@ -150,7 +158,7 @@ export default function TranslationChallengeCard({
   useEffect(() => {
     let isMounted = true;
     const checkReportedStatus = async () => {
-      const sentence = challenge?.nativeSentence;
+      const sentence = promptCleanSentence || challenge?.nativeSentence;
       if (!sentence) {
         if (isMounted) {
           setIsReported(false);
@@ -185,7 +193,7 @@ export default function TranslationChallengeCard({
       isMounted = false;
       window.removeEventListener("vocab-poor-sentences-updated", handleUpdate);
     };
-  }, [challenge?.id, challenge?.nativeSentence]);
+  }, [challenge?.id, challenge?.nativeSentence, promptCleanSentence]);
 
   const scrollToVocabHints = useCallback((behavior: ScrollBehavior = "smooth") => {
     const target = vocabHintsRef.current || hintsContainerRef.current;
@@ -569,7 +577,7 @@ export default function TranslationChallengeCard({
               <button
                 id="btn-play-prompt-sentence"
                 type="button"
-                onClick={() => handlePlayText(challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence")}
+                onClick={() => handlePlayText(promptCleanSentence || challenge.nativeSentence, challenge.nativeLanguage || "Vietnamese", "prompt-sentence")}
                 className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                 title="Listen to native sentence"
               >
@@ -582,10 +590,25 @@ export default function TranslationChallengeCard({
             </div>
           </div>
 
-          {/* Big Bold Native Sentence (No quotes) */}
+          {/* Big Bold Native Sentence (No quotes) with target word highlighted */}
           <div className="py-0.5 min-w-0">
             <p className="text-lg sm:text-xl font-extrabold text-slate-900 leading-snug tracking-tight font-sans break-words select-text">
-              {challenge.nativeSentence.trim()}
+              {promptSentenceSegments.map((seg, idx) => {
+                if (seg.isHighlight) {
+                  const targetEnglishWord = challenge?.targetWordFromCollection?.word;
+                  return (
+                    <mark
+                      key={idx}
+                      data-testid="challenge-target-word-highlight"
+                      className="bg-amber-100 text-amber-950 font-black px-1.5 py-0.5 rounded-lg border border-amber-300/80 shadow-3xs select-text mx-0.5 inline-block decoration-clone"
+                      title={targetEnglishWord ? `Target word: "${targetEnglishWord}"` : "Target word to translate"}
+                    >
+                      {seg.text}
+                    </mark>
+                  );
+                }
+                return <span key={idx}>{seg.text}</span>;
+              })}
             </p>
           </div>
 
@@ -1040,9 +1063,49 @@ export default function TranslationChallengeCard({
         {(() => {
           const userSub = evaluation.userTranslation?.trim();
           const isPlayingIdeal = playingItemKey === "ideal-sentence";
+          const hasOriginalSentence = Boolean(promptCleanSentence || challenge?.nativeSentence);
 
           return (
-            <div className={`grid grid-cols-1 ${userSub ? "md:grid-cols-2" : ""} gap-3`}>
+            <div className="space-y-2.5">
+              {hasOriginalSentence && (
+                <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-2xl space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider font-mono block">
+                      Original Challenge ({challenge?.nativeLanguage || "Vietnamese"})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handlePlayText(promptCleanSentence || challenge?.nativeSentence || "", challenge?.nativeLanguage || "Vietnamese", "eval-prompt-sentence")}
+                      className="p-1 text-stone-400 hover:text-stone-700 rounded-md transition-colors cursor-pointer"
+                      title="Listen to original sentence"
+                    >
+                      {playingItemKey === "eval-prompt-sentence" ? (
+                        <Square className="w-3.5 h-3.5 fill-amber-600 text-amber-600 animate-pulse" />
+                      ) : (
+                        <Volume2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs sm:text-sm font-bold text-stone-900 break-words select-text">
+                    {promptSentenceSegments.map((seg, idx) => {
+                      if (seg.isHighlight) {
+                        return (
+                          <mark
+                            key={idx}
+                            className="bg-amber-100 text-amber-950 font-black px-1.5 py-0.5 rounded-lg border border-amber-300/80 shadow-3xs select-text mx-0.5 inline-block decoration-clone"
+                            title={challenge?.targetWordFromCollection?.word ? `Target word: "${challenge.targetWordFromCollection.word}"` : undefined}
+                          >
+                            {seg.text}
+                          </mark>
+                        );
+                      }
+                      return <span key={idx}>{seg.text}</span>;
+                    })}
+                  </p>
+                </div>
+              )}
+
+              <div className={`grid grid-cols-1 ${userSub ? "md:grid-cols-2" : ""} gap-3`}>
               {userSub && (
                 <div className="p-3 bg-stone-50 border border-stone-200/70 rounded-2xl space-y-1">
                   <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider font-mono block">
@@ -1091,6 +1154,7 @@ export default function TranslationChallengeCard({
                   "{evaluation.correctedSentence}"
                 </p>
               </div>
+            </div>
             </div>
           );
         })()}

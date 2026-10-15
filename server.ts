@@ -9,6 +9,7 @@ import { extractPhrasalVerbsAndCollocationsFromSentence } from "./src/utils/quiz
 import { isPhrasalVerb, findWordInCollection, hasUserIncorporatedWord } from "./src/utils/wordNormalization";
 import { getTranslationChallengeCandidateWords } from "./src/utils/spacedRepetition";
 import { PROVIDER_OPTIONS, RELIABLE_MODELS, getPreferredModelsForLanguage } from "./src/config/llmProviders";
+import { resolveTargetHighlight } from "./src/utils/challengeHighlight";
 
 dotenv.config();
 
@@ -3320,8 +3321,9 @@ YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
 - Bạn hoàn toàn tự do sáng tạo nhãn chủ đề 2–4 từ tiếng Việt (hoặc song ngữ) phản ánh chính xác lát cắt nội dung bạn đã chọn, ví dụ: "Kính thiên văn nghiệp dư", "Hương vị trà đào", "Chuyến bay đêm", "Thuật toán tối ưu", "Cơn mưa rào bất chợt", "Kỷ niệm tuổi thơ", "Triển lãm tranh sơn dầu", "Cắm trại ven hồ", "Kỹ năng sinh tồn"...
 - Hãy sáng tạo nhãn chủ đề thật phong phú và đa dạng! Ghi vào trường "topicContext".
 
-4. TỪ VỰNG MỤC TIÊU & TỪ KHÓA HỮU ÍCH:
+4. TỪ VỰNG MỤC TIÊU & TỪ CẦN HIGHLIGHT TRONG CÂU:
 - Ghi rõ từ tiếng Anh đã chọn từ danh sách ứng viên vào "targetWordFromCollection" kèm nghĩa tiếng Việt và gợi ý ngắn.
+- BẮT BUỘC cung cấp "targetWordInNativeSentence": ghi CHÍNH XÁC từ hoặc cụm từ tiếng Việt xuất hiện nguyên văn trong "nativeSentence" thể hiện nghĩa của targetWordFromCollection (ví dụ: nếu từ mục tiêu là 'moor'/'anchor' và câu là 'Anh ấy cố gắng leo lên neo đậu con thuyền, trời bão ghê!' thì targetWordInNativeSentence là 'neo đậu') để hệ thống làm nổi bật (highlight) từ đó cho người học.
 - Cung cấp danh sách 3–6 từ/cụm từ tiếng Anh hữu ích liên quan đến câu này trong "keyTargetWords" (để học viên có thể xem gợi ý từ vựng nếu cần). Mỗi mục gồm { "word": "english_word", "translation": "nghĩa tiếng việt", "hint": "loại từ hoặc gợi ý" }.
 
 5. LỜI NHẮN NGỮ CẢNH (PERSONALITY NOTE):
@@ -3330,11 +3332,13 @@ YÊU CẦU CỐT LÕI (TUYỆT ĐỐI TUÂN THỦ):
 ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ JSON THUẦN, KHÔNG DÙNG MARKDOWN BACKTICKS):
 {
   "nativeSentence": "Câu tiếng Việt tự nhiên 100%, 6-14 từ, giàu biểu cảm và tự nhiên",
+  "targetWordInNativeSentence": "từ hoặc cụm từ tiếng Việt chính xác trong nativeSentence thể hiện nghĩa của targetWordFromCollection",
   "topicContext": "Nhãn chủ đề 2-4 từ do bạn tự do sáng tạo",
   "targetWordFromCollection": {
     "word": "từ tiếng Anh chọn từ danh sách ứng viên",
     "translation": "nghĩa tiếng Việt tương ứng trong câu",
-    "hint": "gợi ý ngắn gọn về ngữ cảnh"
+    "hint": "gợi ý ngắn gọn về ngữ cảnh",
+    "nativeWordInSentence": "từ hoặc cụm từ chính xác trong nativeSentence"
   },
   "keyTargetWords": [
     { "word": "từ_tiếng_anh", "translation": "nghĩa_tiếng_việt", "hint": "gợi_ý" }
@@ -3407,8 +3411,9 @@ Freely create a vivid, specific, and unique 2–4 word topic label in "topicCont
 - Absolutely no ${targetLanguage} words, loanwords, or untranslated target terms.
 - Express every concept in natural ${nativeLanguage}.
 
-5. TARGET WORD PRESENCE
+5. TARGET WORD PRESENCE & HIGHLIGHT
 The exact native meaning of the chosen candidate target word MUST appear clearly in nativeSentence.
+MANDATORY: Provide "targetWordInNativeSentence" containing the EXACT word or phrase as it appears verbatim inside "nativeSentence" that translates/represents the targetWordFromCollection, so the UI can highlight it for the learner.
 
 6. 1-TO-1 SEMANTIC EQUIVALENCE
 nativeSentence and idealTranslation must be exact bidirectional translations.
@@ -3426,12 +3431,14 @@ Short explanation of why this scenario + vocabulary suits a ${archetype?.toLower
 OUTPUT FORMAT (STRICT RAW JSON ONLY):
 {
   "nativeSentence": "Concise sentence in ${nativeLanguage} (6-14 words, ZERO ${targetLanguage})",
+  "targetWordInNativeSentence": "The exact word or phrase from nativeSentence that corresponds to targetWordFromCollection",
   "idealTranslation": "Concise ideal translation in ${targetLanguage}",
   "topicContext": "Freely chosen 2-4 word topic label",
   "targetWordFromCollection": {
     "word": "EXACT word chosen strictly and verbatim from the USER'S WORDS COLLECTION CANDIDATES above",
     "translation": "native meaning of this chosen candidate word",
-    "hint": "brief context hint"
+    "hint": "brief context hint",
+    "nativeWordInSentence": "exact word or phrase inside nativeSentence"
   },
   "keyTargetWords": [
     { "word": "${targetLanguage === "English" ? "english_word" : "target_word"}", "translation": "${nativeLanguage.toLowerCase()}", "hint": "synonym / pos / note" }
@@ -3572,6 +3579,22 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY):
             return translation.toLowerCase();
           });
         }
+      }
+
+      // Resolve target word to highlight in nativeSentence with robust multi-tier fallback
+      const highlightRes = resolveTargetHighlight(
+        parsed.nativeSentence,
+        {
+          targetWordInNativeSentence: parsed.targetWordInNativeSentence || parsed.targetWordFromCollection?.nativeWordInSentence,
+          targetWordFromCollection: parsed.targetWordFromCollection,
+          keyTargetWords: parsed.keyTargetWords,
+        },
+        Array.isArray(words) ? words : []
+      );
+      parsed.nativeSentence = highlightRes.cleanSentence;
+      parsed.targetWordInNativeSentence = highlightRes.highlightWord || undefined;
+      if (parsed.targetWordFromCollection) {
+        parsed.targetWordFromCollection.nativeWordInSentence = highlightRes.highlightWord || undefined;
       }
 
       return res.json({
