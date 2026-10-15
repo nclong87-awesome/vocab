@@ -1027,48 +1027,9 @@ export default function TranslationChallengeCard({
         {(() => {
           const userSub = evaluation.userTranslation?.trim();
           const isPlayingIdeal = playingItemKey === "ideal-sentence";
-          const hasOriginalSentence = Boolean(promptCleanSentence || challenge?.nativeSentence);
 
           return (
             <div className="space-y-2.5">
-              {hasOriginalSentence && (
-                <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-2xl space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider font-mono block">
-                      Original Challenge ({challenge?.nativeLanguage || "Vietnamese"})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handlePlayText(promptCleanSentence || challenge?.nativeSentence || "", challenge?.nativeLanguage || "Vietnamese", "eval-prompt-sentence")}
-                      className="p-1 text-stone-400 hover:text-stone-700 rounded-md transition-colors cursor-pointer"
-                      title="Listen to original sentence"
-                    >
-                      {playingItemKey === "eval-prompt-sentence" ? (
-                        <Square className="w-3.5 h-3.5 fill-amber-600 text-amber-600 animate-pulse" />
-                      ) : (
-                        <Volume2 className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-xs sm:text-sm font-bold text-stone-900 break-words select-text">
-                    {promptSentenceSegments.map((seg, idx) => {
-                      if (seg.isHighlight) {
-                        return (
-                          <mark
-                            key={idx}
-                            className="bg-amber-100 text-amber-950 font-black px-1.5 py-0.5 rounded-lg border border-amber-300/80 shadow-3xs select-text mx-0.5 inline-block decoration-clone"
-                            title={challenge?.targetWordFromCollection?.word ? `Target word: "${challenge.targetWordFromCollection.word}"` : undefined}
-                          >
-                            {seg.text}
-                          </mark>
-                        );
-                      }
-                      return <span key={idx}>{seg.text}</span>;
-                    })}
-                  </p>
-                </div>
-              )}
-
               <div className={`grid grid-cols-1 ${userSub ? "md:grid-cols-2" : ""} gap-3`}>
               {userSub && (
                 <div className="p-3 bg-stone-50 border border-stone-200/70 rounded-2xl space-y-1">
