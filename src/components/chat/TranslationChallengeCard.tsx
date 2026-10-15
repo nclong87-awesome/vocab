@@ -19,8 +19,7 @@ import {
   Send,
   CornerDownLeft,
   Flag,
-  Globe,
-  Play
+  Globe
 } from "lucide-react";
 import { ChallengeData, ChallengeEvaluation, Word, ChallengeSuggestedVocab, TTSConfig, LLMConfig, PoorSentenceReport } from "../../types";
 import { isWordInCollection, findWordInCollection } from "../../utils/wordNormalization";
@@ -712,8 +711,8 @@ export default function TranslationChallengeCard({
                 className="w-full bg-transparent p-3.5 sm:p-4 pr-10 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none resize-none min-h-[80px] leading-relaxed font-sans"
               />
 
-              {/* Vertical right side mic and audio actions */}
-              <div className="absolute right-3 top-3 bottom-3 flex flex-col justify-between items-center pointer-events-none">
+              {/* Vertical right side mic action */}
+              <div className="absolute right-3 top-3 bottom-3 flex flex-col justify-center items-center pointer-events-none">
                 {isSpeechSupported && (
                   <button
                     type="button"
@@ -728,76 +727,41 @@ export default function TranslationChallengeCard({
                     <Mic className="w-4 h-4" />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (userAnswer.trim()) {
-                      handlePlayText(userAnswer, effectiveTargetLang, "draft-audio");
-                    }
-                  }}
-                  disabled={!userAnswer.trim()}
-                  className="p-1.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 rounded-full transition-all cursor-pointer pointer-events-auto"
-                  title="Play draft audio"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                </button>
               </div>
             </div>
           </div>
 
           {/* Action Buttons Row */}
-          <div className="flex items-center justify-between gap-2.5 pt-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              {/* Submit Answer Button (Green) */}
-              <button
-                id="btn-submit-challenge-answer"
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onMouseDown={(e) => e.preventDefault()}
-                onTouchStart={handleTouchStartOnSubmit}
-                onTouchEnd={(e) => handleTouchEndOnSubmit(e)}
-                onClick={(e) => {
-                  e.preventDefault();
-                  triggerSubmit();
-                }}
-                disabled={isSubmitting}
-                className="bg-[#059669] hover:bg-[#047857] active:scale-98 text-white font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-xs transition-all cursor-pointer select-none touch-manipulation"
-              >
-                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="whitespace-nowrap">{isSubmitting ? "Submitting..." : "Submit Answer"}</span>
-              </button>
+          <div className="flex items-center justify-start gap-2.5 pt-2 flex-wrap">
+            {/* Submit Answer Button (Green) */}
+            <button
+              id="btn-submit-challenge-answer"
+              type="button"
+              onPointerDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={handleTouchStartOnSubmit}
+              onTouchEnd={(e) => handleTouchEndOnSubmit(e)}
+              onClick={(e) => {
+                e.preventDefault();
+                triggerSubmit();
+              }}
+              disabled={isSubmitting}
+              className="bg-[#059669] hover:bg-[#047857] active:scale-98 text-white font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-xs transition-all cursor-pointer select-none touch-manipulation"
+            >
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="whitespace-nowrap">{isSubmitting ? "Submitting..." : "Submit Answer"}</span>
+            </button>
 
-              {/* Ask AI Button (Violet / Purple) */}
-              <button
-                id="btn-ask-ai-challenge-prompt"
-                type="button"
-                onClick={() => setIsAskAiModalOpen(true)}
-                className="bg-[#7c3aed] hover:bg-[#6d28d9] active:scale-98 text-white font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-xs transition-all cursor-pointer select-none"
-              >
-                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="whitespace-nowrap">Ask AI</span>
-              </button>
-            </div>
-
-            {/* Reveal Answer link */}
-            <div className="flex items-center gap-1 text-xs text-slate-500 font-medium ml-auto">
-              <span className="hidden sm:inline">Don't know?</span>
-              <button
-                type="button"
-                onPointerDown={(e) => e.preventDefault()}
-                onMouseDown={(e) => e.preventDefault()}
-                onTouchStart={handleTouchStartOnSubmit}
-                onTouchEnd={(e) => handleTouchEndOnSubmit(e, "(No answer provided)")}
-                onClick={(e) => {
-                  e.preventDefault();
-                  triggerSubmit("(No answer provided)");
-                }}
-                disabled={isSubmitting}
-                className="text-slate-700 hover:text-slate-900 underline font-semibold cursor-pointer select-none touch-manipulation whitespace-nowrap"
-              >
-                Reveal answer
-              </button>
-            </div>
+            {/* Ask AI Button (Violet / Purple) */}
+            <button
+              id="btn-ask-ai-challenge-prompt"
+              type="button"
+              onClick={() => setIsAskAiModalOpen(true)}
+              className="bg-[#7c3aed] hover:bg-[#6d28d9] active:scale-98 text-white font-bold text-xs sm:text-sm px-4 sm:px-5 py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 shadow-xs transition-all cursor-pointer select-none"
+            >
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="whitespace-nowrap">Ask AI</span>
+            </button>
           </div>
 
           {/* AI Response Metadata */}
