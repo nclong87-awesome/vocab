@@ -99,6 +99,18 @@ export const PROVIDER_OPTIONS: LLMProviderOption[] = [
     requiresKey: false
   },
   {
+    id: "motapis",
+    name: "Motapis",
+    tagline: "Motapis Cloud API",
+    defaultModel: "gpt-6-luna",
+    models: [
+      "gpt-6-luna"
+    ],
+    defaultBaseUrl: "https://motapis.nclong87.workers.dev/v1",
+    directBaseUrl: "https://motapis.com/v1",
+    requiresKey: false
+  },
+  {
     id: "cloudflare",
     name: "Cloudflare Workers AI",
     tagline: "Serverless inference at the edge",
@@ -153,6 +165,7 @@ export const RELIABLE_MODELS: string[] = [
   // "gpt-oss:20b",
   // "pro/claude-haiku-4-5",
   "pro/gpt-5.6-luna",
+  "gpt-6-luna",
   "@cf/aisingapore/gemma-sea-lion-v4-27b-it"
 ];
 
@@ -170,7 +183,8 @@ export const LANGUAGE_PREFERRED_MODELS: Record<string, string[]> = {
     "google/gemini-3.5-flash-lite",
     "openai/gpt-oss-120b",
     "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-    "pro/gpt-5.6-luna"
+    "pro/gpt-5.6-luna",
+    "gpt-6-luna"
   ],
   vi: [
     "google/gemini-3.8-flash",
@@ -179,7 +193,8 @@ export const LANGUAGE_PREFERRED_MODELS: Record<string, string[]> = {
     "google/gemini-3.5-flash-lite",
     "openai/gpt-oss-120b",
     "@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-    "pro/gpt-5.6-luna"
+    "pro/gpt-5.6-luna",
+    "gpt-6-luna"
   ],
   japanese: [
     "google/gemini-3.8-flash",
