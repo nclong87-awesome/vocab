@@ -1,5 +1,5 @@
 import { LLMConfig, Word, QuizQuestion, UserStats, UserPersonalityProfile, QuizSuggestedWord } from "../types";
-import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions, isQuestionSentenceValid, getDefaultContextSentence, extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
+import { generateConfusers, getImageKeyword, ensureQuestionHasBlank, generateQuizQuestions, isQuestionSentenceValid, getDefaultContextSentence, extractPhrasalVerbsAndCollocationsFromSentence, sanitizeQuizQuestion } from "../utils/quizGenerator";
 import { areWordsEquivalent, isNoun, isPhrasalVerb } from "../utils/wordNormalization";
 import { resizeImageDataUrl, extractCleanErrorMessage } from "../utils/llmHelpers";
 import { PROVIDER_OPTIONS, DEFAULT_PROVIDER_ID, RELIABLE_MODELS, getPreferredModelsForLanguage } from "../config/llmProviders";
@@ -2579,14 +2579,20 @@ CORE RULES:
 2. Distractor Independence: Options must be plausible external confusers matching the exact part of speech. Never reuse input words as distractors.
 3. Correct Answer: MUST strictly equal the target word being tested.
 4. STRICT NO DUPLICATE WORDS: Each question MUST test a DIFFERENT, UNIQUE target word from the input list. NEVER generate two questions for the same word.
-5. NOUN-ONLY RULE FOR IMAGES:
+5. STRICT ANTI-LEAKAGE RULE (CRITICAL - NEVER REVEAL THE TARGET WORD IN THE QUESTION):
+   - Under NO circumstance may the 'question' text mention, state, or reveal the target word being tested!
+   - For 'picture': The question MUST ALWAYS be exactly "Which word matches the visual concept shown below?". NEVER ask "Which image represents [word]" because the options are words, not images! NEVER put the target word in the question prompt!
+   - For 'listening': The question MUST ALWAYS be "Listen to the audio clip and select the correct matching word:". NEVER mention the target word!
+   - For 'definition': The definition MUST NEVER contain the target word itself (replace any self-referential occurrence with "______").
+   - For 'sentence' and 'duel': The context sentence MUST replace the target word with "______".
+6. NOUN-ONLY RULE FOR IMAGES:
    - Images and 'picture' questions are STRICTLY RESTRICTED to words whose part of speech is a NOUN.
    - If a word is NOT a noun (e.g. adjective, verb, adverb, preposition), you MUST NEVER use 'picture' type, and 'imageKeyword' MUST be omitted or empty.
    - Do NOT generate a 'picture' question unless the target word is actually a noun.
-6. Question Types:
+7. Question Types:
    - 'sentence': Fill-in-the-blank with "______". Include complete 'sentence' (with target word filled in, NEVER with blanks) and 'sentenceTranslation' (${nativeLanguage} full natural translation, NEVER with blanks or placeholders). The 'question' MUST embed the context sentence containing "______".
-   - 'definition': Match word to definition.
-   - 'picture': Set concise 1-3 word 'imageKeyword' (ONLY FOR NOUNS).
+   - 'definition': Match word to definition. (Definition must not contain the target word).
+   - 'picture': Set concise 1-3 word 'imageKeyword' (ONLY FOR NOUNS). The 'question' MUST be "Which word matches the visual concept shown below?".
    - 'duel': Pit target word against rival 'confuserWord' with a crisp 1-sentence 'contrastRule'.
      CRITICAL REQUIREMENT FOR 'duel': The 'question' MUST be a contextual fill-in-the-blank sentence where "______" represents the target word in a natural context (e.g. 'Choose the word that accurately fits the context:\n"We ______ finish work at five, but today we stayed late."'). NEVER output a vague instruction like 'Choose the word that best matches the given nuance (_____).' without a complete context sentence!
 ${isDuelMode 
@@ -2594,7 +2600,7 @@ ${isDuelMode
   : (hasAnyNoun 
       ? "   - Include at least 1 'picture' question with an 'imageKeyword' for a target word that is a NOUN. Other questions must be 'sentence', 'definition', or 'listening' (NEVER use 'duel' type)."
       : "   - Use 'sentence', 'definition', or 'listening' questions (NEVER use 'duel' type, no picture questions since no word is a noun).")}
-7. Suggested Words & Phrasal Verbs (FOR EACH INDIVIDUAL QUESTION):
+8. Suggested Words & Phrasal Verbs (FOR EACH INDIVIDUAL QUESTION):
    For EACH individual question, provide a "suggestedWords" array with 2 to 3 practical companion vocabulary items, phrasal verbs, collocations, idioms, or paired expressions in ${targetLanguage} directly relevant to that question.
    - CRITICAL REQUIREMENT FOR CONFUSER DUEL:
      * When generating Confuser Duel practice ('duel' questions), you MUST specifically examine and scan the generated context sentence and example for natural phrasal verbs.
@@ -2611,7 +2617,7 @@ Output MUST be strictly valid JSON matching this schema:
       "word": "string (the target word being tested)",
       "partOfSpeech": "string (the part of speech of the word)",
       "type": "definition" | "sentence" | "listening" | "picture" | "duel",
-      "question": "string (For 'duel' and 'sentence', MUST be a full context sentence with '______' inside double quotes; NEVER a sentence-less prompt)",
+      "question": "string (CRITICAL: NEVER reveal the target word in the question! For 'picture', MUST be 'Which word matches the visual concept shown below?'. For 'listening', MUST be 'Listen to the audio clip and select the correct matching word:'. For 'duel' and 'sentence', MUST be a full context sentence with '______' inside double quotes; NEVER a sentence-less prompt)",
       "options": ["string", "string"],
       "correctAnswer": "string (MUST be exactly the target word itself)",
       "hint": "string",
@@ -2637,11 +2643,11 @@ Output MUST be strictly valid JSON matching this schema:
     `1. Return exactly ${expectedCount} question(s) (strictly 1 per word). Correct answer MUST be the exact word.\n` +
     `2. CRITICAL: Every question must test a different target word. NEVER generate more than one question for the same word.\n` +
     `3. Distractors must match part of speech; do NOT use other input words as distractors.\n` +
-    `4. IMAGES AND PICTURE QUESTIONS: ONLY use 'picture' type or provide 'imageKeyword' if the target word is a NOUN. For adjectives, verbs, adverbs, etc., do NOT use 'picture' type and do NOT provide 'imageKeyword'.\n` +
+    `4. IMAGES AND PICTURE QUESTIONS: ONLY use 'picture' type or provide 'imageKeyword' if the target word is a NOUN. For 'picture', the question MUST be exactly "Which word matches the visual concept shown below?" and MUST NEVER mention or reveal the target word!\n` +
     (isDuelMode 
       ? `5. ALL questions must be 'duel' with 'confuserWord', 'contrastRule', and a full context sentence containing '______' (never a sentence-less prompt).\n` 
       : (hasAnyNoun 
-          ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word. Other questions must be 'sentence', 'definition', or 'listening' (do NOT use 'duel').\n`
+          ? `5. Include at least 1 'picture' question with 1-3 word 'imageKeyword' for a NOUN target word (question must be "Which word matches the visual concept shown below?"). Other questions must be 'sentence', 'definition', or 'listening' (do NOT use 'duel').\n`
           : `5. Use 'sentence', 'definition', or 'listening' questions (do NOT use 'duel').\n`)) +
     `6. Suggested words for EACH individual question: Include "suggestedWords" with 2-3 items containing "word", "translation", "partOfSpeech", and "category". CRITICAL FOR CONFUSER DUEL: Specifically examine and scan the generated context sentence and example for phrasal verbs (e.g., "laugh it off", "look forward to", "trip on", "give up", "break down"). Actively include phrasal verbs in "suggestedWords" and explicitly categorize them with category: "phrasal verb" and partOfSpeech: "phrasal verb"! Keep multi-word phrasal verbs intact (do NOT strip prepositions or shorten phrases).\n` +
     `7. CRITICAL NO-BLANK REQUIREMENT FOR SENTENCE & TRANSLATION: "sentence" must be the complete, natural sentence with the target word in place (no blanks). "sentenceTranslation" must be the natural full sentence translation in ${nativeLanguage} with NO blanks, underscores, or placeholders (NEVER put "______" or "(_____)" in sentenceTranslation).`;
@@ -2868,16 +2874,39 @@ Output MUST be strictly valid JSON matching this schema:
           : undefined;
 
         let rawQuestion = q.question;
-        if (!rawQuestion || !isQuestionSentenceValid(rawQuestion)) {
+        if (resolvedType === 'picture') {
+          const lowerQ = (rawQuestion || "").toLowerCase();
+          const targetLower = matchingWord.word.toLowerCase();
+          if (
+            !rawQuestion ||
+            !isQuestionSentenceValid(rawQuestion) ||
+            lowerQ.includes(targetLower) ||
+            /which (?:image|picture|photo)|what (?:image|picture|photo)/i.test(rawQuestion)
+          ) {
+            rawQuestion = "Which word matches the visual concept shown below?";
+          }
+        } else if (resolvedType === 'listening') {
+          const lowerQ = (rawQuestion || "").toLowerCase();
+          const targetLower = matchingWord.word.toLowerCase();
+          if (!rawQuestion || lowerQ.includes(targetLower)) {
+            rawQuestion = "Listen to the audio clip and select the correct matching word:";
+          }
+        } else if (!rawQuestion || !isQuestionSentenceValid(rawQuestion)) {
           if (isQuestionDuel) {
             rawQuestion = ensureQuestionHasBlank("", matchingWord.word, fallbackSentence, matchingWord.partOfSpeech || q.partOfSpeech);
           } else if (resolvedType === 'sentence') {
             rawQuestion = ensureQuestionHasBlank("", matchingWord.word, fallbackSentence, matchingWord.partOfSpeech || q.partOfSpeech);
           } else {
-            rawQuestion = `Which word matches: ${matchingWord.definition || matchingWord.word}`;
+            rawQuestion = `Which word matches the definition?\n"${matchingWord.definition || "______"}"`;
           }
         } else if (resolvedType === 'duel' || resolvedType === 'sentence' || /confuser duel|fill in the blank/i.test(rawQuestion)) {
           rawQuestion = ensureQuestionHasBlank(rawQuestion, matchingWord.word, fallbackSentence, matchingWord.partOfSpeech || q.partOfSpeech);
+        } else if (resolvedType === 'definition') {
+          const targetLower = matchingWord.word.toLowerCase();
+          if (rawQuestion && rawQuestion.toLowerCase().includes(targetLower)) {
+            const escaped = matchingWord.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            rawQuestion = rawQuestion.replace(new RegExp(`\\b${escaped}(?:s|es|ed|ing|d)?\\b`, "gi"), "______");
+          }
         }
 
         let resolvedSentence = q.sentence || (matchingWord.example ? matchingWord.example : undefined);
@@ -2973,7 +3002,7 @@ Output MUST be strictly valid JSON matching this schema:
           }
         }
 
-        validQuestions.push({
+        validQuestions.push(sanitizeQuizQuestion({
           id: q.id || `ai-q-${matchingWord.id}-${idx}`,
           wordId: matchingWord.id,
           word: matchingWord.word,
@@ -2990,7 +3019,7 @@ Output MUST be strictly valid JSON matching this schema:
           suggestedWords: qSuggestions.length > 0 ? qSuggestions.slice(0, 3) : [],
           confuserWord: isQuestionDuel ? (q.confuserWord || undefined) : undefined,
           contrastRule: isQuestionDuel ? (q.contrastRule || undefined) : undefined
-        });
+        }, matchingWord));
       }
 
       // If any target words were missed by the LLM, fill them with rule-based questions
@@ -3046,7 +3075,7 @@ Output MUST be strictly valid JSON matching this schema:
       });
 
       return {
-        questions: validQuestions.slice(0, 3),
+        questions: validQuestions.slice(0, 3).map(q => sanitizeQuizQuestion(q)),
         provider,
         model,
         responseTimeMs

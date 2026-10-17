@@ -623,6 +623,61 @@ export function ensureQuestionHasBlank(
   }
 }
 
+/**
+ * Sanitizes a quiz question to strictly guarantee that the target word
+ * is never revealed in the question prompt across any question type.
+ */
+export function sanitizeQuizQuestion(q: QuizQuestion, fallbackWord?: Word): QuizQuestion {
+  if (!q) return q;
+  const targetWord = (q.word || q.correctAnswer || fallbackWord?.word || "").trim();
+  const escapedTarget = targetWord ? targetWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "";
+  const targetRegex = escapedTarget ? new RegExp(`\\b${escapedTarget}(?:s|es|ed|ing|d)?\\b`, "gi") : null;
+
+  let questionText = (q.question || "").trim();
+
+  if (q.type === 'picture') {
+    // Picture questions display an image and present text options.
+    // The question prompt must NEVER leak the target word, and must NEVER ask "Which image...".
+    const lower = questionText.toLowerCase();
+    const revealsWord = targetRegex ? targetRegex.test(questionText) : (Boolean(targetWord) && lower.includes(targetWord.toLowerCase()));
+    const asksWhichImage = /which (?:image|picture|photo)|what (?:image|picture|photo)/i.test(questionText);
+
+    if (!questionText || revealsWord || asksWhichImage || !isQuestionSentenceValid(questionText)) {
+      questionText = "Which word matches the visual concept shown below?";
+    }
+  } else if (q.type === 'listening') {
+    // Listening questions play an audio clip and learner selects matching word.
+    // Prompt must never reveal the target word.
+    const lower = questionText.toLowerCase();
+    const revealsWord = targetRegex ? targetRegex.test(questionText) : (Boolean(targetWord) && lower.includes(targetWord.toLowerCase()));
+    if (!questionText || revealsWord) {
+      questionText = "Listen to the audio clip and select the correct matching word:";
+    }
+  } else if (q.type === 'definition') {
+    // Definition questions should never reveal the target word in the definition.
+    if (targetRegex && targetRegex.test(questionText)) {
+      questionText = questionText.replace(targetRegex, "______");
+    }
+    if (targetWord && questionText.toLowerCase().includes(`matches: ${targetWord.toLowerCase()}`)) {
+      questionText = `Which word matches the definition?\n"${q.sentence || "______"}"`;
+    }
+  } else if (q.type === 'sentence' || q.type === 'duel') {
+    questionText = ensureQuestionHasBlank(questionText, targetWord, q.sentence, q.partOfSpeech);
+  }
+
+  // Ensure options include the correct answer and are not empty
+  let cleanOptions = Array.isArray(q.options) ? q.options.filter(Boolean) : [];
+  if (targetWord && !cleanOptions.some(o => o.toLowerCase().trim() === targetWord.toLowerCase().trim())) {
+    cleanOptions.unshift(targetWord);
+  }
+
+  return {
+    ...q,
+    question: questionText,
+    options: cleanOptions
+  };
+}
+
 export const CURATED_CONFUSER_PAIRS: Record<string, ConfuserPairInfo> = {
   "normally": {
     rival: "especially",
@@ -1011,7 +1066,7 @@ export function generateConfuserDuelQuestions(wordList: Word[], targetLanguage?:
       uniqueWords.push(w);
     }
   }
-  return uniqueWords.slice(0, 3).map((word) => generateDuelQuestionForWord(word, targetLanguage));
+  return uniqueWords.slice(0, 3).map((word) => sanitizeQuizQuestion(generateDuelQuestionForWord(word, targetLanguage), word));
 }
 
 // Rule-based Quiz Question Generator with strict distractor logic & target-language restrictions
@@ -1168,5 +1223,5 @@ export function generateQuizQuestions(wordList: Word[], targetLanguage?: string)
   });
 
   const randomized = generated.sort(() => 0.5 - Math.random());
-  return randomized.slice(0, 3);
+  return randomized.slice(0, 3).map(q => sanitizeQuizQuestion(q));
 }

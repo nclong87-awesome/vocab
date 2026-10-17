@@ -32,7 +32,7 @@ import { subscribeLlmRequestStart, notifyLlmRequestStartFromConfig, publishLlmAp
 import { t } from "../config/i18n";
 import { speakText as speakTextService, registerSpeechTimer, buildEssentialChallengeAudioText } from "../utils/ttsService";
 import { areWordsEquivalent, findWordInCollection, isWordInCollection, isNoun, isCompletedWord, isIncompleteWord, sanitizeEvaluationWhatWentWell } from "../utils/wordNormalization";
-import { extractPhrasalVerbsAndCollocationsFromSentence } from "../utils/quizGenerator";
+import { extractPhrasalVerbsAndCollocationsFromSentence, sanitizeQuizQuestion } from "../utils/quizGenerator";
 import { recordUserInquiry, getRecentUserInquiries } from "../services/userInquiryService";
 import { ChallengeData } from "../types";
 import { generateChallenge, processChallengeTurn } from "../services/challengeService";
@@ -559,7 +559,7 @@ export function useChat({
         });
 
         const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
-        const generatedQuestions = rawQuestions.slice(0, 3);
+        const generatedQuestions = rawQuestions.slice(0, 3).map((q) => sanitizeQuizQuestion(q));
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -676,7 +676,7 @@ export function useChat({
         });
 
         const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
-        const generatedQuestions = rawQuestions.slice(0, 3);
+        const generatedQuestions = rawQuestions.slice(0, 3).map((q) => sanitizeQuizQuestion(q));
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -871,7 +871,7 @@ export function useChat({
         });
 
         const rawQuestions = Array.isArray(quizResult) ? quizResult : (quizResult?.questions || []);
-        const generatedQuestions = rawQuestions.slice(0, 3);
+        const generatedQuestions = rawQuestions.slice(0, 3).map((q) => sanitizeQuizQuestion(q));
         const provider = Array.isArray(quizResult) ? undefined : quizResult?.provider;
         const model = Array.isArray(quizResult) ? undefined : quizResult?.model;
         const responseTimeMs = Array.isArray(quizResult) ? undefined : quizResult?.responseTimeMs;
@@ -1337,7 +1337,7 @@ export function useChat({
     const nextIndex = activeQuiz.currentIndex;
 
     if (nextIndex < activeQuiz.questions.length) {
-      const nextQ = activeQuiz.questions[nextIndex];
+      const nextQ = sanitizeQuizQuestion(activeQuiz.questions[nextIndex]);
       const isNextQWarmup = activeQuiz.isSandwichSession && activeQuiz.warmupWordIds?.includes(nextQ.wordId);
       const qTag = activeQuiz.isSandwichSession
         ? ` (${activeQuiz.sandwichStep === 1 ? t("chat_sandwich_q_duel_tag", currentAppLang) : isNextQWarmup ? t("chat_sandwich_q_warmup_tag", currentAppLang) : t("chat_sandwich_q_review_tag", currentAppLang)})`
