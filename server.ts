@@ -344,8 +344,18 @@ function getNextServerAutoCandidate(llmConfig?: LLMRequestConfig, excludedKeys?:
     candidates = candidates.filter(c => RELIABLE_MODELS.some(m => m === c.model));
   }
 
+  // If a specific preferred provider and model was designated and is healthy, honor it immediately
+  const prefProv = (llmConfig as any)?.preferredProvider;
+  const prefMod = (llmConfig as any)?.preferredModel;
+  if (prefProv && prefMod && !isServerModelLocked(prefProv, prefMod) && (!excludedKeys || !excludedKeys.has(`${prefProv}:${prefMod}`))) {
+    const designatedMatch = candidates.find(c => c.provider === prefProv && c.model === prefMod);
+    if (designatedMatch) {
+      return designatedMatch;
+    }
+  }
+
   const preferredModels = (llmConfig as any)?.preferredModels ||
-    getPreferredModelsForLanguage((llmConfig as any)?.nativeLanguage || (llmConfig as any)?.language);
+    getPreferredModelsForLanguage((llmConfig as any)?.targetLanguage || (llmConfig as any)?.nativeLanguage || (llmConfig as any)?.language);
 
   if (Array.isArray(preferredModels) && preferredModels.length > 0) {
     const priorityCandidates = candidates.filter(c => preferredModels.includes(c.model));
@@ -3450,14 +3460,21 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY):
       schemaDescription = `JSON object with nativeSentence, idealTranslation, topicContext, targetWordFromCollection object, keyTargetWords array, and personalityNote string.`;
     }
 
-    const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+    const preferredLang = targetLanguage || nativeLanguage;
+    const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+      ? getPreferredModelsForLanguage(preferredLang)
+      : getPreferredModelsForLanguage(nativeLanguage);
 
     let effectiveLlmConfig: LLMRequestConfig = llmConfig 
-      ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage } 
-      : { onlyReliableModels: true, preferredModels, nativeLanguage };
+      ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage } 
+      : { onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage };
     if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
       delete effectiveLlmConfig.model;
       delete effectiveLlmConfig.provider;
+    }
+    if ((effectiveLlmConfig as any)?.preferredModel && !RELIABLE_MODELS.some(m => m === (effectiveLlmConfig as any).preferredModel)) {
+      delete (effectiveLlmConfig as any).preferredModel;
+      delete (effectiveLlmConfig as any).preferredProvider;
     }
 
     const startTime = Date.now();
@@ -3911,14 +3928,21 @@ Return STRICTLY raw JSON matching:
       schemaDescription = `JSON object with intent ("submission" | "incomplete"), agentReply if incomplete, and evaluation object containing score, scoreLabel, userTranslation, incorporatedTargetWord (boolean), targetWordUsed (string), incorporatedVocabClues (string array), whatWentWell, areasForImprovement, correctedSentence, and suggestedVocabulary.`;
     }
 
-    const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+    const preferredLang = targetLanguage || nativeLanguage;
+    const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+      ? getPreferredModelsForLanguage(preferredLang)
+      : getPreferredModelsForLanguage(nativeLanguage);
 
     let effectiveLlmConfig: LLMRequestConfig = llmConfig 
-      ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage } 
-      : { onlyReliableModels: true, preferredModels, nativeLanguage };
+      ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage } 
+      : { onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage };
     if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
       delete effectiveLlmConfig.model;
       delete effectiveLlmConfig.provider;
+    }
+    if ((effectiveLlmConfig as any)?.preferredModel && !RELIABLE_MODELS.some(m => m === (effectiveLlmConfig as any).preferredModel)) {
+      delete (effectiveLlmConfig as any).preferredModel;
+      delete (effectiveLlmConfig as any).preferredProvider;
     }
 
     const startTime = Date.now();

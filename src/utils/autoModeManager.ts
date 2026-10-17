@@ -1232,6 +1232,16 @@ export function getNextAutoCandidate(
     return !isLocked && !isExcluded;
   });
 
+  // If a specific preferred provider and model was designated for this request and is healthy, honor it immediately
+  if (llmConfig?.preferredProvider && llmConfig?.preferredModel) {
+    const designatedMatch = available.find(
+      c => c.provider === llmConfig.preferredProvider && c.model === llmConfig.preferredModel
+    );
+    if (designatedMatch) {
+      return designatedMatch;
+    }
+  }
+
   const preferredModels = llmConfig?.preferredModels || 
     getPreferredModelsForLanguage(llmConfig?.nativeLanguage || llmConfig?.language);
 
@@ -1283,12 +1293,8 @@ export function getNextAutoCandidate(
     const hasPreferred = Array.isArray(preferredModels) && preferredModels.length > 0;
 
     // When language-preferred models are active, strictly prioritize the top preferred candidates!
-    // Non-advancing queries (predictions for pub/sub & UI indicators) always return top available preferred model.
+    // Rotation must be deterministic and identical between prediction (advance=false) and execution (advance=true).
     if (hasPreferred) {
-      if (!advance) {
-        return available[0];
-      }
-
       // Filter available candidates that belong to preferredModels
       const preferredAvailable = available.filter((c) => preferredModels.includes(c.model));
       preferredAvailable.sort((a, b) => {
@@ -1309,6 +1315,15 @@ export function getNextAutoCandidate(
       }
 
       return available[0];
+    }
+
+    if (tier1Probes.length > 0 && tier1Tested.length === 0) {
+      const rotIdx = getAutoRotationIndex();
+      const idx = rotIdx % tier1Probes.length;
+      if (advance) {
+        saveAutoRotationIndex(rotIdx + 1);
+      }
+      return tier1Probes[idx];
     }
 
     // 2. Standard Tier 1 Round-Robin Rotation:

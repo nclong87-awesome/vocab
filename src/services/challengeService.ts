@@ -453,16 +453,21 @@ export function enrichKeyTargetWords(
  * Client-side LLM call using Cloudflare Workers / direct provider for translation challenge generation
  */
 async function generateChallengeClientSide(params: GenerateChallengeParams, randomSeed: string): Promise<ChallengeData> {
-  const effectiveConfig = getOverrideConfig(params.llmConfig);
+  const isAutoMode = !params.llmConfig?.provider || params.llmConfig?.provider === "auto" || !params.llmConfig?.model || params.llmConfig?.model === "auto";
+  const effectiveConfig = isAutoMode ? { ...params.llmConfig } : (getOverrideConfig(params.llmConfig) || { ...params.llmConfig });
   const nativeLanguage = params.nativeLanguage || "Vietnamese";
-  const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+  const targetLanguage = params.targetLanguage || "English";
+  const preferredLang = targetLanguage || nativeLanguage;
+  const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+    ? getPreferredModelsForLanguage(preferredLang)
+    : getPreferredModelsForLanguage(nativeLanguage);
   effectiveConfig.preferredModels = preferredModels;
-  effectiveConfig.language = nativeLanguage;
+  effectiveConfig.language = preferredLang;
   effectiveConfig.nativeLanguage = nativeLanguage;
+  effectiveConfig.targetLanguage = targetLanguage;
   effectiveConfig.onlyReliableModels = true;
 
   const isVietnameseNative = nativeLanguage.toLowerCase().includes("vi");
-  const targetLanguage = params.targetLanguage || "English";
   const { prompt, candidateCollectionWords } = buildChallengePrompt(params, randomSeed);
 
   const systemInstruction = isVietnameseNative
@@ -1016,11 +1021,16 @@ Return STRICTLY raw JSON matching:
   }
 
   const startTime = performance.now();
-  const effectiveConfig = getOverrideConfig(llmConfig);
-  const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+  const isAutoMode = !llmConfig?.provider || llmConfig?.provider === "auto" || !llmConfig?.model || llmConfig?.model === "auto";
+  const effectiveConfig = isAutoMode ? { ...llmConfig } : (getOverrideConfig(llmConfig) || { ...llmConfig });
+  const preferredLang = params.targetLanguage || params.challenge?.targetLanguage || targetLanguage || nativeLanguage;
+  const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+    ? getPreferredModelsForLanguage(preferredLang)
+    : getPreferredModelsForLanguage(nativeLanguage);
   effectiveConfig.preferredModels = preferredModels;
-  effectiveConfig.language = nativeLanguage;
+  effectiveConfig.language = preferredLang;
   effectiveConfig.nativeLanguage = nativeLanguage;
+  effectiveConfig.targetLanguage = params.targetLanguage || targetLanguage;
   effectiveConfig.onlyReliableModels = true;
 
   const actionToUse = params.action || (params.fromBottomInput ? "chat" : "processChallengeTurn");

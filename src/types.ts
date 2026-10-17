@@ -55,6 +55,7 @@ export interface LLMConfig {
   onlyReliableModels?: boolean;
   language?: string;
   nativeLanguage?: string;
+  targetLanguage?: string;
 }
 
 export type StrengthHistoryReason = 

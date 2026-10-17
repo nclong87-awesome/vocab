@@ -223,26 +223,22 @@ export const LANGUAGE_PREFERRED_MODELS: Record<string, string[]> = {
   spanish: [
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
-    "openai/gpt-oss-120b",
-    "cohere/command-a"
+    "openai/gpt-oss-120b"
   ],
   es: [
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
-    "openai/gpt-oss-120b",
-    "cohere/command-a"
+    "openai/gpt-oss-120b"
   ],
   french: [
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
-    "openai/gpt-oss-120b",
-    "cohere/command-a"
+    "openai/gpt-oss-120b"
   ],
   fr: [
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
-    "openai/gpt-oss-120b",
-    "cohere/command-a"
+    "openai/gpt-oss-120b"
   ]
 };
 

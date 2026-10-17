@@ -99,11 +99,10 @@ export function useChat({
     });
     setActiveModelInfo(activeInfo);
     setIsTypingState(true);
-    const isAutoMode = !cfgToUse.provider || cfgToUse.provider === "auto" || !cfgToUse.model || cfgToUse.model === "auto";
     return {
       ...cfgToUse,
-      preferredProvider: isAutoMode ? cfgToUse.preferredProvider : (cfgToUse.preferredProvider || activeInfo.provider),
-      preferredModel: isAutoMode ? cfgToUse.preferredModel : (cfgToUse.preferredModel || activeInfo.model),
+      preferredProvider: cfgToUse.preferredProvider || activeInfo.provider,
+      preferredModel: cfgToUse.preferredModel || activeInfo.model,
     };
   };
 
@@ -1820,11 +1819,15 @@ export function useChat({
       // refrain from utilizing the foreground progress modal during active typing.
       const isFromBottomInput = options?.source === "bottom_input" || options?.source !== "challenge_card";
       const challengeAction = "processChallengeTurn";
-      const preferredModels = getPreferredModelsForLanguage(nativeLanguage);
+      const preferredLang = challengeToProcess?.targetLanguage || targetLanguage || nativeLanguage;
+      const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+        ? getPreferredModelsForLanguage(preferredLang)
+        : getPreferredModelsForLanguage(nativeLanguage);
       const enrichedConfig: LLMConfig = {
         ...configToUse,
         nativeLanguage,
-        language: nativeLanguage,
+        targetLanguage: challengeToProcess?.targetLanguage || targetLanguage,
+        language: preferredLang,
         preferredModels,
         onlyReliableModels: true,
       };

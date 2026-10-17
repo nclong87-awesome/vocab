@@ -102,6 +102,14 @@ export class LLMConnectionError extends Error {
 }
 
 export function getOverrideConfig(llmConfig?: LLMConfig): LLMConfig | undefined {
+  if (!llmConfig) return undefined;
+
+  // Preserve Auto Mode so that intelligent auto-routing and candidate rotation are retained
+  const isAutoMode = !llmConfig.provider || llmConfig.provider === "auto" || !llmConfig.model || llmConfig.model === "auto";
+  if (isAutoMode) {
+    return { ...llmConfig, provider: "auto", model: "auto" };
+  }
+
   // if llmConfig?.model is reliable, return it as-is; otherwise, rotate to a reliable model
   if (llmConfig?.model && RELIABLE_MODELS.some(m => m === llmConfig.model)) {
     return llmConfig;
