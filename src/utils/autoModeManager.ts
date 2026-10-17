@@ -1292,8 +1292,7 @@ export function getNextAutoCandidate(
 
     const hasPreferred = Array.isArray(preferredModels) && preferredModels.length > 0;
 
-    // When language-preferred models are active, strictly prioritize the top preferred candidates!
-    // Rotation must be deterministic and identical between prediction (advance=false) and execution (advance=true).
+    // When language-preferred models are active, rotate deterministically across all preferred candidates
     if (hasPreferred) {
       // Filter available candidates that belong to preferredModels
       const preferredAvailable = available.filter((c) => preferredModels.includes(c.model));
@@ -1304,45 +1303,24 @@ export function getNextAutoCandidate(
       });
 
       if (preferredAvailable.length > 0) {
-        // Rotate only between the top 2 preferred models if both are healthy
-        const topPool = preferredAvailable.slice(0, Math.min(2, preferredAvailable.length));
         const rotIdx = getAutoRotationIndex();
-        const idx = rotIdx % topPool.length;
+        const idx = rotIdx % preferredAvailable.length;
         if (advance) {
           saveAutoRotationIndex(rotIdx + 1);
         }
-        return topPool[idx];
+        return preferredAvailable[idx];
       }
 
       return available[0];
     }
 
-    if (tier1Probes.length > 0 && tier1Tested.length === 0) {
-      const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % tier1Probes.length;
-      if (advance) {
-        saveAutoRotationIndex(rotIdx + 1);
-      }
-      return tier1Probes[idx];
+    // Standard round-robin across all available healthy candidates
+    const rotIdx = getAutoRotationIndex();
+    const idx = rotIdx % available.length;
+    if (advance) {
+      saveAutoRotationIndex(rotIdx + 1);
     }
-
-    // 2. Standard Tier 1 Round-Robin Rotation:
-    // All tested Tier 1 models rotate equally with equal probability across queries.
-    if (tier1Tested.length > 0) {
-      if (hasPreferred) {
-        tier1Tested.sort((a, b) => {
-          const idxA = preferredModels.indexOf(a.cand.model);
-          const idxB = preferredModels.indexOf(b.cand.model);
-          return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
-        });
-      }
-      const rotIdx = getAutoRotationIndex();
-      const idx = rotIdx % tier1Tested.length;
-      if (advance) {
-        saveAutoRotationIndex(rotIdx + 1);
-      }
-      return tier1Tested[idx].cand;
-    }
+    return available[idx];
 
     if (tier2.length > 0) {
       const rotIdx = getAutoRotationIndex();

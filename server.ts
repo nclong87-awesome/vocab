@@ -366,23 +366,14 @@ function getNextServerAutoCandidate(llmConfig?: LLMRequestConfig, excludedKeys?:
     });
     const fallbackCandidates = candidates.filter(c => !preferredModels.includes(c.model));
 
-    // 1. Rotate through top available priority candidates (top 2), not down to lower-tier fallbacks like Cloudflare
-    const topPriority = priorityCandidates.slice(0, Math.min(2, priorityCandidates.length));
-    for (let i = 0; i < topPriority.length; i++) {
-      const idx = (serverAutoRotationIndex + i) % topPriority.length;
-      const cand = topPriority[idx];
+    // 1. Rotate through all available priority candidates
+    for (let i = 0; i < priorityCandidates.length; i++) {
+      const idx = (serverAutoRotationIndex + i) % priorityCandidates.length;
+      const cand = priorityCandidates[idx];
       const key = `${cand.provider}:${cand.model}`;
 
       if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
-        serverAutoRotationIndex = (idx + 1) % topPriority.length;
-        return cand;
-      }
-    }
-
-    // If top 2 are locked/excluded, check remaining priority candidates in order
-    for (const cand of priorityCandidates.slice(2)) {
-      const key = `${cand.provider}:${cand.model}`;
-      if (!isServerModelLocked(cand.provider, cand.model) && (!excludedKeys || !excludedKeys.has(key))) {
+        serverAutoRotationIndex = (idx + 1) % priorityCandidates.length;
         return cand;
       }
     }
