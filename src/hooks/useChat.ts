@@ -953,7 +953,19 @@ export function useChat({
       }
       const controller = new AbortController();
       abortControllerRef.current = controller;
-      const configForServer = startTypingWithConfig(configToUse, "generateChallenge");
+      const preferredLang = targetLanguage || nativeLanguage;
+      const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+        ? getPreferredModelsForLanguage(preferredLang)
+        : getPreferredModelsForLanguage(nativeLanguage);
+      const enrichedConfig: LLMConfig = {
+        ...configToUse,
+        nativeLanguage,
+        targetLanguage,
+        language: preferredLang,
+        preferredModels,
+        onlyReliableModels: true,
+      };
+      const configForServer = startTypingWithConfig(enrichedConfig, "generateChallenge");
 
       try {
         let recentSentences: string[] = [];

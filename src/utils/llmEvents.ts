@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LLMConfig } from "../types";
 import { getNextAutoCandidate, isModelLocked } from "./autoModeManager";
-import { PROVIDER_OPTIONS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "../config/llmProviders";
 
 function sanitizeModelName(provider: string, model?: string): string {
   if (provider === "auto") return "auto";
@@ -115,17 +115,26 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig, action?: 
   const isAutoMode = provider === "auto" || model === "auto";
 
   if (isAutoMode) {
-    if (llmConfig?.preferredProvider && llmConfig?.preferredModel && !isModelLocked(llmConfig.preferredProvider, llmConfig.preferredModel)) {
+    if (
+      llmConfig?.preferredProvider &&
+      llmConfig?.preferredModel &&
+      !isModelLocked(llmConfig.preferredProvider, llmConfig.preferredModel) &&
+      RELIABLE_MODELS.some((m) => m === llmConfig.preferredModel)
+    ) {
       provider = llmConfig.preferredProvider;
       model = llmConfig.preferredModel;
     } else {
       try {
-        const cand = getNextAutoCandidate(llmConfig, undefined, false);
+        const effectiveCfg: LLMConfig = {
+          ...llmConfig,
+          onlyReliableModels: true,
+        };
+        const cand = getNextAutoCandidate(effectiveCfg, undefined, false);
         provider = cand.provider;
         model = cand.model;
       } catch (e) {
-        provider = "openrouter";
-        model = "google/gemini-3.8-flash";
+        provider = "groq";
+        model = "openai/gpt-oss-120b";
       }
     }
   } else {

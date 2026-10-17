@@ -549,7 +549,10 @@ async function generateChallengeClientSide(params: GenerateChallengeParams, rand
  */
 export async function generateChallenge(params: GenerateChallengeParams): Promise<ChallengeData> {
   const randomSeed = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  const preferredModels = getPreferredModelsForLanguage(params.nativeLanguage);
+  const preferredLang = params.targetLanguage || params.nativeLanguage;
+  const preferredModels = getPreferredModelsForLanguage(preferredLang).length > 0
+    ? getPreferredModelsForLanguage(preferredLang)
+    : getPreferredModelsForLanguage(params.nativeLanguage);
   const baseConfig: LLMConfig = params.llmConfig || {
     provider: "auto",
     model: "auto",
@@ -560,7 +563,8 @@ export async function generateChallenge(params: GenerateChallengeParams): Promis
   const enrichedConfig: LLMConfig = {
     ...baseConfig,
     nativeLanguage: params.nativeLanguage,
-    language: params.nativeLanguage,
+    targetLanguage: params.targetLanguage,
+    language: preferredLang,
     preferredModels,
     onlyReliableModels: true,
   };
