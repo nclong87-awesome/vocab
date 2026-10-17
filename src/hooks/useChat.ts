@@ -99,11 +99,7 @@ export function useChat({
     });
     setActiveModelInfo(activeInfo);
     setIsTypingState(true);
-    return {
-      ...cfgToUse,
-      preferredProvider: cfgToUse.preferredProvider || activeInfo.provider,
-      preferredModel: cfgToUse.preferredModel || activeInfo.model,
-    };
+    return cfgToUse;
   };
 
   const setIsTyping = (val: boolean | ((prev: boolean) => boolean), overrideConfig?: LLMConfig) => {
@@ -2085,8 +2081,8 @@ export function useChat({
 
           const bonusLine = bonusSections.length > 0 ? `\n\n${bonusSections.join("\n\n")}` : "";
 
-          const actualProvider = result.provider || configForServer?.preferredProvider || configForServer?.provider || "openrouter";
-          const actualModel = result.model || configForServer?.preferredModel || configForServer?.model || "google/gemini-3.8-flash";
+          const actualProvider = result.provider || configForServer?.provider || "openrouter";
+          const actualModel = result.model || configForServer?.model || "google/gemini-3.8-flash";
           const actualResponseTimeMs = result.responseTimeMs;
 
           if (result.provider && result.model) {
