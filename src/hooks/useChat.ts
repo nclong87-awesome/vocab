@@ -1823,7 +1823,6 @@ export function useChat({
         return;
       }
 
-      setIsTyping(true);
       const controller = new AbortController();
       abortControllerRef.current = controller;
 

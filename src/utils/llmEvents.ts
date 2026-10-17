@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LLMConfig } from "../types";
 import { getNextAutoCandidate, isModelLocked } from "./autoModeManager";
-import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "../config/llmProviders";
+import { PROVIDER_OPTIONS } from "../config/llmProviders";
 
 function sanitizeModelName(provider: string, model?: string): string {
   if (provider === "auto") return "auto";
@@ -118,18 +118,13 @@ export function notifyLlmRequestStartFromConfig(llmConfig?: LLMConfig, action?: 
     if (
       llmConfig?.preferredProvider &&
       llmConfig?.preferredModel &&
-      !isModelLocked(llmConfig.preferredProvider, llmConfig.preferredModel) &&
-      RELIABLE_MODELS.some((m) => m === llmConfig.preferredModel)
+      !isModelLocked(llmConfig.preferredProvider, llmConfig.preferredModel)
     ) {
       provider = llmConfig.preferredProvider;
       model = llmConfig.preferredModel;
     } else {
       try {
-        const effectiveCfg: LLMConfig = {
-          ...llmConfig,
-          onlyReliableModels: true,
-        };
-        const cand = getNextAutoCandidate(effectiveCfg, undefined, false);
+        const cand = getNextAutoCandidate(llmConfig, undefined, false);
         provider = cand.provider;
         model = cand.model;
       } catch (e) {

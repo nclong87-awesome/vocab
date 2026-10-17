@@ -4,7 +4,7 @@ import { Zap, X, Cpu, Clock, Compass, Sparkles, CheckCircle2 } from "lucide-reac
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses, getAutoCandidateWithMeta } from "../../utils/autoModeManager";
 import { formatModelDisplayName } from "../../utils/llmHelpers";
-import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "../../config/llmProviders";
+import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { t } from "../../config/i18n";
 import {
   subscribeEnrichmentProgress,
@@ -102,26 +102,24 @@ export default function ApiCallProgressModal({
 
   if (!isOpen) return null;
 
-  // Format provider & model - resolve candidate if auto or empty or unreliable in auto mode
-  let rawProvider = provider || llmConfig?.provider || "groq";
-  let rawModel = model || llmConfig?.model || "openai/gpt-oss-120b";
-  const isAuto = !llmConfig?.provider || llmConfig.provider === "auto" || !rawProvider || rawProvider === "auto" || !rawModel || rawModel === "auto";
+  // Format provider & model - resolve candidate only if auto or empty
+  let rawProvider = provider || llmConfig?.provider || "";
+  let rawModel = model || llmConfig?.model || "";
 
   if (
     !rawModel ||
     rawModel.toLowerCase() === "auto" ||
     rawModel.toLowerCase() === "auto model" ||
     !rawProvider ||
-    rawProvider.toLowerCase() === "auto" ||
-    (isAuto && !RELIABLE_MODELS.some((m) => m === rawModel))
+    rawProvider.toLowerCase() === "auto"
   ) {
     try {
-      const cand = getAutoCandidateWithMeta({ ...llmConfig, onlyReliableModels: true }, undefined, false).candidate;
-      if (!rawProvider || rawProvider.toLowerCase() === "auto" || !RELIABLE_MODELS.some((m) => m === rawModel)) rawProvider = cand.provider;
-      if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model" || !RELIABLE_MODELS.some((m) => m === rawModel)) rawModel = cand.model;
+      const cand = getAutoCandidateWithMeta(llmConfig, undefined, false).candidate;
+      if (!rawProvider || rawProvider.toLowerCase() === "auto") rawProvider = cand.provider;
+      if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model") rawModel = cand.model;
     } catch {
-      if (!rawProvider || rawProvider.toLowerCase() === "auto" || !RELIABLE_MODELS.some((m) => m === rawModel)) rawProvider = "groq";
-      if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model" || !RELIABLE_MODELS.some((m) => m === rawModel)) rawModel = "openai/gpt-oss-120b";
+      if (!rawProvider || rawProvider.toLowerCase() === "auto") rawProvider = "groq";
+      if (!rawModel || rawModel.toLowerCase() === "auto" || rawModel.toLowerCase() === "auto model") rawModel = "openai/gpt-oss-120b";
     }
   }
 

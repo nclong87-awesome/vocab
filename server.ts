@@ -3468,14 +3468,6 @@ OUTPUT FORMAT (STRICT RAW JSON ONLY):
     let effectiveLlmConfig: LLMRequestConfig = llmConfig 
       ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage } 
       : { onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage };
-    if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
-      delete effectiveLlmConfig.model;
-      delete effectiveLlmConfig.provider;
-    }
-    if ((effectiveLlmConfig as any)?.preferredModel && !RELIABLE_MODELS.some(m => m === (effectiveLlmConfig as any).preferredModel)) {
-      delete (effectiveLlmConfig as any).preferredModel;
-      delete (effectiveLlmConfig as any).preferredProvider;
-    }
 
     const startTime = Date.now();
     const metaResult = await callLLMAutoCandidatesWithMeta(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);
@@ -3936,14 +3928,6 @@ Return STRICTLY raw JSON matching:
     let effectiveLlmConfig: LLMRequestConfig = llmConfig 
       ? { ...llmConfig, onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage } 
       : { onlyReliableModels: true, preferredModels, nativeLanguage, targetLanguage };
-    if (effectiveLlmConfig?.model && !RELIABLE_MODELS.some(m => m === effectiveLlmConfig.model)) {
-      delete effectiveLlmConfig.model;
-      delete effectiveLlmConfig.provider;
-    }
-    if ((effectiveLlmConfig as any)?.preferredModel && !RELIABLE_MODELS.some(m => m === (effectiveLlmConfig as any).preferredModel)) {
-      delete (effectiveLlmConfig as any).preferredModel;
-      delete (effectiveLlmConfig as any).preferredProvider;
-    }
 
     const startTime = Date.now();
     const metaResult = await callLLMAutoCandidatesWithMeta(prompt, systemInstruction, schemaDescription, effectiveLlmConfig, undefined, controller.signal);

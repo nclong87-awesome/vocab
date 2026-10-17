@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Clock, X } from "lucide-react";
 import { LLMConfig } from "../../types";
 import { getAllModelStatuses, getNextAutoCandidate } from "../../utils/autoModeManager";
-import { PROVIDER_OPTIONS, RELIABLE_MODELS } from "../../config/llmProviders";
+import { PROVIDER_OPTIONS } from "../../config/llmProviders";
 import { subscribeLlmRequestStart, subscribeLlmRequestEnd, useCentralModalOpen } from "../../utils/llmEvents";
 
 interface LlmProgressIndicatorProps {
@@ -20,39 +20,19 @@ export default function LlmProgressIndicator({ llmConfig, onCancel, activeModelI
   );
 
   useEffect(() => {
-    if (activeModelInfo) {
-      if (isAutoMode && !RELIABLE_MODELS.some((m) => m === activeModelInfo.model)) {
-        try {
-          const cand = getNextAutoCandidate({ ...llmConfig, onlyReliableModels: true }, undefined, false);
-          setLiveModelInfo({ provider: cand.provider, model: cand.model });
-          return;
-        } catch {
-          setLiveModelInfo({ provider: "groq", model: "openai/gpt-oss-120b" });
-          return;
-        }
-      }
+    if (activeModelInfo && activeModelInfo.model && activeModelInfo.model !== "auto") {
       setLiveModelInfo(activeModelInfo);
     }
-  }, [activeModelInfo, isAutoMode, llmConfig]);
+  }, [activeModelInfo]);
 
   useEffect(() => {
     const unsubStart = subscribeLlmRequestStart((data) => {
-      if (data?.provider && data?.model) {
-        if (data.isAutoMode && !RELIABLE_MODELS.some((m) => m === data.model)) {
-          try {
-            const cand = getNextAutoCandidate({ ...llmConfig, onlyReliableModels: true }, undefined, false);
-            setLiveModelInfo({ provider: cand.provider, model: cand.model });
-            return;
-          } catch {
-            setLiveModelInfo({ provider: "groq", model: "openai/gpt-oss-120b" });
-            return;
-          }
-        }
+      if (data?.provider && data?.model && data.model !== "auto") {
         setLiveModelInfo({ provider: data.provider, model: data.model });
       }
     });
     const unsubEnd = subscribeLlmRequestEnd((data) => {
-      if (data?.provider && data?.model) {
+      if (data?.provider && data?.model && data.model !== "auto") {
         setLiveModelInfo({ provider: data.provider, model: data.model });
       }
     });
@@ -60,15 +40,15 @@ export default function LlmProgressIndicator({ llmConfig, onCancel, activeModelI
       unsubStart();
       unsubEnd();
     };
-  }, [llmConfig]);
+  }, []);
 
   // Resolve active provider and model
-  let provider = liveModelInfo?.provider || activeModelInfo?.provider || llmConfig.provider;
-  let model = liveModelInfo?.model || activeModelInfo?.model || llmConfig.model;
+  let provider = liveModelInfo?.provider || activeModelInfo?.provider || (llmConfig?.provider !== "auto" ? llmConfig?.provider : "");
+  let model = liveModelInfo?.model || activeModelInfo?.model || (llmConfig?.model !== "auto" ? llmConfig?.model : "");
 
-  if (!provider || provider === "auto" || !model || model === "auto" || (isAutoMode && !RELIABLE_MODELS.some(m => m === model))) {
+  if (!provider || provider === "auto" || !model || model === "auto") {
     try {
-      const nextCand = getNextAutoCandidate({ ...llmConfig, onlyReliableModels: true }, undefined, false);
+      const nextCand = getNextAutoCandidate(llmConfig, undefined, false);
       provider = nextCand.provider;
       model = nextCand.model;
     } catch (e) {
